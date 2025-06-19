@@ -6,8 +6,10 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ✅ Add your auth route
+// ✅ Add your auth and poh route
 app.use('/auth', require('./routes/auth'));
+app.use('/poh', require('./routes/poh'));
+
 
 // ✅ Optional: Add a simple health check
 app.get('/', (req, res) => {
