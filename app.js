@@ -13,6 +13,7 @@ app.use('/communities', require('./routes/communities'));
 app.use('/avatars', require('./routes/avatars'));
 app.use('/chat', require('./routes/chat'));
 app.use(require('./routes/interaction'));
+app.use('/policy/enforce', require('./routes/policy'));
 
 
 
