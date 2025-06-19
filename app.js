@@ -9,6 +9,8 @@ app.use(express.json());
 // ✅ Add your auth and poh route
 app.use('/auth', require('./routes/auth'));
 app.use('/poh', require('./routes/poh'));
+app.use('/communities', require('./routes/communities'));
+
 
 
 // ✅ Optional: Add a simple health check
