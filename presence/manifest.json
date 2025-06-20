@@ -1,0 +1,48 @@
+{ 
+  "manifest_version": 3,
+  "name": "Presence",
+  "version": "0.1.0",
+  "description": "Adds a sidebar for collaboration and agent interaction on web pages.",
+  "permissions": [
+    "sidePanel",
+    "activeTab",
+    "tabs",
+    "storage",
+    "scripting",
+    "identity"
+  ],
+  "oauth2": {
+    "client_id": "323445937864-mn658sdkavg5100akt3ep379loc3eeb7.apps.googleusercontent.com",
+    "scopes": [
+      "https://www.googleapis.com/auth/userinfo.email",
+      "https://www.googleapis.com/auth/userinfo.profile"
+    ]
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "background": {
+    "page": "background.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "css": ["content.css"]
+    }
+  ],
+  "icons": {
+    "16": "images/icon16.png",
+    "48": "images/icon48.png",
+    "128": "images/icon128.png"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["images/*.png", "images/*.svg"],
+      "matches": ["<all_urls>"]
+    }
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' https://cors-anywhere.herokuapp.com; object-src 'self'; connect-src 'self' https://bvshfzikwwjasluumfkr.supabase.co wss://bvshfzikwwjasluumfkr.supabase.co https://cors-anywhere.herokuapp.com;"
+  }
+} 

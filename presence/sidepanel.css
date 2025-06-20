@@ -1,0 +1,773 @@
+/* sidepanel.css - Styles based on mockups */
+
+:root {
+    /* Define some base colors from mockups (adjust as needed) */
+    --background-primary: #ffffff;
+    --background-secondary: #f8f9fa; /* Light grey for backgrounds */
+    --background-header: #ffffff;
+    --background-nav: #ffffff;
+    --text-primary: #212529; /* Dark grey */
+    --text-secondary: #6c757d; /* Medium grey */
+    --text-link: #0d6efd; /* Blue */
+    --border-color: #dee2e6; /* Light border */
+    --primary-accent: #0d6efd; /* Blue accent */
+    --online-status: #28a745; /* Green */
+    --away-status: #ffc107; /* Yellow */
+    --self-message-bg: #e7f5ff; /* Light blue for own messages */
+    --other-message-bg: #f1f3f5; /* Light grey for other messages */
+    --box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+
+    --sidebar-width: 320px; /* Adjust as needed */
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: var(--background-primary);
+    color: var(--text-primary);
+    width: var(--sidebar-width);
+    overflow-x: hidden;
+    font-size: 14px;
+    line-height: 1.4;
+}
+
+.sidebar-container {
+    display: flex;
+    flex-direction: column;
+    height: 100vh; /* Full viewport height */
+    border-left: 1px solid var(--border-color); /* Add a border to separate from page */
+}
+
+/* --- Main Header --- */
+.sidebar-header-main {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border-color);
+    background-color: var(--background-header);
+    gap: 8px; /* Spacing between elements */
+    height: 50px; /* Fixed height */
+    box-sizing: border-box;
+}
+
+#close-sidebar-btn {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: var(--text-secondary);
+    padding: 0 4px;
+}
+
+.logo-container {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-grow: 1; /* Takes up space to push actions right */
+}
+
+.logo-img {
+    height: 24px; /* Adjust size */
+    width: auto;
+}
+
+.logo-text {
+    font-weight: bold;
+    font-size: 1.1em;
+}
+
+.logo-beta {
+    font-size: 0.7em;
+    color: var(--text-secondary);
+    vertical-align: super;
+    margin-left: 2px;
+}
+
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    position: relative;
+    margin-left: auto;
+}
+
+.header-actions button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 18px; /* Adjust icon size */
+    color: var(--text-secondary);
+    padding: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.header-actions button:hover {
+    color: var(--text-primary);
+}
+
+.community-dropdown-trigger {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    font-weight: 500;
+}
+
+#current-community-name {
+    max-width: 100px; /* Prevent long names pushing icons */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+#community-options-btn {
+    font-size: 12px; /* Arrow size */
+}
+
+.profile-avatar-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+/* --- Community Dropdown Panel --- */
+.dropdown-panel {
+    position: absolute;
+    top: calc(100% + 5px);
+    left: auto;
+    right: 0;
+    background-color: var(--background-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    z-index: 10;
+    padding: 10px;
+    min-width: 200px;
+}
+
+.dropdown-panel h4 {
+    margin: 0 0 10px 0;
+    font-size: 0.9em;
+    color: var(--text-secondary);
+}
+
+/* ADDED relative positioning to header */
+.dropdown-header {
+    display: flex; /* Use flex to align items if needed */
+    justify-content: space-between; /* Pushes title left, button right */
+    align-items: center;
+    margin-bottom: 10px; /* Space below header */
+    position: relative; /* Positioning context for the close button */
+}
+
+.community-list {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 10px 0;
+    max-height: 200px; /* Limit height */
+    overflow-y: auto;
+}
+
+.community-list li {
+    display: flex;
+    align-items: center;
+    padding: 8px 4px;
+    font-size: 1em;
+    gap: 8px;
+}
+
+.community-list img {
+    width: 20px;
+    height: 20px;
+    border-radius: 3px;
+}
+
+.community-list .primary-tag {
+    font-size: 0.8em;
+    background-color: var(--primary-accent);
+    color: white;
+    padding: 2px 5px;
+    border-radius: 3px;
+    margin-left: 5px;
+}
+
+.community-list input[type="checkbox"] {
+    margin-left: auto; /* Push checkbox and button right */
+}
+
+.community-list .more-options {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 16px;
+    padding: 0 5px;
+}
+
+/* Updated styles for the close button */
+#close-community-dropdown {
+    /* Remove block styles */
+    /* display: block; */ 
+    /* width: 100%; */
+    /* padding: 8px; */
+    /* background-color: var(--background-secondary); */
+    /* border: 1px solid var(--border-color); */
+    /* border-radius: 4px; */
+    /* text-align: center; */
+
+    /* Add styles similar to modal close button */
+    position: absolute;
+    top: -5px; /* Adjust fine positioning */
+    right: 0px; /* Adjust fine positioning */
+    background: none;
+    border: none;
+    font-size: 24px; /* Make the 'x' bigger */
+    font-weight: bold;
+    line-height: 1; /* Prevent extra spacing */
+    color: #aaa; /* Light grey */
+    cursor: pointer;
+    padding: 5px; /* Add some clickable area */
+}
+
+#close-community-dropdown:hover {
+    color: #333; /* Darken on hover */
+}
+
+/* --- Main Navigation --- */
+.sidebar-nav-main {
+    display: flex;
+    align-items: center;
+    border-bottom: 1px solid var(--border-color);
+    background-color: var(--background-nav);
+    padding: 0 10px;
+}
+
+.main-nav-tab {
+    padding: 12px 15px;
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-size: 1em;
+    font-weight: 500;
+    color: var(--text-secondary);
+    border-bottom: 3px solid transparent;
+    transition: color 0.2s ease, border-color 0.2s ease;
+    margin-bottom: -1px; /* Overlap border */
+}
+
+.main-nav-tab:hover {
+    color: var(--text-primary);
+}
+
+.main-nav-tab.active {
+    color: var(--primary-accent);
+    border-bottom-color: var(--primary-accent);
+}
+
+.nav-extra-icons {
+    margin-left: auto; /* Push extra icons to the right */
+    display: flex;
+    gap: 8px;
+}
+
+.nav-extra-icons button {
+     background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 18px; /* Adjust icon size */
+    color: var(--text-secondary);
+    padding: 4px;
+}
+
+.nav-extra-icons button:hover {
+    color: var(--text-primary);
+}
+
+/* --- Sub Navigation --- */
+.sidebar-nav-sub {
+    display: flex;
+    border-bottom: 1px solid var(--border-color);
+    background-color: var(--background-secondary);
+    padding: 0 15px;
+}
+
+.sub-nav-tab {
+    padding: 10px 15px;
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-size: 0.95em;
+    color: var(--text-secondary);
+    border-bottom: 2px solid transparent;
+    transition: color 0.2s ease, border-color 0.2s ease;
+}
+
+.sub-nav-tab:hover {
+    color: var(--text-primary);
+}
+
+.sub-nav-tab.active {
+    color: var(--text-primary);
+    font-weight: 500;
+    border-bottom-color: var(--primary-accent);
+}
+
+.sub-nav-tab .count {
+    font-size: 0.8em;
+    background-color: var(--text-secondary);
+    color: white;
+    padding: 1px 5px;
+    border-radius: 10px;
+    margin-left: 5px;
+}
+
+.sub-nav-tab.active .count {
+    background-color: var(--primary-accent);
+}
+
+/* --- Main Content Area --- */
+.sidebar-content {
+    flex-grow: 1; /* Take remaining space */
+    overflow-y: auto; /* Enable scrolling for content */
+    display: flex;
+    flex-direction: column; /* Ensure content divs stack */
+}
+
+.main-tab-content {
+    display: none; /* Hide inactive main tabs */
+    flex-grow: 1; /* Allow content to fill space */
+    flex-direction: column; /* Keep flex direction but remove duplicate display */
+}
+
+.main-tab-content.active {
+    display: flex; /* Show active main tab */
+}
+
+/* Content within sub-tabs */
+.sub-tab-content-area {
+    flex-grow: 1;
+    overflow-y: auto;
+    position: relative; /* For FAB positioning */
+}
+
+.sub-tab-content {
+    display: none; /* Hide inactive sub-tabs */
+    padding: 15px;
+}
+
+.sub-tab-content.active {
+    display: block; /* Show active sub-tab */
+}
+
+
+/* --- Search Bars --- */
+.search-bar-container {
+    padding: 10px 15px;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.search-bar-container input[type="search"] {
+    flex-grow: 1;
+    padding: 8px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 20px; /* Pill shape */
+    font-size: 0.95em;
+    /* TODO: Add search icon inside input */
+}
+
+.search-bar-container button {
+    background: none;
+    border: none;
+    font-size: 18px;
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+
+/* --- General Item Lists (Visible, Rooms, People) --- */
+.item-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.item-list li {
+    display: flex;
+    align-items: center;
+    padding: 12px 15px;
+    border-bottom: 1px solid var(--border-color);
+    gap: 12px;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
+
+.item-list li:hover {
+    background-color: var(--background-secondary);
+}
+
+.item-list li:last-child {
+    border-bottom: none;
+}
+
+/* NEW: Container for avatar and status dot */
+.avatar-container {
+    position: relative;
+    flex-shrink: 0;
+    width: 40px; /* Match avatar size in lists */
+    height: 40px; /* Match avatar size in lists */
+}
+
+/* Styles for the avatar image itself (adjust width/height if needed) */
+.avatar-container .avatar,
+.avatar-container .avatar-placeholder {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+    display: block; /* Prevents potential small gaps */
+}
+
+/* NEW: Overlay Status Dot Styles */
+.status-dot-overlay {
+    position: absolute;
+    bottom: -1px; /* Adjust position slightly */
+    right: -1px;  /* Adjust position slightly */
+    width: 12px;  /* Size of the dot */
+    height: 12px; /* Size of the dot */
+    border-radius: 50%;
+    background-color: var(--text-secondary); /* Default: offline */
+    border: 2px solid var(--background-primary); /* White border around dot */
+    box-sizing: border-box;
+}
+
+.status-dot-overlay.online {
+    background-color: var(--online-status);
+}
+
+.status-dot-overlay.away {
+    background-color: var(--away-status);
+}
+
+/* Keep avatar placeholder styles if needed for fallback */
+.avatar-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    color: white;
+    font-size: 1.2em;
+    /* Ensure it still fills the container */
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+}
+
+.item-details {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+    overflow: hidden; /* Prevent long text breaking layout */
+}
+
+.item-name {
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.item-status,
+.item-last-message,
+.request-text {
+    font-size: 0.9em;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.item-timestamp {
+    font-size: 0.8em;
+    color: var(--text-secondary);
+    margin-left: auto;
+    white-space: nowrap;
+    padding-left: 10px;
+    flex-shrink: 0;
+}
+
+.more-options {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 18px;
+    padding: 0 5px;
+    margin-left: auto; /* Push right */
+}
+
+/* Friend Request Specific */
+.request-list li {
+    gap: 8px;
+}
+
+.request-actions {
+     margin-left: auto; /* Push buttons right */
+     display: flex;
+     gap: 5px;
+     flex-shrink: 0;
+}
+
+.request-actions button {
+    padding: 4px 10px;
+    font-size: 0.9em;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.approve-btn {
+    background-color: var(--online-status);
+    color: white;
+    border: none;
+}
+
+.deny-btn {
+    background-color: var(--background-secondary);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+}
+
+/* --- Live Chat --- */
+.chat-messages {
+    flex-grow: 1;
+    overflow-y: auto;
+    padding: 10px; /* Padding inside the scroll area */
+}
+
+.date-separator {
+    text-align: center;
+    margin: 15px 0;
+    font-size: 0.8em;
+    color: var(--text-secondary);
+}
+
+.date-separator span {
+    background-color: var(--background-primary); /* Match body bg */
+    padding: 0 10px;
+}
+
+.message-group {
+    display: flex;
+    margin-bottom: 10px;
+    gap: 8px;
+    align-items: flex-end; /* Align items to bottom for consistency */
+}
+
+.message-group.other {
+    justify-content: flex-start;
+}
+
+.message-group.self {
+    justify-content: flex-end;
+}
+
+/* Apply avatar container styles to chat avatars too */
+.message-group .avatar-container {
+    width: 32px; /* Smaller avatar for chat */
+    height: 32px; /* Smaller avatar for chat */
+    /* position: relative; Inherited or implied */
+    /* flex-shrink: 0; Inherited or implied */
+}
+
+/* Adjust status dot size/position for smaller chat avatars if needed */
+.message-group .status-dot-overlay {
+     width: 10px;
+     height: 10px;
+     bottom: -1px;
+     right: -1px;
+     border-width: 1.5px; /* Slightly smaller border */
+}
+
+.message-group.self .avatar-container {
+    display: none; /* Hide own avatar */
+}
+
+.message-content {
+    display: flex;
+    flex-direction: column;
+    max-width: 80%; /* Prevent messages taking full width */
+}
+
+.message-group.other .message-content {
+    align-items: flex-start;
+}
+
+.message-group.self .message-content {
+    align-items: flex-end;
+}
+
+.message-sender {
+    font-size: 0.85em;
+    color: var(--text-secondary);
+    margin-bottom: 2px;
+}
+
+.message-time {
+    font-size: 0.75em;
+    color: var(--text-secondary);
+    margin-left: 5px; /* Space between name and time */
+}
+
+.message-group.self .message-time {
+    /* Order might be adjusted based on exact mockup */
+     text-align: right;
+     margin-left: 0;
+     margin-bottom: 2px;
+}
+
+.message-bubble {
+    padding: 8px 12px;
+    border-radius: 15px;
+    font-size: 0.95em;
+    word-wrap: break-word;
+}
+
+.message-group.other .message-bubble {
+    background-color: var(--other-message-bg);
+    color: var(--text-primary);
+    border-top-left-radius: 0; /* Pointy corner */
+}
+
+.message-group.self .message-bubble {
+    background-color: var(--self-message-bg);
+    color: var(--text-primary); /* Or a slightly different color */
+    border-top-right-radius: 0; /* Pointy corner */
+}
+
+.chat-input-area,
+.agent-input-area {
+    display: flex;
+    padding: 10px 15px;
+    border-top: 1px solid var(--border-color);
+    background-color: var(--background-secondary);
+    gap: 8px;
+}
+
+.chat-input-area input[type="text"],
+.agent-input-area input[type="text"] {
+    flex-grow: 1;
+    padding: 10px 15px;
+    border: 1px solid var(--border-color);
+    border-radius: 20px; /* Pill shape */
+    font-size: 0.95em;
+}
+
+.chat-input-area button,
+.agent-input-area button {
+    background: none;
+    border: none;
+    font-size: 20px;
+    color: var(--primary-accent);
+    cursor: pointer;
+    padding: 5px;
+}
+
+/* --- Agent Tab --- */
+#agent h3 {
+    padding: 15px;
+    margin: 0;
+    border-bottom: 1px solid var(--border-color);
+}
+#agent label,
+#agent select {
+    margin: 10px 15px;
+}
+#agent select {
+    display: block;
+    width: calc(100% - 30px);
+    padding: 8px;
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
+}
+.agent-output {
+    min-height: 150px; /* Example height */
+    padding: 15px;
+    margin: 0 15px 15px 15px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background-color: var(--background-primary);
+    font-size: 0.9em;
+    color: var(--text-secondary);
+}
+
+/* --- Floating Action Button (FAB) --- */
+.fab {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    width: 50px;
+    height: 50px;
+    background-color: var(--primary-accent);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    font-size: 24px;
+    line-height: 50px; /* Center '+' vertically */
+    text-align: center;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    cursor: pointer;
+    transition: background-color 0.2s ease, transform 0.2s ease;
+}
+
+.fab:hover {
+    background-color: #0b5ed7; /* Darker blue */
+    transform: scale(1.05);
+}
+
+/* --- Mini-Profile Modal --- */
+/* Keep previous basic modal styles for now, can refine later */
+.modal {
+  position: fixed; /* Stay in place */
+  z-index: 1000; /* Sit on top */
+  left: 0;
+  top: 0;
+  width: 100%; /* Full width */
+  height: 100%; /* Full height */
+  overflow: auto; /* Enable scroll if needed */
+  background-color: rgba(0,0,0,0.4); /* Black w/ opacity */
+  display: flex; /* Use flexbox for centering */
+  justify-content: center; /* Center horizontally */
+  align-items: center; /* Center vertically */
+}
+
+.modal-content {
+  background-color: #fefefe;
+  margin: auto;
+  padding: 20px;
+  border: 1px solid #888;
+  width: 80%; /* Could be more specific */
+  max-width: 400px;
+  border-radius: 5px;
+  position: relative;
+}
+
+.close-button {
+  color: #aaa;
+  position: absolute;
+  top: 5px;
+  right: 10px;
+  font-size: 28px;
+  font-weight: bold;
+}
+
+.close-button:hover,
+.close-button:focus {
+  color: black;
+  text-decoration: none;
+  cursor: pointer;
+} 
