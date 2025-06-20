@@ -1,0 +1,37 @@
+/* content.css - Styles for the trigger button */
+
+#collaborative-sidebar-trigger {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 9999; /* Ensure it's above most page content */
+    padding: 10px 12px; /* Adjust padding */
+    background-color: #007bff; /* Example background */
+    color: white;
+    border: none;
+    border-radius: 50%; /* Make it circular */
+    cursor: pointer;
+    font-size: 24px; /* Adjust emoji/icon size */
+    line-height: 1; /* Ensure text/emoji is centered vertically */
+    box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.3); /* Add some shadow */
+    transition: transform 0.2s ease-in-out, background-color 0.2s ease;
+    /* TODO: Add animation for bouncing effect */
+    /* TODO: Replace text content with an actual icon using background-image */
+}
+
+#collaborative-sidebar-trigger:hover {
+    background-color: #0056b3; /* Darker on hover */
+    transform: scale(1.1); /* Slightly larger on hover */
+}
+
+/* Styles for 'push' mode (when sidebar pushes content) */
+/* Apply a margin to the html element when the sidebar is open in push mode */
+/* The exact width needs to match the sidebar width */
+/* This requires JS in content script listening to storage changes */
+
+/*
+html.collaborative-sidebar-push-mode {
+   margin-right: 300px; // Adjust width as needed
+   transition: margin-right 0.3s ease;
+}
+*/ 

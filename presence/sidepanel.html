@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Presence</title>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="sidepanel.css">
+  <!-- Load LOCAL Supabase JS Library -->
+  <script src="lib/supabase.min.js"></script>
+</head>
+<body>
+  <!-- Main Sidebar Container -->
+  <div class="sidebar-container">
+    <!-- Header with logo and actions -->
+    <header class="sidebar-header-main">
+      <button id="close-sidebar-btn">&times;</button>
+      <div class="logo-container">
+        <span class="logo-text">Presence<span class="logo-beta">BETA</span></span>
+      </div>
+      <div class="header-actions">
+        <div class="community-dropdown-trigger">
+          <span id="current-community-name">Main Community</span>
+          <span id="community-options-btn">▼</span>
+        </div>
+        <div id="community-dropdown-panel" class="dropdown-panel" style="display: none;">
+          <div class="dropdown-header">
+            <h4>Your Communities</h4>
+            <button id="close-community-dropdown">&times;</button>
+          </div>
+          <ul class="community-list">
+            <li>
+              <img src="/images/community1.png" alt="Community">
+              <span>Main Community</span>
+              <span class="primary-tag">Primary</span>
+            </li>
+            <li>
+              <img src="/images/community2.png" alt="Community">
+              <span>Other Community</span>
+            </li>
+          </ul>
+        </div>
+        <button id="google-login-btn" style="margin-left: 10px; padding: 5px 10px;">Login</button>
+        <div id="user-info" style="display: none; margin-left: 10px; display: flex; align-items: center; gap: 5px;">
+          <img id="user-avatar" src="" alt="Avatar" style="width: 24px; height: 24px; border-radius: 50%;">
+          <span id="user-name" style="font-size: 0.9em;"></span>
+          <button id="logout-btn" style="font-size: 18px; background: none; border: none; cursor: pointer; padding: 0 4px;">&times;</button>
+        </div>
+      </div>
+    </header>
+    
+    <!-- Main Navigation Tabs -->
+    <div class="sidebar-nav-main">
+      <button class="main-nav-tab active" data-tab="canopi-tab">Canopi</button>
+      <button class="main-nav-tab" data-tab="rooms-tab">Rooms</button>
+      <button class="main-nav-tab" data-tab="people-tab">People</button>
+      <button class="main-nav-tab" data-tab="agent-tab">Agent</button>
+    </div>
+    
+    <!-- Main Tab Contents -->
+    <div class="sidebar-content">
+      <!-- Canopi Tab Content -->
+      <div id="canopi-tab" class="main-tab-content active">
+        <div class="sidebar-nav-sub">
+          <button class="sub-nav-tab active" data-subtab="canopi-live-chat">Live Chat</button>
+          <button class="sub-nav-tab" data-subtab="canopi-visible">Visible</button>
+        </div>
+        <div id="canopi-live-chat" class="sub-tab-content active">
+          <div class="chat-messages">
+             <p style="text-align: center; color: var(--text-secondary); padding: 20px;">Chat history appears here.</p>
+          </div>
+          <div class="chat-input-area">
+            <input type="text" placeholder="Type a message...">
+            <button>➤</button>
+          </div>
+        </div>
+        <div id="canopi-visible" class="sub-tab-content">
+          <h3>Canopi Visible Content</h3>
+          <p>Content for Canopi visible tab.</p>
+        </div>
+      </div>
+      
+      <!-- Rooms Tab Content -->
+      <div id="rooms-tab" class="main-tab-content">
+        <h3>Rooms</h3>
+        <p>Room list or content goes here.</p>
+      </div>
+      
+      <!-- People Tab Content -->
+      <div id="people-tab" class="main-tab-content">
+        <ul class="item-list">
+          <li>
+            <div class="item-avatar"></div>
+            <div class="item-info">
+              <div class="item-name">John Doe</div>
+              <div class="item-status">Online</div>
+            </div>
+          </li>
+          <li>
+            <div class="item-avatar"></div>
+            <div class="item-info">
+              <div class="item-name">Jane Smith</div>
+              <div class="item-status">Away</div>
+            </div>
+          </li>
+        </ul>
+      </div>
+      
+      <!-- Agent Tab Content -->
+      <div id="agent-tab" class="main-tab-content">
+        <h3>Agent Content</h3>
+        <p>Content for the Agent tab.</p>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Mini Profile Modal -->
+  <div id="mini-profile-modal" class="modal" style="display: none;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="modal-name">User Name</h3>
+        <button class="close-button">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="modal-status">Status</div>
+        <div class="modal-actions">
+          <button class="action-button">Message</button>
+          <button class="action-button">View Profile</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Debug Functions - REMOVED INLINE SCRIPT -->
+  <!-- The debug logic is now in sidepanel.js -->
+  
+  <!-- Include the main sidebar JavaScript -->
+  <script src="sidepanel.js"></script>
+
+  <!-- MOVED Debug panel to the bottom -->
+  <div id="debug" style="position: fixed; bottom: 0; left: 0; width: var(--sidebar-width); background: #eee; padding: 5px; font-size: 10px; border-top: 1px solid #ccc; max-height: 100px; overflow-y: auto; z-index: 999;">Debug messages will appear here</div>
+</body>
+</html> 
