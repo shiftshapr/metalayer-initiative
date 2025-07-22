@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Metalayer Demo - Human-Agent Interaction Prototype</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 40px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        h1 {
+            color: #2d3748;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5rem;
+        }
+        .status {
+            background: #f7fafc;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .status.success {
+            border-color: #48bb78;
+            background: #f0fff4;
+        }
+        .status.info {
+            border-color: #4299e1;
+            background: #ebf8ff;
+        }
+        .feature-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin: 30px 0;
+        }
+        .feature {
+            background: #f7fafc;
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid #4299e1;
+        }
+        .feature h3 {
+            margin: 0 0 10px 0;
+            color: #2d3748;
+        }
+        .feature p {
+            margin: 0;
+            color: #4a5568;
+            font-size: 0.9rem;
+        }
+        .steps {
+            background: #fff5f5;
+            border: 1px solid #fed7d7;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .steps ol {
+            margin: 0;
+            padding-left: 20px;
+        }
+        .steps li {
+            margin: 10px 0;
+            color: #2d3748;
+        }
+        .api-test {
+            background: #f0fff4;
+            border: 1px solid #9ae6b4;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .api-test h3 {
+            margin: 0 0 15px 0;
+            color: #22543d;
+        }
+        .api-test button {
+            background: #48bb78;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .api-test button:hover {
+            background: #38a169;
+        }
+        .result {
+            background: #2d3748;
+            color: #e2e8f0;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+            font-family: monospace;
+            font-size: 0.8rem;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🛡️ Metalayer Demo</h1>
+        <p style="text-align: center; font-size: 1.2rem; color: #4a5568;">
+            Human-Agent Interaction Prototype
+        </p>
+
+        <div class="status success">
+            <h3>✅ System Status: FULLY FUNCTIONAL</h3>
+            <p>The Metalayer sidebar extension is now connected to a working backend with authentication, chat, communities, and visibility features.</p>
+        </div>
+
+        <div class="feature-list">
+            <div class="feature">
+                <h3>🔐 Authentication</h3>
+                <p>Mock login system with session management. Ready for Google OAuth and Fractal ID integration.</p>
+            </div>
+            <div class="feature">
+                <h3>💬 Live Chat</h3>
+                <p>Real-time messaging system with community-based chat rooms and message history.</p>
+            </div>
+            <div class="feature">
+                <h3>👥 Communities</h3>
+                <p>Community selection and management with different rule sets and moderation levels.</p>
+            </div>
+            <div class="feature">
+                <h3>👁️ Visibility Layer</h3>
+                <p>Privacy controls for online status, typing indicators, location sharing, and message permissions.</p>
+            </div>
+        </div>
+
+        <div class="steps">
+            <h3>🚀 How to Test the Extension</h3>
+            <ol>
+                <li><strong>Load the Extension:</strong> Go to Chrome Extensions → Load Unpacked → Select <code>client/build</code></li>
+                <li><strong>Navigate to any website</strong> (like this demo page)</li>
+                <li><strong>Click the floating 🛡️ icon</strong> in the top-left corner</li>
+                <li><strong>Authenticate:</strong> Click "Auth" tab and sign in with any email</li>
+                <li><strong>Select a Community:</strong> Go to "Community Selector" and choose a community</li>
+                <li><strong>Start Chatting:</strong> Switch to "Live Chat" and send messages</li>
+                <li><strong>Manage Privacy:</strong> Use "Visibility Layer" to control your settings</li>
+            </ol>
+        </div>
+
+        <div class="api-test">
+            <h3>🧪 Backend API Tests</h3>
+            <p>Test the backend APIs directly (server must be running on port 3001):</p>
+            <button onclick="testHealth()">Test Health Check</button>
+            <button onclick="testAuth()">Test Authentication</button>
+            <button onclick="testCommunities()">Test Communities</button>
+            <button onclick="testChat()">Test Chat</button>
+            <div id="api-result" class="result" style="display: none;"></div>
+        </div>
+
+        <div class="status info">
+            <h3>🔧 Technical Details</h3>
+            <ul>
+                <li><strong>Frontend:</strong> React sidebar overlay packaged as Chrome extension</li>
+                <li><strong>Backend:</strong> Node.js/Express with modular architecture</li>
+                <li><strong>Database:</strong> Prisma schema ready for PostgreSQL</li>
+                <li><strong>Blockchain:</strong> Solana logging stubs implemented</li>
+                <li><strong>Agents:</strong> Eliza/Swarm orchestration stubs ready</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        async function testAPI(endpoint, method = 'GET', body = null) {
+            const resultDiv = document.getElementById('api-result');
+            resultDiv.style.display = 'block';
+            resultDiv.textContent = 'Testing...';
+            
+            try {
+                const options = {
+                    method,
+                    headers: { 'Content-Type': 'application/json' }
+                };
+                if (body) options.body = JSON.stringify(body);
+                
+                const response = await fetch(`http://localhost:3001${endpoint}`, options);
+                const data = await response.json();
+                
+                resultDiv.textContent = `✅ ${method} ${endpoint}\nStatus: ${response.status}\nResponse: ${JSON.stringify(data, null, 2)}`;
+            } catch (error) {
+                resultDiv.textContent = `❌ Error testing ${endpoint}:\n${error.message}`;
+            }
+        }
+
+        function testHealth() {
+            testAPI('/');
+        }
+
+        function testAuth() {
+            testAPI('/auth/login', 'POST', { email: 'demo@metalayer.org' });
+        }
+
+        function testCommunities() {
+            testAPI('/communities');
+        }
+
+        function testChat() {
+            testAPI('/chat/message', 'POST', {
+                userId: 'demo-user',
+                communityId: 'comm-001',
+                content: 'Hello from demo page!'
+            });
+        }
+    </script>
+</body>
+</html> 
