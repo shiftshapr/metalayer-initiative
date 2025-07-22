@@ -1,0 +1,313 @@
+.auth-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(24, 28, 36, 0.92);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  padding: 20px;
+}
+
+.auth-modal {
+  background: #23272f;
+  border: 1px solid rgba(120, 120, 120, 0.13);
+  border-radius: 10px;
+  width: 100%;
+  max-width: 400px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.18);
+}
+
+.auth-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 20px 10px 20px;
+  border-bottom: 1px solid rgba(120, 120, 120, 0.08);
+}
+
+.auth-modal-header h2 {
+  color: #e5e7eb;
+  font-size: 1.08rem;
+  font-weight: 600;
+  margin: 0;
+  letter-spacing: 0.01em;
+}
+
+.close-button {
+  width: 28px;
+  height: 28px;
+  background: #23272f;
+  border: 1px solid rgba(120, 120, 120, 0.13);
+  border-radius: 6px;
+  color: #a1a1aa;
+  font-size: 1.1rem;
+  cursor: pointer;
+  transition: all 0.18s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.close-button:hover {
+  background: #4f8cff;
+  color: #fff;
+  border-color: #4f8cff;
+}
+
+.auth-modal-content {
+  padding: 20px;
+}
+
+.auth-description {
+  color: #a1a1aa;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  margin-bottom: 18px;
+  text-align: center;
+}
+
+.auth-methods {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.auth-method-tabs {
+  display: flex;
+  gap: 6px;
+  background: #23272f;
+  border-radius: 7px;
+  padding: 2px;
+}
+
+.auth-tab {
+  flex: 1;
+  padding: 8px 0;
+  background: transparent;
+  border: none;
+  border-radius: 5px;
+  color: #a1a1aa;
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.18s;
+}
+
+.auth-tab:hover {
+  color: #4f8cff;
+}
+
+.auth-tab.active {
+  background: #23272f;
+  color: #4f8cff;
+  border: 1px solid #4f8cff;
+}
+
+.auth-method-content {
+  min-height: 160px;
+}
+
+.wallet-auth,
+.google-auth-button {
+  width: 100%;
+  padding: 12px;
+  background: #4285f4;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.18s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.google-auth-button:hover {
+  background: #357ae8;
+  transform: translateY(-1px);
+}
+
+.google-auth-button:disabled {
+  background: #94a3b8;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.google-icon {
+  font-weight: bold;
+  font-size: 1.1rem;
+}
+
+.auth-form {
+  padding: 0 20px 20px 20px;
+}
+
+.auth-footer {
+  padding: 0 20px 20px 20px;
+  text-align: center;
+}
+
+.auth-footer p {
+  color: #a1a1aa;
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.error-message {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 6px;
+  padding: 10px;
+  font-size: 0.9rem;
+  margin-bottom: 16px;
+  text-align: center;
+}
+
+.google-auth,
+.fractal-auth {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.wallet-auth h3,
+.google-auth h3,
+.fractal-auth h3 {
+  color: #e5e7eb;
+  font-size: 1.01rem;
+  font-weight: 500;
+  margin: 0;
+}
+
+.wallet-auth p,
+.google-auth p,
+.fractal-auth p {
+  color: #a1a1aa;
+  font-size: 0.93rem;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.wallet-options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.wallet-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  background: #23272f;
+  border: 1px solid #4f8cff;
+  border-radius: 5px;
+  color: #4f8cff;
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.18s;
+}
+
+.wallet-option:hover:not(:disabled) {
+  background: #4f8cff;
+  color: #fff;
+}
+
+.wallet-option:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.wallet-icon {
+  font-size: 1.1rem;
+}
+
+.google-auth-button,
+.fractal-auth-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 0;
+  background: #4f8cff;
+  border: none;
+  border-radius: 5px;
+  color: #fff;
+  font-size: 0.97rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.18s;
+  width: 100%;
+}
+
+.google-auth-button:hover:not(:disabled),
+.fractal-auth-button:hover:not(:disabled) {
+  background: #3b4252;
+  color: #4f8cff;
+}
+
+.google-auth-button:disabled,
+.fractal-auth-button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.google-icon,
+.fractal-icon {
+  font-size: 1.1rem;
+}
+
+.loading-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(120, 120, 120, 0.18);
+  border-top: 2px solid #4f8cff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.fractal-benefits {
+  background: #23272f;
+  border: 1px solid #10b981;
+  border-radius: 7px;
+  padding: 10px;
+  margin-top: 10px;
+}
+
+.fractal-benefits h4 {
+  color: #10b981;
+  font-size: 0.93rem;
+  font-weight: 600;
+  margin: 0 0 4px 0;
+}
+
+.fractal-benefits ul {
+  color: #a1a1aa;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  margin: 0;
+  padding-left: 14px;
+}
+
+.fractal-benefits li {
+  margin-bottom: 2px;
+} 
