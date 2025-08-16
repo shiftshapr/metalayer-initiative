@@ -1,5 +1,15 @@
-.app-container {
+.App {
+  text-align: center;
   min-height: 100vh;
-  display: flex;
-  background: #101624;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.App-header {
+  background-color: #282c34;
+  padding: 20px;
+  color: white;
+}
+
+.App-link {
+  color: #61dafb;
 } 
