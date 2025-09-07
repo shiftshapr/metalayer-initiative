@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { checkPoH } = require('../controllers/pohController');
-const sessionStore = require('../sessionStore');
+const sessionStore = require('../services/sessionStore');
 
 // POST /auth/login → Simulate login
 router.post('/login', (req, res) => {
