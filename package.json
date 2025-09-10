@@ -1,0 +1,35 @@
+{
+  "name": "metalayer-initiative",
+  "version": "1.0.0",
+  "description": "Metaweb-inspired coordination layer enabling human-avatar (agent) interaction with community-aware policies, messaging, and presence tracking",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js",
+    "dev": "nodemon app.js",
+    "test": "node test.js"
+  },
+  "keywords": [
+    "metaweb",
+    "coordination",
+    "human-agent-interaction",
+    "community-policies",
+    "messaging",
+    "presence-tracking"
+  ],
+  "author": "Bridgit-SPC",
+  "license": "MIT",
+  "dependencies": {
+    "@prisma/client": "^5.0.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "pdf-parse": "^1.1.1",
+    "prisma": "^5.0.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}
