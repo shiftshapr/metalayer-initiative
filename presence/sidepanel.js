@@ -44,6 +44,17 @@ class MetaLayerAPI {
   async getMe() {
     return this.request('/auth/me');
   }
+
+  async sendMessage(userId, communityId, content) {
+    return this.request('/chat/message', {
+      method: 'POST',
+      body: JSON.stringify({ userId, communityId, content })
+    });
+  }
+
+  async getChatHistory(communityId) {
+    return this.request(`/chat/history?communityId=${communityId}`);
+  }
 }
 
 // Initialize API client
@@ -207,9 +218,12 @@ async function loadCommunities() {
     // Update community dropdown
     updateCommunityDropdown(communities);
     
-    // Load avatars for the first community
+    // Load avatars and chat history for the first community
     if (communities.length > 0) {
       await loadAvatars(communities[0].id);
+      await loadChatHistory(communities[0].id);
+      // Store current community
+      chrome.storage.local.set({ currentCommunity: communities[0].id });
     }
   } catch (error) {
     console.error('Failed to load communities:', error);
@@ -332,6 +346,12 @@ function switchCommunity(community) {
   
   // Load avatars for the new community
   loadAvatars(community.id);
+  
+  // Load chat history for the new community
+  loadChatHistory(community.id);
+  
+  // Store current community
+  chrome.storage.local.set({ currentCommunity: community.id });
 }
 
 function getAvatarColor(name) {
@@ -339,6 +359,50 @@ function getAvatarColor(name) {
   const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F'];
   const index = name.charCodeAt(0) % colors.length;
   return colors[index];
+}
+
+function addMessageToChat(message) {
+  const chatMessages = document.querySelector('.chat-messages');
+  if (!chatMessages) return;
+  
+  // Remove placeholder text if it exists
+  const placeholder = chatMessages.querySelector('p[style*="text-align: center"]');
+  if (placeholder) {
+    placeholder.remove();
+  }
+  
+  // Create message element
+  const messageDiv = document.createElement('div');
+  messageDiv.className = 'message';
+  messageDiv.innerHTML = `
+    <div class="message-content">${message.content}</div>
+    <div class="message-time">${new Date(message.created_at).toLocaleTimeString()}</div>
+  `;
+  
+  chatMessages.appendChild(messageDiv);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+async function loadChatHistory(communityId) {
+  try {
+    const response = await api.getChatHistory(communityId);
+    const chatMessages = document.querySelector('.chat-messages');
+    if (!chatMessages) return;
+    
+    // Clear existing messages
+    chatMessages.innerHTML = '';
+    
+    if (response.messages && response.messages.length > 0) {
+      response.messages.forEach(message => {
+        addMessageToChat(message);
+      });
+    } else {
+      chatMessages.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 20px;">Chat history appears here.</p>';
+    }
+  } catch (error) {
+    console.error('Failed to load chat history:', error);
+    debug(`Failed to load chat history: ${error.message}`);
+  }
 }
 
 // --- UI Update Function ---
@@ -788,12 +852,33 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (chatSendButton) {
     chatSendButton.addEventListener('click', () => {
       console.log('Chat send button clicked');
-      requireAuth('send messages', () => {
+      requireAuth('send messages', async () => {
         const message = chatInput?.value;
         if (message) {
           debug(`Sending message: ${message}`);
           console.log('Sending message:', message);
-          // TODO: Implement actual message sending
+          
+          try {
+            // Get current user and community
+            const result = await chrome.storage.local.get(['googleUser', 'currentCommunity']);
+            const user = result.googleUser;
+            const communityId = result.currentCommunity || 'comm-001';
+            
+            if (user && user.id) {
+              const response = await api.sendMessage(user.id, communityId, message);
+              debug(`Message sent successfully: ${response.msg?.id}`);
+              console.log('Message sent:', response);
+              
+              // Add message to chat display
+              addMessageToChat(response.msg);
+            } else {
+              debug('No user found for sending message');
+            }
+          } catch (error) {
+            debug(`Failed to send message: ${error.message}`);
+            console.error('Failed to send message:', error);
+          }
+          
           chatInput.value = '';
         }
       });

@@ -552,6 +552,26 @@ body {
     padding: 10px; /* Padding inside the scroll area */
 }
 
+.message {
+  margin-bottom: 10px;
+  padding: 8px;
+  background: white;
+  border-radius: 8px;
+  border-left: 3px solid #007bff;
+}
+
+.message-content {
+  font-size: 14px;
+  line-height: 1.4;
+  margin-bottom: 4px;
+}
+
+.message-time {
+  font-size: 11px;
+  color: #666;
+  text-align: right;
+}
+
 .date-separator {
     text-align: center;
     margin: 15px 0;
