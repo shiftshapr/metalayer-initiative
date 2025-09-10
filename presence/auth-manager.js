@@ -91,7 +91,16 @@ class AuthManager {
     }
 
     try {
-      this.currentUser = await this.currentProvider.getCurrentUser();
+      const user = await this.currentProvider.getCurrentUser();
+      this.currentUser = user;
+      
+      // Notify listeners about current user state
+      if (user) {
+        this.notifyListeners('SIGNED_IN', user);
+      } else {
+        this.notifyListeners('SIGNED_OUT', null);
+      }
+      
       return this.currentUser;
     } catch (error) {
       console.error('Failed to get current user:', error);

@@ -542,7 +542,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // Don't fall back to offline mode - force real auth
     console.log('Forcing real authentication - no offline fallback');
-    updateUI(null);
+    // Don't clear UI here - let the auth state listener handle it
   }
   
   // Load communities and initialize the interface
@@ -554,9 +554,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     console.error('Error loading communities:', error);
   }
   
-  // Ensure UI is updated regardless of auth status
-  console.log('Updating UI...');
-  updateUI(null);
+  // UI will be updated by auth state listener
+  console.log('UI will be updated by auth state listener');
   
   console.log('=== END Initialization ===');
 
@@ -954,8 +953,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Update people tab
   updatePeopleTabWithAuth();
 
-  // Initial UI state
-  updateUI(null);
+  // Initial UI state will be set by auth manager
 
   // Make functions globally accessible for onclick handlers
   window.requireAuth = requireAuth;
