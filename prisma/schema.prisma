@@ -13,3 +13,86 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+model User {
+  id          String   @id @default(uuid())
+  email       String   @unique
+  name        String?
+  avatarUrl   String?
+  isVerified  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  sessions    Session[]
+  messages    Message[]
+  communities CommunityMember[]
+  vault       Vault?
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  token     String   @unique
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+}
+
+model Community {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  members     CommunityMember[]
+  messages    Message[]
+  rules       String? // OPA policy JSON or text
+}
+
+model CommunityMember {
+  id          String   @id @default(uuid())
+  userId      String
+  communityId String
+  user        User     @relation(fields: [userId], references: [id])
+  community   Community @relation(fields: [communityId], references: [id])
+  joinedAt    DateTime @default(now())
+}
+
+model Message {
+  id          String   @id @default(uuid())
+  userId      String
+  communityId String
+  content     String
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id])
+  community   Community @relation(fields: [communityId], references: [id])
+}
+
+model Interaction {
+  id          String   @id @default(uuid())
+  userId      String
+  action      String
+  hash        String?
+  onChainTx   String?
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id])
+}
+
+model Vault {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  data      String   // Encrypted JSON
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+model Avatar {
+  id        String   @id @default(uuid())
+  userId    String
+  url       String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+// Future: Blockchain log, TEE, Agent orchestration, MCP protocol
+// model BlockchainLog { ... }
+// model Agent { ... }
+// model TEE { ... }

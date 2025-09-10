@@ -1,0 +1,41 @@
+{
+  "manifest_version": 3,
+  "name": "Metalayer Sidebar",
+  "version": "1.0.0",
+  "description": "A sidebar overlay for Metalayer, providing chat, community, and agent features.",
+  "action": {
+    "default_icon": {
+      "16": "icon.svg",
+      "48": "icon.svg",
+      "128": "icon.svg"
+    }
+  },
+  "permissions": ["activeTab", "storage", "scripting", "identity"],
+  "host_permissions": ["<all_urls>"],
+  "oauth2": {
+    "client_id": "12678945690-u7nil11ob7ha3qhn7qmj3u0d309h7sih.apps.googleusercontent.com",
+    "scopes": ["openid", "email", "profile"]
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["contentScript.js"]
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "index.html",
+        "icon.svg",
+        "static/js/main.17bda400.js",
+        "static/js/main.17bda400.js.map",
+        "static/css/main.087f3a1d.css",
+        "static/css/main.087f3a1d.css.map"
+      ],
+      "matches": ["<all_urls>"]
+    }
+  ]
+} 
