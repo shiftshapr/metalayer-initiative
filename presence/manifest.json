@@ -22,7 +22,7 @@
     "default_path": "sidepanel.html"
   },
   "background": {
-    "page": "background.html"
+    "service_worker": "background.js"
   },
   "content_scripts": [
     {
@@ -43,6 +43,6 @@
     }
   ],
   "content_security_policy": {
-    "extension_pages": "script-src 'self' https://cors-anywhere.herokuapp.com; object-src 'self'; connect-src 'self' https://bvshfzikwwjasluumfkr.supabase.co wss://bvshfzikwwjasluumfkr.supabase.co https://cors-anywhere.herokuapp.com;"
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' https://bvshfzikwwjasluumfkr.supabase.co wss://bvshfzikwwjasluumfkr.supabase.co http://localhost:3002;"
   }
 } 

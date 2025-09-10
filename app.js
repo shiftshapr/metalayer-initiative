@@ -14,6 +14,8 @@ app.use('/avatars', require('./routes/avatars'));
 app.use('/chat', require('./routes/chat'));
 app.use(require('./routes/interaction'));
 app.use('/policy/enforce', require('./routes/policy'));
+// X-Owlz dynamic NFT endpoints
+app.use('/', require('./routes/xowlz'));
 
 
 
@@ -25,7 +27,10 @@ app.get('/', (req, res) => {
   res.send('API is live!');
 });
 
-const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
-  console.log(`API running on port ${PORT}`);
+const PORT = process.env.PORT || 3002;
+const HOST = process.env.HOST || '0.0.0.0';
+
+app.listen(PORT, HOST, () => {
+  console.log(`🚀 Metalayer Initiative API running on http://${HOST}:${PORT}`);
+  console.log(`📡 Environment: ${process.env.NODE_ENV || 'development'}`);
 });

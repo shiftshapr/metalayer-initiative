@@ -1,18 +1,60 @@
-// Supabase Credentials (Replace with your actual credentials)
-const SUPABASE_URL = 'https://bvshfzikwwjasluumfkr.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ2c2hmemlrd3dqYXNsdXVtZmtyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDQxNDU3NjUsImV4cCI6MjA1OTcyMTc2NX0.YuBpfklO3IxI-yFwFBP_2GIlSO-IGYia6CwpRyRd7VA';
+// Meta-Layer Initiative API Configuration
+const METALAYER_API_URL = 'http://localhost:3002';
 
-// Declare Supabase variable globally but initialize later
-let supabase = null; 
+// API client for Meta-Layer Initiative
+class MetaLayerAPI {
+  constructor(baseURL) {
+    this.baseURL = baseURL;
+  }
 
-// === DEBUGGING: Check how Supabase lib is loaded ===
-console.log('Checking Supabase library presence...');
-console.log('typeof supabase object:', typeof window.supabase);
-console.log('typeof createClient function:', typeof window.createClient);
-if (typeof window.supabase === 'object' && window.supabase !== null) {
-  console.log('supabase object keys:', Object.keys(window.supabase));
-  console.log('typeof supabase.createClient:', typeof window.supabase.createClient);
+  async request(endpoint, options = {}) {
+    const url = `${this.baseURL}${endpoint}`;
+    const config = {
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+      },
+      ...options
+    };
+
+    try {
+      const response = await fetch(url, config);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('API request failed:', error);
+      throw error;
+    }
+  }
+
+  async getCommunities() {
+    return this.request('/communities');
+  }
+
+  async getAvatars(communityId) {
+    return this.request(`/avatars/active?communityId=${communityId}`);
+  }
+
+  async login() {
+    return this.request('/auth/login', { method: 'POST' });
+  }
+
+  async getMe() {
+    return this.request('/auth/me');
+  }
 }
+
+// Initialize API client
+const api = new MetaLayerAPI(METALAYER_API_URL);
+
+// Initialize Loosely Coupled Auth Manager
+const authManager = new AuthManager(); 
+
+// === DEBUGGING: Check API connection ===
+console.log('Meta-Layer Initiative API initialized');
+console.log('API URL:', METALAYER_API_URL);
 // === END DEBUGGING ===
 
 // Debug function (moved from HTML)
@@ -27,32 +69,36 @@ function debug(message) {
 
 // JavaScript for the Collaborative Sidebar
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   debug("DOMContentLoaded event fired.");
   console.log("DOMContentLoaded event fired.");
 
-  // === Initialize Supabase Client HERE ===
-  console.log('Attempting to initialize Supabase...');
-  debug('Attempting to initialize Supabase...');
-  try {
-    // Check if the global `supabase` object exists AND has `createClient` (from local file)
-    if (typeof window.supabase === 'object' && window.supabase !== null && typeof window.supabase.createClient === 'function') {
-        supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-        console.log('Supabase client initialized (Method 1).');
-        debug('Supabase client initialized (Method 1).');
-    } else if (typeof window.createClient === 'function') { 
-        // Or if createClient is directly available globally (less common)
-        supabase = window.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-        console.log('Supabase client initialized (Method 2).');
-        debug('Supabase client initialized (Method 2).');
-    } else {
-        throw new Error('Supabase library not loaded correctly or createClient not found.');
-    }
-  } catch (error) {
-    console.error('Error initializing Supabase inside DOMContentLoaded:', error);
-    debug(`Error initializing Supabase inside DOMContentLoaded: ${error.message}`);
-    // supabase remains null if initialization fails
+  // === Register Auth Providers ===
+  authManager.registerProvider('supabase', new SupabaseAuthProvider());
+  authManager.registerProvider('metalayer', new MetalayerAuthProvider());
+  
+  // === Initialize Auth Manager ===
+  const authReady = await authManager.initialize();
+  if (authReady) {
+    console.log('Auth Manager ready');
+    debug('Auth Manager ready');
+    
+    // Set up auth state listener
+    authManager.onAuthStateChange((event, data) => {
+      debug(`Auth state changed: ${event} - ${data ? 'User found' : 'No user'}`);
+      updateUI(data?.user ?? null);
+    });
+    
+    // Check initial auth state
+    const user = await authManager.getCurrentUser();
+    updateUI(user);
+  } else {
+    console.log('Auth system failed to initialize');
+    debug('Auth system failed to initialize');
   }
+  
+  // Load communities and initialize the interface
+  loadCommunities();
   // === END Initialization ===
 
   // --- Now proceed with the rest of the setup ---
@@ -238,15 +284,33 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Get auth elements
-  const loginBtn = document.getElementById('google-login-btn');
+  const googleLoginBtn = document.getElementById('google-login-btn');
+  const magicLinkBtn = document.getElementById('magic-link-btn');
   const logoutBtn = document.getElementById('logout-btn');
+  const magicLinkModal = document.getElementById('magic-link-modal');
+  const closeMagicLinkModal = document.getElementById('close-magic-link-modal');
+  const sendMagicLinkBtn = document.getElementById('send-magic-link');
+  const magicLinkEmail = document.getElementById('magic-link-email');
 
   // Attach auth listeners
-  if (loginBtn) {
-    loginBtn.addEventListener('click', signInWithGoogle);
+  if (googleLoginBtn) {
+    googleLoginBtn.addEventListener('click', () => signInWithGoogle());
+  }
+  if (magicLinkBtn) {
+    magicLinkBtn.addEventListener('click', () => {
+      magicLinkModal.style.display = 'block';
+    });
   }
   if (logoutBtn) {
-    logoutBtn.addEventListener('click', signOut);
+    logoutBtn.addEventListener('click', () => signOut());
+  }
+  if (closeMagicLinkModal) {
+    closeMagicLinkModal.addEventListener('click', () => {
+      magicLinkModal.style.display = 'none';
+    });
+  }
+  if (sendMagicLinkBtn) {
+    sendMagicLinkBtn.addEventListener('click', () => sendMagicLink());
   }
 
   // Check initial auth state *only if supabase initialized*
@@ -302,36 +366,46 @@ function updateUI(user) {
 
 // --- Auth Functions ---
 async function signInWithGoogle() {
-  debug('Requesting Google Sign-In via background script...');
   try {
-    // Send message to background script (fire and forget)
-    chrome.runtime.sendMessage({ type: 'LOGIN_REQUEST' });
-    // REMOVED await and response handling:
-    // const response = await chrome.runtime.sendMessage({ type: 'LOGIN_REQUEST' });
-    // debug(`Background script responded to login request: ${JSON.stringify(response)}`);
-    // if (response?.status !== 'success') {
-    //    throw new Error(response?.message || 'Background script failed to initiate login.');
-    // }
-    debug('Login request sent to background script.');
-    // onAuthStateChange listener will handle the UI update upon successful login.
+    debug('Attempting Google sign-in...');
+    await authManager.signIn('google');
+    debug('Google sign-in successful');
   } catch (error) {
-    // This catch block now only handles errors during the *sending* of the message
-    console.error('Error sending login request message:', error);
-    debug(`Login Request Send Error: ${error.message}`);
+    console.error('Google sign-in failed:', error);
+    debug(`Google sign-in error: ${error.message}`);
+  }
+}
+
+async function sendMagicLink() {
+  try {
+    const email = document.getElementById('magic-link-email').value;
+    if (!email) {
+      document.getElementById('magic-link-status').textContent = 'Please enter an email address';
+      return;
+    }
+
+    document.getElementById('magic-link-status').textContent = 'Sending magic link...';
+    debug(`Attempting magic link sign-in for: ${email}`);
+    
+    await authManager.signIn('magic_link', email);
+    
+    document.getElementById('magic-link-status').textContent = 'Magic link sent! Check your email.';
+    document.getElementById('magic-link-modal').style.display = 'none';
+    debug('Magic link sent successfully');
+  } catch (error) {
+    console.error('Magic link sign-in failed:', error);
+    document.getElementById('magic-link-status').textContent = `Error: ${error.message}`;
+    debug(`Magic link error: ${error.message}`);
   }
 }
 
 async function signOut() {
-  // Sign out can likely still happen here, as it doesn't need a popup
-  if (!supabase) return console.error('Supabase client not initialized.');
-  debug('Attempting Sign-Out...');
   try {
-    const { error } = await supabase.auth.signOut();
-    if (error) throw error;
-    debug('Sign-Out successful.');
-    updateUI(null); // Update UI immediately on logout
+    debug('Attempting sign-out...');
+    await authManager.signOut();
+    debug('Sign-out successful');
   } catch (error) {
-    console.error('Error signing out:', error);
-    debug(`Sign-Out Error: ${error.message}`);
+    console.error('Sign-out failed:', error);
+    debug(`Sign-out error: ${error.message}`);
   }
 } 
