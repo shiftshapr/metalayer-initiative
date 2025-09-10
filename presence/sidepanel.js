@@ -404,7 +404,7 @@ function addMessageToChat(message) {
   messageDiv.innerHTML = `
     <div class="message-header">
       ${threadIndicator}
-      ${message.uri ? `<a href="${message.uri}" target="_blank" class="message-uri">🔗</a>` : ''}
+      ${message.uri ? `<a href="${message.uri}" target="_blank" class="message-uri" title="Captured from: ${message.uri}">🔗</a>` : ''}
     </div>
     <div class="message-content">${contentWithLinks}</div>
     ${message.optionalContent ? `<div class="message-anchor">📍 ${message.optionalContent}</div>` : ''}
@@ -419,6 +419,20 @@ function convertUrlsToLinks(text) {
   // URL regex pattern
   const urlRegex = /(https?:\/\/[^\s]+)/g;
   return text.replace(urlRegex, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
+}
+
+async function getCurrentPageUri() {
+  try {
+    // Get the active tab
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab && tab.url) {
+      return tab.url;
+    }
+    return null;
+  } catch (error) {
+    console.error('Failed to get current page URI:', error);
+    return null;
+  }
 }
 
 async function loadChatHistory(communityId) {
@@ -901,16 +915,31 @@ document.addEventListener('DOMContentLoaded', async () => {
           const communityId = result.currentCommunity || 'comm-001';
           
           if (user && user.id) {
-            const response = await api.sendMessage(user.id, communityId, message);
-            debug(`Message sent successfully: ${response.msg?.id}`);
-            console.log('Message sent:', response);
+            // Show loading state
+            const originalButtonText = chatSendButton.textContent;
+            chatSendButton.textContent = 'Sending...';
+            chatSendButton.disabled = true;
             
-            // Add message to chat display
-            addMessageToChat(response.msg);
-            
-            // Clear input and reset height
-            chatInput.value = '';
-            chatInput.style.height = 'auto';
+            try {
+              // Get current page URI
+              const currentUri = await getCurrentPageUri();
+              debug(`Current page URI: ${currentUri}`);
+              
+              const response = await api.sendMessage(user.id, communityId, message, currentUri);
+              debug(`Message sent successfully: ${response.msg?.id}`);
+              console.log('Message sent:', response);
+              
+              // Add message to chat display
+              addMessageToChat(response.msg);
+              
+              // Clear input and reset height
+              chatInput.value = '';
+              chatInput.style.height = 'auto';
+            } finally {
+              // Restore button state
+              chatSendButton.textContent = originalButtonText;
+              chatSendButton.disabled = false;
+            }
           } else {
             debug('No user found for sending message');
           }
