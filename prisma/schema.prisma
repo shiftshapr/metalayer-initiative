@@ -57,13 +57,21 @@ model CommunityMember {
 }
 
 model Message {
-  id          String   @id @default(uuid())
-  userId      String
-  communityId String
-  content     String
-  createdAt   DateTime @default(now())
-  user        User     @relation(fields: [userId], references: [id])
-  community   Community @relation(fields: [communityId], references: [id])
+  id             String   @id @default(uuid())
+  userId         String
+  communityId    String
+  content        String
+  uri            String?  // URI for the message
+  parentId       String?  // For replies
+  threadId       String?  // For threading
+  optionalContent String? // For anchoring comments
+  createdAt      DateTime @default(now())
+  user           User     @relation(fields: [userId], references: [id])
+  community      Community @relation(fields: [communityId], references: [id])
+  
+  // Self-referential relations for threading
+  parent         Message? @relation("MessageReplies", fields: [parentId], references: [id])
+  replies        Message[] @relation("MessageReplies")
 }
 
 model Interaction {
@@ -88,6 +96,7 @@ model Avatar {
   id        String   @id @default(uuid())
   userId    String
   url       String
+  uri       String?  // URI for the avatar/visibility
   createdAt DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id])
 }

@@ -45,15 +45,30 @@ class MetaLayerAPI {
     return this.request('/auth/me');
   }
 
-  async sendMessage(userId, communityId, content) {
+  async sendMessage(userId, communityId, content, uri = null, parentId = null, threadId = null, optionalContent = null) {
     return this.request('/chat/message', {
       method: 'POST',
-      body: JSON.stringify({ userId, communityId, content })
+      body: JSON.stringify({ 
+        userId, 
+        communityId, 
+        content, 
+        uri, 
+        parentId, 
+        threadId, 
+        optionalContent 
+      })
     });
   }
 
-  async getChatHistory(communityId) {
-    return this.request(`/chat/history?communityId=${communityId}`);
+  async getChatHistory(communityId, threadId = null) {
+    const url = threadId 
+      ? `/chat/history?communityId=${communityId}&threadId=${threadId}`
+      : `/chat/history?communityId=${communityId}`;
+    return this.request(url);
+  }
+
+  async getThreads(communityId) {
+    return this.request(`/chat/threads?communityId=${communityId}`);
   }
 }
 
@@ -374,13 +389,36 @@ function addMessageToChat(message) {
   // Create message element
   const messageDiv = document.createElement('div');
   messageDiv.className = 'message';
+  
+  // Convert URLs to clickable links
+  const contentWithLinks = convertUrlsToLinks(message.content);
+  
+  // Add thread/reply indicators
+  let threadIndicator = '';
+  if (message.parentId) {
+    threadIndicator = '<span class="thread-indicator">↳ Reply</span>';
+  } else if (message.threadId && message.threadId !== message.id) {
+    threadIndicator = '<span class="thread-indicator">🧵 Thread</span>';
+  }
+  
   messageDiv.innerHTML = `
-    <div class="message-content">${message.content}</div>
+    <div class="message-header">
+      ${threadIndicator}
+      ${message.uri ? `<a href="${message.uri}" target="_blank" class="message-uri">🔗</a>` : ''}
+    </div>
+    <div class="message-content">${contentWithLinks}</div>
+    ${message.optionalContent ? `<div class="message-anchor">📍 ${message.optionalContent}</div>` : ''}
     <div class="message-time">${new Date(message.created_at).toLocaleTimeString()}</div>
   `;
   
   chatMessages.appendChild(messageDiv);
   chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+function convertUrlsToLinks(text) {
+  // URL regex pattern
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  return text.replace(urlRegex, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
 }
 
 async function loadChatHistory(communityId) {
@@ -835,30 +873,47 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   
   if (chatSendButton) {
-    chatSendButton.addEventListener('click', () => {
-      console.log('Chat send button clicked');
-      requireAuth('send messages', async () => {
-        const message = chatInput?.value;
-        if (message) {
-          debug(`Sending message: ${message}`);
-          console.log('Sending message:', message);
+    chatSendButton.addEventListener('click', sendChatMessage);
+  }
+  
+  // Add Enter key support for sending messages
+  if (chatInput) {
+    chatInput.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        sendChatMessage();
+      }
+    });
+  }
+  
+  function sendChatMessage() {
+    console.log('Chat send button clicked');
+    requireAuth('send messages', async () => {
+      const message = chatInput?.value?.trim();
+      if (message) {
+        debug(`Sending message: ${message}`);
+        console.log('Sending message:', message);
+        
+        try {
+          // Get current user and community
+          const result = await chrome.storage.local.get(['googleUser', 'currentCommunity']);
+          const user = result.googleUser;
+          const communityId = result.currentCommunity || 'comm-001';
           
-          try {
-            // Get current user and community
-            const result = await chrome.storage.local.get(['googleUser', 'currentCommunity']);
-            const user = result.googleUser;
-            const communityId = result.currentCommunity || 'comm-001';
+          if (user && user.id) {
+            const response = await api.sendMessage(user.id, communityId, message);
+            debug(`Message sent successfully: ${response.msg?.id}`);
+            console.log('Message sent:', response);
             
-            if (user && user.id) {
-              const response = await api.sendMessage(user.id, communityId, message);
-              debug(`Message sent successfully: ${response.msg?.id}`);
-              console.log('Message sent:', response);
-              
-              // Add message to chat display
-              addMessageToChat(response.msg);
-            } else {
-              debug('No user found for sending message');
-            }
+            // Add message to chat display
+            addMessageToChat(response.msg);
+            
+            // Clear input and reset height
+            chatInput.value = '';
+            chatInput.style.height = 'auto';
+          } else {
+            debug('No user found for sending message');
+          }
           } catch (error) {
             debug(`Failed to send message: ${error.message}`);
             console.error('Failed to send message:', error);
