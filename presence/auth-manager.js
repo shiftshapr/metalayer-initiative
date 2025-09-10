@@ -382,8 +382,9 @@ class MetalayerAuthProvider extends BaseAuthProvider {
 
   async getCurrentUser() {
     try {
-      const result = await this.api.getMe();
-      return result.user;
+      // For Chrome extension, get user from storage instead of API
+      const result = await chrome.storage.local.get(['googleUser', 'supabaseUser', 'metalayerUser']);
+      return result.googleUser || result.supabaseUser || result.metalayerUser || null;
     } catch (error) {
       return null;
     }

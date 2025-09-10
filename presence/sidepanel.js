@@ -532,22 +532,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       const user = await authManager.getCurrentUser();
       console.log('Initial user:', user);
       
-      // Force real authentication - clear any stored users
-      if (user) {
-        console.log('Found stored user, clearing and requiring real auth');
-        try {
-          await authManager.signOut();
-        } catch (error) {
-          console.log('Sign out failed, clearing storage manually');
-        }
-        // Always clear storage manually to ensure clean state
-        await chrome.storage.local.clear();
-        // Force auth manager to clear its cache
-        authManager.currentUser = null;
-        updateUI(null);
-      } else {
-        updateUI(null);
-      }
+      // Update UI with current user
+      updateUI(user);
     } else {
       console.log('Auth system failed to initialize');
     }
