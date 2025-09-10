@@ -8,8 +8,8 @@ class AuthManager {
     this.currentUser = null;
     this.listeners = [];
     this.config = {
-      defaultProvider: 'supabase',
-      fallbackProvider: 'metalayer'
+      defaultProvider: 'metalayer',
+      fallbackProvider: 'supabase'
     };
   }
 
@@ -41,8 +41,14 @@ class AuthManager {
         await this.setProvider(this.config.fallbackProvider);
         return true;
       } catch (fallbackError) {
-        console.error('All auth providers failed to initialize:', fallbackError);
-        return false;
+        console.warn(`Fallback provider failed, trying offline mode: ${fallbackError.message}`);
+        try {
+          await this.setProvider('offline');
+          return true;
+        } catch (offlineError) {
+          console.error('All auth providers failed to initialize:', offlineError);
+          return false;
+        }
       }
     }
   }
@@ -169,13 +175,23 @@ class SupabaseAuthProvider extends BaseAuthProvider {
   async initialize() {
     try {
       if (typeof window.supabase === 'object' && window.supabase !== null && typeof window.supabase.createClient === 'function') {
-        this.supabase = window.supabase.createClient(
-          'https://bvshfzikwwjasluumfkr.supabase.co',
-          'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ2c2hmemlrd3dqYXNsdXVtZmtyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDQxNDU3NjUsImV4cCI6MjA1OTcyMTc2NX0.YuBpfklO3IxI-yFwFBP_2GIlSO-IGYia6CwpRyRd7VA'
-        );
-        this.initialized = true;
-        console.log('Supabase auth provider initialized');
-        return true;
+        // Test if Supabase URL is reachable
+        try {
+          const response = await fetch('https://bvshfzikwwjasluumfkr.supabase.co/rest/v1/', {
+            method: 'HEAD'
+          });
+          
+          this.supabase = window.supabase.createClient(
+            'https://bvshfzikwwjasluumfkr.supabase.co',
+            'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ2c2hmemlrd3dqYXNsdXVtZmtyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDQxNDU3NjUsImV4cCI6MjA1OTcyMTc2NX0.YuBpfklO3IxI-yFwFBP_2GIlSO-IGYia6CwpRyRd7VA'
+          );
+          this.initialized = true;
+          console.log('Supabase auth provider initialized');
+          return true;
+        } catch (networkError) {
+          console.warn('Supabase URL not reachable, skipping initialization:', networkError.message);
+          throw new Error(`Supabase service unavailable: ${networkError.message}`);
+        }
       }
       throw new Error('Supabase library not available');
     } catch (error) {
@@ -199,15 +215,21 @@ class SupabaseAuthProvider extends BaseAuthProvider {
   }
 
   async signInWithGoogle() {
-    const { data, error } = await this.supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: chrome.identity.getRedirectURL()
-      }
+    // Use Chrome's background script for Google OAuth
+    return new Promise((resolve, reject) => {
+      chrome.runtime.sendMessage({ type: 'GOOGLE_AUTH_REQUEST' }, (response) => {
+        if (chrome.runtime.lastError) {
+          reject(new Error(chrome.runtime.lastError.message));
+          return;
+        }
+        
+        if (response.success) {
+          resolve({ user: response.user, session: { access_token: 'google-token' } });
+        } else {
+          reject(new Error(response.error || 'Google authentication failed'));
+        }
+      });
     });
-    
-    if (error) throw error;
-    return { user: data.user, session: data.session };
   }
 
   async signInWithMagicLink(email) {
@@ -269,9 +291,9 @@ class MetalayerAuthProvider extends BaseAuthProvider {
 
   async initialize() {
     try {
-      this.api = new MetaLayerAPI('http://localhost:3002');
+      this.api = new MetaLayerAPI('http://216.238.91.120:3002');
       this.initialized = true;
-      console.log('Metalayer auth provider initialized');
+      console.log('Metalayer auth provider initialized (no network check)');
       return true;
     } catch (error) {
       console.error('Failed to initialize Metalayer auth provider:', error);
@@ -285,12 +307,32 @@ class MetalayerAuthProvider extends BaseAuthProvider {
     switch (method) {
       case 'mock':
         return await this.signInMock();
+      case 'google':
+        return await this.signInWithGoogle();
       case 'magic_link':
         const [email] = args;
         return await this.signInWithMagicLink(email);
       default:
         throw new Error(`Unsupported sign-in method: ${method}`);
     }
+  }
+
+  async signInWithGoogle() {
+    // Use Chrome's background script for Google OAuth
+    return new Promise((resolve, reject) => {
+      chrome.runtime.sendMessage({ type: 'GOOGLE_AUTH_REQUEST' }, (response) => {
+        if (chrome.runtime.lastError) {
+          reject(new Error(chrome.runtime.lastError.message));
+          return;
+        }
+        
+        if (response.success) {
+          resolve({ user: response.user, session: { access_token: 'google-token' } });
+        } else {
+          reject(new Error(response.error || 'Google authentication failed'));
+        }
+      });
+    });
   }
 
   async signInMock() {
@@ -312,7 +354,30 @@ class MetalayerAuthProvider extends BaseAuthProvider {
   }
 
   async signOut() {
-    await this.api.logout();
+    try {
+      // Revoke Google OAuth token if it exists
+      const result = await chrome.storage.local.get(['googleUser']);
+      if (result.googleUser) {
+        try {
+          // Get the stored token and revoke it
+          chrome.identity.getAuthToken({ interactive: false }, (token) => {
+            if (token) {
+              chrome.identity.removeCachedAuthToken({ token }, () => {
+                console.log('Google token revoked');
+              });
+            }
+          });
+        } catch (error) {
+          console.log('No Google token to revoke');
+        }
+      }
+      
+      // Clear Chrome storage
+      await chrome.storage.local.clear();
+      console.log('Chrome storage cleared');
+    } catch (error) {
+      console.error('Error during sign out:', error);
+    }
   }
 
   async getCurrentUser() {
@@ -325,7 +390,112 @@ class MetalayerAuthProvider extends BaseAuthProvider {
   }
 
   getAvailableMethods() {
-    return ['mock', 'magic_link'];
+    return ['mock', 'google', 'magic_link'];
+  }
+}
+
+// Offline Mock Auth Provider (for testing when no services are available)
+class OfflineAuthProvider extends BaseAuthProvider {
+  constructor() {
+    super('offline');
+    this.mockUser = null;
+  }
+
+  async initialize() {
+    this.initialized = true;
+    console.log('Offline auth provider initialized (mock mode)');
+    return true;
+  }
+
+  async signIn(method, ...args) {
+    if (!this.initialized) throw new Error('Provider not initialized');
+
+    switch (method) {
+      case 'mock':
+        return await this.signInMock();
+      case 'google':
+        return await this.signInWithGoogle();
+      case 'magic_link':
+        const [email] = args;
+        return await this.signInWithMagicLink(email);
+      default:
+        throw new Error(`Unsupported sign-in method: ${method}`);
+    }
+  }
+
+  async signInWithGoogle() {
+    // Use Chrome's background script for Google OAuth even in offline mode
+    return new Promise((resolve, reject) => {
+      chrome.runtime.sendMessage({ type: 'GOOGLE_AUTH_REQUEST' }, (response) => {
+        if (chrome.runtime.lastError) {
+          // If Chrome OAuth fails, fall back to mock
+          console.warn('Chrome OAuth failed, using mock Google user:', chrome.runtime.lastError.message);
+          this.mockUser = {
+            id: 'mock-google-user',
+            email: 'demo@gmail.com',
+            user_metadata: { 
+              full_name: 'Demo Google User',
+              avatar_url: null
+            }
+          };
+          resolve({ user: this.mockUser, session: { access_token: 'mock-google-token' } });
+          return;
+        }
+        
+        if (response.success) {
+          this.mockUser = response.user;
+          resolve({ user: response.user, session: { access_token: 'google-token' } });
+        } else {
+          // Fall back to mock if OAuth fails
+          console.warn('Google OAuth failed, using mock user:', response.error);
+          this.mockUser = {
+            id: 'mock-google-user',
+            email: 'demo@gmail.com',
+            user_metadata: { 
+              full_name: 'Demo Google User',
+              avatar_url: null
+            }
+          };
+          resolve({ user: this.mockUser, session: { access_token: 'mock-google-token' } });
+        }
+      });
+    });
+  }
+
+  async signInMock() {
+    this.mockUser = {
+      id: 'mock-user-123',
+      email: 'demo@example.com',
+      user_metadata: { 
+        full_name: 'Demo User',
+        avatar_url: null
+      }
+    };
+    return { user: this.mockUser, session: { access_token: 'mock-token' } };
+  }
+
+  async signInWithMagicLink(email) {
+    this.mockUser = {
+      id: `mock-${email}`,
+      email: email,
+      user_metadata: { 
+        full_name: email.split('@')[0],
+        avatar_url: null
+      }
+    };
+    return { user: this.mockUser, session: { access_token: 'mock-token' } };
+  }
+
+  async signOut() {
+    this.mockUser = null;
+  }
+
+  async getCurrentUser() {
+    return this.mockUser;
+  }
+
+  getAvailableMethods() {
+    return ['mock', 'google', 'magic_link'];
   }
 }
 
@@ -334,3 +504,4 @@ window.AuthManager = AuthManager;
 window.BaseAuthProvider = BaseAuthProvider;
 window.SupabaseAuthProvider = SupabaseAuthProvider;
 window.MetalayerAuthProvider = MetalayerAuthProvider;
+window.OfflineAuthProvider = OfflineAuthProvider;

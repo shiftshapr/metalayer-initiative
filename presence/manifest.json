@@ -11,11 +11,15 @@
     "scripting",
     "identity"
   ],
+  "host_permissions": [
+    "https://app.themetalayer.org/*"
+  ],
   "oauth2": {
-    "client_id": "323445937864-mn658sdkavg5100akt3ep379loc3eeb7.apps.googleusercontent.com",
+    "client_id": "240745106929-q6hc1b06mochkuu4gf6uo3d2mopvg337.apps.googleusercontent.com",
     "scopes": [
       "https://www.googleapis.com/auth/userinfo.email",
-      "https://www.googleapis.com/auth/userinfo.profile"
+      "https://www.googleapis.com/auth/userinfo.profile",
+      "openid"
     ]
   },
   "side_panel": {
@@ -43,6 +47,6 @@
     }
   ],
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' https://bvshfzikwwjasluumfkr.supabase.co wss://bvshfzikwwjasluumfkr.supabase.co http://localhost:3002;"
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' https://bvshfzikwwjasluumfkr.supabase.co wss://bvshfzikwwjasluumfkr.supabase.co http://216.238.91.120:3002 https://app.themetalayer.org https://www.googleapis.com;"
   }
 } 

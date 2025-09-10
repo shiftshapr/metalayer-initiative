@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Google OAuth</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        button { padding: 10px 20px; margin: 10px; font-size: 16px; }
+        .result { margin: 20px 0; padding: 10px; background: #f0f0f0; border-radius: 5px; }
+        .error { background: #ffebee; color: #c62828; }
+        .success { background: #e8f5e8; color: #2e7d32; }
+    </style>
+</head>
+<body>
+    <h1>Google OAuth Test</h1>
+    <p>This page tests the Google OAuth functionality in the browser extension.</p>
+    
+    <button id="test-google-auth">Test Google Authentication</button>
+    <button id="test-chrome-storage">Check Chrome Storage</button>
+    <button id="clear-storage">Clear Storage</button>
+    
+    <div id="result" class="result" style="display: none;"></div>
+    
+    <script>
+        function showResult(message, isError = false) {
+            const result = document.getElementById('result');
+            result.textContent = message;
+            result.className = `result ${isError ? 'error' : 'success'}`;
+            result.style.display = 'block';
+        }
+        
+        document.getElementById('test-google-auth').addEventListener('click', async () => {
+            try {
+                showResult('Testing Google OAuth...');
+                
+                // Test the background script message
+                const response = await new Promise((resolve, reject) => {
+                    chrome.runtime.sendMessage({ type: 'GOOGLE_AUTH_REQUEST' }, (response) => {
+                        if (chrome.runtime.lastError) {
+                            reject(new Error(chrome.runtime.lastError.message));
+                        } else {
+                            resolve(response);
+                        }
+                    });
+                });
+                
+                if (response.success) {
+                    showResult(`Google OAuth Success! User: ${response.user.email} (${response.user.user_metadata.full_name})`);
+                } else {
+                    showResult(`Google OAuth Failed: ${response.error}`, true);
+                }
+            } catch (error) {
+                showResult(`Error: ${error.message}`, true);
+            }
+        });
+        
+        document.getElementById('test-chrome-storage').addEventListener('click', async () => {
+            try {
+                const result = await new Promise((resolve) => {
+                    chrome.storage.local.get(['googleUser'], (result) => {
+                        resolve(result);
+                    });
+                });
+                
+                if (result.googleUser) {
+                    showResult(`Chrome Storage: Found user ${result.googleUser.email} (${result.googleUser.name})`);
+                } else {
+                    showResult('Chrome Storage: No user found', true);
+                }
+            } catch (error) {
+                showResult(`Storage Error: ${error.message}`, true);
+            }
+        });
+        
+        document.getElementById('clear-storage').addEventListener('click', async () => {
+            try {
+                await new Promise((resolve) => {
+                    chrome.storage.local.clear(() => {
+                        resolve();
+                    });
+                });
+                showResult('Chrome Storage cleared');
+            } catch (error) {
+                showResult(`Clear Error: ${error.message}`, true);
+            }
+        });
+    </script>
+</body>
+</html>
