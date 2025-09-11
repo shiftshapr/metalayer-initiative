@@ -435,6 +435,81 @@ async function getCurrentPageUri() {
   }
 }
 
+async function handlePendingContent() {
+  try {
+    const result = await chrome.storage.local.get([
+      'pendingMessageContent', 
+      'pendingMessageUri',
+      'pendingVisibilityContent',
+      'pendingVisibilityUri'
+    ]);
+
+    // Handle pending message content
+    if (result.pendingMessageContent) {
+      const chatInput = document.getElementById('chat-textarea');
+      if (chatInput) {
+        // Pre-populate the message input with the selected content
+        chatInput.value = `Commenting on: "${result.pendingMessageContent}"`;
+        chatInput.focus();
+        
+        // Auto-resize the textarea
+        autoResize(chatInput);
+        
+        // Clear the pending content
+        await chrome.storage.local.remove(['pendingMessageContent', 'pendingMessageUri']);
+        
+        console.log('Pre-populated message input with selected content');
+      }
+    }
+
+    // Handle pending visibility content
+    if (result.pendingVisibilityContent) {
+      // For now, we'll show a notification that visibility anchoring is not yet implemented
+      // In the future, this could update the user's visibility status
+      console.log('Pending visibility content:', result.pendingVisibilityContent);
+      
+      // Clear the pending content
+      await chrome.storage.local.remove(['pendingVisibilityContent', 'pendingVisibilityUri']);
+      
+      // Show a temporary notification
+      showNotification('Visibility anchoring feature coming soon!');
+    }
+  } catch (error) {
+    console.error('Failed to handle pending content:', error);
+  }
+}
+
+function showNotification(message) {
+  // Create a temporary notification
+  const notification = document.createElement('div');
+  notification.style.cssText = `
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: #007bff;
+    color: white;
+    padding: 12px 16px;
+    border-radius: 6px;
+    font-size: 14px;
+    z-index: 10000;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    animation: slideIn 0.3s ease-out;
+  `;
+  
+  notification.textContent = message;
+  document.body.appendChild(notification);
+  
+  // Remove after 3 seconds
+  setTimeout(() => {
+    notification.style.animation = 'slideOut 0.3s ease-in';
+    setTimeout(() => {
+      if (notification.parentNode) {
+        notification.parentNode.removeChild(notification);
+      }
+    }, 300);
+  }, 3000);
+}
+
 async function loadChatHistory(communityId) {
   try {
     const response = await api.getChatHistory(communityId);
@@ -586,6 +661,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       
       // Update UI with current user
       updateUI(user);
+      
+      // Check for pending content from selection widget
+      await handlePendingContent();
     } else {
       console.log('Auth system failed to initialize');
     }
@@ -925,7 +1003,19 @@ document.addEventListener('DOMContentLoaded', async () => {
               const currentUri = await getCurrentPageUri();
               debug(`Current page URI: ${currentUri}`);
               
-              const response = await api.sendMessage(user.id, communityId, message, currentUri);
+              // Check if this is a message with selected content
+              let optionalContent = null;
+              if (message.startsWith('Commenting on: "')) {
+                // Extract the selected content from the pre-populated message
+                const match = message.match(/^Commenting on: "(.+)"$/);
+                if (match) {
+                  optionalContent = match[1];
+                  // Remove the prefix from the actual message content
+                  message = message.replace(/^Commenting on: ".+":\s*/, '');
+                }
+              }
+              
+              const response = await api.sendMessage(user.id, communityId, message, currentUri, null, null, optionalContent);
               debug(`Message sent successfully: ${response.msg?.id}`);
               console.log('Message sent:', response);
               

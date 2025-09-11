@@ -34,4 +34,169 @@ html.collaborative-sidebar-push-mode {
    margin-right: 300px; // Adjust width as needed
    transition: margin-right 0.3s ease;
 }
-*/ 
+*/
+
+/* Selection Widget Styles */
+.metalayer-widget {
+    position: fixed;
+    z-index: 10000;
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 14px;
+    min-width: 280px;
+    max-width: 400px;
+    display: none;
+    animation: widgetFadeIn 0.2s ease-out;
+}
+
+@keyframes widgetFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.widget-content {
+    padding: 12px;
+}
+
+.widget-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #eee;
+}
+
+.widget-title {
+    font-weight: 600;
+    color: #333;
+    font-size: 16px;
+}
+
+.widget-close {
+    background: none;
+    border: none;
+    font-size: 18px;
+    color: #999;
+    cursor: pointer;
+    padding: 0;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 3px;
+}
+
+.widget-close:hover {
+    background: #f5f5f5;
+    color: #666;
+}
+
+.widget-actions {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.widget-action {
+    flex: 1;
+    padding: 8px 12px;
+    border: 1px solid #007bff;
+    background: white;
+    color: #007bff;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+.widget-action:hover {
+    background: #007bff;
+    color: white;
+    transform: translateY(-1px);
+}
+
+.widget-action:active {
+    transform: translateY(0);
+}
+
+.widget-preview {
+    background: #f8f9fa;
+    border-radius: 4px;
+    padding: 8px;
+    border-left: 3px solid #007bff;
+}
+
+.preview-label {
+    font-size: 11px;
+    color: #666;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    display: block;
+    margin-bottom: 4px;
+}
+
+.preview-content {
+    font-size: 13px;
+    color: #333;
+    line-height: 1.4;
+    word-wrap: break-word;
+    max-height: 60px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Responsive adjustments */
+@media (max-width: 480px) {
+    .metalayer-widget {
+        min-width: 260px;
+        max-width: calc(100vw - 20px);
+    }
+    
+    .widget-actions {
+        flex-direction: column;
+    }
+    
+    .widget-action {
+        flex: none;
+    }
+}
+
+/* Notification animations */
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@keyframes slideOut {
+    from {
+        transform: translateX(0);
+        opacity: 1;
+    }
+    to {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+} 

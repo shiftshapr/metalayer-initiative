@@ -94,6 +94,55 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true; // Indicate asynchronous response
   }
 
+  // Handle selection widget actions
+  if (message.action === "startMessageWithContent") {
+    console.log("Received startMessageWithContent message:", message);
+    (async () => {
+      const tabId = sender.tab?.id;
+      if (tabId) {
+        try {
+          // Open sidepanel and pass the selected content
+          await chrome.sidePanel.open({ tabId });
+          
+          // Store the selected content for the sidepanel to use
+          await chrome.storage.local.set({
+            pendingMessageContent: message.content,
+            pendingMessageUri: message.uri
+          });
+          
+          console.log("Side panel opened with pending message content");
+        } catch (error) {
+          console.error("Error handling startMessageWithContent:", error);
+        }
+      }
+    })();
+    return true;
+  }
+
+  if (message.action === "anchorVisibility") {
+    console.log("Received anchorVisibility message:", message);
+    (async () => {
+      const tabId = sender.tab?.id;
+      if (tabId) {
+        try {
+          // Open sidepanel and pass the selected content for visibility anchoring
+          await chrome.sidePanel.open({ tabId });
+          
+          // Store the selected content for visibility anchoring
+          await chrome.storage.local.set({
+            pendingVisibilityContent: message.content,
+            pendingVisibilityUri: message.uri
+          });
+          
+          console.log("Side panel opened with pending visibility content");
+        } catch (error) {
+          console.error("Error handling anchorVisibility:", error);
+        }
+      }
+    })();
+    return true;
+  }
+
   // Handle sidebar toggle
   if (message.action === "toggleSidebar") {
     console.log("Received toggleSidebar message from content script");
