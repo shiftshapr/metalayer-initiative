@@ -549,7 +549,28 @@ body {
 .chat-messages {
     flex-grow: 1;
     overflow-y: auto;
+    overflow-x: hidden;
     padding: 10px; /* Padding inside the scroll area */
+    scrollbar-width: thin;
+    scrollbar-color: #ccc #f1f1f1;
+}
+
+.chat-messages::-webkit-scrollbar {
+    width: 8px;
+}
+
+.chat-messages::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+.chat-messages::-webkit-scrollbar-thumb {
+    background: #ccc;
+    border-radius: 4px;
+}
+
+.chat-messages::-webkit-scrollbar-thumb:hover {
+    background: #999;
 }
 
 .message {
@@ -558,6 +579,8 @@ body {
   background: white;
   border-radius: 8px;
   border-left: 3px solid #007bff;
+  width: 95%;
+  max-width: 95%;
 }
 
 .message-header {

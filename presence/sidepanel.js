@@ -424,7 +424,7 @@ function addMessageToChat(message) {
           <span class="sender-name">Deleted Message</span>
         </div>
         <div class="message-meta">
-          <span class="message-time">${new Date(message.deleted_at).toLocaleTimeString()}</span>
+          <span class="message-time">${new Date(message.deleted_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
         </div>
       </div>
       <div class="message-content deleted-message">This message was deleted</div>
@@ -472,7 +472,7 @@ function addMessageToChat(message) {
       </div>
       <div class="message-meta">
         ${message.uri ? `<a href="${message.uri}" target="_blank" class="message-uri" title="Captured from: ${message.uri}">🔗</a>` : ''}
-        <span class="message-time">${new Date(message.created_at).toLocaleTimeString()}</span>
+        <span class="message-time">${new Date(message.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
       </div>
     </div>
     <div class="message-content">${contentWithLinks}</div>

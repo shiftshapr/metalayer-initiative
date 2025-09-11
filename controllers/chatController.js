@@ -120,3 +120,23 @@ exports.deleteMessage = (req, res) => {
   
   res.json({ success: true });
 };
+
+// PUT /chat/message/:id/uri - Update message URI
+exports.updateMessageUri = (req, res) => {
+  const { id } = req.params;
+  const { uri } = req.body;
+  
+  if (!uri) {
+    return res.status(400).json({ error: 'uri is required' });
+  }
+  
+  const messageIndex = chatMessages.findIndex(m => m.id === id);
+  if (messageIndex === -1) {
+    return res.status(404).json({ error: 'Message not found' });
+  }
+  
+  // Update the message URI
+  chatMessages[messageIndex].uri = uri;
+  
+  res.json({ success: true, message: chatMessages[messageIndex] });
+};
