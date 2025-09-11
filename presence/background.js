@@ -8,6 +8,37 @@ chrome.runtime.onInstalled.addListener(() => {
   chrome.storage.sync.set({ sidebarMode: 'overlay' });
 });
 
+// Listen for tab changes to update side panel content
+chrome.tabs.onActivated.addListener(async (activeInfo) => {
+  console.log('Tab activated:', activeInfo.tabId);
+  try {
+    // Send message to side panel to update content for new tab
+    chrome.runtime.sendMessage({
+      type: 'TAB_CHANGED',
+      tabId: activeInfo.tabId
+    });
+  } catch (error) {
+    console.log('Could not send tab change message (side panel may not be open):', error.message);
+  }
+});
+
+// Listen for tab updates (URL changes)
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (changeInfo.status === 'complete' && tab.url) {
+    console.log('Tab updated:', tabId, tab.url);
+    try {
+      // Send message to side panel to update content for URL change
+      chrome.runtime.sendMessage({
+        type: 'TAB_UPDATED',
+        tabId: tabId,
+        url: tab.url
+      });
+    } catch (error) {
+      console.log('Could not send tab update message (side panel may not be open):', error.message);
+    }
+  }
+});
+
 // Handle extension icon click to open side panel
 if (chrome.action && chrome.action.onClicked) {
   chrome.action.onClicked.addListener(async (tab) => {

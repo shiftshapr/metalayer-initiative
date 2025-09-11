@@ -60,10 +60,14 @@ class MetaLayerAPI {
     });
   }
 
-  async getChatHistory(communityId, threadId = null) {
-    const url = threadId 
-      ? `/chat/history?communityId=${communityId}&threadId=${threadId}`
-      : `/chat/history?communityId=${communityId}`;
+  async getChatHistory(communityId, threadId = null, uri = null) {
+    let url = `/chat/history?communityId=${communityId}`;
+    if (threadId) {
+      url += `&threadId=${threadId}`;
+    }
+    if (uri) {
+      url += `&uri=${encodeURIComponent(uri)}`;
+    }
     return this.request(url);
   }
 
@@ -718,9 +722,19 @@ function showNotification(message) {
   }, 3000);
 }
 
-async function loadChatHistory(communityId) {
+async function loadChatHistory(communityId = null) {
   try {
-    const response = await api.getChatHistory(communityId);
+    // Get current community if not provided
+    if (!communityId) {
+      const result = await chrome.storage.local.get(['currentCommunity']);
+      communityId = result.currentCommunity || 'comm-001';
+    }
+    
+    // Get current page URI for page-specific messages
+    const currentUri = await getCurrentPageUri();
+    console.log('Loading chat history for URI:', currentUri);
+    
+    const response = await api.getChatHistory(communityId, null, currentUri);
     const chatMessages = document.querySelector('.chat-messages');
     if (!chatMessages) return;
     
@@ -1351,6 +1365,54 @@ document.addEventListener('DOMContentLoaded', async () => {
   console.log("Sidebar setup complete");
   debug("Sidebar setup complete (from JS)");
 });
+
+// Listen for messages from background script
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === 'TAB_CHANGED') {
+    console.log('Tab changed to:', message.tabId);
+    handleTabChange(message.tabId);
+    return true;
+  }
+  
+  if (message.type === 'TAB_UPDATED') {
+    console.log('Tab updated:', message.tabId, message.url);
+    handleTabUpdate(message.tabId, message.url);
+    return true;
+  }
+  
+  return false;
+});
+
+// Handle tab changes
+async function handleTabChange(tabId) {
+  console.log('Handling tab change for tab:', tabId);
+  try {
+    // Get the current tab URL
+    const tab = await chrome.tabs.get(tabId);
+    if (tab && tab.url) {
+      console.log('New tab URL:', tab.url);
+      // Reload chat history for the new page
+      await loadChatHistory();
+      // Update visibility list for the new page
+      await loadAvatars();
+    }
+  } catch (error) {
+    console.error('Error handling tab change:', error);
+  }
+}
+
+// Handle tab updates (URL changes)
+async function handleTabUpdate(tabId, url) {
+  console.log('Handling tab update for tab:', tabId, 'URL:', url);
+  try {
+    // Reload chat history for the new URL
+    await loadChatHistory();
+    // Update visibility list for the new URL
+    await loadAvatars();
+  } catch (error) {
+    console.error('Error handling tab update:', error);
+  }
+}
 
 // Toggle thread replies visibility
 async function toggleThreadReplies(threadId, messageElement) {

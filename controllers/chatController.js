@@ -26,7 +26,7 @@ exports.postMessage = (req, res) => {
 
 // GET /chat/history
 exports.getChatHistory = (req, res) => {
-  const { communityId, threadId } = req.query;
+  const { communityId, threadId, uri } = req.query;
   if (!communityId) {
     return res.status(400).json({ error: 'communityId query is required' });
   }
@@ -36,6 +36,11 @@ exports.getChatHistory = (req, res) => {
   // If threadId is specified, filter by thread
   if (threadId) {
     msgs = msgs.filter(m => m.threadId === threadId || m.id === threadId);
+  }
+  
+  // If uri is specified, filter by URI (page-specific messages)
+  if (uri) {
+    msgs = msgs.filter(m => m.uri === uri);
   }
   
   // Sort by creation time
