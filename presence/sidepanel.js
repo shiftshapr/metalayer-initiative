@@ -68,6 +68,8 @@ class MetaLayerAPI {
     if (uri) {
       url += `&uri=${encodeURIComponent(uri)}`;
     }
+    console.log('API getChatHistory URL:', url);
+    debug(`API getChatHistory URL: ${url}`);
     return this.request(url);
   }
 
@@ -637,12 +639,13 @@ async function getCurrentPageUri() {
   try {
     // Get the active tab
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (tab && tab.url) {
-      return tab.url;
-    }
-    return null;
+    const uri = tab && tab.url ? tab.url : null;
+    console.log('Current page URI:', uri);
+    debug(`Current page URI: ${uri}`);
+    return uri;
   } catch (error) {
     console.error('Failed to get current page URI:', error);
+    debug(`Failed to get current page URI: ${error.message}`);
     return null;
   }
 }
@@ -733,8 +736,11 @@ async function loadChatHistory(communityId = null) {
     // Get current page URI for page-specific messages
     const currentUri = await getCurrentPageUri();
     console.log('Loading chat history for URI:', currentUri);
+    debug(`Loading chat history for URI: ${currentUri}`);
     
     const response = await api.getChatHistory(communityId, null, currentUri);
+    console.log('Chat history response:', response);
+    debug(`Chat history response: ${JSON.stringify(response)}`);
     const chatMessages = document.querySelector('.chat-messages');
     if (!chatMessages) return;
     
@@ -1386,24 +1392,31 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 // Handle tab changes
 async function handleTabChange(tabId) {
   console.log('Handling tab change for tab:', tabId);
+  debug(`Handling tab change for tab: ${tabId}`);
   try {
     // Get the current tab URL
     const tab = await chrome.tabs.get(tabId);
     if (tab && tab.url) {
       console.log('New tab URL:', tab.url);
+      debug(`New tab URL: ${tab.url}`);
       // Reload chat history for the new page
       await loadChatHistory();
       // Update visibility list for the new page
       await loadAvatars();
+    } else {
+      console.log('No tab or URL found for tab:', tabId);
+      debug(`No tab or URL found for tab: ${tabId}`);
     }
   } catch (error) {
     console.error('Error handling tab change:', error);
+    debug(`Error handling tab change: ${error.message}`);
   }
 }
 
 // Handle tab updates (URL changes)
 async function handleTabUpdate(tabId, url) {
   console.log('Handling tab update for tab:', tabId, 'URL:', url);
+  debug(`Handling tab update for tab: ${tabId}, URL: ${url}`);
   try {
     // Reload chat history for the new URL
     await loadChatHistory();
@@ -1411,6 +1424,7 @@ async function handleTabUpdate(tabId, url) {
     await loadAvatars();
   } catch (error) {
     console.error('Error handling tab update:', error);
+    debug(`Error handling tab update: ${error.message}`);
   }
 }
 

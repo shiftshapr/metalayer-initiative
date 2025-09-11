@@ -27,26 +27,33 @@ exports.postMessage = (req, res) => {
 // GET /chat/history
 exports.getChatHistory = (req, res) => {
   const { communityId, threadId, uri } = req.query;
+  console.log('getChatHistory called with:', { communityId, threadId, uri });
+  
   if (!communityId) {
     return res.status(400).json({ error: 'communityId query is required' });
   }
 
   let msgs = chatMessages.filter(m => m.communityId === communityId);
+  console.log(`Found ${msgs.length} messages for community ${communityId}`);
   
   // If threadId is specified, filter by thread
   if (threadId) {
     msgs = msgs.filter(m => m.threadId === threadId || m.id === threadId);
+    console.log(`After thread filter: ${msgs.length} messages`);
   }
   
   // If uri is specified, filter by URI (page-specific messages)
   if (uri) {
+    const beforeCount = msgs.length;
     msgs = msgs.filter(m => m.uri === uri);
+    console.log(`After URI filter (${uri}): ${beforeCount} -> ${msgs.length} messages`);
   }
   
   // Sort by creation time
   msgs.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
   
-  res.json({ communityId, threadId, messages: msgs });
+  console.log(`Returning ${msgs.length} messages`);
+  res.json({ communityId, threadId, uri, messages: msgs });
 };
 
 // GET /chat/threads - Get all threads in a community
