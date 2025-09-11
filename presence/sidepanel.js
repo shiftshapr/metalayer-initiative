@@ -533,9 +533,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   const mainTabs = document.querySelectorAll('.main-nav-tab');
   const mainTabContents = document.querySelectorAll('.main-tab-content');
   
-  const communityDropdownTrigger = document.querySelector('.community-dropdown-trigger');
+  const communityDropdownTrigger = document.getElementById('community-options-btn');
   const communityDropdownPanel = document.getElementById('community-dropdown-panel');
-  const closeCommunityDropdownButton = document.getElementById('close-community-dropdown');
   const closeSidebarButton = document.getElementById('close-sidebar-btn');
 
   const modal = document.getElementById('mini-profile-modal');
@@ -642,6 +641,40 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.log("Community dropdown closed via outside click");
       }
     }
+  });
+
+  // --- Community Selection Logic ---
+  const communityItems = document.querySelectorAll('.community-item');
+  communityItems.forEach(item => {
+    const checkmark = item.querySelector('.community-checkmark');
+    checkmark.addEventListener('click', (event) => {
+      event.stopPropagation();
+      
+      const isCurrentlyActive = checkmark.classList.contains('active');
+      
+      if (isCurrentlyActive) {
+        // If currently active, uncheck it
+        checkmark.classList.remove('active');
+        const communityName = item.querySelector('.community-name').textContent;
+        console.log(`Unchecked community: ${communityName}`);
+      } else {
+        // If not active, check it and uncheck others
+        // Remove active class from all checkmarks
+        communityItems.forEach(ci => {
+          ci.querySelector('.community-checkmark').classList.remove('active');
+        });
+        
+        // Add active class to clicked checkmark
+        checkmark.classList.add('active');
+        
+        // Get community name and update header
+        const communityName = item.querySelector('.community-name').textContent;
+        console.log(`Selected community: ${communityName}`);
+      }
+      
+      // Close dropdown after selection
+      communityDropdownPanel.style.display = 'none';
+    });
   });
 
   // --- Sidebar Close Button ---

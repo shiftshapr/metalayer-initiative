@@ -26,17 +26,21 @@ body {
     padding: 0;
     background-color: var(--background-primary);
     color: var(--text-primary);
-    width: var(--sidebar-width);
-    overflow-x: hidden;
+    width: 100%; /* Full width instead of fixed sidebar width */
+    overflow-x: visible; /* Allow horizontal overflow */
     font-size: 14px;
     line-height: 1.4;
+    box-sizing: border-box;
 }
 
 .sidebar-container {
     display: flex;
     flex-direction: column;
     height: 100vh; /* Full viewport height */
-    border-left: 1px solid var(--border-color); /* Add a border to separate from page */
+    width: 100%; /* Ensure full width */
+    overflow-x: visible; /* Allow header to extend */
+    overflow-y: auto; /* Allow vertical scrolling if needed */
+    padding-top: 50px; /* Account for absolutely positioned header */
 }
 
 /* --- Main Header --- */
@@ -45,10 +49,15 @@ body {
     align-items: center;
     padding: 8px 12px;
     border-bottom: 1px solid var(--border-color);
-    background-color: var(--background-header);
+    background-color: #1e3a8a; /* Dark blue background */
     gap: 8px; /* Spacing between elements */
     height: 50px; /* Fixed height */
     box-sizing: border-box;
+    width: 100vw; /* Full viewport width */
+    position: absolute; /* Absolute positioning */
+    top: 0; /* Align to top */
+    left: 0; /* Align to left edge */
+    z-index: 1000; /* Ensure it's on top */
 }
 
 #close-sidebar-btn {
@@ -56,7 +65,7 @@ body {
     border: none;
     font-size: 24px;
     cursor: pointer;
-    color: var(--text-secondary);
+    color: white; /* White color for dark background */
     padding: 0 4px;
 }
 
@@ -72,16 +81,113 @@ body {
     width: auto;
 }
 
+/* Hexagonal logo */
+.hexagon-logo {
+    width: 24px;
+    height: 24px;
+    background: white;
+    color: #1e3a8a;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 14px;
+    clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+}
+
 .logo-text {
     font-weight: bold;
     font-size: 1.1em;
+    color: white; /* White text for dark background */
 }
 
 .logo-beta {
     font-size: 0.7em;
+    color: white;
+    margin-left: 4px;
+    border: 1px solid white;
+    padding: 1px 4px;
+    border-radius: 2px;
+}
+
+.dropdown-arrow {
+    color: white;
+    cursor: pointer;
+    font-size: 12px;
+    margin-left: 4px;
+}
+
+/* Community Dropdown Panel */
+.community-dropdown-panel {
+    background: white;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 12px 15px;
+    margin: 8px 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    width: auto;
+    max-width: 280px;
+    position: absolute;
+    top: 50px;
+    left: 12px;
+    z-index: 1001;
+}
+
+.community-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.community-icon-img {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.community-info {
+    flex-grow: 1;
+}
+
+.community-name {
+    font-weight: bold;
+    font-size: 1em;
+    color: var(--text-primary);
+    margin-bottom: 2px;
+}
+
+.community-tag {
+    font-size: 0.8em;
+    color: var(--primary-accent);
+    font-weight: 500;
+}
+
+.community-checkmark {
+    width: 20px;
+    height: 20px;
+    background: #e5e7eb;
+    color: #6b7280;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.community-checkmark.active {
+    background: var(--primary-accent);
+    color: white;
+}
+
+.community-more {
     color: var(--text-secondary);
-    vertical-align: super;
-    margin-left: 2px;
+    cursor: pointer;
+    font-size: 16px;
+    padding: 4px;
 }
 
 .header-actions {

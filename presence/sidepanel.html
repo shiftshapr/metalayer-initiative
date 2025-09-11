@@ -16,30 +16,12 @@
     <header class="sidebar-header-main">
       <button id="close-sidebar-btn">&times;</button>
       <div class="logo-container">
-        <span class="logo-text">Presence<span class="logo-beta">BETA</span></span>
+        <div class="hexagon-logo">P</div>
+        <span class="logo-text">resence</span>
+        <span class="logo-beta">BETA</span>
+        <span id="community-options-btn" class="dropdown-arrow">▼</span>
       </div>
       <div class="header-actions">
-        <div class="community-dropdown-trigger">
-          <span id="current-community-name">Main Community</span>
-          <span id="community-options-btn">▼</span>
-        </div>
-        <div id="community-dropdown-panel" class="dropdown-panel" style="display: none;">
-          <div class="dropdown-header">
-            <h4>Your Communities</h4>
-            <button id="close-community-dropdown">&times;</button>
-          </div>
-          <ul class="community-list">
-            <li>
-              <img src="/images/community1.png" alt="Community">
-              <span>Main Community</span>
-              <span class="primary-tag">Primary</span>
-            </li>
-            <li>
-              <img src="/images/community2.png" alt="Community">
-              <span>Other Community</span>
-            </li>
-          </ul>
-        </div>
         <!-- Auth buttons removed - auth will be triggered on-demand -->
         <div id="user-info" style="display: none; margin-left: 10px; display: flex; align-items: center; gap: 5px; position: relative;">
           <img id="user-avatar" src="" alt="Avatar" style="width: 24px; height: 24px; border-radius: 50%; cursor: pointer;">
@@ -53,6 +35,27 @@
         </div>
       </div>
     </header>
+    
+    <!-- Community Dropdown Panel -->
+    <div id="community-dropdown-panel" class="community-dropdown-panel" style="display: none;">
+      <div class="community-item" data-community="main">
+        <img src="/images/community1.png" alt="Community" class="community-icon-img">
+        <div class="community-info">
+          <div class="community-name">Main Community</div>
+          <div class="community-tag">Primary</div>
+        </div>
+        <div class="community-checkmark active">✓</div>
+        <div class="community-more">⋮</div>
+      </div>
+      <div class="community-item" data-community="other">
+        <img src="/images/community2.png" alt="Community" class="community-icon-img">
+        <div class="community-info">
+          <div class="community-name">Other Community</div>
+        </div>
+        <div class="community-checkmark">✓</div>
+        <div class="community-more">⋮</div>
+      </div>
+    </div>
     
     <!-- Main Navigation Tabs -->
     <div class="sidebar-nav-main">
