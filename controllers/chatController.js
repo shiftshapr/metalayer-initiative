@@ -67,3 +67,56 @@ exports.getThreads = (req, res) => {
   
   res.json({ communityId, threads });
 };
+
+// PUT /chat/message/:id - Edit a message
+exports.editMessage = (req, res) => {
+  const { id } = req.params;
+  const { content } = req.body;
+  
+  if (!content) {
+    return res.status(400).json({ error: 'content is required' });
+  }
+  
+  const messageIndex = chatMessages.findIndex(m => m.id === id);
+  if (messageIndex === -1) {
+    return res.status(404).json({ error: 'Message not found' });
+  }
+  
+  // Check if message is less than 1 hour old
+  const messageTime = new Date(chatMessages[messageIndex].created_at);
+  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+  
+  if (messageTime <= oneHourAgo) {
+    return res.status(403).json({ error: 'Message is too old to edit (1 hour limit)' });
+  }
+  
+  // Update the message
+  chatMessages[messageIndex].content = content;
+  chatMessages[messageIndex].edited_at = new Date().toISOString();
+  
+  res.json({ success: true, message: chatMessages[messageIndex] });
+};
+
+// DELETE /chat/message/:id - Delete a message
+exports.deleteMessage = (req, res) => {
+  const { id } = req.params;
+  
+  const messageIndex = chatMessages.findIndex(m => m.id === id);
+  if (messageIndex === -1) {
+    return res.status(404).json({ error: 'Message not found' });
+  }
+  
+  // Check if message is less than 1 hour old
+  const messageTime = new Date(chatMessages[messageIndex].created_at);
+  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+  
+  if (messageTime <= oneHourAgo) {
+    return res.status(403).json({ error: 'Message is too old to delete (1 hour limit)' });
+  }
+  
+  // Mark as deleted instead of actually removing (for reply integrity)
+  chatMessages[messageIndex].deleted = true;
+  chatMessages[messageIndex].deleted_at = new Date().toISOString();
+  
+  res.json({ success: true });
+};

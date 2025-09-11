@@ -70,6 +70,19 @@ class MetaLayerAPI {
   async getThreads(communityId) {
     return this.request(`/chat/threads?communityId=${communityId}`);
   }
+
+  async editMessage(messageId, newContent) {
+    return this.request(`/chat/message/${messageId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ content: newContent })
+    });
+  }
+
+  async deleteMessage(messageId) {
+    return this.request(`/chat/message/${messageId}`, {
+      method: 'DELETE'
+    });
+  }
 }
 
 // Initialize API client
@@ -389,6 +402,7 @@ function addMessageToChat(message) {
   // Create message element
   const messageDiv = document.createElement('div');
   messageDiv.className = 'message';
+  messageDiv.dataset.messageId = message.id;
   
   // Convert URLs to clickable links
   const contentWithLinks = convertUrlsToLinks(message.content);
@@ -401,15 +415,74 @@ function addMessageToChat(message) {
     threadIndicator = '<span class="thread-indicator">🧵 Thread</span>';
   }
   
+  // Check if message is deleted
+  if (message.deleted) {
+    messageDiv.innerHTML = `
+      <div class="message-header">
+        <div class="message-sender">
+          <span class="sender-avatar">?</span>
+          <span class="sender-name">Deleted Message</span>
+        </div>
+        <div class="message-meta">
+          <span class="message-time">${new Date(message.deleted_at).toLocaleTimeString()}</span>
+        </div>
+      </div>
+      <div class="message-content deleted-message">This message was deleted</div>
+    `;
+    messageDiv.classList.add('deleted');
+    chatMessages.appendChild(messageDiv);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+    return;
+  }
+  
+  // Get sender name (for now, use userId, later we'll get real names)
+  const senderName = getSenderName(message.userId);
+  
+  // Check if user can edit/delete (within 1 hour and is the author)
+  const canEdit = canUserEditMessage(message);
+  const editDeleteButtons = canEdit ? `
+    <div class="message-actions">
+      <button class="message-action-btn edit-btn" data-message-id="${message.id}" title="Edit message">
+        ✏️
+      </button>
+      <button class="message-action-btn delete-btn" data-message-id="${message.id}" title="Delete message">
+        🗑️
+      </button>
+    </div>
+  ` : '';
+  
+  // Add reply/thread buttons
+  const replyButtons = `
+    <div class="message-actions">
+      <button class="message-action-btn reply-btn" data-message-id="${message.id}" title="Reply to message">
+        💬 Reply
+      </button>
+      <button class="message-action-btn thread-btn" data-message-id="${message.id}" title="Start thread">
+        🧵 Thread
+      </button>
+    </div>
+  `;
+  
   messageDiv.innerHTML = `
     <div class="message-header">
-      ${threadIndicator}
-      ${message.uri ? `<a href="${message.uri}" target="_blank" class="message-uri" title="Captured from: ${message.uri}">🔗</a>` : ''}
+      <div class="message-sender">
+        <span class="sender-avatar">${getSenderInitial(senderName)}</span>
+        <span class="sender-name">${senderName}</span>
+        ${threadIndicator}
+      </div>
+      <div class="message-meta">
+        ${message.uri ? `<a href="${message.uri}" target="_blank" class="message-uri" title="Captured from: ${message.uri}">🔗</a>` : ''}
+        <span class="message-time">${new Date(message.created_at).toLocaleTimeString()}</span>
+      </div>
     </div>
     <div class="message-content">${contentWithLinks}</div>
     ${message.optionalContent ? `<div class="message-anchor">📍 ${message.optionalContent}</div>` : ''}
-    <div class="message-time">${new Date(message.created_at).toLocaleTimeString()}</div>
+    ${editDeleteButtons}
+    ${replyButtons}
   `;
+  
+  // Add event listeners for action buttons
+  addMessageActionListeners(messageDiv, message);
   
   chatMessages.appendChild(messageDiv);
   chatMessages.scrollTop = chatMessages.scrollHeight;
@@ -419,6 +492,122 @@ function convertUrlsToLinks(text) {
   // URL regex pattern
   const urlRegex = /(https?:\/\/[^\s]+)/g;
   return text.replace(urlRegex, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
+}
+
+function getSenderName(userId) {
+  // For now, return a formatted version of the userId
+  // Later this could be enhanced to fetch real user names from the API
+  if (userId === 'test-user') return 'Test User';
+  if (userId === 'test-user-2') return 'Test User 2';
+  if (userId.startsWith('116467399993975200419')) return 'Dave Room';
+  return `User ${userId.substring(0, 8)}...`;
+}
+
+function getSenderInitial(name) {
+  return name.charAt(0).toUpperCase();
+}
+
+function canUserEditMessage(message) {
+  // Check if current user is the author and message is less than 1 hour old
+  const messageTime = new Date(message.created_at);
+  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+  
+  // For now, we'll check against stored user ID
+  // In a real implementation, this would check against the authenticated user
+  const result = chrome.storage.local.get(['googleUser']);
+  const currentUserId = result.googleUser?.id;
+  
+  return message.userId === currentUserId && messageTime > oneHourAgo;
+}
+
+function addMessageActionListeners(messageDiv, message) {
+  // Edit button
+  const editBtn = messageDiv.querySelector('.edit-btn');
+  if (editBtn) {
+    editBtn.addEventListener('click', () => handleEditMessage(message));
+  }
+  
+  // Delete button
+  const deleteBtn = messageDiv.querySelector('.delete-btn');
+  if (deleteBtn) {
+    deleteBtn.addEventListener('click', () => handleDeleteMessage(message));
+  }
+  
+  // Reply button
+  const replyBtn = messageDiv.querySelector('.reply-btn');
+  if (replyBtn) {
+    replyBtn.addEventListener('click', () => handleReplyToMessage(message));
+  }
+  
+  // Thread button
+  const threadBtn = messageDiv.querySelector('.thread-btn');
+  if (threadBtn) {
+    threadBtn.addEventListener('click', () => handleStartThread(message));
+  }
+}
+
+async function handleEditMessage(message) {
+  const newContent = prompt('Edit your message:', message.content);
+  if (newContent && newContent !== message.content) {
+    try {
+      const response = await api.editMessage(message.id, newContent);
+      if (response.success) {
+        // Update the message in the UI
+        const messageDiv = document.querySelector(`[data-message-id="${message.id}"]`);
+        if (messageDiv) {
+          const contentDiv = messageDiv.querySelector('.message-content');
+          contentDiv.innerHTML = convertUrlsToLinks(newContent);
+        }
+        showNotification('Message updated successfully');
+      }
+    } catch (error) {
+      console.error('Failed to edit message:', error);
+      showNotification('Failed to edit message');
+    }
+  }
+}
+
+async function handleDeleteMessage(message) {
+  if (confirm('Are you sure you want to delete this message?')) {
+    try {
+      const response = await api.deleteMessage(message.id);
+      if (response.success) {
+        // Remove the message from the UI
+        const messageDiv = document.querySelector(`[data-message-id="${message.id}"]`);
+        if (messageDiv) {
+          messageDiv.remove();
+        }
+        showNotification('Message deleted successfully');
+      }
+    } catch (error) {
+      console.error('Failed to delete message:', error);
+      showNotification('Failed to delete message');
+    }
+  }
+}
+
+function handleReplyToMessage(message) {
+  const chatInput = document.getElementById('chat-textarea');
+  if (chatInput) {
+    chatInput.value = `Replying to ${getSenderName(message.userId)}: `;
+    chatInput.focus();
+    autoResize(chatInput);
+    
+    // Store the parent message ID for when the reply is sent
+    chatInput.dataset.replyTo = message.id;
+  }
+}
+
+function handleStartThread(message) {
+  const chatInput = document.getElementById('chat-textarea');
+  if (chatInput) {
+    chatInput.value = `Starting thread on "${message.content.substring(0, 50)}...": `;
+    chatInput.focus();
+    autoResize(chatInput);
+    
+    // Store the thread message ID for when the thread message is sent
+    chatInput.dataset.threadId = message.id;
+  }
 }
 
 async function getCurrentPageUri() {
@@ -788,15 +977,15 @@ document.addEventListener('DOMContentLoaded', async () => {
       // Require authentication to access community selector
       if (!requireAuth('access community settings', () => {
         console.log('Auth passed, toggling community dropdown');
-        if (communityDropdownPanel) {
-          // Toggle visibility
-          if (communityDropdownPanel.style.display === 'block') {
-            communityDropdownPanel.style.display = 'none';
-            console.log("Community dropdown hidden");
-          } else {
-            communityDropdownPanel.style.display = 'block';
-            console.log("Community dropdown shown");
-          }
+      if (communityDropdownPanel) {
+        // Toggle visibility
+        if (communityDropdownPanel.style.display === 'block') {
+          communityDropdownPanel.style.display = 'none';
+          console.log("Community dropdown hidden");
+        } else {
+          communityDropdownPanel.style.display = 'block';
+          console.log("Community dropdown shown");
+        }
         }
       })) {
         console.log('Auth failed for community dropdown');
@@ -1015,7 +1204,25 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
               }
               
-              const response = await api.sendMessage(user.id, communityId, message, currentUri, null, null, optionalContent);
+              // Check if this is a reply or thread
+              let parentId = null;
+              let threadId = null;
+              
+              if (chatInput.dataset.replyTo) {
+                parentId = chatInput.dataset.replyTo;
+                // Remove the reply prefix from the message
+                message = message.replace(/^Replying to .+:\s*/, '');
+                // Clear the reply data
+                delete chatInput.dataset.replyTo;
+              } else if (chatInput.dataset.threadId) {
+                threadId = chatInput.dataset.threadId;
+                // Remove the thread prefix from the message
+                message = message.replace(/^Starting thread on ".+":\s*/, '');
+                // Clear the thread data
+                delete chatInput.dataset.threadId;
+              }
+              
+              const response = await api.sendMessage(user.id, communityId, message, currentUri, parentId, threadId, optionalContent);
               debug(`Message sent successfully: ${response.msg?.id}`);
               console.log('Message sent:', response);
               
