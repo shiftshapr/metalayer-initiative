@@ -589,7 +589,11 @@ async function handleDeleteMessage(message) {
 function handleReplyToMessage(message) {
   const chatInput = document.getElementById('chat-textarea');
   if (chatInput) {
-    chatInput.value = `Replying to ${getSenderName(message.userId)}: `;
+    // Show the actual message content instead of user name
+    const replyText = message.content.length > 50 
+      ? message.content.substring(0, 50) + '...' 
+      : message.content;
+    chatInput.value = `Replying to "${replyText}": `;
     chatInput.focus();
     autoResize(chatInput);
     
@@ -1153,9 +1157,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
   
-  if (chatSendButton) {
-    chatSendButton.addEventListener('click', sendChatMessage);
-  }
+  // Send button removed - using Enter key only
   
   // Add Enter key support for sending messages
   if (chatInput) {
@@ -1170,7 +1172,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   function sendChatMessage() {
     console.log('Chat send button clicked');
     requireAuth('send messages', async () => {
-      const message = chatInput?.value?.trim();
+      let message = chatInput?.value?.trim();
       if (message) {
         debug(`Sending message: ${message}`);
         console.log('Sending message:', message);
@@ -1211,7 +1213,7 @@ document.addEventListener('DOMContentLoaded', async () => {
               if (chatInput.dataset.replyTo) {
                 parentId = chatInput.dataset.replyTo;
                 // Remove the reply prefix from the message
-                message = message.replace(/^Replying to .+:\s*/, '');
+                message = message.replace(/^Replying to ".+":\s*/, '');
                 // Clear the reply data
                 delete chatInput.dataset.replyTo;
               } else if (chatInput.dataset.threadId) {
