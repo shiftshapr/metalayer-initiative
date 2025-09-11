@@ -350,6 +350,30 @@ body {
     display: flex; /* Show active main tab */
 }
 
+/* --- Specific alignment fixes for Rooms and Agent tabs --- */
+#rooms-tab {
+    padding: 20px;
+}
+
+#rooms-tab h3 {
+    margin: 0 0 16px 0;
+    padding: 0;
+}
+
+#rooms-tab p {
+    margin: 0;
+    padding: 0;
+}
+
+#agent-tab {
+    padding: 20px;
+}
+
+#agent-tab h3 {
+    margin: 0 0 16px 0;
+    padding: 0;
+}
+
 /* Content within sub-tabs */
 .sub-tab-content-area {
     flex-grow: 1;

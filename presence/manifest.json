@@ -15,7 +15,7 @@
     "https://app.themetalayer.org/*"
   ],
   "oauth2": {
-    "client_id": "240745106929-q6hc1b06mochkuu4gf6uo3d2mopvg337.apps.googleusercontent.com",
+    "client_id": "874969116680-cn0vnij95npbq2s71dd3voc8vhdqh5fg.apps.googleusercontent.com",
     "scopes": [
       "https://www.googleapis.com/auth/userinfo.email",
       "https://www.googleapis.com/auth/userinfo.profile",
