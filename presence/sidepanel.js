@@ -1132,7 +1132,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // --- Chat Input Authentication ---
   const chatInput = document.getElementById('chat-textarea');
-  const chatSendButton = document.querySelector('.chat-input-area button');
   
   // Add auto-resize functionality to textarea
   if (chatInput) {
@@ -1184,11 +1183,6 @@ document.addEventListener('DOMContentLoaded', async () => {
           const communityId = result.currentCommunity || 'comm-001';
           
           if (user && user.id) {
-            // Show loading state
-            const originalButtonText = chatSendButton.textContent;
-            chatSendButton.textContent = 'Sending...';
-            chatSendButton.disabled = true;
-            
             try {
               // Get current page URI
               const currentUri = await getCurrentPageUri();
@@ -1234,10 +1228,9 @@ document.addEventListener('DOMContentLoaded', async () => {
               // Clear input and reset height
               chatInput.value = '';
               chatInput.style.height = 'auto';
-            } finally {
-              // Restore button state
-              chatSendButton.textContent = originalButtonText;
-              chatSendButton.disabled = false;
+            } catch (error) {
+              debug(`Failed to send message: ${error.message}`);
+              console.error('Failed to send message:', error);
             }
           } else {
             debug('No user found for sending message');
