@@ -9,8 +9,7 @@
     "tabs",
     "storage",
     "scripting",
-    "identity",
-    "action"
+    "identity"
   ],
   "host_permissions": [
     "https://app.themetalayer.org/*"

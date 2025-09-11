@@ -9,25 +9,29 @@ chrome.runtime.onInstalled.addListener(() => {
 });
 
 // Handle extension icon click to open side panel
-chrome.action.onClicked.addListener(async (tab) => {
-  console.log('Extension icon clicked, opening side panel for tab:', tab.id);
-  try {
-    await chrome.sidePanel.open({ tabId: tab.id });
-    console.log('Side panel opened successfully');
-  } catch (error) {
-    console.error('Error opening side panel:', error);
-    // Fallback: try to open for the current window
+if (chrome.action && chrome.action.onClicked) {
+  chrome.action.onClicked.addListener(async (tab) => {
+    console.log('Extension icon clicked, opening side panel for tab:', tab.id);
     try {
-      const currentWindow = await chrome.windows.getLastFocused({ populate: false });
-      if (currentWindow?.id) {
-        await chrome.sidePanel.open({ windowId: currentWindow.id });
-        console.log('Side panel opened for window:', currentWindow.id);
+      await chrome.sidePanel.open({ tabId: tab.id });
+      console.log('Side panel opened successfully');
+    } catch (error) {
+      console.error('Error opening side panel:', error);
+      // Fallback: try to open for the current window
+      try {
+        const currentWindow = await chrome.windows.getLastFocused({ populate: false });
+        if (currentWindow?.id) {
+          await chrome.sidePanel.open({ windowId: currentWindow.id });
+          console.log('Side panel opened for window:', currentWindow.id);
+        }
+      } catch (winError) {
+        console.error('Error opening side panel on window:', winError);
       }
-    } catch (winError) {
-      console.error('Error opening side panel on window:', winError);
     }
-  }
-});
+  });
+} else {
+  console.log('chrome.action.onClicked not available');
+}
 
 // Listen for messages from content scripts AND sidepanel
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
