@@ -1033,14 +1033,11 @@ document.addEventListener('DOMContentLoaded', async () => {
           } else {
             debug('No user found for sending message');
           }
-          } catch (error) {
-            debug(`Failed to send message: ${error.message}`);
-            console.error('Failed to send message:', error);
-          }
-          
-          chatInput.value = '';
+        } catch (error) {
+          debug(`Failed to send message: ${error.message}`);
+          console.error('Failed to send message:', error);
         }
-      });
+      }
     });
   }
 
