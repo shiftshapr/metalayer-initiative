@@ -409,10 +409,13 @@ function addMessageToChat(message) {
   
   // Add thread/reply indicators
   let threadIndicator = '';
+  let threadToggleButton = '';
   if (message.parentId) {
     threadIndicator = '<span class="thread-indicator">↳ Reply</span>';
-  } else if (message.threadId && message.threadId !== message.id) {
+  } else if (message.threadId && message.threadId === message.id) {
+    // This is a thread starter - add expand/collapse button
     threadIndicator = '<span class="thread-indicator">🧵 Thread</span>';
+    threadToggleButton = `<button class="thread-toggle-btn" data-thread-id="${message.threadId}" title="Toggle thread replies">📂</button>`;
   }
   
   // Check if message is deleted
@@ -471,18 +474,30 @@ function addMessageToChat(message) {
         ${threadIndicator}
       </div>
       <div class="message-meta">
-        ${message.uri ? `<a href="${message.uri}" target="_blank" class="message-uri" title="Captured from: ${message.uri}">🔗</a>` : ''}
+        ${message.optionalContent ? `<a href="${message.uri || '#'}" target="_blank" class="message-uri" title="Anchored to: ${message.optionalContent}">🔗</a>` : ''}
         <span class="message-time">${new Date(message.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
       </div>
     </div>
     <div class="message-content">${contentWithLinks}</div>
     ${message.optionalContent ? `<div class="message-anchor">📍 ${message.optionalContent}</div>` : ''}
+    ${threadToggleButton}
     ${editDeleteButtons}
     ${replyButtons}
   `;
   
   // Add event listeners for action buttons
   addMessageActionListeners(messageDiv, message);
+  
+  // Add thread toggle listener
+  if (threadToggleButton) {
+    const toggleBtn = messageDiv.querySelector('.thread-toggle-btn');
+    if (toggleBtn) {
+      toggleBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleThreadReplies(message.threadId, messageDiv);
+      });
+    }
+  }
   
   chatMessages.appendChild(messageDiv);
   chatMessages.scrollTop = chatMessages.scrollHeight;
@@ -1336,3 +1351,53 @@ document.addEventListener('DOMContentLoaded', async () => {
   console.log("Sidebar setup complete");
   debug("Sidebar setup complete (from JS)");
 });
+
+// Toggle thread replies visibility
+async function toggleThreadReplies(threadId, messageElement) {
+  const toggleBtn = messageElement.querySelector('.thread-toggle-btn');
+  const isExpanded = toggleBtn.dataset.expanded === 'true';
+  
+  if (isExpanded) {
+    // Collapse - remove thread replies
+    const threadReplies = messageElement.querySelector('.thread-replies');
+    if (threadReplies) {
+      threadReplies.remove();
+    }
+    toggleBtn.textContent = '📂';
+    toggleBtn.dataset.expanded = 'false';
+    toggleBtn.title = 'Show thread replies';
+  } else {
+    // Expand - load and show thread replies
+    try {
+      const response = await api.getChatHistory('comm-001', threadId);
+      const replies = response.messages.filter(msg => msg.parentId && msg.threadId === threadId);
+      
+      if (replies.length > 0) {
+        const threadRepliesDiv = document.createElement('div');
+        threadRepliesDiv.className = 'thread-replies';
+        threadRepliesDiv.innerHTML = '<div class="thread-replies-header">Replies:</div>';
+        
+        replies.forEach(reply => {
+          const replyDiv = document.createElement('div');
+          replyDiv.className = 'thread-reply';
+          replyDiv.innerHTML = `
+            <div class="reply-header">
+              <span class="reply-sender">${getSenderName(reply.userId)}</span>
+              <span class="reply-time">${new Date(reply.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+            </div>
+            <div class="reply-content">${convertUrlsToLinks(reply.content)}</div>
+          `;
+          threadRepliesDiv.appendChild(replyDiv);
+        });
+        
+        messageElement.appendChild(threadRepliesDiv);
+      }
+      
+      toggleBtn.textContent = '📁';
+      toggleBtn.dataset.expanded = 'true';
+      toggleBtn.title = 'Hide thread replies';
+    } catch (error) {
+      console.error('Failed to load thread replies:', error);
+    }
+  }
+}

@@ -685,6 +685,65 @@ body {
   opacity: 1;
 }
 
+.thread-toggle-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 4px;
+  margin-top: 4px;
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+}
+
+.thread-toggle-btn:hover {
+  background-color: #f0f0f0;
+}
+
+.thread-replies {
+  margin-top: 8px;
+  padding-left: 16px;
+  border-left: 2px solid #e0e0e0;
+}
+
+.thread-replies-header {
+  font-size: 12px;
+  color: #666;
+  margin-bottom: 8px;
+  font-weight: bold;
+}
+
+.thread-reply {
+  margin-bottom: 8px;
+  padding: 6px;
+  background: #f8f9fa;
+  border-radius: 4px;
+  border-left: 3px solid #007bff;
+}
+
+.reply-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.reply-sender {
+  font-size: 12px;
+  font-weight: bold;
+  color: #333;
+}
+
+.reply-time {
+  font-size: 10px;
+  color: #666;
+}
+
+.reply-content {
+  font-size: 13px;
+  color: #444;
+}
+
 .message-action-btn {
   background: none;
   border: 1px solid #ddd;

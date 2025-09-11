@@ -1,13 +1,4 @@
-// Explicitly register the service worker
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/background.js')
-    .then(registration => {
-      console.log('Service worker registered:', registration);
-    })
-    .catch(error => {
-      console.error('Service worker registration failed:', error);
-    });
-}
+// Service worker is automatically registered by Chrome in Manifest V3
 
 // Background service worker for the Collaborative Sidebar extension
 console.log("Background service worker started.");
