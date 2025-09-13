@@ -14,96 +14,92 @@
     triggerButton.textContent = '🗨️'; // Simple emoji placeholder, replace with icon via CSS
     triggerButton.title = 'Toggle Collaborative Sidebar (Drag to move)';
 
-    // Load saved position from storage
-    chrome.storage.local.get(['iconPosition'], (result) => {
-        if (result.iconPosition) {
-            triggerButton.style.left = result.iconPosition.x + 'px';
-            triggerButton.style.top = result.iconPosition.y + 'px';
-        } else {
-            // Default position (bottom-right)
-            triggerButton.style.left = 'calc(100vw - 60px)';
-            triggerButton.style.top = 'calc(100vh - 60px)';
-        }
-    });
-
     // Dragging variables
     let isDragging = false;
     let dragOffset = { x: 0, y: 0 };
+    let hasMoved = false; // Track if mouse has moved during drag
 
-    // Mouse down event - start dragging
-    triggerButton.addEventListener('mousedown', (e) => {
-        // Only start dragging if it's not a click (prevent accidental drags)
-        if (e.button === 0) { // Left mouse button
-            isDragging = true;
-            triggerButton.style.opacity = '0.7';
-            triggerButton.style.cursor = 'grabbing';
-            
-            // Calculate offset from mouse to button corner
-            const rect = triggerButton.getBoundingClientRect();
-            dragOffset.x = e.clientX - rect.left;
-            dragOffset.y = e.clientY - rect.top;
-            
-            e.preventDefault();
-        }
-    });
+    // Function to set up event listeners
+    function setupEventListeners() {
+        // Mouse down event - start dragging
+        triggerButton.addEventListener('mousedown', (e) => {
+            // Only start dragging if it's not a click (prevent accidental drags)
+            if (e.button === 0) { // Left mouse button
+                isDragging = true;
+                hasMoved = false;
+                triggerButton.style.opacity = '0.7';
+                triggerButton.style.cursor = 'grabbing';
+                
+                // Calculate offset from mouse to button corner
+                const rect = triggerButton.getBoundingClientRect();
+                dragOffset.x = e.clientX - rect.left;
+                dragOffset.y = e.clientY - rect.top;
+                
+                e.preventDefault();
+            }
+        });
 
-    // Mouse move event - handle dragging
-    document.addEventListener('mousemove', (e) => {
-        if (isDragging) {
-            const newX = e.clientX - dragOffset.x;
-            const newY = e.clientY - dragOffset.y;
-            
-            // Keep button within viewport bounds
-            const buttonSize = 50; // Approximate button size
-            const maxX = window.innerWidth - buttonSize;
-            const maxY = window.innerHeight - buttonSize;
-            
-            const constrainedX = Math.max(0, Math.min(newX, maxX));
-            const constrainedY = Math.max(0, Math.min(newY, maxY));
-            
-            triggerButton.style.left = constrainedX + 'px';
-            triggerButton.style.top = constrainedY + 'px';
-        }
-    });
+        // Mouse move event - handle dragging
+        document.addEventListener('mousemove', (e) => {
+            if (isDragging) {
+                hasMoved = true;
+                const newX = e.clientX - dragOffset.x;
+                const newY = e.clientY - dragOffset.y;
+                
+                // Keep button within viewport bounds
+                const buttonSize = 50; // Approximate button size
+                const maxX = window.innerWidth - buttonSize;
+                const maxY = window.innerHeight - buttonSize;
+                
+                const constrainedX = Math.max(0, Math.min(newX, maxX));
+                const constrainedY = Math.max(0, Math.min(newY, maxY));
+                
+                triggerButton.style.left = constrainedX + 'px';
+                triggerButton.style.top = constrainedY + 'px';
+                
+            }
+        });
 
-    // Mouse up event - stop dragging
-    document.addEventListener('mouseup', (e) => {
-        if (isDragging) {
-            isDragging = false;
-            triggerButton.style.opacity = '1';
-            triggerButton.style.cursor = 'grab';
-            
-            // Save position to storage
-            const rect = triggerButton.getBoundingClientRect();
-            chrome.storage.local.set({
-                iconPosition: {
-                    x: rect.left,
-                    y: rect.top
-                }
-            });
-        }
-    });
+        // Mouse up event - stop dragging
+        document.addEventListener('mouseup', (e) => {
+            if (isDragging) {
+                isDragging = false;
+                triggerButton.style.opacity = '1';
+                triggerButton.style.cursor = 'grab';
+                
+                // Reset hasMoved after a short delay to allow click detection
+                setTimeout(() => {
+                    hasMoved = false;
+                }, 100);
+            }
+        });
 
-    // Click event - toggle sidebar (only if not dragging)
-    triggerButton.addEventListener('click', (e) => {
-        // Only trigger if we're not in the middle of a drag
-        if (!isDragging) {
-            console.log("Trigger button clicked.");
-            // Send a message to the background script to toggle the sidebar
-            chrome.runtime.sendMessage({ action: "toggleSidebar" }, (response) => {
-                 if (chrome.runtime.lastError) {
-                    console.error("Error sending toggle message:", chrome.runtime.lastError);
-                } else {
-                    console.log("Toggle message sent, background responded:", response);
-                }
-            });
-        }
-    });
+        // Click event - toggle sidebar (only if not dragging)
+        triggerButton.addEventListener('click', (e) => {
+            // Only trigger if we're not in the middle of a drag and haven't moved
+            if (!isDragging && !hasMoved) {
+                console.log("Trigger button clicked.");
+                // Send a message to the background script to toggle the sidebar
+                chrome.runtime.sendMessage({ action: "toggleSidebar" }, (response) => {
+                     if (chrome.runtime.lastError) {
+                        console.error("Error sending toggle message:", chrome.runtime.lastError);
+                    } else {
+                        console.log("Toggle message sent, background responded:", response);
+                    }
+                });
+            }
+        });
+    }
 
+    // Set default position (bottom-right) and append button
+    triggerButton.style.left = 'calc(100vw - 60px)';
+    triggerButton.style.top = 'calc(100vh - 60px)';
+    
+    // Set up event listeners
+    setupEventListeners();
+    
     // Append the button to the body
     document.body.appendChild(triggerButton);
-
-    console.log("Trigger button added to page.");
 
     // --- Optional: Logic for overlay vs. push mode ---
     // This would likely involve listening for changes in chrome.storage
