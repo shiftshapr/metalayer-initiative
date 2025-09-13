@@ -40,6 +40,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         // REAL OAuth2 - Use Chrome's built-in identity API with new client ID
         console.log("Starting REAL Google OAuth2 with Chrome identity API...");
         
+
         // Use Chrome's built-in OAuth with the new client ID
         chrome.identity.getAuthToken({ interactive: true }, (token) => {
           if (chrome.runtime.lastError) {
