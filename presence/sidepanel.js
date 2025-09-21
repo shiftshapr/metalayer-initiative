@@ -4,14 +4,25 @@ const METALAYER_API_URL = 'http://216.238.91.120:3003';
 // Avatar Background Color Configuration
 const AVATAR_BG_CONFIG = {
   // Default background color for user's profile avatar when transparent
-  defaultBgColor: '#45B7D1', // Blue color
+  defaultBgColor: null, // Will be set dynamically based on user's name
   
   // User's custom background color
   customBgColor: null,
   
   // Get the current background color
   getBgColor() {
-    return this.customBgColor || this.defaultBgColor;
+    if (this.customBgColor) {
+      return this.customBgColor;
+    }
+    
+    // If no custom color, use the same color system as message avatars
+    const currentUser = getCurrentUser();
+    if (currentUser) {
+      const name = currentUser.user_metadata?.full_name || currentUser.email || 'User';
+      return getAvatarColor(name);
+    }
+    
+    return '#45B7D1'; // Fallback blue color
   },
   
   // Set custom background color
@@ -705,6 +716,119 @@ async function loadUserAvatarBgConfig() {
 window.setUserAvatarBgColor = setUserAvatarBgColor;
 window.resetUserAvatarBgColor = resetUserAvatarBgColor;
 window.getCurrentUserAvatarBgColor = getCurrentUserAvatarBgColor;
+
+// Color Picker Modal Functions
+function showColorPickerModal() {
+  // Create modal HTML
+  const modalHTML = `
+    <div class="color-picker-modal" id="color-picker-modal">
+      <div class="color-picker-content">
+        <div class="color-picker-header">
+          <h3 class="color-picker-title">Change Avatar Color</h3>
+          <button class="color-picker-close" id="color-picker-close">&times;</button>
+        </div>
+        <div class="color-picker-input-group">
+          <label class="color-picker-label" for="color-input">Hex Color (without #):</label>
+          <input type="text" class="color-picker-input" id="color-input" placeholder="45B7D1" maxlength="6">
+        </div>
+        <div class="color-picker-preview">
+          <div class="color-picker-preview-circle" id="color-preview-circle">D</div>
+          <div class="color-picker-preview-text" id="color-preview-text">Preview</div>
+        </div>
+        <div class="color-picker-buttons">
+          <button class="color-picker-btn" id="color-picker-reset">Reset to Default</button>
+          <button class="color-picker-btn primary" id="color-picker-save">Save Color</button>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  // Add modal to page
+  document.body.insertAdjacentHTML('beforeend', modalHTML);
+  
+  const modal = document.getElementById('color-picker-modal');
+  const colorInput = document.getElementById('color-input');
+  const previewCircle = document.getElementById('color-preview-circle');
+  const previewText = document.getElementById('color-preview-text');
+  const closeBtn = document.getElementById('color-picker-close');
+  const resetBtn = document.getElementById('color-picker-reset');
+  const saveBtn = document.getElementById('color-picker-save');
+  
+  // Get current color and set initial values
+  const currentColor = getCurrentUserAvatarBgColor();
+  const currentHex = currentColor.replace('#', '');
+  colorInput.value = currentHex;
+  updatePreview(currentHex);
+  
+  // Event listeners
+  colorInput.addEventListener('input', (e) => {
+    const hex = e.target.value.replace('#', '');
+    updatePreview(hex);
+  });
+  
+  closeBtn.addEventListener('click', closeColorPickerModal);
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) closeColorPickerModal();
+  });
+  
+  resetBtn.addEventListener('click', () => {
+    // Get the dynamic default color (based on user's name)
+    const currentUser = getCurrentUser();
+    let defaultColor = '#45B7D1'; // Fallback
+    if (currentUser) {
+      const name = currentUser.user_metadata?.full_name || currentUser.email || 'User';
+      defaultColor = getAvatarColor(name);
+    }
+    const defaultHex = defaultColor.replace('#', '');
+    colorInput.value = defaultHex;
+    updatePreview(defaultHex);
+  });
+  
+  saveBtn.addEventListener('click', () => {
+    const hex = colorInput.value.replace('#', '');
+    if (isValidHex(hex)) {
+      setUserAvatarBgColor('#' + hex);
+      closeColorPickerModal();
+    } else {
+      alert('Please enter a valid 6-digit hex color (e.g., 45B7D1)');
+    }
+  });
+  
+  // Focus the input
+  colorInput.focus();
+  colorInput.select();
+  
+  function updatePreview(hex) {
+    if (isValidHex(hex)) {
+      const color = '#' + hex;
+      previewCircle.style.backgroundColor = color;
+      previewText.textContent = color;
+    } else {
+      previewCircle.style.backgroundColor = '#cccccc';
+      previewText.textContent = 'Invalid color';
+    }
+  }
+  
+  function isValidHex(hex) {
+    return /^[A-Fa-f0-9]{6}$/.test(hex);
+  }
+}
+
+function closeColorPickerModal() {
+  const modal = document.getElementById('color-picker-modal');
+  if (modal) {
+    modal.remove();
+  }
+}
+
+// Add click handler to profile avatar
+function addProfileAvatarClickHandler() {
+  const userAvatar = document.getElementById('user-avatar');
+  if (userAvatar) {
+    userAvatar.addEventListener('click', showColorPickerModal);
+    userAvatar.title = 'Click to change avatar color';
+  }
+}
 
 // Global functions for custom avatar color configuration (accessible from browser console)
 window.setCustomAvatarColor = setCustomAvatarColor;
@@ -2225,20 +2349,20 @@ function updateUI(user) {
           userAvatarImg.style.display = 'none';
           const name = user.user_metadata?.full_name || user.email || 'User';
           const initial = name.charAt(0).toUpperCase();
-          // Use the same color system as message avatars
-          const color = getAvatarColor(name);
-          const avatarDiv = document.createElement('div');
-          avatarDiv.style.cssText = `width: 24px; height: 24px; border-radius: 50%; background-color: ${color}; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 12px;`;
-          avatarDiv.textContent = initial;
-          userAvatarImg.parentNode.insertBefore(avatarDiv, userAvatarImg);
+        // Use the user's custom avatar background color or fallback to message avatar color
+        const color = getUserAvatarBgColor();
+        const avatarDiv = document.createElement('div');
+        avatarDiv.style.cssText = `width: 24px; height: 24px; border-radius: 50%; background-color: ${color}; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 12px;`;
+        avatarDiv.textContent = initial;
+        userAvatarImg.parentNode.insertBefore(avatarDiv, userAvatarImg);
         };
         console.log('✅ Set user avatar to:', avatarUrl);
       } else {
         // Use a colored initial instead of placeholder image
         const name = user.user_metadata?.full_name || user.email || 'User';
         const initial = name.charAt(0).toUpperCase();
-        // Use the same color system as message avatars
-        const color = getAvatarColor(name);
+        // Use the user's custom avatar background color or fallback to message avatar color
+        const color = getUserAvatarBgColor();
         userAvatarImg.style.display = 'none';
         
         // Create a colored div to replace the image
@@ -2251,6 +2375,9 @@ function updateUI(user) {
     }
     debug(`User logged in: ${userMenuName?.textContent}`);
     console.log('UI updated: User authenticated, showing user info');
+    
+    // Add click handler to profile avatar after UI update
+    addProfileAvatarClickHandler();
   } else {
     // User is logged out - hide user info
     if (userInfoDiv) userInfoDiv.style.display = 'none';
@@ -2334,6 +2461,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   // === Load User Avatar Background Color Configuration ===
   await loadUserAvatarBgConfig();
+  
+  // Add click handler to profile avatar
+  addProfileAvatarClickHandler();
   
   // === Update Visual Hierarchy for Existing Messages ===
   setTimeout(() => {

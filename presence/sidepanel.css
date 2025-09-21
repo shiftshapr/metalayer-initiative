@@ -177,13 +177,167 @@ body {
     object-fit: cover !important;
     display: block !important;
     cursor: pointer !important;
-    background-color: #f0f0f0 !important;
+    /* Background color will be set dynamically via JavaScript */
 }
 
 /* Dark mode for profile avatar */
 [data-theme="dark"] #user-avatar {
-    border: 1px solid #555555 !important;
-    background-color: #3a3a3a !important;
+    border: 1px solid var(--border-color) !important;
+}
+
+/* Color Picker Modal */
+.color-picker-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+}
+
+.color-picker-content {
+    background: var(--background-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 20px;
+    min-width: 300px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.color-picker-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.color-picker-title {
+    font-size: 16px;
+    font-weight: bold;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.color-picker-close {
+    background: none;
+    border: none;
+    font-size: 20px;
+    cursor: pointer;
+    color: var(--text-secondary);
+    padding: 0;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.color-picker-close:hover {
+    color: var(--text-primary);
+}
+
+.color-picker-input-group {
+    margin-bottom: 15px;
+}
+
+.color-picker-label {
+    display: block;
+    font-size: 14px;
+    color: var(--text-primary);
+    margin-bottom: 5px;
+}
+
+.color-picker-input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background: var(--background-secondary);
+    color: var(--text-primary);
+    font-size: 14px;
+    font-family: monospace;
+}
+
+.color-picker-input:focus {
+    outline: none;
+    border-color: var(--primary-accent);
+}
+
+.color-picker-preview {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.color-picker-preview-circle {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 2px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: bold;
+    font-size: 16px;
+}
+
+.color-picker-preview-text {
+    font-size: 14px;
+    color: var(--text-secondary);
+}
+
+.color-picker-buttons {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+}
+
+.color-picker-btn {
+    padding: 8px 16px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background: var(--background-secondary);
+    color: var(--text-primary);
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.color-picker-btn:hover {
+    background: var(--background-hover);
+}
+
+.color-picker-btn.primary {
+    background: var(--primary-accent);
+    color: white;
+    border-color: var(--primary-accent);
+}
+
+.color-picker-btn.primary:hover {
+    background: var(--primary-accent-hover);
+}
+
+/* Dark mode for color picker */
+[data-theme="dark"] .color-picker-content {
+    background: var(--background-primary);
+    border-color: var(--border-color);
+}
+
+[data-theme="dark"] .color-picker-input {
+    background: var(--background-secondary);
+    border-color: var(--border-color);
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] .color-picker-btn {
+    background: var(--background-secondary);
+    border-color: var(--border-color);
+    color: var(--text-primary);
 }
 
 /* --- Community Dropdown Panel --- */
