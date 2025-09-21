@@ -16,13 +16,9 @@ const AVATAR_BG_CONFIG = {
     }
     
     // If no custom color, use the same color system as message avatars
-    const currentUser = getCurrentUser();
-    if (currentUser) {
-      const name = currentUser.user_metadata?.full_name || currentUser.email || 'User';
-      return getAvatarColor(name);
-    }
-    
-    return '#45B7D1'; // Fallback blue color
+    // For now, return the blue color that matches the message avatars
+    // The actual user-specific color will be set when the avatar is created
+    return '#45B7D1'; // Blue color that matches message avatars
   },
   
   // Set custom background color
@@ -773,15 +769,17 @@ function showColorPickerModal() {
   
   resetBtn.addEventListener('click', () => {
     // Get the dynamic default color (based on user's name)
-    const currentUser = getCurrentUser();
-    let defaultColor = '#45B7D1'; // Fallback
-    if (currentUser) {
-      const name = currentUser.user_metadata?.full_name || currentUser.email || 'User';
-      defaultColor = getAvatarColor(name);
-    }
-    const defaultHex = defaultColor.replace('#', '');
-    colorInput.value = defaultHex;
-    updatePreview(defaultHex);
+    // Get user from chrome storage
+    chrome.storage.local.get(['googleUser']).then(({ googleUser }) => {
+      let defaultColor = '#45B7D1'; // Fallback
+      if (googleUser) {
+        const name = googleUser.user_metadata?.full_name || googleUser.email || 'User';
+        defaultColor = getAvatarColor(name);
+      }
+      const defaultHex = defaultColor.replace('#', '');
+      colorInput.value = defaultHex;
+      updatePreview(defaultHex);
+    });
   });
   
   saveBtn.addEventListener('click', () => {
@@ -2350,7 +2348,10 @@ function updateUI(user) {
           const name = user.user_metadata?.full_name || user.email || 'User';
           const initial = name.charAt(0).toUpperCase();
         // Use the user's custom avatar background color or fallback to message avatar color
-        const color = getUserAvatarBgColor();
+        const customColor = getUserAvatarBgColor();
+        const name = user.user_metadata?.full_name || user.email || 'User';
+        const defaultColor = getAvatarColor(name);
+        const color = customColor !== '#45B7D1' ? customColor : defaultColor; // Use custom if set, otherwise use name-based color
         const avatarDiv = document.createElement('div');
         avatarDiv.style.cssText = `width: 24px; height: 24px; border-radius: 50%; background-color: ${color}; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 12px;`;
         avatarDiv.textContent = initial;
@@ -2362,7 +2363,9 @@ function updateUI(user) {
         const name = user.user_metadata?.full_name || user.email || 'User';
         const initial = name.charAt(0).toUpperCase();
         // Use the user's custom avatar background color or fallback to message avatar color
-        const color = getUserAvatarBgColor();
+        const customColor = getUserAvatarBgColor();
+        const defaultColor = getAvatarColor(name);
+        const color = customColor !== '#45B7D1' ? customColor : defaultColor; // Use custom if set, otherwise use name-based color
         userAvatarImg.style.display = 'none';
         
         // Create a colored div to replace the image
