@@ -472,7 +472,6 @@ body {
 }
 
 #agent-tab {
-    display: flex;
     flex-direction: column;
     height: 100%;
 }
@@ -731,10 +730,6 @@ body {
     border-top-color: rgba(255, 255, 255, 0.3);
 }
 
-/* Main tab content height */
-.main-tab-content {
-    height: 100%;
-}
 
 .sub-tab-content {
     height: 100%;
