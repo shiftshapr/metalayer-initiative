@@ -15,6 +15,9 @@ app.use(cors({
 
 app.use(express.json());
 
+// Serve static files from public directory
+app.use(express.static('public'));
+
 // Session configuration
 app.use(session({
   secret: process.env.SESSION_SECRET || 'your-session-secret',

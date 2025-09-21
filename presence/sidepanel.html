@@ -14,9 +14,8 @@
   <div class="sidebar-container">
     <!-- Header with logo and actions -->
     <header class="sidebar-header-main">
-      <button id="close-sidebar-btn">&times;</button>
       <div class="logo-container">
-        <span class="logo-text">Presence<span class="logo-beta">BETA</span></span>
+        <span class="logo-text">Canopi<span class="logo-beta">BETA</span></span>
       </div>
       <div class="header-actions">
         <div class="community-dropdown-trigger">
@@ -43,10 +42,14 @@
         <!-- Auth buttons removed - auth will be triggered on-demand -->
         <div id="user-info" style="display: none; margin-left: 10px; display: flex; align-items: center; gap: 5px; position: relative;">
           <img id="user-avatar" src="" alt="Avatar" style="width: 24px; height: 24px; border-radius: 50%; cursor: pointer;">
-          <div id="user-menu" style="display: none; position: absolute; top: 100%; right: 0; background: white; border: 1px solid #ccc; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); z-index: 1000; min-width: 120px;">
+          <div id="user-menu" class="user-menu" style="display: none; position: absolute; top: 100%; right: 0; z-index: 1000; min-width: 120px;">
             <div style="padding: 8px 12px; border-bottom: 1px solid #eee; font-size: 0.9em; color: #666;">Signed in as</div>
             <div id="user-menu-name" style="padding: 4px 12px; font-weight: bold; font-size: 0.9em;"></div>
             <div style="padding: 4px 0; border-top: 1px solid #eee;">
+              <button id="theme-toggle-btn" style="width: 100%; padding: 8px 12px; border: none; background: none; text-align: left; cursor: pointer; font-size: 0.9em; display: flex; align-items: center; gap: 8px;">
+                <span id="theme-icon">🌙</span>
+                <span id="theme-text">Dark mode</span>
+              </button>
               <button id="logout-btn" style="width: 100%; padding: 8px 12px; border: none; background: none; text-align: left; cursor: pointer; font-size: 0.9em;">Sign out</button>
             </div>
           </div>
@@ -144,19 +147,17 @@
   <!-- Include the main sidebar JavaScript -->
   <script src="sidepanel.js"></script>
 
-  <!-- Chat Input Area - Fixed at bottom -->
-  <div class="chat-input-area" style="position: fixed; bottom: 0; left: 0; width: var(--sidebar-width); background: #f8f9fa; border-top: 1px solid #dee2e6; z-index: 1000;">
-    <textarea id="chat-textarea" placeholder="Type a message... (Press Enter to send)" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 0; font-size: 14px; resize: none; min-height: 20px; max-height: 100px; font-family: inherit; box-sizing: border-box; margin: 0; border-left: none; border-right: none; border-bottom: none;"></textarea>
+  <!-- Context Bar for Reply/Edit - Separate row above input -->
+  <div id="context-bar" style="display: none; position: fixed; bottom: 60px; left: 0; width: 100vw; background: #e8f4fd; padding: 2px 8px; border-bottom: 1px solid #b3d9ff; font-size: 10px; color: #0066cc; line-height: 1.2; height: 18px; overflow: hidden; z-index: 1001;">
+    <span id="context-text" style="font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: calc(100% - 20px); display: inline-block;"></span>
+    <button id="cancel-context" style="float: right; background: none; border: none; color: #0066cc; cursor: pointer; font-size: 10px; padding: 0; margin-left: 4px; width: 12px; height: 12px; line-height: 1;">✕</button>
   </div>
 
-  <!-- Debug panel - Above chat input -->
-  <div id="debug" style="position: fixed; bottom: 60px; left: 0; width: var(--sidebar-width); background: #eee; border-top: 1px solid #ccc; z-index: 999;">
-    <div id="debug-header" style="padding: 5px; background: #ddd; cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-size: 10px;">
-      <span>Debug messages will appear here</span>
-      <span id="debug-toggle" style="font-size: 12px;">▼</span>
-    </div>
-    <div id="debug-content" style="padding: 5px; font-size: 10px; max-height: 100px; overflow-y: auto; display: none;"></div>
+  <!-- Chat Input Area - Fixed at bottom -->
+  <div class="chat-input-area" style="position: fixed; bottom: 0; left: 0; width: 100vw; background: #f8f9fa; border-top: 1px solid #dee2e6; z-index: 1000; padding: 0;">
+    <textarea id="chat-textarea" placeholder="Start thread in Public Square" style="width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 0; font-size: 14px; resize: none; min-height: 20px; font-family: inherit; box-sizing: border-box; margin: 0; border-left: none; border-right: none; border-bottom: none; overflow-y: hidden;"></textarea>
   </div>
+
 
   <!-- Magic Link Modal -->
   <div id="magic-link-modal" class="modal" style="display: none;">

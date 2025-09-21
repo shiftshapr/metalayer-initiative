@@ -1,6 +1,6 @@
 { 
   "manifest_version": 3,
-  "name": "Presence",
+  "name": "Canopi",
   "version": "0.1.0",
   "description": "Adds a sidebar for collaboration and agent interaction on web pages.",
   "permissions": [
@@ -47,6 +47,6 @@
     }
   ],
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' https://bvshfzikwwjasluumfkr.supabase.co wss://bvshfzikwwjasluumfkr.supabase.co http://216.238.91.120:3002 https://app.themetalayer.org https://www.googleapis.com;"
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' https://bvshfzikwwjasluumfkr.supabase.co wss://bvshfzikwwjasluumfkr.supabase.co http://216.238.91.120:3003 https://app.themetalayer.org https://www.googleapis.com;"
   }
 } 

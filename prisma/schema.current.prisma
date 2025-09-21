@@ -1,0 +1,118 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          String   @id @default(uuid())
+  email       String   @unique
+  name        String?
+  avatarUrl   String?
+  isVerified  Boolean  @default(false)
+  isSuperAdmin Boolean @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  sessions    Session[]
+  messages    Message[]
+  communities CommunityMember[]
+  ownedCommunities Community[] @relation("CommunityOwner")
+  interactions Interaction[]
+  avatars     Avatar[]
+  vault       Vault?
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  token     String   @unique
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+}
+
+model Community {
+  id              String   @id @default(uuid())
+  name            String   @unique
+  description     String?
+  codeOfConduct   String?  // Text field for now, will get more complex later
+  logo            String?  // URL to logo image
+  daoLink         String?  // Community/DAO link
+  onboardingInstructions String? // Instructions for new members
+  ownerId         String   // User who created the community
+  owner           User     @relation("CommunityOwner", fields: [ownerId], references: [id])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  members         CommunityMember[]
+  messages        Message[]
+  rules           String? // OPA policy JSON or text
+}
+
+model CommunityMember {
+  id          String   @id @default(uuid())
+  userId      String
+  communityId String
+  user        User     @relation(fields: [userId], references: [id])
+  community   Community @relation(fields: [communityId], references: [id])
+  joinedAt    DateTime @default(now())
+}
+
+model Message {
+  id             String   @id @default(uuid())
+  userId         String
+  communityId    String
+  content        String
+  uri            String?  // URI for the message
+  parentId       String?  // For replies
+  threadId       String?  // For threading
+  optionalContent String? // For anchoring comments
+  createdAt      DateTime @default(now())
+  user           User     @relation(fields: [userId], references: [id])
+  community      Community @relation(fields: [communityId], references: [id])
+  
+  // Self-referential relations for threading
+  parent         Message? @relation("MessageReplies", fields: [parentId], references: [id])
+  replies        Message[] @relation("MessageReplies")
+}
+
+model Interaction {
+  id          String   @id @default(uuid())
+  userId      String
+  action      String
+  hash        String?
+  onChainTx   String?
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id])
+}
+
+model Vault {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  data      String   // Encrypted JSON
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+model Avatar {
+  id        String   @id @default(uuid())
+  userId    String
+  url       String
+  uri       String?  // URI for the avatar/visibility
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+// Future: Blockchain log, TEE, Agent orchestration, MCP protocol
+// model BlockchainLog { ... }
+// model Agent { ... }
+// model TEE { ... }

@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "Page" ALTER COLUMN "spaceId" DROP NOT NULL;

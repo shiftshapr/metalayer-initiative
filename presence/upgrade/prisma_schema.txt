@@ -1,9 +1,7 @@
-// Canopi 2.0 Schema - Conversation Architecture & UX
-// This replaces the previous messaging system with a new anchored conversation model
+// schema.prisma
 
 generator client {
   provider = "prisma-client-js"
-  output   = "../generated/prisma"
 }
 
 datasource db {
@@ -11,91 +9,36 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Enums
-enum Role {
-  OWNER
-  MODERATOR
-  MEMBER
-  VISITOR
-}
+enum Role { OWNER MODERATOR MEMBER VISITOR }
 
-enum Visibility {
-  PUBLIC
-  COMMUNITY
-  GROUP
-  PRIVATE
-  CUSTOM
-}
+enum Visibility { PUBLIC COMMUNITY GROUP PRIVATE CUSTOM }
 
-enum Status {
-  OPEN
-  RESOLVED
-  ARCHIVED
-  FLAGGED
-}
+enum Status { OPEN RESOLVED ARCHIVED FLAGGED }
 
-enum ReactionKind {
-  AGREE
-  LOVE
-  LAUGH
-  QUESTION
-  CITE
-  FLAG
-  DISAGREE
-  CLARIFY
-}
+enum ReactionKind { AGREE QUESTION CITE FLAG DISAGREE }
 
-enum PresenceEventKind {
-  ENTER
-  HEARTBEAT
-  EXIT
-  AVAILABILITY
-}
+enum PresenceEventKind { ENTER HEARTBEAT EXIT AVAILABILITY }
 
-enum Availability {
-  AVAILABLE
-  BUSY
-  AWAY
-  CUSTOM
-}
+enum Availability { AVAILABLE BUSY AWAY CUSTOM }
 
-enum AnchorType {
-  PAGE
-  REGION
-  TEXT
-  MEDIA
-  COMPOSITE
-}
+enum AnchorType { PAGE REGION TEXT MEDIA COMPOSITE }
 
-// Core Models
 model AppUser {
   id             String            @id @default(uuid()) @db.Uuid
   handle         String            @unique
   email          String?           @unique
-  name           String?
-  avatarUrl      String?
-  isVerified     Boolean           @default(false)
-  isSuperAdmin   Boolean           @default(false)
   createdAt      DateTime          @default(now())
-  updatedAt      DateTime          @updatedAt
-  
-  // Relations
   spaces         SpaceMember[]
   conversations  Conversation[]    @relation("ConversationCreatedBy")
   posts          Post[]
   reactions      Reaction[]
   presenceEvents PresenceEvent[]
-  moderationActions ModerationAction[]
 }
 
 model Space {
   id        String         @id @default(uuid()) @db.Uuid
   name      String
-  description String?
   createdAt DateTime       @default(now())
-  updatedAt DateTime       @updatedAt
-  
-  // Relations
   members   SpaceMember[]
   pages     Page[]
 }
@@ -106,31 +49,20 @@ model SpaceMember {
   user      AppUser @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId    String  @db.Uuid
   role      Role
-  joinedAt  DateTime @default(now())
-  
   @@id([spaceId, userId])
 }
 
 model Page {
   id               String         @id @default(uuid()) @db.Uuid
-  space            Space?         @relation(fields: [spaceId], references: [id], onDelete: Cascade)
-  spaceId          String?        @db.Uuid
+  space            Space          @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  spaceId          String         @db.Uuid
   url              String
   canonicalUrl     String
-  title            String?
-  description      String?
   latestSnapshot   PageSnapshot?  @relation("LatestSnapshot", fields: [latestSnapshotId], references: [id])
   latestSnapshotId String?        @db.Uuid
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
-  
-  // Relations
   snapshots        PageSnapshot[]
   conversations    Conversation[]
-  presenceEvents   PresenceEvent[]
-  
   @@unique([spaceId, canonicalUrl])
-  @@index([canonicalUrl])
 }
 
 model PageSnapshot {
@@ -143,12 +75,7 @@ model PageSnapshot {
   lastModified  DateTime?
   screenshotKey String?
   createdAt     DateTime  @default(now())
-  
-  // Relations
   anchors       Anchor[]
-  pagesAsLatest Page[]    @relation("LatestSnapshot")
-  
-  @@index([pageId, createdAt(sort: Desc)])
 }
 
 model Anchor {
@@ -156,18 +83,14 @@ model Anchor {
   pageSnapshot    PageSnapshot  @relation(fields: [pageSnapshotId], references: [id], onDelete: Cascade)
   pageSnapshotId  String        @db.Uuid
   type            AnchorType
-  selectors       Json          // CSS selectors, XPath, text positions, etc.
-  bbox            Json?         // Bounding box coordinates
-  media           Json?         // Media-specific data (timestamps, etc.)
-  snippet         String?       // Text snippet for display
+  selectors       Json
+  bbox            Json?
+  media           Json?
+  snippet         String?
   confidence      Float         @default(1.0)
   createdAt       DateTime      @default(now())
-  
-  // Relations
   conversations   Conversation[]
-  
   @@index([pageSnapshotId])
-  @@index([type])
 }
 
 model Conversation {
@@ -175,25 +98,18 @@ model Conversation {
   page        Page         @relation(fields: [pageId], references: [id], onDelete: Cascade)
   pageId      String       @db.Uuid
   anchor      Anchor?      @relation(fields: [anchorId], references: [id])
-  anchorId    String?      @db.Uuid
+  anchorId    String?
   visibility  Visibility
   title       String?
   tags        String[]
   status      Status       @default(OPEN)
-  communityId String?      // Community identifier for filtering
   createdBy   AppUser      @relation("ConversationCreatedBy", fields: [createdById], references: [id])
   createdById String       @db.Uuid
   createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  
-  // Relations
+  updatedAt   DateTime     @default(now())
   posts       Post[]
   reactions   Reaction[]
-  
   @@index([pageId, updatedAt(sort: Desc)], map: "conversation_list_ix")
-  @@index([anchorId])
-  @@index([status])
-  @@index([communityId])
 }
 
 model Post {
@@ -201,23 +117,18 @@ model Post {
   conversation    Conversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   conversationId  String        @db.Uuid
   parent          Post?         @relation("PostToPost", fields: [parentId], references: [id], onDelete: SetNull)
-  parentId        String?       @db.Uuid
+  parentId        String?
   children        Post[]        @relation("PostToPost")
   author          AppUser       @relation(fields: [authorId], references: [id])
   authorId        String        @db.Uuid
   body            String
-  attachments     Json?         // Array of attachment objects
+  attachments     Json?
   createdAt       DateTime      @default(now())
   editedAt        DateTime?
   visibilityOverride Visibility?
   deletedAt       DateTime?
-  
-  // Relations
   reactions       Reaction[]
-  
   @@index([conversationId, createdAt], map: "post_list_ix")
-  @@index([parentId])
-  @@index([authorId])
 }
 
 model Reaction {
@@ -225,16 +136,12 @@ model Reaction {
   user            AppUser         @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId          String          @db.Uuid
   conversation    Conversation?   @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  conversationId  String?         @db.Uuid
+  conversationId  String?
   post            Post?           @relation(fields: [postId], references: [id], onDelete: Cascade)
-  postId          String?         @db.Uuid
+  postId          String?
   kind            ReactionKind
-  emoji           String?         // Store the actual emoji clicked
   createdAt       DateTime        @default(now())
-  
   @@unique([userId, conversationId, postId], map: "unique_user_target")
-  @@index([conversationId])
-  @@index([postId])
 }
 
 model PresenceEvent {
@@ -247,21 +154,15 @@ model PresenceEvent {
   availability Availability?
   customLabel String?
   createdAt   DateTime          @default(now())
-  
-  @@index([pageId, createdAt(sort: Desc)])
-  @@index([userId])
 }
 
 model ModerationAction {
   id         String   @id @default(uuid()) @db.Uuid
   actor      AppUser  @relation(fields: [actorId], references: [id])
   actorId    String   @db.Uuid
-  targetType String   // "conversation", "post", "user", etc.
+  targetType String
   targetId   String
-  action     String   // "lock", "unlock", "delete", "flag", etc.
+  action     String
   reason     String?
   createdAt  DateTime @default(now())
-  
-  @@index([targetType, targetId])
-  @@index([actorId])
 }

@@ -1,7 +1,11 @@
 /* sidepanel.css - Styles based on mockups */
 
+* {
+    box-sizing: border-box;
+}
+
 :root {
-    /* Define some base colors from mockups (adjust as needed) */
+    /* Light theme colors */
     --background-primary: #ffffff;
     --background-secondary: #f8f9fa; /* Light grey for backgrounds */
     --background-header: #ffffff;
@@ -16,8 +20,32 @@
     --self-message-bg: #e7f5ff; /* Light blue for own messages */
     --other-message-bg: #f1f3f5; /* Light grey for other messages */
     --box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    --user-menu-bg: #ffffff;
+    --user-menu-border: #ccc;
+    --user-menu-shadow: 0 2px 8px rgba(0,0,0,0.1);
 
     --sidebar-width: 320px; /* Adjust as needed */
+}
+
+/* Dark theme */
+[data-theme="dark"] {
+    --background-primary: #1a1a1a;
+    --background-secondary: #3a3a3a; /* Lighter gray */
+    --background-header: #1a1a1a;
+    --background-nav: #1a1a1a;
+    --text-primary: #ffffff;
+    --text-secondary: #d0d0d0; /* Lighter gray */
+    --text-link: #4dabf7;
+    --border-color: #555555; /* Lighter gray */
+    --primary-accent: #4dabf7;
+    --online-status: #51cf66;
+    --away-status: #ffd43b;
+    --self-message-bg: #1e3a8a;
+    --other-message-bg: #4a4a4a; /* Lighter gray */
+    --box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    --user-menu-bg: #3a3a3a; /* Lighter gray */
+    --user-menu-border: #555555; /* Lighter gray */
+    --user-menu-shadow: 0 2px 8px rgba(0,0,0,0.3);
 }
 
 body {
@@ -26,17 +54,24 @@ body {
     padding: 0;
     background-color: var(--background-primary);
     color: var(--text-primary);
-    width: var(--sidebar-width);
+    width: 100vw;
+    min-width: 100vw;
+    max-width: 100vw;
     overflow-x: hidden;
     font-size: 14px;
     line-height: 1.4;
+    box-sizing: border-box;
 }
 
 .sidebar-container {
     display: flex;
     flex-direction: column;
     height: 100vh; /* Full viewport height */
+    width: 100%; /* Use full width of body */
     border-left: 1px solid var(--border-color); /* Add a border to separate from page */
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
 }
 
 /* --- Main Header --- */
@@ -132,6 +167,23 @@ body {
     height: 28px;
     border-radius: 50%;
     object-fit: cover;
+}
+
+/* Profile avatar in header */
+#user-avatar {
+    width: 24px !important;
+    height: 24px !important;
+    border-radius: 50% !important;
+    object-fit: cover !important;
+    display: block !important;
+    cursor: pointer !important;
+    background-color: #f0f0f0 !important;
+}
+
+/* Dark mode for profile avatar */
+[data-theme="dark"] #user-avatar {
+    border: 1px solid #555555 !important;
+    background-color: #3a3a3a !important;
 }
 
 /* --- Community Dropdown Panel --- */
@@ -359,7 +411,7 @@ body {
 
 .sub-tab-content {
     display: none; /* Hide inactive sub-tabs */
-    padding: 15px;
+    padding: 3px;
 }
 
 .sub-tab-content.active {
@@ -550,9 +602,11 @@ body {
     flex-grow: 1;
     overflow-y: auto;
     overflow-x: hidden;
-    padding: 10px; /* Padding inside the scroll area */
+    padding: 0; /* NO padding - use ALL space */
     scrollbar-width: thin;
     scrollbar-color: #ccc #f1f1f1;
+    min-height: 0; /* Allow flex item to shrink below content size */
+    max-height: calc(100vh - 200px); /* Ensure it doesn't exceed viewport minus header/input */
 }
 
 .chat-messages::-webkit-scrollbar {
@@ -574,20 +628,383 @@ body {
 }
 
 .message {
-  margin-bottom: 10px;
-  padding: 8px;
-  background: white;
-  border-radius: 8px;
-  border-left: 3px solid #007bff;
-  width: 95%;
-  max-width: 95%;
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  padding: 3px 4px;
+  box-sizing: border-box;
+  display: flex;
+  gap: 12px;
+  border-bottom: 1px solid #e1e8ed;
+  position: relative;
+  background-color: transparent !important;
+}
+
+.message-reply {
+  margin-left: 32px;
+  border-bottom: 1px solid #f1f3f4;
+  display: none; /* Hide replies by default */
+  max-width: calc(100% - 32px); /* Account for the 32px indentation */
+  overflow: visible; /* Ensure three dots aren't clipped */
+  position: relative;
+  background-color: transparent !important;
+}
+
+/* BREAKTHROUGH: Lines at TOP of messages for better control */
+
+/* Remove all bottom borders and pseudo-elements */
+.message {
+  border-bottom: none !important;
+  position: relative;
+}
+
+/* Thread starters get FULL width top line with padding */
+.message.thread-starter::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100% !important; /* FULL width for thread starters */
+  height: 1px;
+  background-color: var(--border-color);
+  z-index: 2;
+}
+
+/* Add 2px padding under top lines - use !important to override existing padding */
+.message.thread-starter {
+  padding-top: 2px !important;
+}
+
+/* Replies get SHORT width top line (indented) with padding */
+.message-reply.thread-reply::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 32px; /* Indent to match reply margin */
+  width: calc(100% - 32px) !important; /* SHORT width for replies (full width minus indent) */
+  height: 1px;
+  background-color: var(--border-color);
+  z-index: 2;
+}
+
+/* Add 2px padding under top lines for replies - use !important to override existing padding */
+.message-reply.thread-reply {
+  padding-top: 2px !important;
+}
+
+/* Thread starter with replies - add vertical line from bottom of avatar */
+.message.thread-starter.has-replies::after {
+  content: '';
+  position: absolute;
+  left: 16px; /* Center of avatar (32px / 2) */
+  top: 32px; /* Start from bottom of avatar (32px height) */
+  width: 1px;
+  height: var(--vertical-line-height, 100px);
+  background-color: var(--border-color);
+  z-index: 1;
+}
+
+/* Remove blue focus outlines and borders */
+.message, .message *, .message-content, .message-header-new, .message-reply {
+  outline: none !important;
+  border-left: none !important;
+}
+
+/* Remove any focus styles that might create blue lines */
+.message:focus, .message-content:focus, .message-header-new:focus {
+  outline: none !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* Replies in a thread - indented (no bottom borders needed) */
+.message-reply.thread-reply {
+  margin-left: 32px;
+}
+
+/* Dark mode - same top-line approach */
+[data-theme="dark"] .message.thread-starter::before {
+  background-color: var(--border-color);
+}
+
+[data-theme="dark"] .message-reply.thread-reply::before {
+  background-color: var(--border-color);
+}
+
+[data-theme="dark"] .message.thread-starter.has-replies::after {
+  background-color: var(--border-color);
+}
+
+/* Dark mode for main messages - REMOVED conflicting border rules */
+[data-theme="dark"] .message {
+  background-color: transparent !important;
+  /* border-bottom removed - handled by specific thread-starter and thread-reply rules above */
+}
+
+[data-theme="dark"] .message-reply {
+  background-color: transparent !important;
+  /* border-bottom removed - handled by specific thread-reply rules above */
+}
+
+
+
+/* Ensure three dots are visible on replies when they're shown */
+.message-reply.visible .message-actions-new {
+  opacity: 1 !important;
+  display: flex !important;
+  visibility: visible !important;
+}
+
+.message-reply.visible .action-dots-btn {
+  opacity: 1 !important;
+  visibility: visible !important;
+  display: block !important;
+}
+
+.message-reply.visible .action-dots {
+  opacity: 1 !important;
+  visibility: visible !important;
+  display: inline-block !important;
+}
+
+/* Even more specific targeting for the entire action menu structure */
+.message.message-reply.visible .message-content-wrapper .message-header-new .message-actions-new {
+  opacity: 1 !important;
+  display: flex !important;
+  visibility: visible !important;
+}
+
+.message.message-reply.visible .message-content-wrapper .message-header-new .message-actions-new .message-actions-menu {
+  opacity: 1 !important;
+  display: block !important;
+  visibility: visible !important;
+}
+
+.message.message-reply.visible .message-content-wrapper .message-header-new .message-actions-new .message-actions-menu .action-dots-btn {
+  opacity: 1 !important;
+  display: block !important;
+  visibility: visible !important;
+}
+
+.message.message-reply.visible .message-content-wrapper .message-header-new .message-actions-new .message-actions-menu .action-dots-btn .action-dots {
+  opacity: 1 !important;
+  display: inline-block !important;
+  visibility: visible !important;
+}
+
+/* Override the default opacity for action dots on visible replies */
+.message-reply.visible .action-dots-btn {
+  opacity: 1 !important;
+}
+
+.message-reply.visible .action-dots {
+  opacity: 1 !important;
+}
+
+/* Dark mode horizontal rules - REMOVED conflicting rule that was overriding last-reply borders */
+
+/* REMOVED conflicting rule that was overriding thread-starter SHORT lines */
+
+[data-theme="dark"] .navigation-header {
+  border-bottom: 1px solid #555555;
+  background: #3a3a3a;
+}
+
+/* Dark mode context bar */
+[data-theme="dark"] #context-bar {
+  background: #2a4a5a !important;
+  border-bottom: 1px solid #4a6a7a !important;
+  color: #88ccff !important;
+}
+
+[data-theme="dark"] #context-bar #context-text {
+  color: #88ccff !important;
+}
+
+[data-theme="dark"] #context-bar #cancel-context {
+  color: #88ccff !important;
+}
+
+/* Dark mode chat input area */
+[data-theme="dark"] .chat-input-area {
+  background: #2a2a2a !important;
+  border-top: 1px solid #555555 !important;
+}
+
+[data-theme="dark"] #chat-textarea {
+  background: #2a2a2a !important;
+  border-color: #555555 !important;
+  color: #ffffff !important;
+}
+
+[data-theme="dark"] #chat-textarea::placeholder {
+  color: #888888 !important;
+}
+
+/* Dark mode message sender names and community text */
+[data-theme="dark"] .sender-name {
+  color: #e0e0e0 !important;
+}
+
+[data-theme="dark"] .message-sender-name {
+  color: #e0e0e0 !important;
+}
+
+[data-theme="dark"] .message-sender {
+  color: #c0c0c0 !important;
+}
+
+[data-theme="dark"] .message-community {
+  color: #c0c0c0 !important;
+}
+
+[data-theme="dark"] .message-time-new {
+  color: #888888 !important;
+}
+
+/* Dark mode for other message elements */
+
+[data-theme="dark"] .reply-indicator {
+  color: #c0c0c0 !important;
+  background: #3a3a3a !important;
+}
+
+[data-theme="dark"] .message-anchor {
+  color: #c0c0c0 !important;
+  background: #3a3a3a !important;
+}
+
+[data-theme="dark"] .message-time {
+  color: #a0a0a0 !important;
+}
+
+[data-theme="dark"] .thread-replies-header {
+  color: #c0c0c0 !important;
+}
+
+[data-theme="dark"] .reply-author {
+  color: #e0e0e0 !important;
+}
+
+[data-theme="dark"] .reply-time {
+  color: #a0a0a0 !important;
+}
+
+[data-theme="dark"] .thread-toggle-btn {
+  color: #c0c0c0 !important;
+}
+
+[data-theme="dark"] .reaction-btn {
+  color: #c0c0c0 !important;
+}
+
+[data-theme="dark"] .reaction-btn:hover {
+  color: #e0e0e0 !important;
+  background-color: #3a3a3a !important;
+}
+
+[data-theme="dark"] .inline-reply-btn {
+  color: #c0c0c0 !important;
+}
+
+[data-theme="dark"] .inline-reply-btn:hover {
+  color: #e0e0e0 !important;
+  background-color: #3a3a3a !important;
+}
+
+[data-theme="dark"] .icon-count {
+  color: #c0c0c0 !important;
+}
+
+.message-reply.visible {
+  display: flex !important; /* Show replies when thread is expanded */
+}
+
+/* Force visibility of three dots on visible replies with maximum specificity */
+div.message.message-reply.visible div.message-content-wrapper div.message-header-new div.message-actions-new {
+  opacity: 1 !important;
+  display: flex !important;
+  visibility: visible !important;
+}
+
+div.message.message-reply.visible div.message-content-wrapper div.message-header-new div.message-actions-new div.message-actions-menu {
+  opacity: 1 !important;
+  display: inline-block !important;
+  visibility: visible !important;
+  position: relative !important;
+}
+
+div.message.message-reply.visible div.message-content-wrapper div.message-header-new div.message-actions-new div.message-actions-menu button.action-dots-btn {
+  opacity: 1 !important;
+  display: block !important;
+  visibility: visible !important;
+}
+
+div.message.message-reply.visible div.message-content-wrapper div.message-header-new div.message-actions-new div.message-actions-menu button.action-dots-btn span.action-dots {
+  opacity: 1 !important;
+  display: inline-block !important;
+  visibility: visible !important;
+  font-size: 16px !important;
+  color: #666 !important;
+}
+
+.message-avatar {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #007bff;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 14px;
+}
+
+.message-content-wrapper {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+}
+
+/* Ensure replies don't clip the three dots menu */
+.message-reply .message-content-wrapper {
+  overflow: visible !important;
+}
+
+.message-reply .message-header-new {
+  overflow: visible !important;
+}
+
+.message-reply .message-actions-new {
+  overflow: visible !important;
+}
+
+/* Ensure three dots are visible on replies in their normal position */
+.message-reply.visible .message-actions-new .message-actions-menu {
+  opacity: 1 !important;
+  display: inline-block !important;
+  visibility: visible !important;
+  position: relative !important;
+}
+
+.message-reply.visible .message-actions-new .message-actions-menu .action-dots-btn {
+  opacity: 1 !important;
+  display: block !important;
+  visibility: visible !important;
+}
+
+.message-reply.visible .message-actions-new .message-actions-menu .action-dots-btn .action-dots {
+  opacity: 1 !important;
+  display: inline-block !important;
+  visibility: visible !important;
+  font-size: 16px !important;
+  color: var(--text-secondary) !important;
 }
 
 .message-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 8px;
+  display: none; /* Hide the old header */
 }
 
 .message-sender {
@@ -624,12 +1041,330 @@ body {
   color: #666;
 }
 
-.thread-indicator {
+.reply-indicator {
   font-size: 11px;
   color: #666;
   background: #f0f0f0;
   padding: 2px 6px;
   border-radius: 4px;
+}
+
+.message-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+  padding-top: 0;
+  border-top: none;
+  font-size: 11px;
+  color: #666;
+}
+
+.message-time {
+  margin-left: auto; /* Push timestamp to the absolute right */
+}
+
+/* Thread indicators */
+.has-thread {
+  border-bottom: 2px solid #e0e0e0;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+}
+
+.reply-indicator {
+  font-size: 10px;
+  color: #999;
+  font-style: italic;
+  margin-right: 8px;
+}
+
+/* New message header layout */
+.message-header-new {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 2px;
+  font-size: 12px;
+}
+
+.message-sender-name {
+  font-weight: 600;
+  color: #333;
+}
+
+.message-time-new {
+  color: #666;
+  font-size: 11px;
+  margin-left: auto;
+  margin-right: 8px;
+  flex-shrink: 0; /* Prevent the time from shrinking */
+  white-space: nowrap; /* Prevent text wrapping */
+}
+
+.message-actions-new {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  opacity: 1; /* Always visible */
+  transition: opacity 0.2s;
+  flex-shrink: 0; /* Prevent the actions from shrinking */
+}
+
+.message:hover .message-actions-new {
+  opacity: 1; /* Keep visible on hover too */
+}
+
+.action-icon {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 4px;
+  border-radius: 3px;
+  transition: background-color 0.2s;
+}
+
+.action-icon:hover {
+  background-color: #f0f0f0;
+}
+
+.inline-reply-btn {
+  background: none;
+  border: none;
+  color: #666;
+  cursor: pointer;
+  font-size: 0.9em;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.inline-reply-btn:hover {
+  background-color: #e9ecef;
+  color: #333;
+}
+
+.reaction-btn {
+  background: none;
+  border: none;
+  color: #666;
+  cursor: pointer;
+  font-size: 1.1em;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.reaction-btn:hover {
+  background-color: #e9ecef;
+  color: #333;
+}
+
+.reaction-modal {
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  padding: 8px;
+}
+
+.reaction-options {
+  display: flex;
+  gap: 4px;
+}
+
+.reaction-option {
+  background: none;
+  border: none;
+  font-size: 1.2em;
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.reaction-option:hover {
+  background-color: #f0f0f0;
+}
+
+/* Icon counts */
+.icon-count {
+  font-size: 9px; /* 75% of 12px icon size */
+  margin-left: 2px;
+  font-weight: normal;
+  color: #666;
+}
+
+.icon-count.unseen {
+  font-weight: bold;
+  color: #007bff;
+}
+
+/* Deleted message styling */
+.message.deleted .message-content {
+  color: #999;
+  font-style: italic;
+}
+
+.message.deleted .message-sender-name {
+  color: #999;
+}
+
+.message.deleted .message-time-new {
+  color: #999;
+}
+
+/* Navigation header for focused messages */
+.navigation-header {
+  padding: 4px 8px;
+  border-bottom: 1px solid #e1e8ed;
+  background: #f8f9fa;
+  display: flex;
+  align-items: center;
+}
+
+/* Message action menu with three dots */
+.message-actions-menu {
+  position: relative;
+  display: inline-block;
+}
+
+.action-dots-btn {
+  background: none;
+  border: none;
+  padding: 4px;
+  cursor: pointer;
+  border-radius: 4px;
+  opacity: 0.6;
+  transition: opacity 0.2s ease;
+}
+
+/* Remove conflicting CSS rules - let inline styles work */
+
+.action-dots-btn:hover {
+  opacity: 1;
+  background-color: var(--background-secondary);
+}
+
+.action-dots {
+  font-size: 16px;
+  color: var(--text-secondary);
+  line-height: 1;
+  transform: rotate(90deg);
+  display: inline-block;
+}
+
+/* Dark mode for three dots */
+[data-theme="dark"] .action-dots {
+  color: #c0c0c0 !important;
+}
+
+[data-theme="dark"] .action-dots-btn {
+  color: #c0c0c0 !important;
+}
+
+.action-dropdown {
+  position: fixed;
+  top: auto;
+  right: auto;
+  background: var(--background-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 10000;
+  min-width: 140px;
+  padding: 4px 0;
+}
+
+.action-item {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--text-primary);
+  transition: background-color 0.2s ease;
+}
+
+.action-item:hover {
+  background-color: var(--background-secondary);
+}
+
+.action-item:first-child {
+  border-top-left-radius: 6px;
+  border-top-right-radius: 6px;
+}
+
+.action-item:last-child {
+  border-bottom-left-radius: 6px;
+  border-bottom-right-radius: 6px;
+}
+
+.back-btn {
+  background: none;
+  border: none;
+  padding: 2px 4px;
+  cursor: pointer;
+  font-size: 16px;
+  color: #495057;
+  transition: all 0.2s;
+}
+
+.back-btn:hover {
+  color: #007bff;
+}
+
+/* Dark mode for back button - more specific selectors */
+[data-theme="dark"] .back-btn {
+  color: #c0c0c0 !important;
+}
+
+[data-theme="dark"] .back-btn:hover {
+  color: #88ccff !important;
+}
+
+/* More specific dark mode for back button in navigation */
+[data-theme="dark"] .navigation-header .back-btn {
+  color: #c0c0c0 !important;
+}
+
+[data-theme="dark"] .navigation-header .back-btn:hover {
+  color: #88ccff !important;
+}
+
+/* Even more specific for the actual back button element */
+[data-theme="dark"] button.back-btn {
+  color: #c0c0c0 !important;
+}
+
+[data-theme="dark"] button.back-btn:hover {
+  color: #88ccff !important;
+}
+
+.focus-title {
+  font-weight: 500;
+  color: #495057;
+  font-size: 12px;
+}
+
+/* Dark mode for focus title (thread label) */
+[data-theme="dark"] .focus-title {
+  color: #c0c0c0 !important;
+}
+
+/* User menu styles */
+.user-menu {
+  background: var(--user-menu-bg);
+  border: 1px solid var(--user-menu-border);
+  border-radius: 4px;
+  box-shadow: var(--user-menu-shadow);
+}
+
+.user-menu button:hover {
+  background-color: var(--background-secondary);
 }
 
 .message-uri {
@@ -677,12 +1412,12 @@ body {
   display: flex;
   gap: 4px;
   margin-top: 8px;
-  opacity: 0;
+  opacity: 1; /* Always visible */
   transition: opacity 0.2s ease;
 }
 
 .message:hover .message-actions {
-  opacity: 1;
+  opacity: 1; /* Keep visible on hover too */
 }
 
 .thread-toggle-btn {
@@ -844,7 +1579,7 @@ body {
 .message-content {
     display: flex;
     flex-direction: column;
-    max-width: 80%; /* Prevent messages taking full width */
+    width: 100%; /* Use full available width */
 }
 
 .message-group.other .message-content {
@@ -1014,4 +1749,75 @@ body {
   color: black;
   text-decoration: none;
   cursor: pointer;
+}
+
+/* FIX: Align time and three dots properly for both threads and replies */
+.message-header-new {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 8px !important;
+  width: 100% !important;
+}
+
+/* Chat input area should be able to expand dynamically */
+.chat-input-area {
+  position: fixed !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  width: 100vw !important;
+  background: #f8f9fa !important;
+  border-top: 1px solid #dee2e6 !important;
+  z-index: 1000 !important;
+  padding: 0 !important;
+  max-height: 50vh !important; /* Prevent it from taking up too much space */
+  overflow-y: auto !important; /* Allow scrolling if content exceeds */
+}
+
+.message-sender-name {
+  flex-grow: 1 !important;
+  min-width: 0 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+/* Group time and actions together on the right */
+.message-time-new {
+  flex-shrink: 0 !important;
+  white-space: nowrap !important;
+  margin-right: 8px !important;
+}
+
+.message-actions-new {
+  flex-shrink: 0 !important;
+  min-width: 30px !important;
+  margin-left: 0 !important;
+}
+
+/* For replies, ensure the header uses full available width within the indented container */
+.message-reply.visible .message-header-new {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+/* Ensure replies have proper width accounting for indentation */
+.message-reply {
+  width: 100% !important;
+  max-width: calc(100% - 32px) !important; /* Account for 32px indentation */
+  margin-left: 32px !important;
+}
+
+.message-reply.visible {
+  width: 100% !important;
+  max-width: calc(100% - 32px) !important;
+}
+
+/* SIMPLE FIX: Make three dots visible on replies */
+.message-reply.visible .action-dots-btn {
+  opacity: 1 !important;
+}
+
+.message-reply.visible .action-dots {
+  opacity: 1 !important;
 } 

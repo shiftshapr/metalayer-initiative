@@ -1,0 +1,7 @@
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/canopi"
+REDIS_URL="redis://localhost:6379"
+S3_ENDPOINT="http://localhost:9000"
+S3_BUCKET="canopi"
+S3_ACCESS_KEY_ID="minioadmin"
+S3_SECRET_ACCESS_KEY="minioadmin"
+JWT_SECRET="dev_secret_change_me"
