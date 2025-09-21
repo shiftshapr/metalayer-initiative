@@ -74,8 +74,19 @@
           <button class="sub-nav-tab" data-subtab="canopi-visible">Visible</button>
         </div>
         <div id="canopi-live-chat" class="sub-tab-content active">
-          <div class="chat-messages">
-             <p style="text-align: center; color: var(--text-secondary); padding: 20px;">Chat history appears here.</p>
+          <div class="chat-messages" id="canopi-chat-messages">
+            <!-- Chat messages will be dynamically added here -->
+          </div>
+          <div class="chat-input-container">
+            <div id="reply-indicator" class="reply-indicator" style="display: none;">
+              <div class="reply-info">
+                <div class="reply-sender" id="reply-sender"></div>
+                <div class="reply-preview" id="reply-preview"></div>
+              </div>
+              <button class="reply-cancel" id="reply-cancel-btn">×</button>
+            </div>
+            <input type="text" id="canopi-message-input" placeholder="Send message in Overweb" class="chat-input">
+            <button id="canopi-send-btn" class="chat-send-btn">✈</button>
           </div>
         </div>
         <div id="canopi-visible" class="sub-tab-content">
@@ -112,13 +123,19 @@
       
       <!-- Agent Tab Content -->
       <div id="agent-tab" class="main-tab-content">
-        <h3>AI Agent</h3>
+        <div class="agent-header">
+          <h3>AI Agent</h3>
+          <div class="agent-actions">
+            <button id="agent-clear-btn">Clear</button>
+            <button id="agent-refresh-btn">Refresh</button>
+          </div>
+        </div>
         <div class="agent-input-area">
           <input type="text" placeholder="Ask the agent something..." id="agent-input">
-          <button id="agent-send-btn">➤</button>
+          <button id="agent-send-btn">✈</button>
         </div>
         <div class="agent-output" id="agent-output">
-          <p>Agent responses will appear here...</p>
+          <!-- Agent responses will appear here -->
         </div>
       </div>
     </div>
@@ -147,16 +164,8 @@
   <!-- Include the main sidebar JavaScript -->
   <script src="sidepanel.js"></script>
 
-  <!-- Chat Input Area - Fixed at bottom -->
-  <div class="chat-input-area" style="position: fixed; bottom: 0; left: 0; width: var(--sidebar-width); background: #f8f9fa; border-top: 1px solid #dee2e6; z-index: 1000;">
-    <div style="display: flex; gap: 8px; align-items: flex-end; padding: 10px;">
-      <textarea id="chat-textarea" placeholder="Type a message..." style="flex: 1; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; resize: none; min-height: 20px; max-height: 100px; font-family: inherit;"></textarea>
-      <button style="padding: 8px 12px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; align-self: flex-end;">➤</button>
-    </div>
-  </div>
-
-  <!-- Debug panel - Above chat input -->
-  <div id="debug" style="position: fixed; bottom: 60px; left: 0; width: var(--sidebar-width); background: #eee; border-top: 1px solid #ccc; z-index: 999;">
+  <!-- Debug panel - Hidden -->
+  <div id="debug" style="display: none;">
     <div id="debug-header" style="padding: 5px; background: #ddd; cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-size: 10px;">
       <span>Debug messages will appear here</span>
       <span id="debug-toggle" style="font-size: 12px;">▼</span>

@@ -8,6 +8,8 @@
 
     console.log("Content script loaded for Collaborative Sidebar.");
 
+    // Listen for messages from the sidepanel
+
     // Create the trigger button
     const triggerButton = document.createElement('button');
     triggerButton.id = 'collaborative-sidebar-trigger';

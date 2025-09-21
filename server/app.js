@@ -170,6 +170,59 @@ app.get('/auth/debug', (req, res) => {
   });
 });
 
+// Agent API endpoint for DeepSeek integration
+app.post('/api/agent', async (req, res) => {
+  try {
+    const { message, pageContent } = req.body;
+    
+    if (!process.env.DEEPSEEK_API_KEY || process.env.DEEPSEEK_API_KEY === 'your_deepseek_api_key_here') {
+      return res.status(500).json({ 
+        error: 'DeepSeek API key not configured. Please set DEEPSEEK_API_KEY in your .env file.' 
+      });
+    }
+    
+    const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.DEEPSEEK_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: 'deepseek-chat',
+        messages: [
+          {
+            role: 'system',
+            content: `You are an AI assistant helping users understand web page content. The current page content is: ${pageContent || 'No page content available'}`
+          },
+          {
+            role: 'user',
+            content: message
+          }
+        ],
+        max_tokens: 1000,
+        temperature: 0.7
+      })
+    });
+    
+    if (!response.ok) {
+      throw new Error(`DeepSeek API error: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    res.json({ 
+      response: data.choices[0].message.content,
+      usage: data.usage 
+    });
+    
+  } catch (error) {
+    console.error('Agent API error:', error);
+    res.status(500).json({ 
+      error: 'Failed to get AI response',
+      details: error.message 
+    });
+  }
+});
+
 // TODO: Add blockchain, TEE, agent orchestration endpoints
 
 const PORT = process.env.PORT || 3001;
