@@ -2347,15 +2347,14 @@ function updateUI(user) {
           userAvatarImg.style.display = 'none';
           const name = user.user_metadata?.full_name || user.email || 'User';
           const initial = name.charAt(0).toUpperCase();
-        // Use the user's custom avatar background color or fallback to message avatar color
-        const customColor = getUserAvatarBgColor();
-        const name = user.user_metadata?.full_name || user.email || 'User';
-        const defaultColor = getAvatarColor(name);
-        const color = customColor !== '#45B7D1' ? customColor : defaultColor; // Use custom if set, otherwise use name-based color
-        const avatarDiv = document.createElement('div');
-        avatarDiv.style.cssText = `width: 24px; height: 24px; border-radius: 50%; background-color: ${color}; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 12px;`;
-        avatarDiv.textContent = initial;
-        userAvatarImg.parentNode.insertBefore(avatarDiv, userAvatarImg);
+          // Use the user's custom avatar background color or fallback to message avatar color
+          const customColor = getUserAvatarBgColor();
+          const defaultColor = getAvatarColor(name);
+          const color = customColor !== '#45B7D1' ? customColor : defaultColor; // Use custom if set, otherwise use name-based color
+          const avatarDiv = document.createElement('div');
+          avatarDiv.style.cssText = `width: 24px; height: 24px; border-radius: 50%; background-color: ${color}; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 12px;`;
+          avatarDiv.textContent = initial;
+          userAvatarImg.parentNode.insertBefore(avatarDiv, userAvatarImg);
         };
         console.log('✅ Set user avatar to:', avatarUrl);
       } else {
