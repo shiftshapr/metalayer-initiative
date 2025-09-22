@@ -3440,14 +3440,11 @@ function stopPresenceTracking() {
     presenceHeartbeatInterval = null;
   }
   
-  // Send EXIT event
-  if (currentPageId) {
-    sendPresenceEvent('EXIT').catch(error => {
-      console.warn('Failed to send EXIT presence event:', error);
-    });
-  }
+  // Note: We don't send explicit EXIT events anymore
+  // EXIT is inferred by heartbeat timeout (5 minutes of no heartbeats)
+  // This allows users to reconnect and resume presence without explicit re-ENTER
   
-  console.log('🛑 PRESENCE: Presence tracking stopped');
+  console.log('🛑 PRESENCE: Presence tracking stopped (EXIT will be inferred by heartbeat timeout)');
 }
 
 // Send a presence event to the server

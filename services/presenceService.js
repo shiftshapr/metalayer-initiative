@@ -48,6 +48,8 @@ class PresenceService {
       const thresholdTime = new Date(Date.now() - minutesThreshold * 60 * 1000);
       
       // Get recent presence events for this page
+      // Note: We only look for ENTER and HEARTBEAT events
+      // EXIT events are inferred by heartbeat timeout, not explicit EXIT events
       const recentEvents = await this.prisma.presenceEvent.findMany({
         where: {
           pageId,
@@ -215,6 +217,81 @@ class PresenceService {
     } catch (error) {
       console.error('Error getting active users for communities:', error);
       throw new Error('Failed to get active users for communities');
+    }
+  }
+
+  // Process heartbeat timeouts and create EXIT events for inactive users
+  async processHeartbeatTimeouts(minutesThreshold = 5) {
+    try {
+      const thresholdTime = new Date(Date.now() - minutesThreshold * 60 * 1000);
+      
+      // Find users who have ENTER or HEARTBEAT events but no recent HEARTBEAT
+      const activeUsers = await this.prisma.presenceEvent.findMany({
+        where: {
+          kind: {
+            in: ['ENTER', 'HEARTBEAT']
+          },
+          createdAt: {
+            gte: thresholdTime
+          }
+        },
+        select: {
+          userId: true,
+          pageId: true,
+          createdAt: true
+        },
+        orderBy: {
+          createdAt: 'desc'
+        }
+      });
+
+      // Group by user+page and find the most recent event for each
+      const userPageMap = new Map();
+      activeUsers.forEach(event => {
+        const key = `${event.userId}-${event.pageId}`;
+        if (!userPageMap.has(key) || event.createdAt > userPageMap.get(key).createdAt) {
+          userPageMap.set(key, event);
+        }
+      });
+
+      // Check for users who need EXIT events (no recent HEARTBEAT)
+      const exitEvents = [];
+      for (const [key, event] of userPageMap) {
+        // Check if the most recent event is a HEARTBEAT
+        const mostRecentEvent = await this.prisma.presenceEvent.findFirst({
+          where: {
+            userId: event.userId,
+            pageId: event.pageId
+          },
+          orderBy: {
+            createdAt: 'desc'
+          }
+        });
+
+        if (mostRecentEvent && mostRecentEvent.kind !== 'HEARTBEAT') {
+          // User's last event was ENTER, not HEARTBEAT - they're inactive
+          exitEvents.push({
+            userId: event.userId,
+            pageId: event.pageId,
+            kind: 'EXIT',
+            availability: null,
+            customLabel: 'Heartbeat timeout'
+          });
+        }
+      }
+
+      // Create EXIT events for inactive users
+      if (exitEvents.length > 0) {
+        await this.prisma.presenceEvent.createMany({
+          data: exitEvents
+        });
+        console.log(`Created ${exitEvents.length} EXIT events for inactive users`);
+      }
+
+      return exitEvents.length;
+    } catch (error) {
+      console.error('Error processing heartbeat timeouts:', error);
+      throw new Error('Failed to process heartbeat timeouts');
     }
   }
 
