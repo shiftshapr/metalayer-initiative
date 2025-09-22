@@ -864,40 +864,61 @@ function closeColorPickerModal() {
 }
 
 // Add click handler to profile avatar to show/hide user menu
+// Global flag to track if click-outside listener has been added
+let clickOutsideListenerAdded = false;
+
 function addProfileAvatarClickHandler() {
   const userAvatar = document.getElementById('user-avatar');
   const userMenu = document.getElementById('user-menu');
   console.log('🔍 Setting up profile avatar click handler, found avatar:', userAvatar, 'menu:', userMenu);
   
   if (userAvatar && userMenu) {
-    userAvatar.addEventListener('click', (e) => {
-      console.log('👤 Profile avatar clicked!');
-      console.log('🔍 Current menu display:', userMenu.style.display);
-      e.stopPropagation();
-      // Toggle menu visibility
-      if (userMenu.style.display === 'none' || userMenu.style.display === '') {
-        userMenu.style.display = 'block';
-        console.log('✅ Menu shown, new display:', userMenu.style.display);
-        console.log('🔍 Menu computed styles:', {
-          display: window.getComputedStyle(userMenu).display,
-          position: window.getComputedStyle(userMenu).position,
-          zIndex: window.getComputedStyle(userMenu).zIndex,
-          visibility: window.getComputedStyle(userMenu).visibility
-        });
-      } else {
-        userMenu.style.display = 'none';
-        console.log('❌ Menu hidden, new display:', userMenu.style.display);
-      }
-    });
+    // Remove any existing click listeners to avoid duplicates
+    userAvatar.removeEventListener('click', handleAvatarClick);
+    userAvatar.addEventListener('click', handleAvatarClick);
     
-    // Close menu when clicking outside
-    document.addEventListener('click', (e) => {
-      if (!userAvatar.contains(e.target) && !userMenu.contains(e.target)) {
-        userMenu.style.display = 'none';
-      }
-    });
+    // Only add click-outside listener once
+    if (!clickOutsideListenerAdded) {
+      document.addEventListener('click', handleClickOutside);
+      clickOutsideListenerAdded = true;
+      console.log('✅ Added click-outside listener');
+    }
   } else {
     console.error('❌ Profile avatar or menu not found!');
+  }
+}
+
+function handleAvatarClick(e) {
+  const userAvatar = document.getElementById('user-avatar');
+  const userMenu = document.getElementById('user-menu');
+  
+  console.log('👤 Profile avatar clicked!');
+  console.log('🔍 Current menu display:', userMenu.style.display);
+  e.stopPropagation();
+  
+  // Toggle menu visibility
+  if (userMenu.style.display === 'none' || userMenu.style.display === '') {
+    userMenu.style.display = 'block';
+    console.log('✅ Menu shown, new display:', userMenu.style.display);
+    console.log('🔍 Menu computed styles:', {
+      display: window.getComputedStyle(userMenu).display,
+      position: window.getComputedStyle(userMenu).position,
+      zIndex: window.getComputedStyle(userMenu).zIndex,
+      visibility: window.getComputedStyle(userMenu).visibility
+    });
+  } else {
+    userMenu.style.display = 'none';
+    console.log('❌ Menu hidden, new display:', userMenu.style.display);
+  }
+}
+
+function handleClickOutside(e) {
+  const userAvatar = document.getElementById('user-avatar');
+  const userMenu = document.getElementById('user-menu');
+  
+  if (userAvatar && userMenu && !userAvatar.contains(e.target) && !userMenu.contains(e.target)) {
+    console.log('🖱️ Clicked outside, hiding menu');
+    userMenu.style.display = 'none';
   }
 }
 
