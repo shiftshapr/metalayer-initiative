@@ -863,6 +863,35 @@ function closeColorPickerModal() {
   }
 }
 
+// Add click handler to profile avatar to show/hide user menu
+function addProfileAvatarClickHandler() {
+  const userAvatar = document.getElementById('user-avatar');
+  const userMenu = document.getElementById('user-menu');
+  console.log('🔍 Setting up profile avatar click handler, found avatar:', userAvatar, 'menu:', userMenu);
+  
+  if (userAvatar && userMenu) {
+    userAvatar.addEventListener('click', (e) => {
+      console.log('👤 Profile avatar clicked!');
+      e.stopPropagation();
+      // Toggle menu visibility
+      if (userMenu.style.display === 'none' || userMenu.style.display === '') {
+        userMenu.style.display = 'block';
+      } else {
+        userMenu.style.display = 'none';
+      }
+    });
+    
+    // Close menu when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!userAvatar.contains(e.target) && !userMenu.contains(e.target)) {
+        userMenu.style.display = 'none';
+      }
+    });
+  } else {
+    console.error('❌ Profile avatar or menu not found!');
+  }
+}
+
 // Add click handler to aura button
 function addAuraButtonClickHandler() {
   const auraBtn = document.getElementById('aura-btn');
@@ -2404,8 +2433,10 @@ function updateUI(user) {
         userAvatarImg.src = avatarUrl;
         userAvatarImg.alt = user.user_metadata?.full_name || user.email;
         userAvatarImg.style.display = 'block';
+        userAvatarImg.setAttribute('data-profile-avatar', 'true');
+        
         // Add error handler to fallback to colored initial if image fails to load
-        userAvatarImg.onerror = function() {
+        userAvatarImg.addEventListener('error', function() {
           console.log('❌ Avatar image failed to load, falling back to colored initial');
           userAvatarImg.style.display = 'none';
           const name = user.user_metadata?.full_name || user.email || 'User';
@@ -2418,7 +2449,7 @@ function updateUI(user) {
           avatarDiv.style.cssText = `width: 24px; height: 24px; border-radius: 50%; background-color: ${color}; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 12px;`;
           avatarDiv.textContent = initial;
           userAvatarImg.parentNode.insertBefore(avatarDiv, userAvatarImg);
-        };
+        });
         console.log('✅ Set user avatar to:', avatarUrl);
       } else {
         // Use a colored initial instead of placeholder image
@@ -2441,8 +2472,11 @@ function updateUI(user) {
     debug(`User logged in: ${userMenuName?.textContent}`);
     console.log('UI updated: User authenticated, showing user info');
     
-    // Add click handler to aura button after UI update
-    addAuraButtonClickHandler();
+    // Add click handlers after UI update (with small delay to ensure DOM is ready)
+    setTimeout(() => {
+      addAuraButtonClickHandler();
+      addProfileAvatarClickHandler();
+    }, 100);
   } else {
     // User is logged out - hide user info
     if (userInfoDiv) userInfoDiv.style.display = 'none';
@@ -2527,8 +2561,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // === Load User Avatar Background Color Configuration ===
   await loadUserAvatarBgConfig();
   
-  // Add click handler to aura button
-  addAuraButtonClickHandler();
+  // Note: Aura button click handler will be set up after user authentication
   
   // === Update Visual Hierarchy for Existing Messages ===
   setTimeout(() => {
