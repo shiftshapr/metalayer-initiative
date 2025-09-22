@@ -872,12 +872,21 @@ function addProfileAvatarClickHandler() {
   if (userAvatar && userMenu) {
     userAvatar.addEventListener('click', (e) => {
       console.log('👤 Profile avatar clicked!');
+      console.log('🔍 Current menu display:', userMenu.style.display);
       e.stopPropagation();
       // Toggle menu visibility
       if (userMenu.style.display === 'none' || userMenu.style.display === '') {
         userMenu.style.display = 'block';
+        console.log('✅ Menu shown, new display:', userMenu.style.display);
+        console.log('🔍 Menu computed styles:', {
+          display: window.getComputedStyle(userMenu).display,
+          position: window.getComputedStyle(userMenu).position,
+          zIndex: window.getComputedStyle(userMenu).zIndex,
+          visibility: window.getComputedStyle(userMenu).visibility
+        });
       } else {
         userMenu.style.display = 'none';
+        console.log('❌ Menu hidden, new display:', userMenu.style.display);
       }
     });
     
