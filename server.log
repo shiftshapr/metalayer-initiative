@@ -286,3 +286,243 @@ Error updating aura color: Error: Failed to update aura color
   email: 'themetalayer@gmail.com',
   avatarUrl: ''
 }
+🔍 Auth middleware - Headers received: {
+  email: 'themetalayer@gmail.com',
+  name: 'Daveed',
+  avatarUrl: 'https://lh3.googleusercontent.com/a/ACg8ocKmW7vIeo8Wm1CN2-xUv7FPaNNN38kRh8rG2hHfFmdOf3Aknw=s96-c'
+}
+✅ Auth middleware - req.user created: {
+  id: '5a4ca9ae-105b-a01b-e461-eaf8d83d90c7',
+  handle: 'themetalayer',
+  name: 'Daveed',
+  email: 'themetalayer@gmail.com',
+  avatarUrl: 'https://lh3.googleusercontent.com/a/ACg8ocKmW7vIeo8Wm1CN2-xUv7FPaNNN38kRh8rG2hHfFmdOf3Aknw=s96-c'
+}
+🔍 Auth middleware - Headers received: {
+  email: 'themetalayer@gmail.com',
+  name: 'Daveed',
+  avatarUrl: 'https://lh3.googleusercontent.com/a/ACg8ocKmW7vIeo8Wm1CN2-xUv7FPaNNN38kRh8rG2hHfFmdOf3Aknw=s96-c'
+}
+✅ Auth middleware - req.user created: {
+  id: '5a4ca9ae-105b-a01b-e461-eaf8d83d90c7',
+  handle: 'themetalayer',
+  name: 'Daveed',
+  email: 'themetalayer@gmail.com',
+  avatarUrl: 'https://lh3.googleusercontent.com/a/ACg8ocKmW7vIeo8Wm1CN2-xUv7FPaNNN38kRh8rG2hHfFmdOf3Aknw=s96-c'
+}
+🔍 Auth middleware - Headers received: {
+  email: 'themetalayer@gmail.com',
+  name: 'Daveed',
+  avatarUrl: 'https://lh3.googleusercontent.com/a/ACg8ocKmW7vIeo8Wm1CN2-xUv7FPaNNN38kRh8rG2hHfFmdOf3Aknw=s96-c'
+}
+✅ Auth middleware - req.user created: {
+  id: '5a4ca9ae-105b-a01b-e461-eaf8d83d90c7',
+  handle: 'themetalayer',
+  name: 'Daveed',
+  email: 'themetalayer@gmail.com',
+  avatarUrl: 'https://lh3.googleusercontent.com/a/ACg8ocKmW7vIeo8Wm1CN2-xUv7FPaNNN38kRh8rG2hHfFmdOf3Aknw=s96-c'
+}
+🔍 Auth middleware - Headers received: {
+  email: 'themetalayer@gmail.com',
+  name: 'Daveed',
+  avatarUrl: 'https://lh3.googleusercontent.com/a/ACg8ocKmW7vIeo8Wm1CN2-xUv7FPaNNN38kRh8rG2hHfFmdOf3Aknw=s96-c'
+}
+✅ Auth middleware - req.user created: {
+  id: '5a4ca9ae-105b-a01b-e461-eaf8d83d90c7',
+  handle: 'themetalayer',
+  name: 'Daveed',
+  email: 'themetalayer@gmail.com',
+  avatarUrl: 'https://lh3.googleusercontent.com/a/ACg8ocKmW7vIeo8Wm1CN2-xUv7FPaNNN38kRh8rG2hHfFmdOf3Aknw=s96-c'
+}
+🔍 Auth middleware - Headers received: {
+  email: 'themetalayer@gmail.com',
+  name: 'Daveed',
+  avatarUrl: 'https://lh3.googleusercontent.com/a/ACg8ocKmW7vIeo8Wm1CN2-xUv7FPaNNN38kRh8rG2hHfFmdOf3Aknw=s96-c'
+}
+✅ Auth middleware - req.user created: {
+  id: '5a4ca9ae-105b-a01b-e461-eaf8d83d90c7',
+  handle: 'themetalayer',
+  name: 'Daveed',
+  email: 'themetalayer@gmail.com',
+  avatarUrl: 'https://lh3.googleusercontent.com/a/ACg8ocKmW7vIeo8Wm1CN2-xUv7FPaNNN38kRh8rG2hHfFmdOf3Aknw=s96-c'
+}
+🔍 Auth middleware - Headers received: {
+  email: 'themetalayer@gmail.com',
+  name: 'Daveed',
+  avatarUrl: 'https://lh3.googleusercontent.com/a/ACg8ocKmW7vIeo8Wm1CN2-xUv7FPaNNN38kRh8rG2hHfFmdOf3Aknw=s96-c'
+}
+✅ Auth middleware - req.user created: {
+  id: '5a4ca9ae-105b-a01b-e461-eaf8d83d90c7',
+  handle: 'themetalayer',
+  name: 'Daveed',
+  email: 'themetalayer@gmail.com',
+  avatarUrl: 'https://lh3.googleusercontent.com/a/ACg8ocKmW7vIeo8Wm1CN2-xUv7FPaNNN38kRh8rG2hHfFmdOf3Aknw=s96-c'
+}
+🔍 Auth middleware - Headers received: {
+  email: 'themetalayer@gmail.com',
+  name: 'Daveed',
+  avatarUrl: 'https://lh3.googleusercontent.com/a/ACg8ocKmW7vIeo8Wm1CN2-xUv7FPaNNN38kRh8rG2hHfFmdOf3Aknw=s96-c'
+}
+✅ Auth middleware - req.user created: {
+  id: '5a4ca9ae-105b-a01b-e461-eaf8d83d90c7',
+  handle: 'themetalayer',
+  name: 'Daveed',
+  email: 'themetalayer@gmail.com',
+  avatarUrl: 'https://lh3.googleusercontent.com/a/ACg8ocKmW7vIeo8Wm1CN2-xUv7FPaNNN38kRh8rG2hHfFmdOf3Aknw=s96-c'
+}
+🔍 Auth middleware - Headers received: {
+  email: 'themetalayer@gmail.com',
+  name: 'Daveed',
+  avatarUrl: 'https://lh3.googleusercontent.com/a/ACg8ocKmW7vIeo8Wm1CN2-xUv7FPaNNN38kRh8rG2hHfFmdOf3Aknw=s96-c'
+}
+✅ Auth middleware - req.user created: {
+  id: '5a4ca9ae-105b-a01b-e461-eaf8d83d90c7',
+  handle: 'themetalayer',
+  name: 'Daveed',
+  email: 'themetalayer@gmail.com',
+  avatarUrl: 'https://lh3.googleusercontent.com/a/ACg8ocKmW7vIeo8Wm1CN2-xUv7FPaNNN38kRh8rG2hHfFmdOf3Aknw=s96-c'
+}
+🔍 Auth middleware - Headers received: {
+  email: 'themetalayer@gmail.com',
+  name: 'Daveed',
+  avatarUrl: 'https://lh3.googleusercontent.com/a/ACg8ocKmW7vIeo8Wm1CN2-xUv7FPaNNN38kRh8rG2hHfFmdOf3Aknw=s96-c'
+}
+✅ Auth middleware - req.user created: {
+  id: '5a4ca9ae-105b-a01b-e461-eaf8d83d90c7',
+  handle: 'themetalayer',
+  name: 'Daveed',
+  email: 'themetalayer@gmail.com',
+  avatarUrl: 'https://lh3.googleusercontent.com/a/ACg8ocKmW7vIeo8Wm1CN2-xUv7FPaNNN38kRh8rG2hHfFmdOf3Aknw=s96-c'
+}
+🔍 Auth middleware - Headers received: {
+  email: 'themetalayer@gmail.com',
+  name: 'Daveed',
+  avatarUrl: 'https://lh3.googleusercontent.com/a/ACg8ocKmW7vIeo8Wm1CN2-xUv7FPaNNN38kRh8rG2hHfFmdOf3Aknw=s96-c'
+}
+✅ Auth middleware - req.user created: {
+  id: '5a4ca9ae-105b-a01b-e461-eaf8d83d90c7',
+  handle: 'themetalayer',
+  name: 'Daveed',
+  email: 'themetalayer@gmail.com',
+  avatarUrl: 'https://lh3.googleusercontent.com/a/ACg8ocKmW7vIeo8Wm1CN2-xUv7FPaNNN38kRh8rG2hHfFmdOf3Aknw=s96-c'
+}
+🔍 Auth middleware - Headers received: {
+  email: 'themetalayer@gmail.com',
+  name: 'Daveed',
+  avatarUrl: 'https://lh3.googleusercontent.com/a/ACg8ocKmW7vIeo8Wm1CN2-xUv7FPaNNN38kRh8rG2hHfFmdOf3Aknw=s96-c'
+}
+✅ Auth middleware - req.user created: {
+  id: '5a4ca9ae-105b-a01b-e461-eaf8d83d90c7',
+  handle: 'themetalayer',
+  name: 'Daveed',
+  email: 'themetalayer@gmail.com',
+  avatarUrl: 'https://lh3.googleusercontent.com/a/ACg8ocKmW7vIeo8Wm1CN2-xUv7FPaNNN38kRh8rG2hHfFmdOf3Aknw=s96-c'
+}
+🔍 Auth middleware - Headers received: {
+  email: 'themetalayer@gmail.com',
+  name: 'Daveed',
+  avatarUrl: 'https://lh3.googleusercontent.com/a/ACg8ocKmW7vIeo8Wm1CN2-xUv7FPaNNN38kRh8rG2hHfFmdOf3Aknw=s96-c'
+}
+✅ Auth middleware - req.user created: {
+  id: '5a4ca9ae-105b-a01b-e461-eaf8d83d90c7',
+  handle: 'themetalayer',
+  name: 'Daveed',
+  email: 'themetalayer@gmail.com',
+  avatarUrl: 'https://lh3.googleusercontent.com/a/ACg8ocKmW7vIeo8Wm1CN2-xUv7FPaNNN38kRh8rG2hHfFmdOf3Aknw=s96-c'
+}
+🔍 Auth middleware - Headers received: {
+  email: 'themetalayer@gmail.com',
+  name: 'Daveed',
+  avatarUrl: 'https://lh3.googleusercontent.com/a/ACg8ocKmW7vIeo8Wm1CN2-xUv7FPaNNN38kRh8rG2hHfFmdOf3Aknw=s96-c'
+}
+✅ Auth middleware - req.user created: {
+  id: '5a4ca9ae-105b-a01b-e461-eaf8d83d90c7',
+  handle: 'themetalayer',
+  name: 'Daveed',
+  email: 'themetalayer@gmail.com',
+  avatarUrl: 'https://lh3.googleusercontent.com/a/ACg8ocKmW7vIeo8Wm1CN2-xUv7FPaNNN38kRh8rG2hHfFmdOf3Aknw=s96-c'
+}
+🔍 Auth middleware - Headers received: {
+  email: 'themetalayer@gmail.com',
+  name: 'Daveed',
+  avatarUrl: 'https://lh3.googleusercontent.com/a/ACg8ocKmW7vIeo8Wm1CN2-xUv7FPaNNN38kRh8rG2hHfFmdOf3Aknw=s96-c'
+}
+✅ Auth middleware - req.user created: {
+  id: '5a4ca9ae-105b-a01b-e461-eaf8d83d90c7',
+  handle: 'themetalayer',
+  name: 'Daveed',
+  email: 'themetalayer@gmail.com',
+  avatarUrl: 'https://lh3.googleusercontent.com/a/ACg8ocKmW7vIeo8Wm1CN2-xUv7FPaNNN38kRh8rG2hHfFmdOf3Aknw=s96-c'
+}
+🔍 Auth middleware - Headers received: {
+  email: 'themetalayer@gmail.com',
+  name: 'Daveed',
+  avatarUrl: 'https://lh3.googleusercontent.com/a/ACg8ocKmW7vIeo8Wm1CN2-xUv7FPaNNN38kRh8rG2hHfFmdOf3Aknw=s96-c'
+}
+✅ Auth middleware - req.user created: {
+  id: '5a4ca9ae-105b-a01b-e461-eaf8d83d90c7',
+  handle: 'themetalayer',
+  name: 'Daveed',
+  email: 'themetalayer@gmail.com',
+  avatarUrl: 'https://lh3.googleusercontent.com/a/ACg8ocKmW7vIeo8Wm1CN2-xUv7FPaNNN38kRh8rG2hHfFmdOf3Aknw=s96-c'
+}
+🔍 Auth middleware - Headers received: {
+  email: 'themetalayer@gmail.com',
+  name: 'Daveed',
+  avatarUrl: 'https://lh3.googleusercontent.com/a/ACg8ocKmW7vIeo8Wm1CN2-xUv7FPaNNN38kRh8rG2hHfFmdOf3Aknw=s96-c'
+}
+✅ Auth middleware - req.user created: {
+  id: '5a4ca9ae-105b-a01b-e461-eaf8d83d90c7',
+  handle: 'themetalayer',
+  name: 'Daveed',
+  email: 'themetalayer@gmail.com',
+  avatarUrl: 'https://lh3.googleusercontent.com/a/ACg8ocKmW7vIeo8Wm1CN2-xUv7FPaNNN38kRh8rG2hHfFmdOf3Aknw=s96-c'
+}
+🔍 Auth middleware - Headers received: {
+  email: 'themetalayer@gmail.com',
+  name: 'Daveed',
+  avatarUrl: 'https://lh3.googleusercontent.com/a/ACg8ocKmW7vIeo8Wm1CN2-xUv7FPaNNN38kRh8rG2hHfFmdOf3Aknw=s96-c'
+}
+✅ Auth middleware - req.user created: {
+  id: '5a4ca9ae-105b-a01b-e461-eaf8d83d90c7',
+  handle: 'themetalayer',
+  name: 'Daveed',
+  email: 'themetalayer@gmail.com',
+  avatarUrl: 'https://lh3.googleusercontent.com/a/ACg8ocKmW7vIeo8Wm1CN2-xUv7FPaNNN38kRh8rG2hHfFmdOf3Aknw=s96-c'
+}
+🔍 Auth middleware - Headers received: {
+  email: 'themetalayer@gmail.com',
+  name: 'Daveed',
+  avatarUrl: 'https://lh3.googleusercontent.com/a/ACg8ocKmW7vIeo8Wm1CN2-xUv7FPaNNN38kRh8rG2hHfFmdOf3Aknw=s96-c'
+}
+✅ Auth middleware - req.user created: {
+  id: '5a4ca9ae-105b-a01b-e461-eaf8d83d90c7',
+  handle: 'themetalayer',
+  name: 'Daveed',
+  email: 'themetalayer@gmail.com',
+  avatarUrl: 'https://lh3.googleusercontent.com/a/ACg8ocKmW7vIeo8Wm1CN2-xUv7FPaNNN38kRh8rG2hHfFmdOf3Aknw=s96-c'
+}
+🔍 Auth middleware - Headers received: {
+  email: 'themetalayer@gmail.com',
+  name: 'Daveed',
+  avatarUrl: 'https://lh3.googleusercontent.com/a/ACg8ocKmW7vIeo8Wm1CN2-xUv7FPaNNN38kRh8rG2hHfFmdOf3Aknw=s96-c'
+}
+✅ Auth middleware - req.user created: {
+  id: '5a4ca9ae-105b-a01b-e461-eaf8d83d90c7',
+  handle: 'themetalayer',
+  name: 'Daveed',
+  email: 'themetalayer@gmail.com',
+  avatarUrl: 'https://lh3.googleusercontent.com/a/ACg8ocKmW7vIeo8Wm1CN2-xUv7FPaNNN38kRh8rG2hHfFmdOf3Aknw=s96-c'
+}
+🔍 Auth middleware - Headers received: {
+  email: 'themetalayer@gmail.com',
+  name: 'themetalayer@gmail.com',
+  avatarUrl: ''
+}
+✅ Auth middleware - req.user created: {
+  id: '5a4ca9ae-105b-a01b-e461-eaf8d83d90c7',
+  handle: 'themetalayer',
+  name: 'themetalayer@gmail.com',
+  email: 'themetalayer@gmail.com',
+  avatarUrl: ''
+}

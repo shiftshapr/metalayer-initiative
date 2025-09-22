@@ -177,7 +177,7 @@ body {
     object-fit: cover !important;
     display: block !important;
     cursor: pointer !important;
-    background-color: #45B7D1 !important; /* Default blue background */
+    background-color: #45B7D1; /* Default blue background */
 }
 
 /* Dark mode for profile avatar */
