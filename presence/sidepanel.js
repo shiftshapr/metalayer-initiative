@@ -909,13 +909,8 @@ function handleAvatarClick(e) {
   // Toggle menu visibility
   if (userMenu.style.display === 'none' || userMenu.style.display === '') {
     userMenu.style.display = 'block';
-      position: window.getComputedStyle(userMenu).position,
-      zIndex: window.getComputedStyle(userMenu).zIndex,
-      visibility: window.getComputedStyle(userMenu).visibility
-    });
   } else {
     userMenu.style.display = 'none';
-    console.log('❌ Menu hidden, new display:', userMenu.style.display);
   }
 }
 
