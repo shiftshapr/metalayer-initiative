@@ -457,28 +457,24 @@ async function loadCombinedAvatars(communityIds) {
   }
 }
 
-// Legacy function for backward compatibility
-async function loadAvatars(communityId) {
+// Legacy function for backward compatibility - now accepts array of community IDs
+async function loadAvatars(communityIds) {
   try {
-    debug(`Loading avatars for community ${communityId}...`);
-    const response = await api.getAvatars(communityId);
-    debug(`Raw API response:`, response);
-    
-    // Handle different response formats
-    let avatars;
-    if (response && response.active && Array.isArray(response.active)) {
-      avatars = response.active;
-    } else if (Array.isArray(response)) {
-      avatars = response;
-    } else {
-      avatars = [];
+    // If single community ID passed, convert to array
+    if (typeof communityIds === 'string') {
+      communityIds = [communityIds];
     }
     
-    debug(`Processed avatars:`, avatars);
-    debug(`Loaded ${avatars.length} avatars`);
+    // If no community IDs provided, get from storage
+    if (!communityIds || communityIds.length === 0) {
+      const result = await chrome.storage.local.get(['activeCommunities']);
+      communityIds = result.activeCommunities || ['comm-001'];
+    }
     
-    // Update the visible tab with avatar data
-    updateVisibleTab(avatars);
+    debug(`Loading avatars for communities: ${communityIds.join(', ')}`);
+    
+    // Use the combined avatars function
+    await loadCombinedAvatars(communityIds);
   } catch (error) {
     console.error('Failed to load avatars:', error);
     debug(`Failed to load avatars: ${error.message}`);
@@ -3310,7 +3306,9 @@ async function handleTabChange(tabId) {
       // Reload chat history for the new page
       await loadChatHistory();
       // Update visibility list for the new page
-      await loadAvatars();
+      const result = await chrome.storage.local.get(['activeCommunities']);
+      const activeCommunities = result.activeCommunities || ['comm-001'];
+      await loadCombinedAvatars(activeCommunities);
     } else {
       console.log('No tab or URL found for tab:', tabId);
       debug(`No tab or URL found for tab: ${tabId}`);
@@ -3329,7 +3327,9 @@ async function handleTabUpdate(tabId, url) {
     // Reload chat history for the new URL
     await loadChatHistory();
     // Update visibility list for the new URL
-    await loadAvatars();
+    const result = await chrome.storage.local.get(['activeCommunities']);
+    const activeCommunities = result.activeCommunities || ['comm-001'];
+    await loadCombinedAvatars(activeCommunities);
   } catch (error) {
     console.error('Error handling tab update:', error);
     debug(`Error handling tab update: ${error.message}`);
