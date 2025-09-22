@@ -426,14 +426,30 @@ async function loadCombinedAvatars(communityIds) {
       let avatars;
       
       console.log(`🔍 VISIBILITY: Processing response for community ${communityId}:`, response);
+      console.log(`🔍 VISIBILITY: Response keys:`, response ? Object.keys(response) : 'null');
+      console.log(`🔍 VISIBILITY: Response type:`, typeof response);
+      console.log(`🔍 VISIBILITY: Is array:`, Array.isArray(response));
       
       // Handle different response formats
-      if (response && response.active && Array.isArray(response.active)) {
+      if (response && response.avatars && Array.isArray(response.avatars)) {
+        avatars = response.avatars;
+        console.log(`🔍 VISIBILITY: Found ${avatars.length} avatars in response.avatars for ${communityId}`);
+      } else if (response && response.active && Array.isArray(response.active)) {
         avatars = response.active;
         console.log(`🔍 VISIBILITY: Found ${avatars.length} avatars in response.active for ${communityId}`);
       } else if (Array.isArray(response)) {
         avatars = response;
         console.log(`🔍 VISIBILITY: Found ${avatars.length} avatars in direct array for ${communityId}`);
+      } else if (response && typeof response === 'object') {
+        // Check for other possible structures
+        console.log(`🔍 VISIBILITY: Checking other object structures for ${communityId}`);
+        if (response.users && Array.isArray(response.users)) {
+          avatars = response.users;
+          console.log(`🔍 VISIBILITY: Found ${avatars.length} avatars in response.users for ${communityId}`);
+        } else {
+          avatars = [];
+          console.log(`🔍 VISIBILITY: No avatars found in object for ${communityId}, available keys:`, Object.keys(response));
+        }
       } else {
         avatars = [];
         console.log(`🔍 VISIBILITY: No avatars found for ${communityId}, response format:`, typeof response);
