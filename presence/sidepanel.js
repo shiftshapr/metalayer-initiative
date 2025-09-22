@@ -870,7 +870,7 @@ let clickOutsideListenerAdded = false;
 function addProfileAvatarClickHandler() {
   const userAvatar = document.getElementById('user-avatar');
   const userMenu = document.getElementById('user-menu');
-  console.log('🔍 Setting up profile avatar click handler, found avatar:', userAvatar, 'menu:', userMenu);
+  // console.log('🔍 Setting up profile avatar click handler, found avatar:', userAvatar, 'menu:', userMenu);
   
   if (userAvatar && userMenu) {
     // Remove any existing click listeners to avoid duplicates
@@ -925,7 +925,7 @@ function handleClickOutside(e) {
 // Add click handler to aura button
 function addAuraButtonClickHandler() {
   const auraBtn = document.getElementById('aura-btn');
-  console.log('🔍 Setting up aura button click handler, found button:', auraBtn);
+  // console.log('🔍 Setting up aura button click handler, found button:', auraBtn);
   if (auraBtn) {
     auraBtn.addEventListener('click', (e) => {
       console.log('🎨 Aura button clicked!');
@@ -969,8 +969,7 @@ window.forceRefreshCSS = () => {
       const allMessages = chatMessages.querySelectorAll('.message');
       const conversationGroups = {};
       
-      console.log('🔍 DEBUG: Updating message visual hierarchy, found', allMessages.length, 'messages');
-      console.log('🔍 LINE DEBUG: Using TOP-line approach with vertical lines!');
+      // console.log('🔍 DEBUG: Updating message visual hierarchy, found', allMessages.length, 'messages');
       
       // Group messages by conversation
       allMessages.forEach(message => {
@@ -989,7 +988,7 @@ window.forceRefreshCSS = () => {
         if (threadStarter && replies.length > 0) {
           // Add has-replies class to thread starter for vertical line
           threadStarter.classList.add('has-replies');
-          console.log('🔍 LINE DEBUG: Thread starter', threadStarter.dataset.messageId, 'gets vertical line (has-replies class)');
+          // console.log('🔍 LINE DEBUG: Thread starter', threadStarter.dataset.messageId, 'gets vertical line (has-replies class)');
           
           // Calculate vertical line height
           setTimeout(() => {
@@ -997,7 +996,7 @@ window.forceRefreshCSS = () => {
           }, 10);
         } else if (threadStarter) {
           threadStarter.classList.remove('has-replies');
-          console.log('🔍 LINE DEBUG: Thread starter without replies', threadStarter.dataset.messageId, 'gets no vertical line');
+          // console.log('🔍 LINE DEBUG: Thread starter without replies', threadStarter.dataset.messageId, 'gets no vertical line');
         }
         
         // Remove any old inline styles that might interfere
