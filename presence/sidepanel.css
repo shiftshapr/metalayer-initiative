@@ -177,7 +177,7 @@ body {
     object-fit: cover !important;
     display: block !important;
     cursor: pointer !important;
-    /* Background color will be set dynamically via JavaScript */
+    background-color: #45B7D1 !important; /* Default blue background */
 }
 
 /* Dark mode for profile avatar */

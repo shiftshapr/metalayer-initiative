@@ -668,6 +668,13 @@ async function setUserAvatarBgColor(color) {
   AVATAR_BG_CONFIG.setBgColor(color);
   console.log('✅ User avatar background color updated:', color);
   
+  // Apply the color directly to the profile avatar element
+  const userAvatar = document.getElementById('user-avatar');
+  if (userAvatar) {
+    userAvatar.style.backgroundColor = color;
+    console.log('✅ Applied background color to profile avatar element:', color);
+  }
+  
   // Save to chrome storage for persistence
   chrome.storage.local.set({ userAvatarBgColor: color });
   
@@ -2463,6 +2470,11 @@ function updateUI(user) {
         userAvatarImg.alt = user.user_metadata?.full_name || user.email;
         userAvatarImg.style.display = 'block';
         userAvatarImg.setAttribute('data-profile-avatar', 'true');
+        
+        // Set the background color for the profile avatar
+        const customColor = getUserAvatarBgColor();
+        userAvatarImg.style.backgroundColor = customColor;
+        console.log('✅ Set profile avatar background color:', customColor);
         
         // Add error handler to fallback to colored initial if image fails to load
         userAvatarImg.addEventListener('error', function() {
