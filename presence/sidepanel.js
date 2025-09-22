@@ -2878,22 +2878,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   const sendMagicLinkBtn = document.getElementById('send-magic-link');
   const magicLinkEmail = document.getElementById('magic-link-email');
 
-  // Attach auth listeners (auth buttons removed, only avatar menu remains)
-  if (userAvatar) {
-    userAvatar.addEventListener('click', (e) => {
-      e.stopPropagation();
-      if (userMenu) {
-        userMenu.style.display = userMenu.style.display === 'none' ? 'block' : 'none';
-      }
-    });
-  }
-  
-  // Close user menu when clicking outside
-  document.addEventListener('click', (e) => {
-    if (userMenu && !userMenu.contains(e.target) && !userAvatar.contains(e.target)) {
-      userMenu.style.display = 'none';
-    }
-  });
+  // Note: User avatar click handling is now done in addProfileAvatarClickHandler()
+  // which is called from updateUI() to avoid duplicate event listeners
   
   // Test background script communication
   const testBackgroundBtn = document.getElementById('test-background-btn');
