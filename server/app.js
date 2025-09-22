@@ -12,6 +12,7 @@ const communitiesRoutes = require('../routes/communities');
 const interactionRoutes = require('../routes/interaction');
 const pohRoutes = require('../routes/poh');
 const policyRoutes = require('../routes/policy');
+const userRoutes = require('../routes/users');
 // Future: Blockchain, TEE, Agent orchestration routes
 
 const app = express();
@@ -49,6 +50,7 @@ app.use('/communities', communitiesRoutes);
 app.use('/interaction', interactionRoutes);
 app.use('/poh', pohRoutes);
 app.use('/policy', policyRoutes);
+app.use('/v1/users', userRoutes);
 
 // Google Auth routes
 app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));

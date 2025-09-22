@@ -10,7 +10,7 @@ class UserService {
    */
   async getOrCreateUser(userData) {
     try {
-      const { id, email, name, handle, avatarUrl } = userData;
+      const { id, email, name, handle, avatarUrl, auraColor } = userData;
       
       // Must have email to create/find user
       if (!email) {
@@ -57,6 +57,7 @@ class UserService {
           name: name || email.split('@')[0],
           handle: userHandle,
           avatarUrl: avatarUrl || null,
+          auraColor: auraColor || null,
           isVerified: false,
           isSuperAdmin: false
         };
@@ -83,6 +84,16 @@ class UserService {
             data: { avatarUrl }
           });
           console.log('✅ User avatar URL updated successfully');
+        }
+        
+        // Update aura color if provided
+        if (auraColor !== undefined && user.auraColor !== auraColor) {
+          console.log('✅ Updating user aura color:', auraColor);
+          user = await this.prisma.appUser.update({
+            where: { id: user.id },
+            data: { auraColor }
+          });
+          console.log('✅ User aura color updated successfully');
         }
       }
 
@@ -126,6 +137,22 @@ class UserService {
     } catch (error) {
       console.error('Error updating user:', error);
       throw new Error('Failed to update user');
+    }
+  }
+
+  /**
+   * Update user's aura color
+   */
+  async updateAuraColor(userId, auraColor) {
+    try {
+      const user = await this.prisma.appUser.update({
+        where: { id: userId },
+        data: { auraColor }
+      });
+      return user;
+    } catch (error) {
+      console.error('Error updating aura color:', error);
+      throw new Error('Failed to update aura color');
     }
   }
 }

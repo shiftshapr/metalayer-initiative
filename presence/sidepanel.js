@@ -649,7 +649,7 @@ function getUserAvatarBgColor() {
 }
 
 // User Avatar Background Color Management Functions
-function setUserAvatarBgColor(color) {
+async function setUserAvatarBgColor(color) {
   // Validate color is a valid hex color
   const hexColorRegex = /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/;
   if (!hexColorRegex.test(color)) {
@@ -662,6 +662,31 @@ function setUserAvatarBgColor(color) {
   
   // Save to chrome storage for persistence
   chrome.storage.local.set({ userAvatarBgColor: color });
+  
+  // Save to database
+  try {
+    const result = await chrome.storage.local.get(['googleUser']);
+    if (result.googleUser && result.googleUser.id) {
+      const response = await fetch(`${METALAYER_API_URL}/v1/users/${result.googleUser.id}/aura-color`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-email': result.googleUser.email,
+          'x-user-name': result.googleUser.user_metadata?.full_name || result.googleUser.email,
+          'x-user-avatar': result.googleUser.user_metadata?.avatar_url || ''
+        },
+        body: JSON.stringify({ auraColor: color })
+      });
+      
+      if (response.ok) {
+        console.log('✅ Aura color saved to database');
+      } else {
+        console.error('❌ Failed to save aura color to database:', response.statusText);
+      }
+    }
+  } catch (error) {
+    console.error('❌ Error saving aura color to database:', error);
+  }
   
   // Refresh only the profile avatar
   refreshUserAvatar();
@@ -720,7 +745,7 @@ function showColorPickerModal() {
     <div class="color-picker-modal" id="color-picker-modal">
       <div class="color-picker-content">
         <div class="color-picker-header">
-          <h3 class="color-picker-title">Change Avatar Color</h3>
+          <h3 class="color-picker-title">Change Aura Color</h3>
           <button class="color-picker-close" id="color-picker-close">&times;</button>
         </div>
         <div class="color-picker-input-group">
@@ -782,10 +807,10 @@ function showColorPickerModal() {
     });
   });
   
-  saveBtn.addEventListener('click', () => {
+  saveBtn.addEventListener('click', async () => {
     const hex = colorInput.value.replace('#', '');
     if (isValidHex(hex)) {
-      setUserAvatarBgColor('#' + hex);
+      await setUserAvatarBgColor('#' + hex);
       closeColorPickerModal();
     } else {
       alert('Please enter a valid 6-digit hex color (e.g., 45B7D1)');
@@ -819,12 +844,14 @@ function closeColorPickerModal() {
   }
 }
 
-// Add click handler to profile avatar
-function addProfileAvatarClickHandler() {
-  const userAvatar = document.getElementById('user-avatar');
-  if (userAvatar) {
-    userAvatar.addEventListener('click', showColorPickerModal);
-    userAvatar.title = 'Click to change avatar color';
+// Add click handler to aura button
+function addAuraButtonClickHandler() {
+  const auraBtn = document.getElementById('aura-btn');
+  if (auraBtn) {
+    auraBtn.addEventListener('click', (e) => {
+      e.stopPropagation(); // Prevent menu from closing
+      showColorPickerModal();
+    });
   }
 }
 
@@ -2378,8 +2405,8 @@ function updateUI(user) {
     debug(`User logged in: ${userMenuName?.textContent}`);
     console.log('UI updated: User authenticated, showing user info');
     
-    // Add click handler to profile avatar after UI update
-    addProfileAvatarClickHandler();
+    // Add click handler to aura button after UI update
+    addAuraButtonClickHandler();
   } else {
     // User is logged out - hide user info
     if (userInfoDiv) userInfoDiv.style.display = 'none';
@@ -2464,8 +2491,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   // === Load User Avatar Background Color Configuration ===
   await loadUserAvatarBgConfig();
   
-  // Add click handler to profile avatar
-  addProfileAvatarClickHandler();
+  // Add click handler to aura button
+  addAuraButtonClickHandler();
   
   // === Update Visual Hierarchy for Existing Messages ===
   setTimeout(() => {
