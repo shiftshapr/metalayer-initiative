@@ -402,17 +402,20 @@ async function loadCommunities() {
 // Load avatars from multiple communities and combine them
 async function loadCombinedAvatars(communityIds) {
   try {
+    console.log('🔍 VISIBILITY: Starting loadCombinedAvatars with communities:', communityIds);
     debug(`Loading combined avatars from communities: ${communityIds.join(', ')}`);
     
     // Load avatars from all active communities
-    const avatarPromises = communityIds.map(communityId => 
-      api.getAvatars(communityId).catch(err => {
-        console.warn(`Failed to load avatars for community ${communityId}:`, err);
+    const avatarPromises = communityIds.map(communityId => {
+      console.log(`🔍 VISIBILITY: Fetching avatars for community: ${communityId}`);
+      return api.getAvatars(communityId).catch(err => {
+        console.warn(`❌ VISIBILITY: Failed to load avatars for community ${communityId}:`, err);
         return [];
-      })
-    );
+      });
+    });
     
     const avatarResponses = await Promise.all(avatarPromises);
+    console.log('🔍 VISIBILITY: Raw avatar responses from API:', avatarResponses);
     
     // Combine and deduplicate avatars
     const allAvatars = [];
@@ -422,13 +425,18 @@ async function loadCombinedAvatars(communityIds) {
       const communityId = communityIds[index];
       let avatars;
       
+      console.log(`🔍 VISIBILITY: Processing response for community ${communityId}:`, response);
+      
       // Handle different response formats
       if (response && response.active && Array.isArray(response.active)) {
         avatars = response.active;
+        console.log(`🔍 VISIBILITY: Found ${avatars.length} avatars in response.active for ${communityId}`);
       } else if (Array.isArray(response)) {
         avatars = response;
+        console.log(`🔍 VISIBILITY: Found ${avatars.length} avatars in direct array for ${communityId}`);
       } else {
         avatars = [];
+        console.log(`🔍 VISIBILITY: No avatars found for ${communityId}, response format:`, typeof response);
       }
       
       // Add community info to each avatar and deduplicate
@@ -441,17 +449,22 @@ async function loadCombinedAvatars(communityIds) {
             communityId: communityId,
             communityName: avatar.communityName || `Community ${communityId}`
           });
+          console.log(`✅ VISIBILITY: Added unique avatar: ${avatar.name || avatar.handle || 'Unknown'} (${userKey}) from ${communityId}`);
+        } else {
+          console.log(`⏭️ VISIBILITY: Skipped duplicate avatar: ${avatar.name || avatar.handle || 'Unknown'} (${userKey}) from ${communityId}`);
         }
       });
     });
     
+    console.log(`🔍 VISIBILITY: Final combined avatars:`, allAvatars);
+    console.log(`🔍 VISIBILITY: Total unique avatars: ${allAvatars.length}`);
     debug(`Combined avatars from ${communityIds.length} communities:`, allAvatars);
     debug(`Total unique avatars: ${allAvatars.length}`);
     
     // Update the visible tab with combined avatar data
     updateVisibleTab(allAvatars);
   } catch (error) {
-    console.error('Failed to load combined avatars:', error);
+    console.error('❌ VISIBILITY: Failed to load combined avatars:', error);
     debug(`Failed to load combined avatars: ${error.message}`);
     updateVisibleTab([]);
   }
@@ -515,8 +528,14 @@ function updateCommunityDropdown(communities) {
 }
 
 function updateVisibleTab(avatars) {
+  console.log('🔍 VISIBILITY: updateVisibleTab called with avatars:', avatars);
   const visibleTab = document.getElementById('canopi-visible');
-  if (!visibleTab) return;
+  if (!visibleTab) {
+    console.log('❌ VISIBILITY: visibleTab element not found');
+    return;
+  }
+  
+  console.log(`🔍 VISIBILITY: Updating visible tab with ${avatars.length} avatars`);
   
   // Create a simple list of visible users
   visibleTab.innerHTML = `
@@ -612,7 +631,6 @@ function setCustomAvatarColor(color) {
   
   // Store the custom color
   chrome.storage.local.set({ customAvatarColor: color }, () => {
-    console.log('✅ Custom avatar color set to:', color);
     // Refresh the profile avatar
     refreshUserAvatar();
   });
@@ -621,7 +639,6 @@ function setCustomAvatarColor(color) {
 // Global function to reset to default avatar color
 function resetCustomAvatarColor() {
   chrome.storage.local.remove(['customAvatarColor'], () => {
-    console.log('✅ Avatar color reset to default');
     // Refresh the profile avatar
     refreshUserAvatar();
   });
@@ -662,13 +679,11 @@ async function setUserAvatarBgColor(color) {
   }
   
   AVATAR_BG_CONFIG.setBgColor(color);
-  console.log('✅ User avatar background color updated:', color);
   
   // Apply the color directly to the profile avatar element
   const userAvatar = document.getElementById('user-avatar');
   if (userAvatar) {
     userAvatar.style.backgroundColor = color;
-    console.log('✅ Applied background color to profile avatar element:', color);
   }
   
   // Save to chrome storage for persistence
@@ -694,7 +709,7 @@ async function setUserAvatarBgColor(color) {
       });
       
       if (response.ok) {
-        console.log('✅ Aura color saved to database');
+        // Aura color saved successfully
       } else {
         const errorText = await response.text();
         console.error('❌ Failed to save aura color to database:', response.status, errorText);
@@ -714,7 +729,6 @@ async function setUserAvatarBgColor(color) {
 
 function resetUserAvatarBgColor() {
   AVATAR_BG_CONFIG.resetToDefault();
-  console.log('✅ User avatar background color reset to default');
   
   // Remove from chrome storage
   chrome.storage.local.remove(['userAvatarBgColor']);
@@ -742,9 +756,6 @@ async function loadUserAvatarBgConfig() {
     const result = await chrome.storage.local.get(['userAvatarBgColor']);
     if (result.userAvatarBgColor) {
       AVATAR_BG_CONFIG.setBgColor(result.userAvatarBgColor);
-      console.log('✅ Loaded custom user avatar background color:', result.userAvatarBgColor);
-    } else {
-      console.log('✅ Using default user avatar background color');
     }
   } catch (error) {
     console.error('❌ Error loading user avatar background color config:', error);
@@ -846,7 +857,6 @@ function showColorPickerModal() {
       const color = '#' + hex;
       previewCircle.style.backgroundColor = color;
       previewText.textContent = color;
-      console.log('✅ Preview updated to color:', color);
     } else {
       previewCircle.style.backgroundColor = '#cccccc';
       previewText.textContent = 'Invalid color';
@@ -873,8 +883,6 @@ let clickOutsideListenerAdded = false;
 function addProfileAvatarClickHandler() {
   const userAvatar = document.getElementById('user-avatar');
   const userMenu = document.getElementById('user-menu');
-  // console.log('🔍 Setting up profile avatar click handler, found avatar:', userAvatar, 'menu:', userMenu);
-  
   if (userAvatar && userMenu) {
     // Remove any existing click listeners to avoid duplicates
     userAvatar.removeEventListener('click', handleAvatarClick);
@@ -884,7 +892,6 @@ function addProfileAvatarClickHandler() {
     if (!clickOutsideListenerAdded) {
       document.addEventListener('click', handleClickOutside);
       clickOutsideListenerAdded = true;
-      console.log('✅ Added click-outside listener');
     }
   } else {
     console.error('❌ Profile avatar or menu not found!');
@@ -902,9 +909,6 @@ function handleAvatarClick(e) {
   // Toggle menu visibility
   if (userMenu.style.display === 'none' || userMenu.style.display === '') {
     userMenu.style.display = 'block';
-    console.log('✅ Menu shown, new display:', userMenu.style.display);
-    console.log('🔍 Menu computed styles:', {
-      display: window.getComputedStyle(userMenu).display,
       position: window.getComputedStyle(userMenu).position,
       zIndex: window.getComputedStyle(userMenu).zIndex,
       visibility: window.getComputedStyle(userMenu).visibility
@@ -928,7 +932,6 @@ function handleClickOutside(e) {
 // Add click handler to aura button
 function addAuraButtonClickHandler() {
   const auraBtn = document.getElementById('aura-btn');
-  // console.log('🔍 Setting up aura button click handler, found button:', auraBtn);
   if (auraBtn) {
     auraBtn.addEventListener('click', (e) => {
       console.log('🎨 Aura button clicked!');
@@ -958,9 +961,6 @@ window.forceRefreshCSS = () => {
   if (link) {
     const href = link.href;
     link.href = href + '?v=' + Date.now();
-    console.log('✅ CSS refreshed');
-  } else {
-    console.log('❌ CSS link not found');
   }
 };
 
@@ -1110,11 +1110,7 @@ async function addMessageToChat(message) {
     const messageReactions = message.conversation.reactions.filter(reaction => 
       reaction.postId === message.id
     );
-    console.log(`💾 Storing reactions data for message ${message.id}:`, messageReactions);
     messageDiv.dataset.reactions = JSON.stringify(messageReactions);
-    console.log(`✅ Reactions data stored on element:`, messageDiv.dataset.reactions);
-  } else {
-    console.log(`❌ No reactions data to store for message ${message.id}. Conversation:`, message.conversation);
     // For new posts, ensure they start with no reactions
     messageDiv.dataset.reactions = JSON.stringify([]);
   }
@@ -1350,12 +1346,8 @@ function getSenderInitial(name) {
 function getSenderAvatar(author) {
   if (!author) return getSenderInitial('Unknown');
   
-  console.log('🔍 Avatar debug for author:', author);
-  console.log('🔍 Avatar URL:', author.avatarUrl);
-  
   // If there's an avatarUrl, use it
   if (author.avatarUrl && author.avatarUrl !== 'null' && author.avatarUrl !== '') {
-    console.log('✅ Using avatar URL:', author.avatarUrl);
     return `<img src="${author.avatarUrl}" alt="${author.name || author.handle || 'User'}" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover;" data-avatar-fallback="true">
       <div style="width: 32px; height: 32px; border-radius: 50%; background-color: ${getAvatarColor(author.name || author.handle || 'Unknown')}; display: none; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 14px;">${(author.name || author.handle || 'Unknown').charAt(0).toUpperCase()}</div>`;
   }
@@ -1923,8 +1915,6 @@ function toggleTheme() {
 
 async function loadMessageReactions(messageId, reactionBtn) {
   try {
-    console.log(`🔍 Loading reactions for message ${messageId}`);
-    
     // First try to get reactions from the stored reactions data if available
     let reactions = [];
     // Find the parent message div (not the button itself)
@@ -1936,7 +1926,6 @@ async function loadMessageReactions(messageId, reactionBtn) {
       console.log(`📊 Stored reactions data:`, reactionsData);
       if (reactionsData) {
         reactions = JSON.parse(reactionsData);
-        console.log(`✅ Parsed reactions from stored data:`, reactions);
       }
     } else {
       console.log(`❌ No message div found for reaction button`);
@@ -1972,9 +1961,6 @@ async function loadMessageReactions(messageId, reactionBtn) {
         console.log(`🆔 Generated server user ID: ${serverUserId}`);
         
         // Find user reaction by ID or email (fallback for existing data)
-        console.log(`🔍 User ID matching debug:`);
-        console.log(`   Generated server user ID: ${serverUserId}`);
-        console.log(`   Current user ID: ${currentUser.id}`);
         console.log(`   Current user email: ${currentUser.email}`);
         console.log(`   All reaction user IDs:`, reactions.map(r => r.userId));
         
@@ -1990,7 +1976,6 @@ async function loadMessageReactions(messageId, reactionBtn) {
         if (userReaction) {
           // Show the actual emoji from the database
           const emoji = userReaction.emoji || '👍';
-          console.log(`✅ Setting reaction button to emoji: ${emoji}`);
           // Update the emoji but preserve the count span
           const countSpan = reactionBtn.querySelector('.icon-count');
           const countText = countSpan ? countSpan.textContent : '';
@@ -2072,9 +2057,7 @@ async function handleReaction(message) {
         reactionBtn.dataset.selectedEmoji = selectedReaction;
         
         // Toggle reaction via API (store both kind and emoji)
-        console.log(`🔄 Toggling reaction: kind=${kind}, messageId=${message.id}, conversationId=${message.conversationId}, emoji=${selectedReaction}`);
         const response = await api.toggleReaction(kind, message.id, message.conversationId, selectedReaction);
-        console.log(`✅ Reaction toggled for message ${message.id}:`, response);
         
         // Update reaction count if available
         const countSpan = reactionBtn.querySelector('.icon-count');
@@ -2190,7 +2173,6 @@ function clearContext() {
     const cancelBtn = contextBar.querySelector('#cancel-context');
     if (cancelBtn) cancelBtn.style.color = '';
     
-    console.log('✅ Context bar hidden');
   }
   
   if (chatInput) {
@@ -2219,17 +2201,14 @@ function clearContext() {
       if (chatInput.value === '') {
         chatInput.style.height = 'auto';
         // Let it naturally size to its content (empty = minimum height)
-        console.log('✅ Chat input height reset to natural size');
       }
     }, 10);
     
-    console.log('✅ Chat input reset');
   }
   
   if (sendButton) {
     sendButton.textContent = 'Send';
     delete sendButton.dataset.editing;
-    console.log('✅ Send button reset');
   }
   
   console.log('🧹 Context cleared successfully');
@@ -2350,12 +2329,10 @@ async function loadChatHistory(communityId = null) {
     const result = await chrome.storage.local.get(['activeCommunities', 'primaryCommunity', 'currentCommunity']);
     const activeCommunities = result.activeCommunities || [result.primaryCommunity || result.currentCommunity || 'comm-001'];
     
-    console.log('Loading chat history for active communities:', activeCommunities);
     debug(`Loading chat history for active communities: ${activeCommunities.join(', ')}`);
     
     // Get current page URI for page-specific messages
     const currentUri = await getCurrentPageUri();
-    console.log('Loading chat history for URI:', currentUri);
     debug(`Loading chat history for URI: ${currentUri}`);
     
     // Load messages from all active communities
@@ -2486,10 +2463,6 @@ function updateUI(user) {
     if (userMenuName) userMenuName.textContent = user.user_metadata?.full_name || user.email;
     if (userAvatarImg) {
       const avatarUrl = user.user_metadata?.avatar_url || user.picture;
-      console.log('🔍 Profile avatar debug - user object:', user);
-      console.log('🔍 Profile avatar debug - avatarUrl:', avatarUrl);
-      console.log('🔍 Profile avatar debug - user_metadata:', user.user_metadata);
-      console.log('🔍 Profile avatar debug - picture:', user.picture);
       if (avatarUrl && avatarUrl !== 'null' && avatarUrl !== '') {
         userAvatarImg.src = avatarUrl;
         userAvatarImg.alt = user.user_metadata?.full_name || user.email;
@@ -2499,7 +2472,6 @@ function updateUI(user) {
         // Set the background color for the profile avatar
         const customColor = getUserAvatarBgColor();
         userAvatarImg.style.backgroundColor = customColor;
-        console.log('✅ Set profile avatar background color:', customColor);
         
         // Add error handler to fallback to colored initial if image fails to load
         userAvatarImg.addEventListener('error', function() {
@@ -2516,7 +2488,6 @@ function updateUI(user) {
           avatarDiv.textContent = initial;
           userAvatarImg.parentNode.insertBefore(avatarDiv, userAvatarImg);
         });
-        console.log('✅ Set user avatar to:', avatarUrl);
       } else {
         // Use a colored initial instead of placeholder image
         const name = user.user_metadata?.full_name || user.email || 'User';
@@ -2692,9 +2663,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   // Load communities and initialize the interface
   try {
-    console.log('Loading communities...');
     loadCommunities();
-    console.log('Communities loaded successfully');
     
     // Also load chat history for the current page
     setTimeout(async () => {
