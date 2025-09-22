@@ -751,7 +751,7 @@ body {
     border: 1px solid var(--border-color);
 }
 
-/* --- Live Chat --- */
+/* --- Conversations --- */
 .chat-messages {
     flex-grow: 1;
     overflow-y: auto;
