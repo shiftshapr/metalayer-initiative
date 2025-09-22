@@ -112,6 +112,10 @@ app.get('/v1/reactions', (req, res) => canopi2Controller.getReactions(req, res))
 
 app.get('/v1/pages/:pageId/conversations', (req, res) => canopi2Controller.getPageConversations(req, res));
 
+// User routes
+const userRoutes = require('./routes/users');
+app.use('/v1/users', userRoutes);
+
 // Compatibility endpoints for existing extension
 app.get('/communities', (req, res) => {
   // Mock communities for now - replace with real data later

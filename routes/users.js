@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const UserService = require('../services/userService');
-const { PrismaClient } = require('@prisma/client');
+const { PrismaClient } = require('../generated/prisma');
 
 const prisma = new PrismaClient();
 const userService = new UserService(prisma);
