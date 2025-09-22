@@ -83,6 +83,19 @@ class MetaLayerAPI {
     return this.request(`/avatars/active?communityId=${communityId}`);
   }
 
+  async getPresenceByUrl(url, communityIds = null) {
+    const params = new URLSearchParams({ url });
+    if (communityIds && communityIds.length > 0) {
+      params.append('communityIds', communityIds.join(','));
+    }
+    return this.request(`/v1/presence/url?${params.toString()}`);
+  }
+
+  async getPresenceByCommunities(communityIds) {
+    const params = new URLSearchParams({ communityIds: communityIds.join(',') });
+    return this.request(`/v1/presence/communities?${params.toString()}`);
+  }
+
   async login() {
     return this.request('/auth/login', { method: 'POST' });
   }
@@ -405,17 +418,48 @@ async function loadCombinedAvatars(communityIds) {
     console.log('🔍 VISIBILITY: Starting loadCombinedAvatars with communities:', communityIds);
     debug(`Loading combined avatars from communities: ${communityIds.join(', ')}`);
     
-    // Load avatars from all active communities
-    const avatarPromises = communityIds.map(communityId => {
-      console.log(`🔍 VISIBILITY: Fetching avatars for community: ${communityId}`);
-      return api.getAvatars(communityId).catch(err => {
-        console.warn(`❌ VISIBILITY: Failed to load avatars for community ${communityId}:`, err);
-        return [];
-      });
-    });
+    // Get current page URI for URL-based presence tracking
+    const currentUri = await getCurrentPageUri();
+    console.log('🔍 VISIBILITY: Current page URI:', currentUri);
     
-    const avatarResponses = await Promise.all(avatarPromises);
-    console.log('🔍 VISIBILITY: Raw avatar responses from API:', avatarResponses);
+    // Try URL-based presence first (more accurate)
+    let avatarResponses = [];
+    try {
+      console.log('🔍 VISIBILITY: Trying URL-based presence API');
+      const urlResponse = await api.getPresenceByUrl(currentUri, communityIds);
+      console.log('🔍 VISIBILITY: URL-based presence response:', urlResponse);
+      
+      if (urlResponse && urlResponse.active && urlResponse.active.length > 0) {
+        avatarResponses = [urlResponse];
+        console.log('🔍 VISIBILITY: Using URL-based presence data');
+      } else {
+        throw new Error('No active users found via URL-based presence');
+      }
+    } catch (urlError) {
+      console.log('🔍 VISIBILITY: URL-based presence failed, falling back to community-based:', urlError.message);
+      
+      // Fallback to community-based presence
+      try {
+        const communityResponse = await api.getPresenceByCommunities(communityIds);
+        console.log('🔍 VISIBILITY: Community-based presence response:', communityResponse);
+        avatarResponses = [communityResponse];
+      } catch (communityError) {
+        console.log('🔍 VISIBILITY: Community-based presence failed, using legacy avatars API:', communityError.message);
+        
+        // Final fallback to legacy avatars API
+        const avatarPromises = communityIds.map(communityId => {
+          console.log(`🔍 VISIBILITY: Fetching avatars for community: ${communityId}`);
+          return api.getAvatars(communityId).catch(err => {
+            console.warn(`❌ VISIBILITY: Failed to load avatars for community ${communityId}:`, err);
+            return [];
+          });
+        });
+        
+        avatarResponses = await Promise.all(avatarPromises);
+      }
+    }
+    
+    console.log('🔍 VISIBILITY: Final avatar responses from API:', avatarResponses);
     
     // Combine and deduplicate avatars
     const allAvatars = [];
@@ -3355,6 +3399,116 @@ async function toggleThreadReplies(threadId, messageElement) {
   setTimeout(() => {
     updateMessageVisualHierarchy();
   }, 10);
+}
+
+// ===== PRESENCE TRACKING =====
+
+let presenceHeartbeatInterval = null;
+let currentPageId = null;
+
+// Start presence tracking for the current page
+async function startPresenceTracking() {
+  try {
+    // Get current page URI and generate a pageId
+    const currentUri = await getCurrentPageUri();
+    currentPageId = await generatePageId(currentUri);
+    
+    console.log('🔍 PRESENCE: Starting presence tracking for page:', currentUri, 'pageId:', currentPageId);
+    
+    // Send initial ENTER event
+    await sendPresenceEvent('ENTER');
+    
+    // Start heartbeat (every 30 seconds)
+    presenceHeartbeatInterval = setInterval(async () => {
+      try {
+        await sendPresenceEvent('HEARTBEAT');
+      } catch (error) {
+        console.warn('Presence heartbeat failed:', error);
+      }
+    }, 30000);
+    
+    console.log('✅ PRESENCE: Presence tracking started');
+  } catch (error) {
+    console.error('❌ PRESENCE: Failed to start presence tracking:', error);
+  }
+}
+
+// Stop presence tracking
+function stopPresenceTracking() {
+  if (presenceHeartbeatInterval) {
+    clearInterval(presenceHeartbeatInterval);
+    presenceHeartbeatInterval = null;
+  }
+  
+  // Send EXIT event
+  if (currentPageId) {
+    sendPresenceEvent('EXIT').catch(error => {
+      console.warn('Failed to send EXIT presence event:', error);
+    });
+  }
+  
+  console.log('🛑 PRESENCE: Presence tracking stopped');
+}
+
+// Send a presence event to the server
+async function sendPresenceEvent(kind, availability = null, customLabel = null) {
+  try {
+    if (!currentPageId) {
+      console.warn('No current pageId for presence event');
+      return;
+    }
+    
+    const response = await fetch(`${API_BASE_URL}/v1/presence/event`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-user-email': getCurrentUserEmail(),
+        'x-user-id': getCurrentUserId()
+      },
+      body: JSON.stringify({
+        pageId: currentPageId,
+        kind,
+        availability,
+        customLabel
+      })
+    });
+    
+    if (response.ok) {
+      console.log(`✅ PRESENCE: ${kind} event sent successfully`);
+    } else {
+      console.warn(`❌ PRESENCE: Failed to send ${kind} event:`, response.status);
+    }
+  } catch (error) {
+    console.warn(`❌ PRESENCE: Error sending ${kind} event:`, error);
+  }
+}
+
+// Generate a consistent pageId from URI
+async function generatePageId(uri) {
+  // For now, use a simple hash of the URI
+  // In a real implementation, this would query the database for existing pages
+  const encoder = new TextEncoder();
+  const data = encoder.encode(uri);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  
+  // Convert to UUID format (simplified)
+  return `${hashHex.substring(0, 8)}-${hashHex.substring(8, 12)}-${hashHex.substring(12, 16)}-${hashHex.substring(16, 20)}-${hashHex.substring(20, 32)}`;
+}
+
+// Get current user email for presence tracking
+function getCurrentUserEmail() {
+  // This should get the current user's email from storage
+  // For now, return a placeholder
+  return 'daveroom@gmail.com'; // TODO: Get from actual user data
+}
+
+// Get current user ID for presence tracking
+function getCurrentUserId() {
+  // This should get the current user's ID from storage
+  // For now, return a placeholder
+  return '5a4ca9ae-105b-a01b-e461-eaf8d83d90c7'; // TODO: Get from actual user data
 }
 
 // ===== MOCK DATA FOR TESTING MULTI-USER SCENARIOS =====

@@ -114,7 +114,9 @@ app.get('/v1/pages/:pageId/conversations', (req, res) => canopi2Controller.getPa
 
 // User routes
 const userRoutes = require('./routes/users');
+const presenceRoutes = require('./routes/presence');
 app.use('/v1/users', userRoutes);
+app.use('/v1/presence', presenceRoutes);
 
 // Compatibility endpoints for existing extension
 app.get('/communities', (req, res) => {
@@ -159,20 +161,51 @@ app.get('/communities', (req, res) => {
   });
 });
 
-app.get('/avatars/active', (req, res) => {
-  // Mock avatars for now
-  res.json({
-    avatars: [
-      {
-        id: 'avatar-1',
-        userId: '550e8400-e29b-41d4-a716-446655440000',
-        name: 'Test User',
-        url: 'https://via.placeholder.com/40x40/007bff/white?text=T',
-        uri: req.query.uri || null,
-        communityId: req.query.communityId || 'comm-001'
-      }
-    ]
-  });
+app.get('/avatars/active', async (req, res) => {
+  const { communityId } = req.query;
+  
+  try {
+    // Use the presence service to get real active users
+    const PresenceService = require('./services/presenceService');
+    const { PrismaClient } = require('./generated/prisma');
+    const prisma = new PrismaClient();
+    const presenceService = new PresenceService(prisma);
+    
+    if (communityId) {
+      // Get active users for specific community
+      const activeUsers = await presenceService.getActiveUsersForCommunities([communityId], 5);
+      res.json({ avatars: activeUsers });
+    } else {
+      // Get active users across all communities (fallback to mock data for now)
+      res.json({
+        avatars: [
+          {
+            id: 'avatar-1',
+            userId: '550e8400-e29b-41d4-a716-446655440000',
+            name: 'Test User',
+            url: 'https://via.placeholder.com/40x40/007bff/white?text=T',
+            uri: req.query.uri || null,
+            communityId: 'comm-001'
+          }
+        ]
+      });
+    }
+  } catch (error) {
+    console.error('Error getting active avatars:', error);
+    // Fallback to mock data on error
+    res.json({
+      avatars: [
+        {
+          id: 'avatar-1',
+          userId: '550e8400-e29b-41d4-a716-446655440000',
+          name: 'Test User',
+          url: 'https://via.placeholder.com/40x40/007bff/white?text=T',
+          uri: req.query.uri || null,
+          communityId: req.query.communityId || 'comm-001'
+        }
+      ]
+    });
+  }
 });
 
 
