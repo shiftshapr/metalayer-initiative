@@ -1069,14 +1069,19 @@ async function addMessageToChat(message) {
     placeholder.remove();
   }
 
-  // Get the community name from the conversation's communityId
+  // Get the community name from the conversation
   let communityName = '';
-  if (message.conversation && message.conversation.communityId) {
-    // Get community name from the communityId
-    const result = await chrome.storage.local.get(['communities']);
-    const communities = result.communities || [];
-    const community = communities.find(c => c.id === message.conversation.communityId);
-    communityName = community ? community.name : '';
+  if (message.conversation) {
+    // First try to use the communityName that was added during loadChatHistory
+    if (message.conversation.communityName) {
+      communityName = message.conversation.communityName;
+    } else if (message.conversation.communityId) {
+      // Fallback to looking up by communityId
+      const result = await chrome.storage.local.get(['communities']);
+      const communities = result.communities || [];
+      const community = communities.find(c => c.id === message.conversation.communityId);
+      communityName = community ? community.name : '';
+    }
   }
   
   // Fallback to current primary community if no community found
@@ -2345,33 +2350,57 @@ function showNotification(message) {
 
 async function loadChatHistory(communityId = null) {
   try {
-    // Get primary community if not provided
-    if (!communityId) {
-      const result = await chrome.storage.local.get(['primaryCommunity', 'currentCommunity']);
-      communityId = result.primaryCommunity || result.currentCommunity || 'comm-001';
-    }
+    // Get user's active communities
+    const result = await chrome.storage.local.get(['activeCommunities', 'primaryCommunity', 'currentCommunity']);
+    const activeCommunities = result.activeCommunities || [result.primaryCommunity || result.currentCommunity || 'comm-001'];
     
-    console.log('Loading chat history for community:', communityId);
-    debug(`Loading chat history for community: ${communityId}`);
+    console.log('Loading chat history for active communities:', activeCommunities);
+    debug(`Loading chat history for active communities: ${activeCommunities.join(', ')}`);
     
     // Get current page URI for page-specific messages
     const currentUri = await getCurrentPageUri();
     console.log('Loading chat history for URI:', currentUri);
     debug(`Loading chat history for URI: ${currentUri}`);
     
-    const response = await api.getChatHistory(communityId, null, currentUri);
-    console.log('Chat history response:', response);
-    debug(`Chat history response: ${JSON.stringify(response)}`);
+    // Load messages from all active communities
+    const allConversations = [];
+    const communitiesResult = await chrome.storage.local.get(['communities']);
+    const communities = communitiesResult.communities || [];
+    
+    for (const communityId of activeCommunities) {
+      try {
+        const response = await api.getChatHistory(communityId, null, currentUri);
+        if (response.conversations && response.conversations.length > 0) {
+          // Find community name
+          const community = communities.find(c => c.id === communityId);
+          const communityName = community ? community.name : `Community ${communityId}`;
+          
+          // Add community info to each conversation
+          const conversationsWithCommunity = response.conversations.map(conv => ({
+            ...conv,
+            communityId: communityId,
+            communityName: communityName
+          }));
+          allConversations.push(...conversationsWithCommunity);
+        }
+      } catch (error) {
+        console.warn(`Failed to load chat history for community ${communityId}:`, error);
+      }
+    }
+    
+    console.log('Combined chat history from all communities:', allConversations);
+    debug(`Combined chat history from all communities: ${JSON.stringify(allConversations)}`);
+    
     const chatMessages = document.querySelector('.chat-messages');
     if (!chatMessages) return;
     
     // Clear existing messages
     chatMessages.innerHTML = '';
     
-    // Handle Canopi 2.0 API response structure
-    if (response.conversations && response.conversations.length > 0) {
+    // Handle combined conversations from all communities
+    if (allConversations.length > 0) {
       // Process each conversation as a thread
-      for (const conversation of response.conversations) {
+      for (const conversation of allConversations) {
         if (conversation.posts && conversation.posts.length > 0) {
           // Sort posts within each conversation by creation time
           const sortedPosts = conversation.posts.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
