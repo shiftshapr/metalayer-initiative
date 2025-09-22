@@ -766,3 +766,10 @@ Error updating aura color: Error: Failed to update aura color
   email: 'themetalayer@gmail.com',
   avatarUrl: ''
 }
+🔍 Auth middleware - Headers received: { email: undefined, name: undefined, avatarUrl: undefined }
+🔍 Auth middleware - Headers received: { email: undefined, name: undefined, avatarUrl: undefined }
+🔍 Auth middleware - Headers received: { email: undefined, name: undefined, avatarUrl: undefined }
+🔍 Auth middleware - Headers received: { email: undefined, name: undefined, avatarUrl: undefined }
+🔍 Auth middleware - Headers received: { email: undefined, name: undefined, avatarUrl: undefined }
+🔍 Auth middleware - Headers received: { email: undefined, name: undefined, avatarUrl: undefined }
+🔍 Auth middleware - Headers received: { email: undefined, name: undefined, avatarUrl: undefined }

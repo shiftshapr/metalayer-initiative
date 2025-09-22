@@ -3376,3 +3376,97 @@ async function toggleThreadReplies(threadId, messageElement) {
     updateMessageVisualHierarchy();
   }, 10);
 }
+
+// ===== MOCK DATA FOR TESTING MULTI-USER SCENARIOS =====
+// Use these functions in the browser console to test different user perspectives
+
+const MOCK_USERS = [
+  {
+    id: 'user1',
+    name: 'Alice Johnson',
+    email: 'alice@example.com',
+    communities: ['comm-001', 'comm-002'],
+    avatarUrl: 'https://via.placeholder.com/40x40/FF6B6B/white?text=A'
+  },
+  {
+    id: 'user2', 
+    name: 'Bob Smith',
+    email: 'bob@example.com',
+    communities: ['comm-001', 'comm-003'],
+    avatarUrl: 'https://via.placeholder.com/40x40/4ECDC4/white?text=B'
+  },
+  {
+    id: 'user3',
+    name: 'Carol Davis', 
+    email: 'carol@example.com',
+    communities: ['comm-002', 'comm-003'],
+    avatarUrl: 'https://via.placeholder.com/40x40/45B7D1/white?text=C'
+  }
+];
+
+const MOCK_MESSAGES = [
+  {
+    id: 'msg1',
+    userId: 'user1',
+    communityId: 'comm-001',
+    content: 'Hello everyone! This is Alice from Public Square.',
+    createdAt: new Date(Date.now() - 1000 * 60 * 5).toISOString(),
+    conversationId: 'conv1'
+  },
+  {
+    id: 'msg2',
+    userId: 'user2', 
+    communityId: 'comm-001',
+    content: 'Hi Alice! Bob here, also in Public Square.',
+    createdAt: new Date(Date.now() - 1000 * 60 * 3).toISOString(),
+    conversationId: 'conv1',
+    parentId: 'msg1'
+  },
+  {
+    id: 'msg3',
+    userId: 'user3',
+    communityId: 'comm-002', 
+    content: 'Carol here from Governance Circle. Different community!',
+    createdAt: new Date(Date.now() - 1000 * 60 * 2).toISOString(),
+    conversationId: 'conv2'
+  }
+];
+
+// Function to simulate different user perspectives
+function simulateUser(userId) {
+  const user = MOCK_USERS.find(u => u.id === userId);
+  if (!user) {
+    console.error('User not found:', userId);
+    return;
+  }
+  
+  console.log(`👤 Simulating user: ${user.name} (${user.email})`);
+  console.log(`🏘️ Communities: ${user.communities.join(', ')}`);
+  
+  // Update Chrome storage to simulate this user
+  chrome.storage.local.set({
+    googleUser: {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      picture: user.avatarUrl
+    },
+    activeCommunities: user.communities,
+    primaryCommunity: user.communities[0]
+  });
+  
+  // Reload the UI
+  setTimeout(() => {
+    loadChatHistory();
+    loadCombinedAvatars(user.communities);
+  }, 100);
+}
+
+// Export for use in console
+window.simulateUser = simulateUser;
+window.MOCK_USERS = MOCK_USERS;
+
+console.log('🧪 Multi-user testing functions loaded:');
+console.log('- simulateUser("user1") - Simulate Alice (Public Square + Governance Circle)');
+console.log('- simulateUser("user2") - Simulate Bob (Public Square + Dev Hub)'); 
+console.log('- simulateUser("user3") - Simulate Carol (Governance Circle + Dev Hub)');
