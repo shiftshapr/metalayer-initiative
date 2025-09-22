@@ -496,10 +496,18 @@ function updateCommunityDropdown(communities) {
   communities.forEach((community, index) => {
     const li = document.createElement('li');
     li.innerHTML = `
-      <img src="/images/community${index + 1}.png" alt="Community" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHZpZXdCb3g9IjAgMCAyMCAyMCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjIwIiBoZWlnaHQ9IjIwIiBmaWxsPSIjZGRkIi8+Cjx0ZXh0IHg9IjEwIiB5PSIxNCIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjEyIiBmaWxsPSIjOTk5IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5DPC90ZXh0Pgo8L3N2Zz4K'">
+      <img src="/images/community${index + 1}.png" alt="Community" data-community-fallback="true">
       <span>${community.name}</span>
       ${index === 0 ? '<span class="primary-tag">Primary</span>' : ''}
     `;
+    
+    // Add error handler for community image
+    const communityImg = li.querySelector('img[data-community-fallback="true"]');
+    if (communityImg) {
+      communityImg.addEventListener('error', function() {
+        this.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHZpZXdCb3g9IjAgMCAyMCAyMCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjIwIiBoZWlnaHQ9IjIwIiBmaWxsPSIjZGRkIi8+Cjx0ZXh0IHg9IjEwIiB5PSIxNCIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjEyIiBmaWxsPSIjOTk5IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5DPC90ZXh0Pgo8L3N2Zz4K';
+      });
+    }
     
     // Add click handler to switch communities
     li.addEventListener('click', () => {
@@ -666,8 +674,12 @@ async function setUserAvatarBgColor(color) {
   // Save to database
   try {
     const result = await chrome.storage.local.get(['googleUser']);
-    if (result.googleUser && result.googleUser.id) {
-      const response = await fetch(`${METALAYER_API_URL}/v1/users/${result.googleUser.id}/aura-color`, {
+    if (result.googleUser && result.googleUser.email) {
+      // Generate the same UUID that the server uses
+      const serverUserId = await generateUUIDFromEmail(result.googleUser.email);
+      console.log('🔍 Saving aura color for user:', { email: result.googleUser.email, serverUserId });
+      
+      const response = await fetch(`${METALAYER_API_URL}/v1/users/${serverUserId}/aura-color`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -681,8 +693,11 @@ async function setUserAvatarBgColor(color) {
       if (response.ok) {
         console.log('✅ Aura color saved to database');
       } else {
-        console.error('❌ Failed to save aura color to database:', response.statusText);
+        const errorText = await response.text();
+        console.error('❌ Failed to save aura color to database:', response.status, errorText);
       }
+    } else {
+      console.error('❌ No user data found for saving aura color');
     }
   } catch (error) {
     console.error('❌ Error saving aura color to database:', error);
@@ -740,6 +755,7 @@ window.getCurrentUserAvatarBgColor = getCurrentUserAvatarBgColor;
 
 // Color Picker Modal Functions
 function showColorPickerModal() {
+  console.log('🎨 Opening color picker modal...');
   // Create modal HTML
   const modalHTML = `
     <div class="color-picker-modal" id="color-picker-modal">
@@ -822,13 +838,16 @@ function showColorPickerModal() {
   colorInput.select();
   
   function updatePreview(hex) {
+    console.log('🔍 Updating preview with hex:', hex);
     if (isValidHex(hex)) {
       const color = '#' + hex;
       previewCircle.style.backgroundColor = color;
       previewText.textContent = color;
+      console.log('✅ Preview updated to color:', color);
     } else {
       previewCircle.style.backgroundColor = '#cccccc';
       previewText.textContent = 'Invalid color';
+      console.log('❌ Invalid hex color:', hex);
     }
   }
   
@@ -847,11 +866,15 @@ function closeColorPickerModal() {
 // Add click handler to aura button
 function addAuraButtonClickHandler() {
   const auraBtn = document.getElementById('aura-btn');
+  console.log('🔍 Setting up aura button click handler, found button:', auraBtn);
   if (auraBtn) {
     auraBtn.addEventListener('click', (e) => {
+      console.log('🎨 Aura button clicked!');
       e.stopPropagation(); // Prevent menu from closing
       showColorPickerModal();
     });
+  } else {
+    console.error('❌ Aura button not found!');
   }
 }
 
@@ -1163,6 +1186,19 @@ async function addMessageToChat(message) {
   }
   
   chatMessages.appendChild(messageDiv);
+  
+  // Add avatar error handlers for CSP compliance
+  const avatarImg = messageDiv.querySelector('img[data-avatar-fallback="true"]');
+  if (avatarImg) {
+    avatarImg.addEventListener('error', function() {
+      this.style.display = 'none';
+      const fallbackDiv = this.nextElementSibling;
+      if (fallbackDiv) {
+        fallbackDiv.style.display = 'flex';
+      }
+    });
+  }
+  
   chatMessages.scrollTop = chatMessages.scrollHeight;
   
   // Update visual hierarchy after adding message
@@ -1254,7 +1290,7 @@ function getSenderAvatar(author) {
   // If there's an avatarUrl, use it
   if (author.avatarUrl && author.avatarUrl !== 'null' && author.avatarUrl !== '') {
     console.log('✅ Using avatar URL:', author.avatarUrl);
-    return `<img src="${author.avatarUrl}" alt="${author.name || author.handle || 'User'}" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+    return `<img src="${author.avatarUrl}" alt="${author.name || author.handle || 'User'}" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover;" data-avatar-fallback="true">
       <div style="width: 32px; height: 32px; border-radius: 50%; background-color: ${getAvatarColor(author.name || author.handle || 'Unknown')}; display: none; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 14px;">${(author.name || author.handle || 'Unknown').charAt(0).toUpperCase()}</div>`;
   }
   
