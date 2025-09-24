@@ -16,7 +16,8 @@ const policyRoutes = require('../routes/policy');
 
 const app = express();
 app.use(cors());
-app.use(bodyParser.json());
+app.use(bodyParser.json({ limit: '10mb' }));
+app.use(bodyParser.urlencoded({ limit: '10mb', extended: true }));
 app.use(session({
   secret: process.env.SESSION_SECRET || 'your_secret_key',
   resave: false,
@@ -170,16 +171,37 @@ app.get('/auth/debug', (req, res) => {
   });
 });
 
-// Agent API endpoint for DeepSeek integration
+// Enhanced Agent API endpoint with RAG support
 app.post('/api/agent', async (req, res) => {
   try {
-    const { message, pageContent } = req.body;
+    const { message, context, pageContent } = req.body;
     
     if (!process.env.DEEPSEEK_API_KEY || process.env.DEEPSEEK_API_KEY === 'your_deepseek_api_key_here') {
       return res.status(500).json({ 
         error: 'DeepSeek API key not configured. Please set DEEPSEEK_API_KEY in your .env file.' 
       });
     }
+    
+    // Build enhanced system prompt with RAG context
+    let systemPrompt = 'You are a helpful AI assistant that can analyze web page content and answer questions about it. You have access to the current page content and should provide clear, accurate, and helpful responses based on that content.';
+    
+    if (context && context.relevantContent && context.relevantContent.length > 0) {
+      systemPrompt += `\n\nRELEVANT PAGE CONTENT:\n${context.relevantContent.join('\n\n')}`;
+    }
+    
+    if (pageContent && pageContent.title) {
+      systemPrompt += `\n\nPAGE TITLE: ${pageContent.title}`;
+    }
+    
+    if (pageContent && pageContent.metadata && pageContent.metadata.description) {
+      systemPrompt += `\n\nPAGE DESCRIPTION: ${pageContent.metadata.description}`;
+    }
+    
+    if (pageContent && pageContent.content && pageContent.content.full) {
+      systemPrompt += `\n\nFULL PAGE CONTENT: ${pageContent.content.full.substring(0, 2000)}...`;
+    }
+    
+    systemPrompt += `\n\nIMPORTANT: You have access to the page content above. Use this information to answer the user's question about the page. Do not say you cannot see the page - you have the content right here.`;
     
     const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
       method: 'POST',
@@ -192,14 +214,14 @@ app.post('/api/agent', async (req, res) => {
         messages: [
           {
             role: 'system',
-            content: `You are an AI assistant helping users understand web page content. The current page content is: ${pageContent || 'No page content available'}`
+            content: systemPrompt
           },
           {
             role: 'user',
-            content: message
+            content: `User Question: ${message}\n\nPlease answer based on the page content provided above.`
           }
         ],
-        max_tokens: 1000,
+        max_tokens: 1500,
         temperature: 0.7
       })
     });
@@ -211,7 +233,12 @@ app.post('/api/agent', async (req, res) => {
     const data = await response.json();
     res.json({ 
       response: data.choices[0].message.content,
-      usage: data.usage 
+      usage: data.usage,
+      context: {
+        relevantChunks: context?.relevantContent?.length || 0,
+        pageTitle: pageContent?.title || 'Unknown',
+        hasContext: !!(context && context.relevantContent && context.relevantContent.length > 0)
+      }
     });
     
   } catch (error) {

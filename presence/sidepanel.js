@@ -158,16 +158,14 @@ async function loadCommunities() {
 // --- Global Variables ---
 let currentUser = null;
 let currentCommunity = null;
-let pageContentCache = '';
-let currentReply = null;
 
-// WebSocket for real-time chat
-let canopiWebSocket = null;
-let isConnected = false;
+// Content caching and RAG system
+let pageContentCache = null;
+let contentHash = null;
+let cachedChunks = [];
 
 // --- Agent Functions ---
 async function testAgent(message) {
-  console.log('testAgent called with:', message);
   if (!message.trim()) return;
   
   // Add user message to output
@@ -177,6 +175,14 @@ async function testAgent(message) {
   const loadingId = addMessageToAgentOutput('Agent', 'Thinking...', false, true);
   
   try {
+    // Check if we have page content, if not try to load it
+    if (!pageContentCache) {
+      await loadPageContent();
+      
+      // Wait a bit for content to load
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+    
     const response = await callDeepSeekAPI(message);
     removeLoadingMessage(loadingId);
     addMessageToAgentOutput('Agent', response, false);
@@ -187,13 +193,51 @@ async function testAgent(message) {
 }
 
 async function callDeepSeekAPI(userMessage) {
+  // Find relevant content chunks using RAG
+  const relevantChunks = findRelevantChunks(userMessage);
+  
+  // Prepare context for the AI
+  const context = {
+    pageTitle: pageContentCache?.title || 'Current Page',
+    pageUrl: pageContentCache?.url || '',
+    relevantContent: relevantChunks,
+    userQuestion: userMessage,
+    timestamp: new Date().toISOString()
+  };
+  
+  // If no page content is available, provide a helpful message
+  if (!pageContentCache) {
+    return `I'm unable to access the current page content to determine what it's about. The system indicates that no page content is available for me to analyze.
+
+You might want to:
+- Refresh the page to see if content loads
+- Check if there are any loading errors
+- Navigate to a different page
+- Or you could tell me what page you're viewing and I can try to help based on that information
+
+Is there a specific topic or question I can assist you with directly?`;
+  }
+  
+  // Create a limited version of page content to avoid payload size issues
+  const limitedPageContent = {
+    title: pageContentCache.title,
+    url: pageContentCache.url,
+    content: {
+      full: limitContentSize(pageContentCache.content.full, 2000),
+      chunks: pageContentCache.content.chunks.slice(0, 3) // Only send top 3 chunks
+    },
+    metadata: pageContentCache.metadata
+  };
+
   const response = await fetch(AGENT_API_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({
-      message: userMessage
+      message: userMessage,
+      context: context,
+      pageContent: limitedPageContent
     })
   });
   
@@ -204,6 +248,58 @@ async function callDeepSeekAPI(userMessage) {
   
   const data = await response.json();
   return data.response;
+}
+
+function findRelevantChunks(userMessage) {
+  if (!cachedChunks || cachedChunks.length === 0) {
+    return [];
+  }
+  
+  // Simple keyword-based relevance scoring
+  const messageWords = userMessage.toLowerCase().split(/\s+/);
+  const relevantChunks = [];
+  
+  cachedChunks.forEach((chunk, index) => {
+    const chunkText = chunk.toLowerCase();
+    let relevanceScore = 0;
+    
+    // Count keyword matches
+    messageWords.forEach(word => {
+      if (word.length > 2) { // Ignore short words
+        const matches = (chunkText.match(new RegExp(word, 'g')) || []).length;
+        relevanceScore += matches;
+      }
+    });
+    
+    // Boost score for chunks with question words
+    const questionWords = ['what', 'how', 'why', 'when', 'where', 'who'];
+    questionWords.forEach(qWord => {
+      if (chunkText.includes(qWord) && messageWords.includes(qWord)) {
+        relevanceScore += 2;
+      }
+    });
+    
+    if (relevanceScore > 0) {
+      relevantChunks.push({
+        chunk: chunk,
+        score: relevanceScore,
+        index: index
+      });
+    }
+  });
+  
+  // Sort by relevance score and return top 3-5 chunks
+  return relevantChunks
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 5)
+    .map(item => item.chunk);
+}
+
+// Helper function to limit content size for API calls
+function limitContentSize(content, maxLength = 2000) {
+  if (!content) return '';
+  if (content.length <= maxLength) return content;
+  return content.substring(0, maxLength) + '...';
 }
 
 function addMessageToAgentOutput(sender, message, isUser = false, isLoading = false) {
@@ -255,7 +351,6 @@ function formatMarkdown(text) {
 
 async function loadPageContent() {
   try {
-    console.log('Loading page content...');
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     
     if (tab && tab.url && !tab.url.startsWith('chrome://') && !tab.url.startsWith('chrome-extension://')) {
@@ -266,16 +361,56 @@ async function loadPageContent() {
         }
         
         if (response && response.content) {
-          console.log('Page content loaded:', response.content.length, 'characters');
-        } else if (response && response.error) {
-          console.log('Error extracting content:', response.error);
+          // Check if content has changed (different hash)
+          const newHash = response.content.contentHash;
+          if (contentHash !== newHash) {
+            contentHash = newHash;
+            pageContentCache = response.content;
+            cachedChunks = response.content.content.chunks || [];
+            
+            // Update agent welcome message with page info
+            updateAgentWelcomeWithPageInfo(response.content);
+          }
         }
       });
-    } else {
-      console.log('Cannot extract content from this page type');
     }
   } catch (error) {
     console.log('Error loading page content:', error);
+  }
+}
+
+function updateAgentWelcomeWithPageInfo(pageData) {
+  const agentOutput = document.getElementById('agent-output');
+  if (!agentOutput) return;
+  
+  // Update welcome message with page-specific info
+  const welcomeElement = agentOutput.querySelector('.agent-welcome');
+  if (welcomeElement) {
+    welcomeElement.innerHTML = `
+      <h4>🤖 AI Agent Ready</h4>
+      <p>I can help you understand and discuss the content on this page. Ask me anything!</p>
+      <div class="page-info">
+        <strong>📄 ${pageData.title}</strong>
+        <p>${pageData.content.full.substring(0, 200)}...</p>
+      </div>
+      <div class="agent-suggestions">
+        <button class="suggestion-btn" data-question="What is this page about?">What is this page about?</button>
+        <button class="suggestion-btn" data-question="Summarize the main points">Summarize the main points</button>
+        <button class="suggestion-btn" data-question="What are the key takeaways?">What are the key takeaways?</button>
+        <button class="suggestion-btn" data-question="Explain this in simple terms">Explain this in simple terms</button>
+        <button class="suggestion-btn" data-question="What questions should I ask about this?">What questions should I ask?</button>
+      </div>
+    `;
+    
+    // Re-add event listeners to suggestion buttons
+    const suggestionButtons = agentOutput.querySelectorAll('.suggestion-btn');
+    suggestionButtons.forEach(button => {
+      button.addEventListener('click', () => {
+        const question = button.getAttribute('data-question');
+        console.log("Suggestion button clicked:", question);
+        testAgent(question);
+      });
+    });
   }
 }
 
@@ -311,7 +446,7 @@ function initializeAgentTab() {
           <button class="suggestion-btn" data-question="What are the key takeaways?">What are the key takeaways?</button>
           <button class="suggestion-btn" data-question="Explain this in simple terms">Explain this in simple terms</button>
           <button class="suggestion-btn" data-question="What questions should I ask about this?">What questions should I ask?</button>
-      </div>
+              </div>
     </div>
   `;
   
@@ -322,8 +457,8 @@ function initializeAgentTab() {
         const question = button.getAttribute('data-question');
         console.log("Suggestion button clicked:", question);
         testAgent(question);
-      });
     });
+  });
     console.log("Agent welcome message set up!");
   }
   
@@ -372,18 +507,18 @@ function initializeAgentTab() {
               <button class="suggestion-btn" data-question="What are the key takeaways?">What are the key takeaways?</button>
               <button class="suggestion-btn" data-question="Explain this in simple terms">Explain this in simple terms</button>
               <button class="suggestion-btn" data-question="What questions should I ask about this?">What questions should I ask?</button>
-            </div>
-          </div>
-        `;
-        
+              </div>
+    </div>
+  `;
+  
         // Re-add event listeners to suggestion buttons
         const suggestionButtons = agentOutput.querySelectorAll('.suggestion-btn');
         suggestionButtons.forEach(button => {
           button.addEventListener('click', () => {
             const question = button.getAttribute('data-question');
             testAgent(question);
-          });
-        });
+    });
+  });
       }
     });
     agentClearButton.setAttribute('data-initialized', 'true');
@@ -419,357 +554,8 @@ function initializeAgentTab() {
   console.log('=== AGENT TAB INITIALIZATION COMPLETE ===');
 }
 
-// --- Canopi Chat Functions ---
-function initializeCanopiChat() {
-  console.log("Initializing Canopi chat...");
-  
-  const chatMessages = document.getElementById('canopi-chat-messages');
-  const messageInput = document.getElementById('canopi-message-input');
-  const sendButton = document.getElementById('canopi-send-btn');
-  const replyCancelBtn = document.getElementById('reply-cancel-btn');
-  
-  if (!chatMessages || !messageInput || !sendButton) {
-    console.log("Canopi chat elements not found, skipping initialization");
-    return;
-  }
-  
-  // Initialize user
-  currentUser = {
-    id: 'user_' + Math.random().toString(36).substr(2, 9),
-    name: 'You',
-    avatar: 'Y'
-  };
-  
-  // Connect to WebSocket
-  connectWebSocket();
-  
-  // Add sample messages for demonstration (only if not connected)
-  if (!isConnected) {
-    addSampleMessages();
-  }
-  
-  // Set up send button
-  sendButton.addEventListener('click', sendCanopiMessage);
-  
-  // Set up Enter key for sending
-  messageInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      sendCanopiMessage();
-    }
-  });
-  
-  // Set up reply cancel button
-  if (replyCancelBtn) {
-    replyCancelBtn.addEventListener('click', cancelReply);
-  }
-  
-  console.log("Canopi chat initialized successfully");
-}
 
-function connectWebSocket() {
-  try {
-    const wsUrls = [
-      'ws://localhost:3001/ws',
-      'ws://216.238.91.120:3001/ws',
-      'wss://echo.websocket.org'
-    ];
-    
-    let currentUrlIndex = 0;
-    
-    function tryConnect() {
-      if (currentUrlIndex >= wsUrls.length) {
-        console.log('All WebSocket servers failed, using local simulation mode');
-        isConnected = true;
-        updateConnectionStatus(true, 'Local Mode');
-        sendSystemMessage(`${currentUser.name} joined the chat (Local Mode)`);
-        return;
-      }
-      
-      const wsUrl = wsUrls[currentUrlIndex];
-      console.log(`Attempting to connect to: ${wsUrl}`);
-      
-      canopiWebSocket = new WebSocket(wsUrl);
-      
-      canopiWebSocket.onopen = function(event) {
-        console.log(`WebSocket connected to: ${wsUrl}`);
-        isConnected = true;
-        updateConnectionStatus(true, 'Connected');
-        sendSystemMessage(`${currentUser.name} joined the chat`);
-      };
-      
-      canopiWebSocket.onmessage = function(event) {
-        try {
-          const data = JSON.parse(event.data);
-          handleIncomingMessage(data);
-        } catch (e) {
-          if (event.data && event.data !== '') {
-            handleEchoMessage(event.data);
-          }
-        }
-      };
-      
-      canopiWebSocket.onclose = function(event) {
-        console.log(`WebSocket disconnected from: ${wsUrl}`);
-        isConnected = false;
-        updateConnectionStatus(false, 'Disconnected');
-        
-        currentUrlIndex++;
-        setTimeout(() => {
-          if (!isConnected) {
-            console.log('Attempting to reconnect...');
-            tryConnect();
-          }
-        }, 3000);
-      };
-      
-      canopiWebSocket.onerror = function(error) {
-        console.error(`WebSocket error with ${wsUrl}:`, error);
-        isConnected = false;
-        updateConnectionStatus(false, 'Connection Error');
-        
-        currentUrlIndex++;
-        setTimeout(() => {
-          if (!isConnected) {
-            tryConnect();
-          }
-        }, 1000);
-      };
-    }
-    
-    tryConnect();
-    
-  } catch (error) {
-    console.error('Failed to connect WebSocket:', error);
-    isConnected = false;
-    updateConnectionStatus(false, 'Failed to Connect');
-  }
-}
 
-function updateConnectionStatus(connected, mode) {
-  const chatMessages = document.getElementById('canopi-chat-messages');
-  if (!chatMessages) return;
-  
-  // Remove existing status
-  const existingStatus = chatMessages.querySelector('.connection-status');
-  if (existingStatus) {
-    existingStatus.remove();
-  }
-  
-  const statusDiv = document.createElement('div');
-  statusDiv.className = `connection-status ${connected ? (mode === 'Local Mode' ? 'local-mode' : 'connected') : 'disconnected'}`;
-  statusDiv.textContent = connected ? `🟢 ${mode}` : '🔴 Disconnected - trying to reconnect...';
-  
-  chatMessages.appendChild(statusDiv);
-  chatMessages.scrollTop = chatMessages.scrollHeight;
-}
-
-function handleIncomingMessage(data) {
-  if (data.type === 'message' && data.sender !== currentUser.id) {
-    addChatMessage(
-      data.senderName || 'Unknown User',
-      (data.senderAvatar || 'U').charAt(0).toUpperCase(),
-      data.message,
-      new Date(data.timestamp),
-      false,
-      data.replyTo
-    );
-  }
-}
-
-function handleEchoMessage(message) {
-  if (message && message !== '') {
-    addChatMessage(
-      'Echo Server',
-      'E',
-      `Echo: ${message}`,
-      new Date(),
-      false
-    );
-  }
-}
-
-function sendSystemMessage(message) {
-  const chatMessages = document.getElementById('canopi-chat-messages');
-  if (!chatMessages) return;
-  
-  const systemDiv = document.createElement('div');
-  systemDiv.className = 'system-message';
-  systemDiv.textContent = message;
-  
-  chatMessages.appendChild(systemDiv);
-  chatMessages.scrollTop = chatMessages.scrollHeight;
-}
-
-function addSampleMessages() {
-  const chatMessages = document.getElementById('canopi-chat-messages');
-  if (!chatMessages) return;
-  
-  // Add date separator
-  const today = new Date();
-  const dateStr = today.toLocaleDateString('en-US', { 
-    weekday: 'long', 
-    year: 'numeric', 
-    month: 'long', 
-    day: 'numeric' 
-  });
-  
-  const dateSeparator = document.createElement('div');
-  dateSeparator.className = 'date-separator';
-  dateSeparator.innerHTML = `<span>${dateStr}</span>`;
-  chatMessages.appendChild(dateSeparator);
-  
-  // Add sample messages
-  const sampleMessages = [
-    { sender: 'Alice', avatar: 'A', message: 'Hey everyone! How\'s the project going?', time: new Date(Date.now() - 3600000) },
-    { sender: 'Bob', avatar: 'B', message: 'Great! Just finished the new feature. What do you think?', time: new Date(Date.now() - 3000000) },
-    { sender: 'You', avatar: 'Y', message: 'Looks amazing! The UI is really clean.', time: new Date(Date.now() - 2400000), isOwn: true },
-    { sender: 'Alice', avatar: 'A', message: 'Thanks! I spent a lot of time on the design.', time: new Date(Date.now() - 1800000) },
-    { sender: 'Bob', avatar: 'B', message: 'Should we add more animations?', time: new Date(Date.now() - 1200000) },
-    { sender: 'You', avatar: 'Y', message: 'That would be nice! Subtle ones though.', time: new Date(Date.now() - 600000), isOwn: true }
-  ];
-  
-  sampleMessages.forEach(msg => {
-    addChatMessage(msg.sender, msg.avatar, msg.message, msg.time, msg.isOwn);
-  });
-}
-
-function addChatMessage(sender, avatarText, message, time, isOwnMessage = false, replyTo = null) {
-  const chatMessages = document.getElementById('canopi-chat-messages');
-  if (!chatMessages) return;
-  
-  const messageDiv = document.createElement('div');
-  messageDiv.className = `chat-message ${isOwnMessage ? 'own-message' : ''}`;
-  messageDiv.setAttribute('data-message-id', Date.now() + Math.random());
-  
-  const timeStr = time.toLocaleTimeString('en-US', { 
-    hour: '2-digit', 
-    minute: '2-digit',
-    hour12: true 
-  });
-  
-  let replyHtml = '';
-  if (replyTo) {
-    replyHtml = `
-      <div class="message-reply">
-        <div class="message-reply-sender">${replyTo.sender}</div>
-        <div class="message-reply-text">${replyTo.message}</div>
-              </div>
-    `;
-  }
-  
-  messageDiv.innerHTML = `
-    <div class="message-avatar">${avatarText}</div>
-    <div class="message-content">
-      <div class="message-header">
-        <span class="message-sender">${sender}</span>
-        <span class="message-time">${timeStr}</span>
-            </div>
-      ${replyHtml}
-      <div class="message-text">${message}</div>
-    </div>
-  `;
-  
-  // Add click handler for replies
-  const content = messageDiv.querySelector('.message-content');
-  if (content && !isOwnMessage) {
-    content.addEventListener('click', () => {
-      startReply(sender, message, messageDiv.getAttribute('data-message-id'));
-    });
-  }
-  
-  chatMessages.appendChild(messageDiv);
-  chatMessages.scrollTop = chatMessages.scrollHeight;
-}
-
-function sendCanopiMessage() {
-  const messageInput = document.getElementById('canopi-message-input');
-  const sendButton = document.getElementById('canopi-send-btn');
-  
-  if (!messageInput || !sendButton) return;
-  
-  const message = messageInput.value.trim();
-  if (!message) return;
-  
-  // Disable input while sending
-  messageInput.disabled = true;
-  sendButton.disabled = true;
-  
-  // Add message to chat
-  addChatMessage(
-    currentUser.name,
-    currentUser.avatar,
-    message,
-    new Date(),
-    true,
-    currentReply
-  );
-  
-  // Send via WebSocket if connected
-  if (isConnected && canopiWebSocket && canopiWebSocket.readyState === WebSocket.OPEN) {
-    const messageData = {
-      sender: currentUser.id,
-      senderName: currentUser.name,
-      senderAvatar: currentUser.avatar,
-      message: message,
-      timestamp: Date.now(),
-      replyTo: currentReply
-    };
-    
-    canopiWebSocket.send(JSON.stringify(messageData));
-    console.log('Message sent via WebSocket:', messageData);
-  } else {
-    // Local mode: simulate echo response
-    setTimeout(() => {
-      handleEchoMessage(message);
-    }, 1000 + Math.random() * 2000); // Random delay 1-3 seconds
-    console.log('Message sent in local mode:', message);
-  }
-  
-  // Clear input and reset reply
-  messageInput.value = '';
-  cancelReply();
-  
-  // Re-enable input
-  messageInput.disabled = false;
-  sendButton.disabled = false;
-  messageInput.focus();
-  
-  console.log('Canopi message sent:', message, currentReply ? 'as reply' : '');
-}
-
-function startReply(sender, message, messageId) {
-  currentReply = {
-    sender: sender,
-    message: message,
-    messageId: messageId
-  };
-  
-  const replyIndicator = document.getElementById('reply-indicator');
-  const replySender = document.getElementById('reply-sender');
-  const replyPreview = document.getElementById('reply-preview');
-  const messageInput = document.getElementById('canopi-message-input');
-  
-  if (replyIndicator && replySender && replyPreview && messageInput) {
-    replySender.textContent = `Replying to ${sender}`;
-    replyPreview.textContent = message.length > 50 ? message.substring(0, 50) + '...' : message;
-    replyIndicator.style.display = 'flex';
-    messageInput.placeholder = `Reply to ${sender}...`;
-    messageInput.focus();
-  }
-}
-
-function cancelReply() {
-  currentReply = null;
-  
-  const replyIndicator = document.getElementById('reply-indicator');
-  const messageInput = document.getElementById('canopi-message-input');
-  
-  if (replyIndicator && messageInput) {
-    replyIndicator.style.display = 'none';
-    messageInput.placeholder = 'Send message in Overweb';
-  }
-}
 
 // --- Tab Switching Functions ---
 function switchToMainTab(tabId) {
@@ -861,9 +647,6 @@ function initializeSidebar() {
       switchToSubTab(subTabId);
     });
   });
-  
-  // Initialize Canopi chat
-  initializeCanopiChat();
   
   console.log('Sidebar setup complete');
 }
@@ -971,8 +754,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   // --- Element References ---
   const mainTabs = document.querySelectorAll('.main-nav-tab');
   const subTabs = document.querySelectorAll('.sub-nav-tab');
-  const chatInput = document.getElementById('chat-textarea');
-  const chatSendButton = document.querySelector('.chat-input-area button');
   
   // --- Main Tab Event Listeners ---
   mainTabs.forEach(tab => {
@@ -1024,29 +805,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   });
   
-  // --- Chat Input Event Listeners ---
-  if (chatInput) {
-    chatInput.addEventListener('input', () => autoResize(chatInput));
-    chatInput.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        if (chatSendButton) {
-          chatSendButton.click();
-        }
-      }
-    });
-  }
-  
-  if (chatSendButton) {
-    chatSendButton.addEventListener('click', () => {
-      if (chatInput && chatInput.value.trim()) {
-        debug(`Sending message: ${chatInput.value}`);
-        // TODO: Implement actual message sending
-        chatInput.value = '';
-        autoResize(chatInput);
-      }
-    });
-  }
   
   // --- Community Dropdown ---
   const communityOptionsBtn = document.getElementById('community-options-btn');
@@ -1129,9 +887,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   // --- Agent initialization is handled by initializeAgentTab() function ---
   
   // --- Page content loading is handled by initializeAgentTab() function ---
-  
-  // --- Initialize Canopi Chat ---
-  initializeCanopiChat();
   
   // --- Final Setup ---
   debug('Sidebar setup complete');
