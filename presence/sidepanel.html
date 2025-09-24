@@ -63,6 +63,9 @@
       <button class="main-nav-tab" data-tab="rooms-tab">Rooms</button>
       <button class="main-nav-tab" data-tab="people-tab">People</button>
       <button class="main-nav-tab" data-tab="agent-tab">Agent</button>
+      <button class="discord-btn" id="discord-btn" title="Join Discord">
+        <span class="discord-icon">🎮</span>
+      </button>
     </div>
     
     <!-- Main Tab Contents -->
@@ -95,22 +98,41 @@
       
       <!-- People Tab Content -->
       <div id="people-tab" class="main-tab-content">
-        <ul class="item-list">
-          <li>
-            <div class="item-avatar"></div>
-            <div class="item-info">
-              <div class="item-name">John Doe</div>
-              <div class="item-status">Online</div>
-            </div>
-          </li>
-          <li>
-            <div class="item-avatar"></div>
-            <div class="item-info">
-              <div class="item-name">Jane Smith</div>
-              <div class="item-status">Away</div>
-            </div>
-          </li>
-        </ul>
+        <!-- Search and Filter Bar -->
+        <div class="people-search-bar">
+          <div class="search-input-container">
+            <input type="text" id="people-search" placeholder="Search people..." class="people-search-input">
+            <button class="people-filter-btn" id="people-filter-btn">☰</button>
+          </div>
+        </div>
+        
+        <!-- Sub-navigation for People -->
+        <div class="people-nav">
+          <button class="people-nav-btn active" data-people-tab="friends">Friends</button>
+          <button class="people-nav-btn" data-people-tab="requests">Friend Requests</button>
+          <button class="people-nav-btn" data-people-tab="blocked">Blocked</button>
+        </div>
+        
+        <!-- Friends Tab -->
+        <div id="people-friends" class="people-tab-content active">
+          <div class="people-list" id="friends-list">
+            <!-- Friends will be loaded here -->
+          </div>
+        </div>
+        
+        <!-- Friend Requests Tab -->
+        <div id="people-requests" class="people-tab-content">
+          <div class="people-list" id="requests-list">
+            <!-- Friend requests will be loaded here -->
+          </div>
+        </div>
+        
+        <!-- Blocked Users Tab -->
+        <div id="people-blocked" class="people-tab-content">
+          <div class="people-list" id="blocked-list">
+            <!-- Blocked users will be loaded here -->
+          </div>
+        </div>
       </div>
       
       <!-- Agent Tab Content -->

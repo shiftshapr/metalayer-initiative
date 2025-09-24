@@ -1,6 +1,7 @@
 // Meta-Layer Initiative API Configuration
 const METALAYER_API_URL = 'http://216.238.91.120:3002';
 const AGENT_API_URL = 'http://localhost:3001/api/agent';
+const PEOPLE_API_URL = 'http://localhost:3001/people';
 
 // API client for Meta-Layer Initiative
 class MetaLayerAPI {
@@ -49,6 +50,498 @@ class MetaLayerAPI {
 
 // Initialize API client
 const api = new MetaLayerAPI(METALAYER_API_URL);
+
+// People Management API
+class PeopleAPI {
+  constructor(baseURL) {
+    this.baseURL = baseURL;
+  }
+
+  async request(endpoint, options = {}) {
+    const url = `${this.baseURL}${endpoint}`;
+    const config = {
+      headers: {
+        'Content-Type': 'application/json',
+        'x-user-id': currentUserId || '1', // Add authentication header
+        ...options.headers
+      },
+      ...options
+    };
+
+    try {
+      const response = await fetch(url, config);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('People API request failed:', error);
+      throw error;
+    }
+  }
+
+  async getUsers(search = '', status = '') {
+    const params = new URLSearchParams();
+    if (search) params.append('search', search);
+    if (status) params.append('status', status);
+    return this.request(`/users?${params.toString()}`);
+  }
+
+  async getFriends() {
+    return this.request('/friends');
+  }
+
+  async getFriendRequests(type = 'all') {
+    return this.request(`/friend-requests?type=${type}`);
+  }
+
+  async sendFriendRequest(toUserId) {
+    return this.request('/friend-request', {
+      method: 'POST',
+      body: JSON.stringify({ toUserId })
+    });
+  }
+
+  async acceptFriendRequest(requestId) {
+    return this.request('/friend-request/accept', {
+      method: 'POST',
+      body: JSON.stringify({ requestId })
+    });
+  }
+
+  async declineFriendRequest(requestId) {
+    return this.request('/friend-request/decline', {
+      method: 'POST',
+      body: JSON.stringify({ requestId })
+    });
+  }
+
+  async removeFriend(friendId) {
+    return this.request(`/friends/${friendId}`, {
+      method: 'DELETE'
+    });
+  }
+
+  async blockUser(blockedUserId) {
+    return this.request('/block', {
+      method: 'POST',
+      body: JSON.stringify({ blockedUserId })
+    });
+  }
+
+  async unblockUser(blockedUserId) {
+    return this.request(`/block/${blockedUserId}`, {
+      method: 'DELETE'
+    });
+  }
+
+  async getBlockedUsers() {
+    return this.request('/blocked');
+  }
+
+  async getUserProfile(userId, currentUserId = null) {
+    const params = currentUserId ? `?currentUserId=${currentUserId}` : '';
+    return this.request(`/profile/${userId}${params}`);
+  }
+}
+
+// Initialize People API
+const peopleAPI = new PeopleAPI(PEOPLE_API_URL);
+
+// Authentication Functions
+async function getCurrentUser() {
+  try {
+    const response = await peopleAPI.request('/me', {
+      headers: {
+        'x-user-id': '1' // For demo purposes - in production this would come from auth token
+      }
+    });
+    if (response.success) {
+      currentUser = response.user;
+      currentUserId = response.user.id;
+      return response.user;
+    }
+  } catch (error) {
+    console.error('Error getting current user:', error);
+    // Fallback to demo user for development
+    currentUserId = '1';
+    currentUser = {
+      id: '1',
+      name: 'John Doe',
+      email: 'john@example.com',
+      avatarUrl: '/images/avatar-j.png',
+      status: 'online'
+    };
+    return currentUser;
+  }
+}
+
+// People Management Variables
+let currentUserId = null; // Will be set from authentication
+let currentUser = null;
+let currentPeopleTab = 'friends';
+let friendsList = [];
+let friendRequests = [];
+let blockedUsers = [];
+
+// People Management Functions
+async function loadFriends() {
+  try {
+    const response = await peopleAPI.getFriends();
+    if (response.success) {
+      friendsList = response.friends;
+      renderFriendsList();
+    }
+  } catch (error) {
+    console.error('Error loading friends:', error);
+    showPeopleError('Failed to load friends');
+  }
+}
+
+async function loadFriendRequests() {
+  try {
+    const response = await peopleAPI.getFriendRequests();
+    if (response.success) {
+      friendRequests = response.requests;
+      renderFriendRequests();
+    }
+  } catch (error) {
+    console.error('Error loading friend requests:', error);
+    showPeopleError('Failed to load friend requests');
+  }
+}
+
+async function loadBlockedUsers() {
+  try {
+    const response = await peopleAPI.getBlockedUsers();
+    if (response.success) {
+      blockedUsers = response.blockedUsers;
+      renderBlockedUsers();
+    }
+  } catch (error) {
+    console.error('Error loading blocked users:', error);
+    showPeopleError('Failed to load blocked users');
+  }
+}
+
+function renderFriendsList() {
+  const container = document.getElementById('friends-list');
+  if (!container) return;
+
+  if (friendsList.length === 0) {
+    container.innerHTML = `
+      <div class="people-empty-state">
+        <div class="empty-illustration">👥</div>
+        <h3>No friends yet</h3>
+        <p>Start building your network by sending friend requests to people you know!</p>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = friendsList.map(friend => `
+    <div class="people-item" data-user-id="${friend.id}">
+      <div class="people-avatar">
+        ${friend.avatar ? `<img src="${friend.avatar}" alt="${friend.name}">` : friend.name.charAt(0)}
+      </div>
+      <div class="people-info">
+        <div class="people-name">${friend.name}</div>
+        <div class="people-status">
+          <span class="status-indicator ${friend.status}"></span>
+          ${friend.status.charAt(0).toUpperCase() + friend.status.slice(1)}
+        </div>
+      </div>
+      <div class="people-actions">
+        <button class="people-action-btn secondary" onclick="messageFriend('${friend.id}')">Message</button>
+        <button class="people-action-btn danger" onclick="removeFriend('${friend.id}')">Remove</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderFriendRequests() {
+  const container = document.getElementById('requests-list');
+  if (!container) return;
+
+  if (friendRequests.length === 0) {
+    container.innerHTML = `
+      <div class="people-empty-state">
+        <div class="empty-illustration">📨</div>
+        <h3>No friend requests</h3>
+        <p>You don't have any pending friend requests at the moment.</p>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = friendRequests.map(request => `
+    <div class="people-item friend-request-item" data-request-id="${request.id}">
+      <div class="people-avatar">
+        ${request.fromUser.avatar ? `<img src="${request.fromUser.avatar}" alt="${request.fromUser.name}">` : request.fromUser.name.charAt(0)}
+      </div>
+      <div class="people-info">
+        <div class="people-name">${request.fromUser.name}</div>
+        <div class="people-status">Sent you a friend request</div>
+      </div>
+      <div class="people-actions">
+        <button class="people-action-btn success" onclick="acceptFriendRequest('${request.id}')">Accept</button>
+        <button class="people-action-btn secondary" onclick="declineFriendRequest('${request.id}')">Decline</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderBlockedUsers() {
+  const container = document.getElementById('blocked-list');
+  if (!container) return;
+
+  if (blockedUsers.length === 0) {
+    container.innerHTML = `
+      <div class="people-empty-state">
+        <div class="empty-illustration">🚫</div>
+        <h3>No blocked users</h3>
+        <p>You haven't blocked anyone yet.</p>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = blockedUsers.map(user => `
+    <div class="people-item blocked-user-item" data-user-id="${user.id}">
+      <div class="people-avatar">
+        ${user.avatar ? `<img src="${user.avatar}" alt="${user.name}">` : user.name.charAt(0)}
+      </div>
+      <div class="people-info">
+        <div class="people-name">${user.name}</div>
+        <div class="people-status">Blocked</div>
+      </div>
+      <div class="people-actions">
+        <button class="people-action-btn secondary" onclick="unblockUser('${user.id}')">Unblock</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+// People Action Functions
+async function sendFriendRequest(userId) {
+  try {
+    const response = await peopleAPI.sendFriendRequest(userId);
+    if (response.success) {
+      showPeopleSuccess('Friend request sent!');
+      loadFriendRequests(); // Refresh requests
+    }
+  } catch (error) {
+    console.error('Error sending friend request:', error);
+    showPeopleError('Failed to send friend request');
+  }
+}
+
+async function acceptFriendRequest(requestId) {
+  try {
+    const response = await peopleAPI.acceptFriendRequest(requestId);
+    if (response.success) {
+      showPeopleSuccess('Friend request accepted!');
+      loadFriends(); // Refresh friends list
+      loadFriendRequests(); // Refresh requests
+    }
+  } catch (error) {
+    console.error('Error accepting friend request:', error);
+    showPeopleError('Failed to accept friend request');
+  }
+}
+
+async function declineFriendRequest(requestId) {
+  try {
+    const response = await peopleAPI.declineFriendRequest(requestId);
+    if (response.success) {
+      showPeopleSuccess('Friend request declined');
+      loadFriendRequests(); // Refresh requests
+    }
+  } catch (error) {
+    console.error('Error declining friend request:', error);
+    showPeopleError('Failed to decline friend request');
+  }
+}
+
+async function removeFriend(friendId) {
+  if (confirm('Are you sure you want to remove this friend?')) {
+    try {
+      const response = await peopleAPI.removeFriend(friendId);
+      if (response.success) {
+        showPeopleSuccess('Friend removed');
+        loadFriends(); // Refresh friends list
+      }
+    } catch (error) {
+      console.error('Error removing friend:', error);
+      showPeopleError('Failed to remove friend');
+    }
+  }
+}
+
+async function blockUser(userId) {
+  if (confirm('Are you sure you want to block this user?')) {
+    try {
+      const response = await peopleAPI.blockUser(userId);
+      if (response.success) {
+        showPeopleSuccess('User blocked');
+        loadBlockedUsers(); // Refresh blocked users
+        loadFriends(); // Refresh friends list
+      }
+    } catch (error) {
+      console.error('Error blocking user:', error);
+      showPeopleError('Failed to block user');
+    }
+  }
+}
+
+async function unblockUser(userId) {
+  try {
+    const response = await peopleAPI.unblockUser(userId);
+    if (response.success) {
+      showPeopleSuccess('User unblocked');
+      loadBlockedUsers(); // Refresh blocked users
+    }
+  } catch (error) {
+    console.error('Error unblocking user:', error);
+    showPeopleError('Failed to unblock user');
+  }
+}
+
+function messageFriend(friendId) {
+  // Placeholder for messaging functionality
+  showPeopleSuccess('Messaging feature coming soon!');
+}
+
+// People Tab Navigation
+function switchPeopleTab(tabName) {
+  // Update navigation buttons
+  document.querySelectorAll('.people-nav-btn').forEach(btn => {
+    btn.classList.remove('active');
+  });
+  document.querySelector(`[data-people-tab="${tabName}"]`).classList.add('active');
+
+  // Update content
+  document.querySelectorAll('.people-tab-content').forEach(content => {
+    content.classList.remove('active');
+  });
+  document.getElementById(`people-${tabName}`).classList.add('active');
+
+  currentPeopleTab = tabName;
+
+  // Load appropriate data
+  switch (tabName) {
+    case 'friends':
+      loadFriends();
+      break;
+    case 'requests':
+      loadFriendRequests();
+      break;
+    case 'blocked':
+      loadBlockedUsers();
+      break;
+  }
+}
+
+// People Search
+function setupPeopleSearch() {
+  const searchInput = document.getElementById('people-search');
+  if (searchInput) {
+    let searchTimeout;
+    searchInput.addEventListener('input', (e) => {
+      clearTimeout(searchTimeout);
+      searchTimeout = setTimeout(() => {
+        const searchTerm = e.target.value;
+        if (currentPeopleTab === 'friends') {
+          // Filter friends locally for now
+          const filteredFriends = friendsList.filter(friend => 
+            friend.name.toLowerCase().includes(searchTerm.toLowerCase())
+          );
+          renderFilteredFriends(filteredFriends);
+        }
+      }, 300);
+    });
+  }
+}
+
+function renderFilteredFriends(filteredFriends) {
+  const container = document.getElementById('friends-list');
+  if (!container) return;
+
+  if (filteredFriends.length === 0) {
+    container.innerHTML = `
+      <div class="people-empty-state">
+        <div class="empty-illustration">🔍</div>
+        <h3>No friends found</h3>
+        <p>Try adjusting your search terms.</p>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = filteredFriends.map(friend => `
+    <div class="people-item" data-user-id="${friend.id}">
+      <div class="people-avatar">
+        ${friend.avatar ? `<img src="${friend.avatar}" alt="${friend.name}">` : friend.name.charAt(0)}
+      </div>
+      <div class="people-info">
+        <div class="people-name">${friend.name}</div>
+        <div class="people-status">
+          <span class="status-indicator ${friend.status}"></span>
+          ${friend.status.charAt(0).toUpperCase() + friend.status.slice(1)}
+        </div>
+      </div>
+      <div class="people-actions">
+        <button class="people-action-btn secondary" onclick="messageFriend('${friend.id}')">Message</button>
+        <button class="people-action-btn danger" onclick="removeFriend('${friend.id}')">Remove</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+// Notification Functions
+function showPeopleSuccess(message) {
+  // Simple success notification
+  const notification = document.createElement('div');
+  notification.style.cssText = `
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: #28a745;
+    color: white;
+    padding: 12px 20px;
+    border-radius: 6px;
+    z-index: 1000;
+    font-size: 0.9em;
+  `;
+  notification.textContent = message;
+  document.body.appendChild(notification);
+  
+  setTimeout(() => {
+    notification.remove();
+  }, 3000);
+}
+
+function showPeopleError(message) {
+  // Simple error notification
+  const notification = document.createElement('div');
+  notification.style.cssText = `
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: #dc3545;
+    color: white;
+    padding: 12px 20px;
+    border-radius: 6px;
+    z-index: 1000;
+    font-size: 0.9em;
+  `;
+  notification.textContent = message;
+  document.body.appendChild(notification);
+  
+  setTimeout(() => {
+    notification.remove();
+  }, 3000);
+}
 
 // Initialize Loosely Coupled Auth Manager
 const authManager = new AuthManager(); 
@@ -156,7 +649,6 @@ async function loadCommunities() {
 }
 
 // --- Global Variables ---
-let currentUser = null;
 let currentCommunity = null;
 
 // Content caching and RAG system
@@ -577,6 +1069,9 @@ function switchToMainTab(tabId) {
     if (tabId === 'agent-tab') {
       console.log('Agent tab activated! Initializing agent...');
       initializeAgentTab();
+    } else if (tabId === 'people-tab') {
+      console.log('People tab activated! Loading people data...');
+      initializePeopleTab();
     }
   }
   
@@ -728,8 +1223,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   updateUI(null);
   
   console.log('=== END Initialization ===');
+});
 
   // --- Now proceed with the rest of the setup ---
+document.addEventListener('DOMContentLoaded', () => {
   debug("Document loaded (from JS)");
   console.log("Sidebar JS Loaded");
   
@@ -884,11 +1381,45 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   // --- Agent functionality is handled by initializeAgentTab() function ---
   
-  // --- Agent initialization is handled by initializeAgentTab() function ---
+  // --- People Tab Event Listeners ---
+  const peopleNavBtns = document.querySelectorAll('.people-nav-btn');
+  peopleNavBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tabName = btn.getAttribute('data-people-tab');
+      switchPeopleTab(tabName);
+      });
+    });
+
+  // Setup people search
+  setupPeopleSearch();
   
-  // --- Page content loading is handled by initializeAgentTab() function ---
-  
-  // --- Final Setup ---
-  debug('Sidebar setup complete');
-  console.log('Sidebar setup complete');
+  // Setup Discord button
+  setupDiscordButton();
 });
+
+// Initialize People Tab
+async function initializePeopleTab() {
+  try {
+    // Get current user first
+    await getCurrentUser();
+    console.log('Current user:', currentUser);
+    
+    // Load friends by default
+    loadFriends();
+  } catch (error) {
+    console.error('Error initializing people tab:', error);
+    showPeopleError('Failed to initialize people tab');
+  }
+}
+
+// Discord Button Setup
+function setupDiscordButton() {
+  const discordBtn = document.getElementById('discord-btn');
+  if (discordBtn) {
+    discordBtn.addEventListener('click', () => {
+      // Discord invite link - you can change this to your server's invite
+      const discordInviteUrl = 'https://discord.com/invite/wb7HAhBxKq';
+      chrome.tabs.create({ url: discordInviteUrl });
+    });
+  }
+}
