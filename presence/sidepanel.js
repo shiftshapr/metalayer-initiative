@@ -1,9 +1,6 @@
-// Meta-Layer Initiative API Configuration
 const METALAYER_API_URL = 'http://216.238.91.120:3002';
 const AGENT_API_URL = 'http://localhost:3001/api/agent';
 const PEOPLE_API_URL = 'http://localhost:3001/people';
-
-// API client for Meta-Layer Initiative
 class MetaLayerAPI {
   constructor(baseURL) {
     this.baseURL = baseURL;
@@ -1114,52 +1111,30 @@ function switchToSubTab(subTabId) {
   }
 }
 
-// --- Initialize Sidebar ---
 function initializeSidebar() {
-  console.log('Found main tab: Canopi');
-  console.log('Found main tab: Rooms');
-  console.log('Found main tab: People');
-  console.log('Found main tab: Agent');
-  console.log('Found sub tab: Live Chat');
-  console.log('Found sub tab: Visible');
-  
-  // Initialize main tabs
   const mainTabs = document.querySelectorAll('.main-nav-tab');
   mainTabs.forEach(tab => {
     tab.addEventListener('click', () => {
       const tabId = tab.getAttribute('data-tab');
-      console.log('Main tab clicked:', tabId);
       switchToMainTab(tabId);
     });
   });
   
-  // Initialize sub tabs
   const subTabs = document.querySelectorAll('.sub-nav-tab');
   subTabs.forEach(tab => {
     tab.addEventListener('click', () => {
       const subTabId = tab.getAttribute('data-subtab');
-      console.log('Sub tab clicked:', subTabId);
       switchToSubTab(subTabId);
     });
   });
   
-  console.log('Sidebar setup complete');
 }
-
-// --- Main Initialization ---
 document.addEventListener('DOMContentLoaded', async () => {
-  debug("DOMContentLoaded event fired.");
-  console.log("DOMContentLoaded event fired.");
 
-  // === Register Auth Providers ===
   authManager.registerProvider('supabase', new SupabaseAuthProvider());
   authManager.registerProvider('metalayer', new MetalayerAuthProvider());
   authManager.registerProvider('offline', new OfflineAuthProvider());
   
-  // === Initialize Auth Manager ===
-  console.log('Starting auth manager initialization...');
-  
-  // Try to initialize with timeout
   try {
     const authReady = await Promise.race([
       authManager.initialize(),
@@ -1211,48 +1186,19 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   // Load communities and initialize the interface
   try {
-    console.log('Loading communities...');
     loadCommunities();
-    console.log('Communities loaded successfully');
   } catch (error) {
     console.error('Error loading communities:', error);
   }
   
-  // Ensure UI is updated regardless of auth status
-  console.log('Updating UI...');
   updateUI(null);
-  
-  console.log('=== END Initialization ===');
 });
-
-  // --- Now proceed with the rest of the setup ---
-document.addEventListener('DOMContentLoaded', () => {
-  debug("Document loaded (from JS)");
-  console.log("Sidebar JS Loaded");
   
-  // Initialize sidebar functionality
+document.addEventListener('DOMContentLoaded', () => {
+
   initializeSidebar();
 
-  // Add debug listeners (moved from HTML)
-  document.querySelectorAll('.main-nav-tab').forEach(tab => {
-    debug(`Found main tab: ${tab.textContent}`);
-    tab.addEventListener('click', () => {
-      debug(`Main tab clicked: ${tab.textContent}`);
-    });
-  });
 
-  document.querySelectorAll('.sub-nav-tab').forEach(tab => {
-    debug(`Found sub tab: ${tab.textContent}`);
-    tab.addEventListener('click', () => {
-      debug(`Sub tab clicked: ${tab.textContent}`);
-    });
-  });
-
-  // --- Element References ---
-  const mainTabs = document.querySelectorAll('.main-nav-tab');
-  const subTabs = document.querySelectorAll('.sub-nav-tab');
-  
-  // --- Main Tab Event Listeners ---
   mainTabs.forEach(tab => {
     tab.addEventListener('click', () => {
       const tabId = tab.getAttribute('data-tab');
