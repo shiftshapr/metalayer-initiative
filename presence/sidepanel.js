@@ -543,8 +543,150 @@ function showPeopleError(message) {
 // Initialize Loosely Coupled Auth Manager
 const authManager = new AuthManager();
 
+// Authentication Flow Setup
+function setupAuthenticationFlow() {
+  console.log('🔧 Setting up authentication flow...');
+  
+  // Listen for authentication state changes
+  if (authManager && authManager.onAuthStateChange) {
+    authManager.onAuthStateChange((event, data) => {
+      console.log('🔄 Auth state changed:', event, data);
+      handleAuthStateChange(event, data);
+    });
+  }
+  
+  // Check for authentication callback in URL parameters
+  checkAuthCallback();
+  
+  // Set up periodic session check
+  setInterval(checkSessionStatus, 30000); // Check every 30 seconds
+  
+  console.log('✅ Authentication flow setup complete');
+}
+
+// Handle authentication state changes
+function handleAuthStateChange(event, data) {
+  console.log('🔄 Handling auth state change:', event, data);
+  
+  switch (event) {
+    case 'signin':
+      console.log('✅ User signed in:', data.user);
+      updateUI(data.user);
+      hideWelcomeScreen();
+      break;
+    case 'signout':
+      console.log('❌ User signed out');
+      updateUI(null);
+      showWelcomeScreen();
+      break;
+    case 'error':
+      console.error('❌ Auth error:', data.error);
+      updateUI(null);
+      showWelcomeScreen();
+      break;
+    default:
+      console.log('🔄 Unknown auth event:', event);
+  }
+}
+
+// Check for authentication callback
+function checkAuthCallback() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const authToken = urlParams.get('auth_token');
+  const authError = urlParams.get('auth_error');
+  
+  if (authToken) {
+    console.log('🔑 Auth token found, processing...');
+    processAuthToken(authToken);
+  } else if (authError) {
+    console.error('❌ Auth error in callback:', authError);
+    showAuthError(authError);
+  }
+}
+
+// Process authentication token
+async function processAuthToken(token) {
+  try {
+    console.log('🔑 Processing auth token...');
+    
+    // Store the token
+    await chrome.storage.local.set({ authToken: token });
+    
+    // Try to get user info with the token
+    const user = await authManager.getCurrentUser();
+    if (user) {
+      console.log('✅ User authenticated successfully:', user);
+      updateUI(user);
+      hideWelcomeScreen();
+    } else {
+      console.log('⚠️ Token received but user not found, showing welcome screen');
+      updateUI(null);
+      showWelcomeScreen();
+    }
+  } catch (error) {
+    console.error('❌ Error processing auth token:', error);
+    updateUI(null);
+    showWelcomeScreen();
+  }
+}
+
+// Check session status periodically
+async function checkSessionStatus() {
+  try {
+    const user = await authManager.getCurrentUser();
+    if (user) {
+      console.log('✅ Session valid, user authenticated');
+      updateUI(user);
+      hideWelcomeScreen();
+    } else {
+      console.log('❌ No valid session, showing welcome screen');
+      updateUI(null);
+      showWelcomeScreen();
+    }
+  } catch (error) {
+    console.error('❌ Session check failed:', error);
+    updateUI(null);
+    showWelcomeScreen();
+  }
+}
+
+// Show welcome screen
+function showWelcomeScreen() {
+  const welcomeScreen = document.getElementById('welcome-screen');
+  const sidebarContent = document.querySelector('.sidebar-content');
+  
+  if (welcomeScreen) welcomeScreen.style.display = 'flex';
+  if (sidebarContent) sidebarContent.style.display = 'none';
+  
+  console.log('👋 Welcome screen shown');
+}
+
+// Hide welcome screen
+function hideWelcomeScreen() {
+  const welcomeScreen = document.getElementById('welcome-screen');
+  const sidebarContent = document.querySelector('.sidebar-content');
+  
+  if (welcomeScreen) welcomeScreen.style.display = 'none';
+  if (sidebarContent) sidebarContent.style.display = 'block';
+  
+  console.log('👋 Welcome screen hidden');
+}
+
+// Show authentication error
+function showAuthError(error) {
+  console.error('❌ Authentication error:', error);
+  // You could show a toast notification or error message here
+  alert(`Authentication failed: ${error}`);
+}
+
 // Setup Discord button immediately
-setupDiscordButton(); 
+setupDiscordButton();
+
+// Setup Welcome Screen buttons
+setupWelcomeButtons();
+
+// Setup Authentication Flow
+setupAuthenticationFlow(); 
 
 // === DEBUGGING: Check API connection ===
 console.log('Meta-Layer Initiative API initialized');
@@ -612,22 +754,28 @@ async function requireAuth(action, callback) {
 
 // --- UI Update Functions ---
 function updateUI(user = null) {
-  console.log('UI updated:', user ? 'User authenticated, showing user info' : 'User not authenticated, hiding user info');
-  debug(`UI updated: ${user ? 'User authenticated, showing user info' : 'User not authenticated, hiding user info'}`);
+  console.log('UI updated:', user ? 'User authenticated, showing user info' : 'User not authenticated, showing welcome screen');
+  debug(`UI updated: ${user ? 'User authenticated, showing user info' : 'User not authenticated, showing welcome screen'}`);
   
   const userInfoDiv = document.getElementById('user-info');
   const userAvatar = document.getElementById('user-avatar');
   const userName = document.getElementById('user-menu-name');
+  const welcomeScreen = document.getElementById('welcome-screen');
+  const sidebarContent = document.querySelector('.sidebar-content');
   
   if (user) {
+    // User is authenticated - show normal interface
     if (userInfoDiv) userInfoDiv.style.display = 'flex';
     if (userAvatar) {
       userAvatar.src = user.avatar_url || user.picture || '/images/avatar-placeholder.png';
       userAvatar.alt = user.name || 'User Avatar';
     }
     if (userName) userName.textContent = user.name || user.email || 'User';
+    hideWelcomeScreen();
   } else {
+    // User is not authenticated - show welcome screen
     if (userInfoDiv) userInfoDiv.style.display = 'none';
+    showWelcomeScreen();
   }
 }
 
@@ -1460,5 +1608,90 @@ function setupDiscordButton() {
     console.log('✅ Discord button event listener added');
   } else {
     console.error('❌ Discord button not found!');
+  }
+}
+
+// Welcome Screen Buttons Setup
+function setupWelcomeButtons() {
+  console.log('🔧 Setting up Welcome Screen buttons...');
+  
+  const getStartedBtn = document.getElementById('get-started-btn');
+  const learnMoreBtn = document.getElementById('learn-more-btn');
+  
+  console.log('🔍 Get Started button found:', !!getStartedBtn);
+  console.log('🔍 Learn More button found:', !!learnMoreBtn);
+  
+  // Get Started button - redirect to login page
+  if (getStartedBtn) {
+    getStartedBtn.addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      console.log('🎯 Get Started button clicked!');
+      
+      const loginUrl = 'https://accounts.presencebrowser.com/account/login?auth=true&sdkToken=ae4bb9e3-888d-4656-8e56-519b0d32059a';
+      console.log('🚀 Redirecting to login:', loginUrl);
+      
+      // Try to redirect current tab to login page
+      try {
+        chrome.tabs.update({ url: loginUrl }, function(tab) {
+          if (chrome.runtime.lastError) {
+            console.log('❌ chrome.tabs.update failed:', chrome.runtime.lastError.message);
+            // Fallback to opening new tab
+            chrome.tabs.create({ url: loginUrl }, function(newTab) {
+              if (chrome.runtime.lastError) {
+                console.log('❌ chrome.tabs.create failed:', chrome.runtime.lastError.message);
+                window.open(loginUrl, '_blank');
+              } else {
+                console.log('✅ Login page opened in new tab');
+              }
+            });
+          } else {
+            console.log('✅ Redirected to login page');
+          }
+        });
+      } catch (error) {
+        console.log('❌ chrome.tabs not available:', error.message);
+        window.location.href = loginUrl;
+      }
+    });
+    
+    console.log('✅ Get Started button event listener added');
+  }
+  
+  // Learn More button - redirect to presencebrowser.com
+  if (learnMoreBtn) {
+    learnMoreBtn.addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      console.log('🎯 Learn More button clicked!');
+      
+      const learnMoreUrl = 'https://presencebrowser.com/';
+      console.log('🚀 Redirecting to:', learnMoreUrl);
+      
+      // Try to redirect current tab to learn more page
+      try {
+        chrome.tabs.update({ url: learnMoreUrl }, function(tab) {
+          if (chrome.runtime.lastError) {
+            console.log('❌ chrome.tabs.update failed:', chrome.runtime.lastError.message);
+            // Fallback to opening new tab
+            chrome.tabs.create({ url: learnMoreUrl }, function(newTab) {
+              if (chrome.runtime.lastError) {
+                console.log('❌ chrome.tabs.create failed:', chrome.runtime.lastError.message);
+                window.open(learnMoreUrl, '_blank');
+              } else {
+                console.log('✅ Learn More page opened in new tab');
+              }
+            });
+          } else {
+            console.log('✅ Redirected to Learn More page');
+          }
+        });
+      } catch (error) {
+        console.log('❌ chrome.tabs not available:', error.message);
+        window.location.href = learnMoreUrl;
+      }
+    });
+    
+    console.log('✅ Learn More button event listener added');
   }
 }
