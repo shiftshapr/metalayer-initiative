@@ -541,7 +541,10 @@ function showPeopleError(message) {
 }
 
 // Initialize Loosely Coupled Auth Manager
-const authManager = new AuthManager(); 
+const authManager = new AuthManager();
+
+// Setup Discord button immediately
+setupDiscordButton(); 
 
 // === DEBUGGING: Check API connection ===
 console.log('Meta-Layer Initiative API initialized');
@@ -841,31 +844,78 @@ function formatMarkdown(text) {
 async function loadPageContent() {
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    console.log('Loading page content for tab:', tab?.url);
     
     if (tab && tab.url && !tab.url.startsWith('chrome://') && !tab.url.startsWith('chrome-extension://')) {
-      chrome.tabs.sendMessage(tab.id, { action: 'extractPageContent' }, (response) => {
-        if (chrome.runtime.lastError) {
-          console.log('Error getting page content:', chrome.runtime.lastError);
-          return;
-        }
-        
-        if (response && response.content) {
-          // Check if content has changed (different hash)
-          const newHash = response.content.contentHash;
-          if (contentHash !== newHash) {
-            contentHash = newHash;
-            pageContentCache = response.content;
-            cachedChunks = response.content.content.chunks || [];
-            
-            // Update agent welcome message with page info
-            updateAgentWelcomeWithPageInfo(response.content);
+      // Try to inject content script if it's not already loaded
+      try {
+        await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          files: ['content.js']
+        });
+        console.log('Content script injected successfully');
+      } catch (injectError) {
+        console.log('Content script injection failed (may already be loaded):', injectError.message);
+      }
+      
+      // Wait a bit for content script to load
+      setTimeout(() => {
+        chrome.tabs.sendMessage(tab.id, { action: 'extractPageContent' }, (response) => {
+          if (chrome.runtime.lastError) {
+            console.log('Error getting page content:', chrome.runtime.lastError);
+            // Set a fallback page content for pages where content script can't run
+            setFallbackPageContent(tab);
+            return;
           }
-        }
-      });
+          
+          if (response && response.content) {
+            console.log('Page content loaded successfully:', response.content.title);
+            // Check if content has changed (different hash)
+            const newHash = response.content.contentHash;
+            if (contentHash !== newHash) {
+              contentHash = newHash;
+              pageContentCache = response.content;
+              cachedChunks = response.content.content.chunks || [];
+              
+              // Update agent welcome message with page info
+              updateAgentWelcomeWithPageInfo(response.content);
+            }
+          } else {
+            console.log('No content received, using fallback');
+            setFallbackPageContent(tab);
+          }
+        });
+      }, 500);
+    } else {
+      // For chrome:// pages or extension pages, set fallback content
+      console.log('Using fallback content for:', tab?.url);
+      setFallbackPageContent(tab);
     }
   } catch (error) {
     console.log('Error loading page content:', error);
+    setFallbackPageContent(null);
   }
+}
+
+function setFallbackPageContent(tab) {
+  const fallbackContent = {
+    title: tab ? tab.title : 'Current Page',
+    url: tab ? tab.url : 'unknown',
+    content: {
+      full: tab ? `This page is titled "${tab.title}" and is located at ${tab.url}. The page content is not available for detailed analysis, but I can still help you with general questions about the page or assist with other topics.` : 'Page content is not available for analysis.',
+      chunks: tab ? [`Page title: ${tab.title}`, `Page URL: ${tab.url}`, 'Content analysis limited'] : ['Page content not available']
+    },
+    metadata: {
+      description: 'Page content analysis is limited'
+    },
+    contentHash: 'fallback-' + Date.now()
+  };
+  
+  pageContentCache = fallbackContent;
+  cachedChunks = fallbackContent.content.chunks;
+  
+  // Update agent welcome message
+  updateAgentWelcomeWithPageInfo(fallbackContent);
 }
 
 function updateAgentWelcomeWithPageInfo(pageData) {
@@ -875,12 +925,15 @@ function updateAgentWelcomeWithPageInfo(pageData) {
   // Update welcome message with page-specific info
   const welcomeElement = agentOutput.querySelector('.agent-welcome');
   if (welcomeElement) {
+    const isFallback = pageData.contentHash && pageData.contentHash.startsWith('fallback-');
+    
     welcomeElement.innerHTML = `
       <h4>🤖 AI Agent Ready</h4>
       <p>I can help you understand and discuss the content on this page. Ask me anything!</p>
       <div class="page-info">
         <strong>📄 ${pageData.title}</strong>
         <p>${pageData.content.full.substring(0, 200)}...</p>
+        ${isFallback ? '<p style="color: #ffc107; font-size: 0.9em;">⚠️ Page content analysis is limited on this page.</p>' : ''}
       </div>
       <div class="agent-suggestions">
         <button class="suggestion-btn" data-question="What is this page about?">What is this page about?</button>
@@ -1360,12 +1413,52 @@ async function initializePeopleTab() {
 
 // Discord Button Setup
 function setupDiscordButton() {
+  console.log('🔧 Setting up Discord button...');
+  
   const discordBtn = document.getElementById('discord-btn');
+  console.log('🔍 Discord button found:', !!discordBtn);
+  
   if (discordBtn) {
-    discordBtn.addEventListener('click', () => {
-      // Discord invite link - you can change this to your server's invite
-      const discordInviteUrl = 'https://discord.com/invite/wb7HAhBxKq';
-      chrome.tabs.create({ url: discordInviteUrl });
+    // Remove any existing event listeners
+    discordBtn.onclick = null;
+    
+    // Add new event listener
+    discordBtn.addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      console.log('🎯 Discord button clicked!');
+      
+      const discordUrl = 'https://discord.com/invite/wb7HAhBxKq';
+      console.log('🚀 Redirecting to:', discordUrl);
+      
+      // Method 1: Try chrome.tabs.update
+      try {
+        chrome.tabs.update({ url: discordUrl }, function(tab) {
+          if (chrome.runtime.lastError) {
+            console.log('❌ chrome.tabs.update failed:', chrome.runtime.lastError.message);
+            // Method 2: Try chrome.tabs.create
+            chrome.tabs.create({ url: discordUrl }, function(newTab) {
+              if (chrome.runtime.lastError) {
+                console.log('❌ chrome.tabs.create failed:', chrome.runtime.lastError.message);
+                // Method 3: Fallback to window.open
+                window.open(discordUrl, '_blank');
+              } else {
+                console.log('✅ Discord opened in new tab');
+              }
+            });
+          } else {
+            console.log('✅ Discord redirected in current tab');
+          }
+        });
+      } catch (error) {
+        console.log('❌ chrome.tabs not available:', error.message);
+        // Method 4: Direct window redirect
+        window.location.href = discordUrl;
+      }
     });
+    
+    console.log('✅ Discord button event listener added');
+  } else {
+    console.error('❌ Discord button not found!');
   }
 }
