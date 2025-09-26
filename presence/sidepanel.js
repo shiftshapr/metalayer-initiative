@@ -572,17 +572,14 @@ function handleAuthStateChange(event, data) {
     case 'signin':
       console.log('✅ User signed in:', data.user);
       updateUI(data.user);
-      hideWelcomeScreen();
       break;
     case 'signout':
       console.log('❌ User signed out');
       updateUI(null);
-      showWelcomeScreen();
       break;
     case 'error':
       console.error('❌ Auth error:', data.error);
       updateUI(null);
-      showWelcomeScreen();
       break;
     default:
       console.log('🔄 Unknown auth event:', event);
@@ -617,16 +614,13 @@ async function processAuthToken(token) {
     if (user) {
       console.log('✅ User authenticated successfully:', user);
       updateUI(user);
-      hideWelcomeScreen();
     } else {
-      console.log('⚠️ Token received but user not found, showing welcome screen');
+      console.log('⚠️ Token received but user not found');
       updateUI(null);
-      showWelcomeScreen();
     }
   } catch (error) {
     console.error('❌ Error processing auth token:', error);
     updateUI(null);
-    showWelcomeScreen();
   }
 }
 
@@ -637,40 +631,16 @@ async function checkSessionStatus() {
     if (user) {
       console.log('✅ Session valid, user authenticated');
       updateUI(user);
-      hideWelcomeScreen();
     } else {
-      console.log('❌ No valid session, showing welcome screen');
+      console.log('❌ No valid session');
       updateUI(null);
-      showWelcomeScreen();
     }
   } catch (error) {
     console.error('❌ Session check failed:', error);
     updateUI(null);
-    showWelcomeScreen();
   }
 }
 
-// Show welcome screen
-function showWelcomeScreen() {
-  const welcomeScreen = document.getElementById('welcome-screen');
-  const sidebarContent = document.querySelector('.sidebar-content');
-  
-  if (welcomeScreen) welcomeScreen.style.display = 'flex';
-  if (sidebarContent) sidebarContent.style.display = 'none';
-  
-  console.log('👋 Welcome screen shown');
-}
-
-// Hide welcome screen
-function hideWelcomeScreen() {
-  const welcomeScreen = document.getElementById('welcome-screen');
-  const sidebarContent = document.querySelector('.sidebar-content');
-  
-  if (welcomeScreen) welcomeScreen.style.display = 'none';
-  if (sidebarContent) sidebarContent.style.display = 'block';
-  
-  console.log('👋 Welcome screen hidden');
-}
 
 // Show authentication error
 function showAuthError(error) {
@@ -681,9 +651,6 @@ function showAuthError(error) {
 
 // Setup Discord button immediately
 setupDiscordButton();
-
-// Setup Welcome Screen buttons
-setupWelcomeButtons();
 
 // Setup Authentication Flow
 setupAuthenticationFlow(); 
@@ -754,14 +721,12 @@ async function requireAuth(action, callback) {
 
 // --- UI Update Functions ---
 function updateUI(user = null) {
-  console.log('UI updated:', user ? 'User authenticated, showing user info' : 'User not authenticated, showing welcome screen');
-  debug(`UI updated: ${user ? 'User authenticated, showing user info' : 'User not authenticated, showing welcome screen'}`);
+  console.log('UI updated:', user ? 'User authenticated, showing user info' : 'User not authenticated, hiding user info');
+  debug(`UI updated: ${user ? 'User authenticated, showing user info' : 'User not authenticated, hiding user info'}`);
   
   const userInfoDiv = document.getElementById('user-info');
   const userAvatar = document.getElementById('user-avatar');
   const userName = document.getElementById('user-menu-name');
-  const welcomeScreen = document.getElementById('welcome-screen');
-  const sidebarContent = document.querySelector('.sidebar-content');
   
   if (user) {
     // User is authenticated - show normal interface
@@ -771,11 +736,9 @@ function updateUI(user = null) {
       userAvatar.alt = user.name || 'User Avatar';
     }
     if (userName) userName.textContent = user.name || user.email || 'User';
-    hideWelcomeScreen();
   } else {
-    // User is not authenticated - show welcome screen
+    // User is not authenticated - hide user info
     if (userInfoDiv) userInfoDiv.style.display = 'none';
-    showWelcomeScreen();
   }
 }
 
@@ -1608,90 +1571,5 @@ function setupDiscordButton() {
     console.log('✅ Discord button event listener added');
   } else {
     console.error('❌ Discord button not found!');
-  }
-}
-
-// Welcome Screen Buttons Setup
-function setupWelcomeButtons() {
-  console.log('🔧 Setting up Welcome Screen buttons...');
-  
-  const getStartedBtn = document.getElementById('get-started-btn');
-  const learnMoreBtn = document.getElementById('learn-more-btn');
-  
-  console.log('🔍 Get Started button found:', !!getStartedBtn);
-  console.log('🔍 Learn More button found:', !!learnMoreBtn);
-  
-  // Get Started button - redirect to login page
-  if (getStartedBtn) {
-    getStartedBtn.addEventListener('click', function(e) {
-      e.preventDefault();
-      e.stopPropagation();
-      console.log('🎯 Get Started button clicked!');
-      
-      const loginUrl = 'https://accounts.presencebrowser.com/account/login?auth=true&sdkToken=ae4bb9e3-888d-4656-8e56-519b0d32059a';
-      console.log('🚀 Redirecting to login:', loginUrl);
-      
-      // Try to redirect current tab to login page
-      try {
-        chrome.tabs.update({ url: loginUrl }, function(tab) {
-          if (chrome.runtime.lastError) {
-            console.log('❌ chrome.tabs.update failed:', chrome.runtime.lastError.message);
-            // Fallback to opening new tab
-            chrome.tabs.create({ url: loginUrl }, function(newTab) {
-              if (chrome.runtime.lastError) {
-                console.log('❌ chrome.tabs.create failed:', chrome.runtime.lastError.message);
-                window.open(loginUrl, '_blank');
-              } else {
-                console.log('✅ Login page opened in new tab');
-              }
-            });
-          } else {
-            console.log('✅ Redirected to login page');
-          }
-        });
-      } catch (error) {
-        console.log('❌ chrome.tabs not available:', error.message);
-        window.location.href = loginUrl;
-      }
-    });
-    
-    console.log('✅ Get Started button event listener added');
-  }
-  
-  // Learn More button - redirect to presencebrowser.com
-  if (learnMoreBtn) {
-    learnMoreBtn.addEventListener('click', function(e) {
-      e.preventDefault();
-      e.stopPropagation();
-      console.log('🎯 Learn More button clicked!');
-      
-      const learnMoreUrl = 'https://presencebrowser.com/';
-      console.log('🚀 Redirecting to:', learnMoreUrl);
-      
-      // Try to redirect current tab to learn more page
-      try {
-        chrome.tabs.update({ url: learnMoreUrl }, function(tab) {
-          if (chrome.runtime.lastError) {
-            console.log('❌ chrome.tabs.update failed:', chrome.runtime.lastError.message);
-            // Fallback to opening new tab
-            chrome.tabs.create({ url: learnMoreUrl }, function(newTab) {
-              if (chrome.runtime.lastError) {
-                console.log('❌ chrome.tabs.create failed:', chrome.runtime.lastError.message);
-                window.open(learnMoreUrl, '_blank');
-              } else {
-                console.log('✅ Learn More page opened in new tab');
-              }
-            });
-          } else {
-            console.log('✅ Redirected to Learn More page');
-          }
-        });
-      } catch (error) {
-        console.log('❌ chrome.tabs not available:', error.message);
-        window.location.href = learnMoreUrl;
-      }
-    });
-    
-    console.log('✅ Learn More button event listener added');
   }
 }
