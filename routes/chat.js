@@ -1,23 +1,14 @@
 const express = require('express');
 const router = express.Router();
-const { postMessage, getChatHistory, getThreads, editMessage, deleteMessage, updateMessageUri } = require('../controllers/chatController');
+const chatController = require('../controllers/chatController');
 
 // POST message
-router.post('/message', postMessage);
+router.post('/message', chatController.postMessage);
 
-// GET history (bonus, prepares for next)
-router.get('/history', getChatHistory);
+// GET history
+router.get('/history', chatController.getChatHistory);
 
 // GET threads
-router.get('/threads', getThreads);
-
-// PUT message (edit)
-router.put('/message/:id', editMessage);
-
-// DELETE message
-router.delete('/message/:id', deleteMessage);
-
-// PUT message URI
-router.put('/message/:id/uri', updateMessageUri);
+router.get('/threads', chatController.getChatThreads);
 
 module.exports = router;

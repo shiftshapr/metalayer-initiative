@@ -1,147 +1,100 @@
 🚀 Canopi 2 server running on port 3003
 📊 Features enabled: None
-🔍 Auth middleware - Headers received: { email: undefined, name: undefined, avatarUrl: undefined }
-Error getting active users for URL: TypeError: Invalid URL
-    at new URL (node:internal/url:806:29)
-    at /home/ubuntu/metalayer-initiative/routes/presence.js:125:18 {
-  code: 'ERR_INVALID_URL',
-  input: 'test'
-}
-🔍 Auth middleware - Headers received: { email: undefined, name: undefined, avatarUrl: undefined }
-Error getting active users for URL: PrismaClientValidationError: 
-Invalid `prisma.page.create()` invocation:
+💓 HEARTBEAT: 8da5f39a-1f4a-2a8a-c371-b306634720b4 on chrome___extensions__errors_dbdjamnflfecdnioehkdmlhnmajffijl
+💓 HEARTBEAT: 5a4ca9ae-105b-a01b-e461-eaf8d83d90c7 on chrome___extensions__errors_dbdjamnflfecdnioehkdmlhnmajffijl
+💓 HEARTBEAT: 8da5f39a-1f4a-2a8a-c371-b306634720b4 on chrome___extensions__errors_dbdjamnflfecdnioehkdmlhnmajffijl
+💓 HEARTBEAT: 5a4ca9ae-105b-a01b-e461-eaf8d83d90c7 on chrome___extensions__errors_dbdjamnflfecdnioehkdmlhnmajffijl
+💓 HEARTBEAT: 8da5f39a-1f4a-2a8a-c371-b306634720b4 on chrome___extensions__errors_dbdjamnflfecdnioehkdmlhnmajffijl
+💓 HEARTBEAT: 5a4ca9ae-105b-a01b-e461-eaf8d83d90c7 on chrome___extensions__errors_dbdjamnflfecdnioehkdmlhnmajffijl
+💓 HEARTBEAT: 8da5f39a-1f4a-2a8a-c371-b306634720b4 on chrome___extensions__errors_dbdjamnflfecdnioehkdmlhnmajffijl
+💓 HEARTBEAT: 5a4ca9ae-105b-a01b-e461-eaf8d83d90c7 on chrome___extensions__errors_dbdjamnflfecdnioehkdmlhnmajffijl
+💓 HEARTBEAT: 8da5f39a-1f4a-2a8a-c371-b306634720b4 on chrome___extensions__errors_dbdjamnflfecdnioehkdmlhnmajffijl
+💓 HEARTBEAT: 5a4ca9ae-105b-a01b-e461-eaf8d83d90c7 on chrome___extensions__errors_dbdjamnflfecdnioehkdmlhnmajffijl
+💓 HEARTBEAT: 8da5f39a-1f4a-2a8a-c371-b306634720b4 on chrome___extensions__errors_dbdjamnflfecdnioehkdmlhnmajffijl
+💓 HEARTBEAT: 5a4ca9ae-105b-a01b-e461-eaf8d83d90c7 on chrome___extensions__errors_dbdjamnflfecdnioehkdmlhnmajffijl
+getChatHistory called with: { communityId: 'comm-001', threadId: undefined, uri: undefined }
+🔍 CHAT: Found 0 conversations for community comm-001
+No conversations found for community comm-001
+💓 HEARTBEAT: 8da5f39a-1f4a-2a8a-c371-b306634720b4 on chrome___extensions__errors_dbdjamnflfecdnioehkdmlhnmajffijl
+💓 HEARTBEAT: 5a4ca9ae-105b-a01b-e461-eaf8d83d90c7 on chrome___extensions__errors_dbdjamnflfecdnioehkdmlhnmajffijl
+💓 HEARTBEAT: 8da5f39a-1f4a-2a8a-c371-b306634720b4 on chrome___extensions__errors_dbdjamnflfecdnioehkdmlhnmajffijl
+💓 HEARTBEAT: 5a4ca9ae-105b-a01b-e461-eaf8d83d90c7 on chrome___extensions__errors_dbdjamnflfecdnioehkdmlhnmajffijl
+💓 HEARTBEAT: 8da5f39a-1f4a-2a8a-c371-b306634720b4 on chrome___extensions__errors_dbdjamnflfecdnioehkdmlhnmajffijl
+💓 HEARTBEAT: 5a4ca9ae-105b-a01b-e461-eaf8d83d90c7 on chrome___extensions__errors_dbdjamnflfecdnioehkdmlhnmajffijl
+💓 HEARTBEAT: 8da5f39a-1f4a-2a8a-c371-b306634720b4 on chrome___extensions__errors_dbdjamnflfecdnioehkdmlhnmajffijl
+💓 HEARTBEAT: 5a4ca9ae-105b-a01b-e461-eaf8d83d90c7 on chrome___extensions__errors_dbdjamnflfecdnioehkdmlhnmajffijl
+💓 HEARTBEAT: 8da5f39a-1f4a-2a8a-c371-b306634720b4 on chrome___extensions__errors_dbdjamnflfecdnioehkdmlhnmajffijl
+💓 HEARTBEAT: 5a4ca9ae-105b-a01b-e461-eaf8d83d90c7 on chrome___extensions__errors_dbdjamnflfecdnioehkdmlhnmajffijl
+💓 HEARTBEAT: 8da5f39a-1f4a-2a8a-c371-b306634720b4 on chrome___extensions__errors_dbdjamnflfecdnioehkdmlhnmajffijl
+💓 HEARTBEAT: 5a4ca9ae-105b-a01b-e461-eaf8d83d90c7 on chrome___extensions__errors_dbdjamnflfecdnioehkdmlhnmajffijl
+💓 HEARTBEAT: 8da5f39a-1f4a-2a8a-c371-b306634720b4 on chrome___extensions__errors_dbdjamnflfecdnioehkdmlhnmajffijl
+💓 HEARTBEAT: 5a4ca9ae-105b-a01b-e461-eaf8d83d90c7 on chrome___extensions__errors_dbdjamnflfecdnioehkdmlhnmajffijl
+💓 HEARTBEAT: 8da5f39a-1f4a-2a8a-c371-b306634720b4 on chrome___extensions__errors_dbdjamnflfecdnioehkdmlhnmajffijl
+💓 HEARTBEAT: 5a4ca9ae-105b-a01b-e461-eaf8d83d90c7 on chrome___extensions__errors_dbdjamnflfecdnioehkdmlhnmajffijl
+✅ CHAT: Creating message for user 5a4ca9ae-105b-a01b-e461-eaf8d83d90c7 in community comm-001 on URI google.com/
+❌ CHAT: Error creating message: PrismaClientValidationError: 
+Invalid `prisma.post.create()` invocation in
+/home/ubuntu/metalayer-initiative/controllers/chatController.js:15:35
 
-{
-  data: {
-    canonicalUrl: "chrome://extensions",
-    spaceId: "default-space",
-    title: "extensions",
-    description: "Page: chrome://extensions",
-+   url: String
-  }
-}
+  12 console.log(`✅ CHAT: Creating message for user ${userId} in community ${communityId} on URI ${uri}`);
+  13 
+  14 // Create message in database using Post table
+→ 15 const msg = await prisma.post.create({
+       data: {
+         body: "Test message after URL normalization fix",
+         authorId: "5a4ca9ae-105b-a01b-e461-eaf8d83d90c7",
+         conversationId: "conv-comm-001-google.com/",
+         parentId: null,
+     +   id: String
+       },
+       include: {
+         author: {
+           select: {
+             id: true,
+             name: true,
+             handle: true,
+             avatarUrl: true
+           }
+         }
+       }
+     })
 
-Argument `url` is missing.
+Argument `id` is missing.
     at wn (/home/ubuntu/metalayer-initiative/generated/prisma/runtime/library.js:29:1363)
     at $n.handleRequestError (/home/ubuntu/metalayer-initiative/generated/prisma/runtime/library.js:121:6958)
     at $n.handleAndLogRequestError (/home/ubuntu/metalayer-initiative/generated/prisma/runtime/library.js:121:6623)
     at $n.request (/home/ubuntu/metalayer-initiative/generated/prisma/runtime/library.js:121:6307)
     at async l (/home/ubuntu/metalayer-initiative/generated/prisma/runtime/library.js:130:9633)
-    at async /home/ubuntu/metalayer-initiative/routes/presence.js:121:14 {
+    at async exports.postMessage (/home/ubuntu/metalayer-initiative/controllers/chatController.js:15:17) {
   clientVersion: '5.22.0'
 }
-🔍 Auth middleware - Headers received: { email: undefined, name: undefined, avatarUrl: undefined }
-Error getting active users for URL: PrismaClientValidationError: 
-Invalid `prisma.page.create()` invocation:
-
-{
-  data: {
-    canonicalUrl: "chrome://extensions",
-    spaceId: "default-space",
-    title: "extensions",
-    description: "Page: chrome://extensions",
-+   url: String
-  }
-}
-
-Argument `url` is missing.
-    at wn (/home/ubuntu/metalayer-initiative/generated/prisma/runtime/library.js:29:1363)
-    at $n.handleRequestError (/home/ubuntu/metalayer-initiative/generated/prisma/runtime/library.js:121:6958)
-    at $n.handleAndLogRequestError (/home/ubuntu/metalayer-initiative/generated/prisma/runtime/library.js:121:6623)
-    at $n.request (/home/ubuntu/metalayer-initiative/generated/prisma/runtime/library.js:121:6307)
-    at async l (/home/ubuntu/metalayer-initiative/generated/prisma/runtime/library.js:130:9633)
-    at async /home/ubuntu/metalayer-initiative/routes/presence.js:121:14 {
-  clientVersion: '5.22.0'
-}
-🔍 Auth middleware - Headers received: { email: undefined, name: undefined, avatarUrl: undefined }
-Error getting active users for URL: PrismaClientValidationError: 
-Invalid `prisma.page.create()` invocation:
-
-{
-  data: {
-    canonicalUrl: "chrome://extensions",
-    spaceId: "default-space",
-    title: "extensions",
-    description: "Page: chrome://extensions",
-+   url: String
-  }
-}
-
-Argument `url` is missing.
-    at wn (/home/ubuntu/metalayer-initiative/generated/prisma/runtime/library.js:29:1363)
-    at $n.handleRequestError (/home/ubuntu/metalayer-initiative/generated/prisma/runtime/library.js:121:6958)
-    at $n.handleAndLogRequestError (/home/ubuntu/metalayer-initiative/generated/prisma/runtime/library.js:121:6623)
-    at $n.request (/home/ubuntu/metalayer-initiative/generated/prisma/runtime/library.js:121:6307)
-    at async l (/home/ubuntu/metalayer-initiative/generated/prisma/runtime/library.js:130:9633)
-    at async /home/ubuntu/metalayer-initiative/routes/presence.js:121:14 {
-  clientVersion: '5.22.0'
-}
-🔍 Auth middleware - Headers received: { email: undefined, name: undefined, avatarUrl: undefined }
-Error getting active users for URL: PrismaClientValidationError: 
-Invalid `prisma.page.create()` invocation:
-
-{
-  data: {
-    canonicalUrl: "chrome://extensions",
-    spaceId: "default-space",
-    title: "extensions",
-    description: "Page: chrome://extensions",
-+   url: String
-  }
-}
-
-Argument `url` is missing.
-    at wn (/home/ubuntu/metalayer-initiative/generated/prisma/runtime/library.js:29:1363)
-    at $n.handleRequestError (/home/ubuntu/metalayer-initiative/generated/prisma/runtime/library.js:121:6958)
-    at $n.handleAndLogRequestError (/home/ubuntu/metalayer-initiative/generated/prisma/runtime/library.js:121:6623)
-    at $n.request (/home/ubuntu/metalayer-initiative/generated/prisma/runtime/library.js:121:6307)
-    at async l (/home/ubuntu/metalayer-initiative/generated/prisma/runtime/library.js:130:9633)
-    at async /home/ubuntu/metalayer-initiative/routes/presence.js:121:14 {
-  clientVersion: '5.22.0'
-}
-🔍 Auth middleware - Headers received: { email: undefined, name: undefined, avatarUrl: undefined }
-Error getting active users for URL: PrismaClientValidationError: 
-Invalid `prisma.page.create()` invocation:
-
-{
-  data: {
-    canonicalUrl: "chrome://extensions",
-    spaceId: "default-space",
-    title: "extensions",
-    description: "Page: chrome://extensions",
-+   url: String
-  }
-}
-
-Argument `url` is missing.
-    at wn (/home/ubuntu/metalayer-initiative/generated/prisma/runtime/library.js:29:1363)
-    at $n.handleRequestError (/home/ubuntu/metalayer-initiative/generated/prisma/runtime/library.js:121:6958)
-    at $n.handleAndLogRequestError (/home/ubuntu/metalayer-initiative/generated/prisma/runtime/library.js:121:6623)
-    at $n.request (/home/ubuntu/metalayer-initiative/generated/prisma/runtime/library.js:121:6307)
-    at async l (/home/ubuntu/metalayer-initiative/generated/prisma/runtime/library.js:130:9633)
-    at async /home/ubuntu/metalayer-initiative/routes/presence.js:121:14 {
-  clientVersion: '5.22.0'
-}
-🔍 Auth middleware - Headers received: { email: undefined, name: undefined, avatarUrl: undefined }
-Error getting active users for URL: PrismaClientValidationError: 
-Invalid `prisma.page.create()` invocation:
-
-{
-  data: {
-    canonicalUrl: "chrome://extensions",
-    spaceId: "default-space",
-    title: "extensions",
-    description: "Page: chrome://extensions",
-+   url: String
-  }
-}
-
-Argument `url` is missing.
-    at wn (/home/ubuntu/metalayer-initiative/generated/prisma/runtime/library.js:29:1363)
-    at $n.handleRequestError (/home/ubuntu/metalayer-initiative/generated/prisma/runtime/library.js:121:6958)
-    at $n.handleAndLogRequestError (/home/ubuntu/metalayer-initiative/generated/prisma/runtime/library.js:121:6623)
-    at $n.request (/home/ubuntu/metalayer-initiative/generated/prisma/runtime/library.js:121:6307)
-    at async l (/home/ubuntu/metalayer-initiative/generated/prisma/runtime/library.js:130:9633)
-    at async /home/ubuntu/metalayer-initiative/routes/presence.js:121:14 {
-  clientVersion: '5.22.0'
-}
+💓 HEARTBEAT: 8da5f39a-1f4a-2a8a-c371-b306634720b4 on chrome___extensions__errors_dbdjamnflfecdnioehkdmlhnmajffijl
+💓 HEARTBEAT: 5a4ca9ae-105b-a01b-e461-eaf8d83d90c7 on chrome___extensions__errors_dbdjamnflfecdnioehkdmlhnmajffijl
+💓 HEARTBEAT: 8da5f39a-1f4a-2a8a-c371-b306634720b4 on chrome___extensions__errors_dbdjamnflfecdnioehkdmlhnmajffijl
+💓 HEARTBEAT: 5a4ca9ae-105b-a01b-e461-eaf8d83d90c7 on chrome___extensions__errors_dbdjamnflfecdnioehkdmlhnmajffijl
+💓 HEARTBEAT: 8da5f39a-1f4a-2a8a-c371-b306634720b4 on chrome___extensions__errors_dbdjamnflfecdnioehkdmlhnmajffijl
+💓 HEARTBEAT: 5a4ca9ae-105b-a01b-e461-eaf8d83d90c7 on chrome___extensions__errors_dbdjamnflfecdnioehkdmlhnmajffijl
+💓 HEARTBEAT: 8da5f39a-1f4a-2a8a-c371-b306634720b4 on chrome___extensions__errors_dbdjamnflfecdnioehkdmlhnmajffijl
+💓 HEARTBEAT: 5a4ca9ae-105b-a01b-e461-eaf8d83d90c7 on chrome___extensions__errors_dbdjamnflfecdnioehkdmlhnmajffijl
+💓 HEARTBEAT: 8da5f39a-1f4a-2a8a-c371-b306634720b4 on chrome___extensions__errors_dbdjamnflfecdnioehkdmlhnmajffijl
+💓 HEARTBEAT: 5a4ca9ae-105b-a01b-e461-eaf8d83d90c7 on chrome___extensions__errors_dbdjamnflfecdnioehkdmlhnmajffijl
+💓 HEARTBEAT: 8da5f39a-1f4a-2a8a-c371-b306634720b4 on chrome___extensions__errors_dbdjamnflfecdnioehkdmlhnmajffijl
+💓 HEARTBEAT: 5a4ca9ae-105b-a01b-e461-eaf8d83d90c7 on chrome___extensions__errors_dbdjamnflfecdnioehkdmlhnmajffijl
+💓 HEARTBEAT: 8da5f39a-1f4a-2a8a-c371-b306634720b4 on chrome___extensions__errors_dbdjamnflfecdnioehkdmlhnmajffijl
+💓 HEARTBEAT: 5a4ca9ae-105b-a01b-e461-eaf8d83d90c7 on chrome___extensions__errors_dbdjamnflfecdnioehkdmlhnmajffijl
+💓 HEARTBEAT: 8da5f39a-1f4a-2a8a-c371-b306634720b4 on chrome___extensions__errors_dbdjamnflfecdnioehkdmlhnmajffijl
+💓 HEARTBEAT: 5a4ca9ae-105b-a01b-e461-eaf8d83d90c7 on chrome___extensions__errors_dbdjamnflfecdnioehkdmlhnmajffijl
+💓 HEARTBEAT: 8da5f39a-1f4a-2a8a-c371-b306634720b4 on chrome___extensions__errors_dbdjamnflfecdnioehkdmlhnmajffijl
+💓 HEARTBEAT: 5a4ca9ae-105b-a01b-e461-eaf8d83d90c7 on chrome___extensions__errors_dbdjamnflfecdnioehkdmlhnmajffijl
+💓 HEARTBEAT: 8da5f39a-1f4a-2a8a-c371-b306634720b4 on chrome___extensions__errors_dbdjamnflfecdnioehkdmlhnmajffijl
+💓 HEARTBEAT: 5a4ca9ae-105b-a01b-e461-eaf8d83d90c7 on chrome___extensions__errors_dbdjamnflfecdnioehkdmlhnmajffijl
+💓 HEARTBEAT: 8da5f39a-1f4a-2a8a-c371-b306634720b4 on chrome___extensions__errors_dbdjamnflfecdnioehkdmlhnmajffijl
+💓 HEARTBEAT: 5a4ca9ae-105b-a01b-e461-eaf8d83d90c7 on chrome___extensions__errors_dbdjamnflfecdnioehkdmlhnmajffijl
+💓 HEARTBEAT: 8da5f39a-1f4a-2a8a-c371-b306634720b4 on chrome___extensions__errors_dbdjamnflfecdnioehkdmlhnmajffijl
+💓 HEARTBEAT: 5a4ca9ae-105b-a01b-e461-eaf8d83d90c7 on chrome___extensions__errors_dbdjamnflfecdnioehkdmlhnmajffijl
+💓 HEARTBEAT: 8da5f39a-1f4a-2a8a-c371-b306634720b4 on chrome___extensions__errors_dbdjamnflfecdnioehkdmlhnmajffijl
+💓 HEARTBEAT: 5a4ca9ae-105b-a01b-e461-eaf8d83d90c7 on chrome___extensions__errors_dbdjamnflfecdnioehkdmlhnmajffijl
+💓 HEARTBEAT: 8da5f39a-1f4a-2a8a-c371-b306634720b4 on chrome___extensions__errors_dbdjamnflfecdnioehkdmlhnmajffijl
+💓 HEARTBEAT: 5a4ca9ae-105b-a01b-e461-eaf8d83d90c7 on chrome___extensions__errors_dbdjamnflfecdnioehkdmlhnmajffijl
+💓 HEARTBEAT: 8da5f39a-1f4a-2a8a-c371-b306634720b4 on chrome___extensions__errors_dbdjamnflfecdnioehkdmlhnmajffijl
+💓 HEARTBEAT: 5a4ca9ae-105b-a01b-e461-eaf8d83d90c7 on chrome___extensions__errors_dbdjamnflfecdnioehkdmlhnmajffijl

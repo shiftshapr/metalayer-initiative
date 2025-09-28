@@ -72,28 +72,19 @@ class UserService {
         });
       } else {
         // User exists, but update avatar URL if we have a new one and the current one is null
-        console.log('🔍 User exists, checking avatar URL update:', { 
-          currentAvatarUrl: user.avatarUrl, 
-          newAvatarUrl: avatarUrl,
-          shouldUpdate: avatarUrl && !user.avatarUrl 
-        });
         if (avatarUrl && !user.avatarUrl) {
-          console.log('✅ Updating user avatar URL:', avatarUrl);
           user = await this.prisma.appUser.update({
             where: { id: user.id },
             data: { avatarUrl }
           });
-          console.log('✅ User avatar URL updated successfully');
         }
         
         // Update aura color if provided
         if (auraColor !== undefined && user.auraColor !== auraColor) {
-          console.log('✅ Updating user aura color:', auraColor);
           user = await this.prisma.appUser.update({
             where: { id: user.id },
             data: { auraColor }
           });
-          console.log('✅ User aura color updated successfully');
         }
       }
 
@@ -153,6 +144,42 @@ class UserService {
     } catch (error) {
       console.error('Error updating aura color:', error);
       throw new Error('Failed to update aura color');
+    }
+  }
+
+  // Update user's headline
+  async updateHeadline(userId, headline) {
+    try {
+      console.log(`🔍 USER SERVICE: Updating headline for user ${userId} to: "${headline}"`);
+      
+      const user = await this.prisma.appUser.update({
+        where: { id: userId },
+        data: { headline }
+      });
+      
+      console.log(`🔍 USER SERVICE: Headline updated successfully for user ${userId}`);
+      return user;
+    } catch (error) {
+      console.error('Error updating headline:', error);
+      throw new Error('Failed to update headline');
+    }
+  }
+
+  // Update user's display visibility after exit
+  async updateDisplayVisibilityAfterExit(userId, days) {
+    try {
+      console.log(`🔍 USER SERVICE: Updating display visibility after exit for user ${userId} to ${days} days`);
+      
+      const user = await this.prisma.appUser.update({
+        where: { id: userId },
+        data: { displayVisibilityAfterExit: days }
+      });
+      
+      console.log(`🔍 USER SERVICE: Display visibility after exit updated successfully for user ${userId}`);
+      return user;
+    } catch (error) {
+      console.error('Error updating display visibility after exit:', error);
+      throw new Error('Failed to update display visibility after exit');
     }
   }
 }

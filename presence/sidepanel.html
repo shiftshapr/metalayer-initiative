@@ -8,6 +8,8 @@
   <script src="lib/supabase.min.js"></script>
   <!-- Load Loosely Coupled Auth Manager -->
   <script src="auth-manager.js"></script>
+  <!-- Load URL Normalization Utility -->
+  <script src="urlNormalization.js"></script>
 </head>
 <body>
   <!-- Main Sidebar Container -->
@@ -49,6 +51,10 @@
               <button id="aura-btn" style="width: 100%; padding: 8px 12px; border: none; background: none; text-align: left; cursor: pointer; font-size: 0.9em; display: flex; align-items: center; gap: 8px;">
                 <span>🎨</span>
                 <span>Change Aura Color</span>
+              </button>
+              <button id="visibility-settings-btn" style="width: 100%; padding: 8px 12px; border: none; background: none; text-align: left; cursor: pointer; font-size: 0.9em; display: flex; align-items: center; gap: 8px;">
+                <span>👁️</span>
+                <span>Visibility Settings</span>
               </button>
               <button id="theme-toggle-btn" style="width: 100%; padding: 8px 12px; border: none; background: none; text-align: left; cursor: pointer; font-size: 0.9em; display: flex; align-items: center; gap: 8px;">
                 <span id="theme-icon">🌙</span>
@@ -152,13 +158,13 @@
   <script src="sidepanel.js"></script>
 
   <!-- Context Bar for Reply/Edit - Separate row above input -->
-  <div id="context-bar" style="display: none; position: fixed; bottom: 60px; left: 0; width: 100vw; background: #e8f4fd; padding: 2px 8px; border-bottom: 1px solid #b3d9ff; font-size: 10px; color: #0066cc; line-height: 1.2; height: 18px; overflow: hidden; z-index: 1001;">
+  <div id="context-bar" style="display: none; position: fixed; bottom: 60px; left: 0; right: 0; background: #e8f4fd; padding: 2px 8px; border-bottom: 1px solid #b3d9ff; font-size: 10px; color: #0066cc; line-height: 1.2; height: 18px; overflow: hidden; z-index: 1001;">
     <span id="context-text" style="font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: calc(100% - 20px); display: inline-block;"></span>
     <button id="cancel-context" style="float: right; background: none; border: none; color: #0066cc; cursor: pointer; font-size: 10px; padding: 0; margin-left: 4px; width: 12px; height: 12px; line-height: 1;">✕</button>
   </div>
 
   <!-- Chat Input Area - Fixed at bottom -->
-  <div class="chat-input-area" style="position: fixed; bottom: 0; left: 0; width: 100vw; background: #f8f9fa; border-top: 1px solid #dee2e6; z-index: 1000; padding: 0;">
+  <div class="chat-input-area" style="position: fixed; bottom: 0; left: 0; right: 0; background: #f8f9fa; border-top: 1px solid #dee2e6; z-index: 1000; padding: 0;">
     <textarea id="chat-textarea" placeholder="Start thread in Public Square" style="width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 0; font-size: 14px; resize: none; min-height: 20px; font-family: inherit; box-sizing: border-box; margin: 0; border-left: none; border-right: none; border-bottom: none; overflow-y: hidden;"></textarea>
   </div>
 

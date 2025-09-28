@@ -61,38 +61,51 @@ function generateUUIDFromEmail(email) {
 }
 
 // Auth middleware - extract user from headers sent by extension
-app.use((req, res, next) => {
-  // Try to get user info from headers (sent by extension)
-  const userEmail = req.headers['x-user-email'];
-  const userName = req.headers['x-user-name'];
-  const userAvatarUrl = req.headers['x-user-avatar'];
-  
-  console.log('🔍 Auth middleware - Headers received:', {
-    email: userEmail,
-    name: userName,
-    avatarUrl: userAvatarUrl
-  });
-  
-  if (userEmail) {
-    // Use real user from extension - generate UUID from email
-    req.user = { 
-      id: generateUUIDFromEmail(userEmail),
-      handle: userEmail.split('@')[0], // Use email prefix as handle
-      name: userName || userEmail.split('@')[0],
-      email: userEmail,
-      avatarUrl: userAvatarUrl
-    };
-    console.log('✅ Auth middleware - req.user created:', req.user);
-  } else {
-    // Fallback to mock user for testing
+app.use(async (req, res, next) => {
+  try {
+    // Try to get user info from headers (sent by extension)
+    const userEmail = req.headers['x-user-email'];
+    const userName = req.headers['x-user-name'];
+    const userAvatarUrl = req.headers['x-user-avatar'];
+    
+    
+    if (userEmail) {
+      // Use real user from extension - generate UUID from email
+      const userData = { 
+        id: generateUUIDFromEmail(userEmail),
+        handle: userEmail.split('@')[0], // Use email prefix as handle
+        name: userName || userEmail.split('@')[0],
+        email: userEmail,
+        avatarUrl: userAvatarUrl
+      };
+      
+      // Create or get user from database
+      const UserService = require('./services/userService');
+      const userService = new UserService(prisma);
+      const user = await userService.getOrCreateUser(userData);
+      
+      req.user = user;
+    } else {
+      // Fallback to mock user for testing
+      req.user = { 
+        id: generateUUIDFromEmail('testuser@example.com'), 
+        handle: 'testuser', 
+        name: 'Test User',
+        email: 'testuser@example.com'
+      };
+    }
+    next();
+  } catch (error) {
+    console.error('❌ Auth middleware error:', error);
+    // Fallback to mock user on error
     req.user = { 
       id: generateUUIDFromEmail('testuser@example.com'), 
       handle: 'testuser', 
       name: 'Test User',
       email: 'testuser@example.com'
     };
+    next();
   }
-  next();
 });
 
 // API routes
@@ -115,8 +128,12 @@ app.get('/v1/pages/:pageId/conversations', (req, res) => canopi2Controller.getPa
 // User routes
 const userRoutes = require('./routes/users');
 const presenceRoutes = require('./routes/presence');
+const visibilityRoutes = require('./routes/visibility');
+const chatRoutes = require('./routes/chat');
 app.use('/v1/users', userRoutes);
 app.use('/v1/presence', presenceRoutes);
+app.use('/v1/visibility', visibilityRoutes);
+app.use('/chat', chatRoutes);
 
 // Compatibility endpoints for existing extension
 app.get('/communities', (req, res) => {
@@ -171,9 +188,12 @@ app.get('/avatars/active', async (req, res) => {
     const prisma = new PrismaClient();
     const presenceService = new PresenceService(prisma);
     
+    // Get current user ID from auth middleware (req.user should be set by auth middleware)
+    const currentUserId = req.user ? req.user.id : null;
+    
     if (communityId) {
-      // Get active users for specific community
-      const activeUsers = await presenceService.getActiveUsersForCommunities([communityId], 5);
+      // Get active users for specific community, excluding current user
+      const activeUsers = await presenceService.getActiveUsersForCommunities([communityId], 5, currentUserId);
       res.json({ avatars: activeUsers });
     } else {
       // Get active users across all communities (fallback to mock data for now)

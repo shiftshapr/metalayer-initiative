@@ -29,6 +29,7 @@ class PageService {
         // Create new page
         page = await this.prisma.page.create({
           data: {
+            id: this.generatePageId(url),
             url: url,
             canonicalUrl: canonicalUrl,
             spaceId: spaceId,
@@ -157,6 +158,31 @@ class PageService {
       return urlObj.hostname + urlObj.pathname;
     } catch (error) {
       return url;
+    }
+  }
+
+  /**
+   * Generate a page ID from URL
+   */
+  generatePageId(url) {
+    // Normalize URL to group users on the same base URL
+    try {
+      const urlObj = new URL(url);
+      // Remove query parameters and hash to group users on the same page
+      const normalizedUrl = `${urlObj.protocol}//${urlObj.hostname}${urlObj.pathname}`;
+      return normalizedUrl.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 100);
+    } catch (error) {
+      // Handle chrome:// URLs specially
+      if (url.startsWith('chrome://')) {
+        // Extract the path part and normalize it
+        const pathMatch = url.match(/chrome:\/\/([^?]+)/);
+        if (pathMatch) {
+          const path = pathMatch[1];
+          return `chrome___${path.replace(/[^a-zA-Z0-9]/g, '_')}`.substring(0, 100);
+        }
+      }
+      // Fallback for other non-URL strings
+      return url.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 100);
     }
   }
 }

@@ -59,4 +59,104 @@ router.get('/:userId/aura-color', async (req, res) => {
   }
 });
 
+// Update user's headline
+router.put('/:userId/headline', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { headline } = req.body;
+    
+    if (typeof headline !== 'string') {
+      return res.status(400).json({ error: 'Headline must be a string' });
+    }
+    
+    const user = await userService.updateHeadline(userId, headline);
+    
+    res.json({ 
+      success: true, 
+      message: 'Headline updated successfully',
+      user: {
+        id: user.id,
+        headline: user.headline
+      }
+    });
+  } catch (error) {
+    console.error('Error updating headline:', error);
+    res.status(500).json({ error: 'Failed to update headline' });
+  }
+});
+
+// Update user's display visibility after exit
+router.put('/:userId/display-visibility-after-exit', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { days } = req.body;
+    
+    if (typeof days !== 'number' || days < 0 || days > 365) {
+      return res.status(400).json({ error: 'Days must be a number between 0 and 365' });
+    }
+    
+    const user = await userService.updateDisplayVisibilityAfterExit(userId, days);
+    
+    res.json({ 
+      success: true, 
+      message: 'Display visibility after exit updated successfully',
+      user: {
+        id: user.id,
+        displayVisibilityAfterExit: user.displayVisibilityAfterExit
+      }
+    });
+  } catch (error) {
+    console.error('Error updating display visibility after exit:', error);
+    res.status(500).json({ error: 'Failed to update display visibility after exit' });
+  }
+});
+
+// Get user's headline
+router.get('/:userId/headline', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    const user = await userService.getUser(userId);
+    
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    res.json({ 
+      success: true, 
+      user: {
+        id: user.id,
+        headline: user.headline
+      }
+    });
+  } catch (error) {
+    console.error('Error getting headline:', error);
+    res.status(500).json({ error: 'Failed to get headline' });
+  }
+});
+
+// Get user's display visibility after exit
+router.get('/:userId/display-visibility-after-exit', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    const user = await userService.getUser(userId);
+    
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    res.json({ 
+      success: true, 
+      user: {
+        id: user.id,
+        displayVisibilityAfterExit: user.displayVisibilityAfterExit
+      }
+    });
+  } catch (error) {
+    console.error('Error getting display visibility after exit:', error);
+    res.status(500).json({ error: 'Failed to get display visibility after exit' });
+  }
+});
+
 module.exports = router;

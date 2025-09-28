@@ -84,16 +84,34 @@ class MetaLayerAPI {
   }
 
   async getPresenceByUrl(url, communityIds = null) {
+    console.log('🔍 API: getPresenceByUrl called with URL:', url, 'communities:', communityIds);
     const params = new URLSearchParams({ url });
     if (communityIds && communityIds.length > 0) {
       params.append('communityIds', communityIds.join(','));
     }
-    return this.request(`/v1/presence/url?${params.toString()}`);
+    
+    // Get current user for authentication
+    const result = await chrome.storage.local.get(['googleUser']);
+    const user = result.googleUser;
+    console.log('🔍 API: Using user for authentication:', user?.email);
+    
+    const response = await this.request(`/v1/presence/url?${params.toString()}`, { user });
+    console.log('🔍 API: getPresenceByUrl response:', JSON.stringify(response, null, 2));
+    return response;
   }
 
   async getPresenceByCommunities(communityIds) {
+    console.log('🔍 API: getPresenceByCommunities called with communities:', communityIds);
     const params = new URLSearchParams({ communityIds: communityIds.join(',') });
-    return this.request(`/v1/presence/communities?${params.toString()}`);
+    
+    // Get current user for authentication
+    const result = await chrome.storage.local.get(['googleUser']);
+    const user = result.googleUser;
+    console.log('🔍 API: Using user for authentication:', user?.email);
+    
+    const response = await this.request(`/v1/presence/communities?${params.toString()}`, { user });
+    console.log('🔍 API: getPresenceByCommunities response:', JSON.stringify(response, null, 2));
+    return response;
   }
 
   async login() {
@@ -104,57 +122,62 @@ class MetaLayerAPI {
     return this.request('/auth/me');
   }
 
-  async sendMessage(userId, communityId, content, uri = null, parentId = null, threadId = null, optionalContent = null) {
-    // Use new Canopi 2 conversation system
-    // First, resolve the page
-    const pageResponse = await this.request('/v1/pages/resolve', {
+  async sendMessage(userEmail, communityId, content, uri = null, parentId = null, threadId = null, optionalContent = null) {
+    // Simplified to use the working /chat/message endpoint with email-based identification
+    return this.request('/chat/message', {
       method: 'POST',
-      body: JSON.stringify({ url: uri || window.location.href })
+      body: JSON.stringify({
+        userEmail: userEmail,
+        communityId: communityId,
+        content: content,
+        uri: uri,
+        parentId: parentId
+      })
     });
-    
-    // If this is a reply to an existing conversation
-    if (threadId) {
-      // Create a post in the existing conversation
-      return this.request('/v1/posts', {
-        method: 'POST',
-        body: JSON.stringify({
-          conversationId: threadId,
-          body: content,
-          parentId: parentId
-        })
-      });
-    } else {
-      // Create a new conversation
-      return this.request('/v1/conversations', {
-        method: 'POST',
-        body: JSON.stringify({
-          pageId: pageResponse.pageId,
-          visibility: 'PUBLIC', // Default visibility
-          title: content.substring(0, 50) + (content.length > 50 ? '...' : ''), // Use first part as title
-          body: content,
-          communityId: communityId
-        })
-      });
-    }
   }
 
   async getChatHistory(communityId, threadId = null, uri = null) {
-    // Use new Canopi 2 conversation system
+    // Use the existing chat API
+    console.log(`🔍 CHAT_API: getChatHistory called with communityId=${communityId}, threadId=${threadId}, uri=${uri}`);
+    
+    if (!communityId) {
+      console.error('❌ CHAT_API: communityId is required');
+      return { conversations: [], messages: [] };
+    }
+    
+    // Build query parameters
+    const params = new URLSearchParams();
+    params.append('communityId', communityId);
     if (threadId) {
-      // Get specific conversation with posts
-      return this.request(`/v1/conversations/${threadId}`);
-    } else if (uri) {
-      // First resolve the page, then get conversations for that page
-      const pageResponse = await this.request('/v1/pages/resolve', {
-        method: 'POST',
-        body: JSON.stringify({ url: uri })
-      });
-      const url = `/v1/pages/${pageResponse.pageId}/conversations${communityId ? `?communityId=${encodeURIComponent(communityId)}` : ''}`;
-      return this.request(url);
-    } else {
-      // Get all conversations (this might need to be limited in the future)
-      const url = `/v1/conversations${communityId ? `?communityId=${encodeURIComponent(communityId)}` : ''}`;
-      return this.request(url);
+      params.append('threadId', threadId);
+    }
+    if (uri) {
+      params.append('uri', uri);
+    }
+    
+    const url = `/chat/history?${params.toString()}`;
+    console.log(`🔍 CHAT_API: Requesting ${url}`);
+    
+    try {
+      const response = await this.request(url);
+      console.log(`✅ CHAT_API: Response:`, response);
+      
+      // The backend now returns conversations directly
+      if (response.conversations) {
+        return {
+          conversations: response.conversations,
+          messages: response.conversations.flatMap(conv => conv.posts || [])
+        };
+      }
+      
+      // Fallback for empty response
+      return {
+        conversations: [],
+        messages: []
+      };
+    } catch (error) {
+      console.error('❌ CHAT_API: Error fetching chat history:', error);
+      return { conversations: [], messages: [] };
     }
   }
 
@@ -396,7 +419,11 @@ async function loadCommunities() {
         communities: communities // Store communities for name lookup
       });
       
-      // Load combined avatars from all active communities
+      // Normalize the current URL ONCE at startup
+      await normalizeCurrentUrl();
+      console.log('🔄 STARTUP: URL normalized for initial load');
+      
+      // Load combined avatars from all active communities (uses normalized URL)
       await loadCombinedAvatars(activeCommunities);
       await loadChatHistory(primaryCommunity);
       
@@ -418,21 +445,23 @@ async function loadCombinedAvatars(communityIds) {
     console.log('🔍 VISIBILITY: Starting loadCombinedAvatars with communities:', communityIds);
     debug(`Loading combined avatars from communities: ${communityIds.join(', ')}`);
     
-    // Get current page URI for URL-based presence tracking
-    const currentUri = await getCurrentPageUri();
-    console.log('🔍 VISIBILITY: Current page URI:', currentUri);
+    // Get normalized URL for visibility - SAME AS MESSAGES
+    const urlData = await normalizeCurrentUrl();
+    const currentUri = urlData.normalizedUrl; // Use normalized URL for consistency
+    console.log('🔍 VISIBILITY: Current normalized URI:', currentUri, '(from raw:', urlData.rawUrl, ')');
     
     // Try URL-based presence first (more accurate)
     let avatarResponses = [];
     try {
-      console.log('🔍 VISIBILITY: Trying URL-based presence API');
+      console.log('🔍 VISIBILITY: Trying URL-based presence API for URL:', currentUri);
       const urlResponse = await api.getPresenceByUrl(currentUri, communityIds);
-      console.log('🔍 VISIBILITY: URL-based presence response:', urlResponse);
+      console.log('🔍 VISIBILITY: URL-based presence response:', JSON.stringify(urlResponse, null, 2));
       
       if (urlResponse && urlResponse.active && urlResponse.active.length > 0) {
         avatarResponses = [urlResponse];
-        console.log('🔍 VISIBILITY: Using URL-based presence data');
+        console.log('🔍 VISIBILITY: Using URL-based presence data - found', urlResponse.active.length, 'active users');
       } else {
+        console.log('🔍 VISIBILITY: No active users found via URL-based presence');
         throw new Error('No active users found via URL-based presence');
       }
     } catch (urlError) {
@@ -440,20 +469,16 @@ async function loadCombinedAvatars(communityIds) {
       
       // Fallback to community-based presence
       try {
+        console.log('🔍 VISIBILITY: Trying community-based presence API');
         const communityResponse = await api.getPresenceByCommunities(communityIds);
-        console.log('🔍 VISIBILITY: Community-based presence response:', communityResponse);
+        console.log('🔍 VISIBILITY: Community-based presence response:', JSON.stringify(communityResponse, null, 2));
         avatarResponses = [communityResponse];
       } catch (communityError) {
         console.log('🔍 VISIBILITY: Community-based presence failed, using legacy avatars API:', communityError.message);
         
-        // Final fallback to legacy avatars API
-        const avatarPromises = communityIds.map(communityId => {
-          console.log(`🔍 VISIBILITY: Fetching avatars for community: ${communityId}`);
-          return api.getAvatars(communityId).catch(err => {
-            console.warn(`❌ VISIBILITY: Failed to load avatars for community ${communityId}:`, err);
-            return [];
-          });
-        });
+        // NO FALLBACK - If presence fails, show empty list
+        console.log('🔍 VISIBILITY: No presence data available - showing empty list');
+        return [];
         
         avatarResponses = await Promise.all(avatarPromises);
       }
@@ -522,11 +547,11 @@ async function loadCombinedAvatars(communityIds) {
     debug(`Total unique avatars: ${allAvatars.length}`);
     
     // Update the visible tab with combined avatar data
-    updateVisibleTab(allAvatars);
+    await updateVisibleTab(allAvatars);
   } catch (error) {
     console.error('❌ VISIBILITY: Failed to load combined avatars:', error);
     debug(`Failed to load combined avatars: ${error.message}`);
-    updateVisibleTab([]);
+    await updateVisibleTab([]);
   }
 }
 
@@ -587,8 +612,8 @@ function updateCommunityDropdown(communities) {
   });
 }
 
-function updateVisibleTab(avatars) {
-  console.log('🔍 VISIBILITY: updateVisibleTab called with avatars:', avatars);
+async function updateVisibleTab(avatars) {
+  console.log('🔍 VISIBILITY: updateVisibleTab called with avatars:', JSON.stringify(avatars, null, 2));
   const visibleTab = document.getElementById('canopi-visible');
   if (!visibleTab) {
     console.log('❌ VISIBILITY: visibleTab element not found');
@@ -597,25 +622,82 @@ function updateVisibleTab(avatars) {
   
   console.log(`🔍 VISIBILITY: Updating visible tab with ${avatars.length} avatars`);
   
-  // Create a simple list of visible users
+  // Filter out users without avatars and current user - only show users with real avatar images
+  const currentUserEmail = await getCurrentUserEmail();
+  const usersWithAvatars = avatars.filter(avatar => {
+    // Filter out users without valid avatars
+    if (!avatar.avatarUrl || 
+        avatar.avatarUrl === 'null' || 
+        avatar.avatarUrl === '' ||
+        !avatar.avatarUrl.startsWith('http')) {
+      return false;
+    }
+    
+    // Filter out current user
+    if (avatar.userId === currentUserEmail || 
+        avatar.handle === currentUserEmail.split('@')[0] ||
+        avatar.name === currentUserEmail.split('@')[0]) {
+      console.log(`🔍 VISIBILITY: Filtering out current user ${avatar.name}`);
+      return false;
+    }
+    
+    return true;
+  });
+  
+  console.log(`🔍 VISIBILITY: Showing ${usersWithAvatars.length} users with real avatars (filtered from ${avatars.length} total)`);
+  
+  // Create a compact header with search, count, and go invisible button
   visibleTab.innerHTML = `
     <div class="visible-users">
-      <h3>Visible Users (${avatars.length})</h3>
+      <div class="visible-header" style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px; padding: 8px; background: var(--background-secondary); border-radius: 6px;">
+        <div class="visible-count" style="font-weight: bold; color: var(--text-primary);">
+          ${usersWithAvatars.length} visible
+        </div>
+        <input type="text" id="visible-search" placeholder="Search users..." style="flex: 1; padding: 4px 8px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--background-primary); color: var(--text-primary); font-size: 12px;">
+        <button id="go-invisible-btn" style="padding: 4px 8px; background: var(--accent-color); color: white; border: none; border-radius: 4px; font-size: 12px; cursor: pointer;">Go Invisible</button>
+      </div>
       <ul class="item-list">
-        ${avatars.map((avatar, index) => `
-          <li class="user-item" data-user-id="${avatar.userId}" data-user-name="${avatar.name}" data-index="${index}">
-            <div class="avatar-container">
-              <div class="avatar-placeholder" style="background-color: ${getAvatarColor(avatar.name)}">
-                ${avatar.name.charAt(0).toUpperCase()}
+        ${usersWithAvatars.map((avatar, index) => {
+          // Determine status based on presence data and user's availability setting
+          const isActive = avatar.lastSeen && new Date(avatar.lastSeen) > new Date(Date.now() - 5 * 60 * 1000); // Active if last seen within 5 minutes
+          
+          // Use the user's availability setting for status dot color
+          let statusDotColor = '#6b7280'; // Default gray (offline)
+          let statusText = 'Offline';
+          
+          if (isActive) {
+            // User is active - use their availability setting for status dot
+            if (avatar.availability === 'AVAILABLE') {
+              statusDotColor = '#22c55e'; // Green
+              statusText = formatTimeDisplay(avatar.lastSeen);
+            } else if (avatar.availability === 'BUSY') {
+              statusDotColor = '#eab308'; // Yellow (Working)
+              statusText = formatTimeDisplay(avatar.lastSeen);
+            } else if (avatar.availability === 'AWAY') {
+              statusDotColor = '#ef4444'; // Red (Unavailable)
+              statusText = formatTimeDisplay(avatar.lastSeen);
+            } else {
+              // Default to Available if no specific availability set
+              statusDotColor = '#22c55e'; // Green (Available)
+              statusText = formatTimeDisplay(avatar.lastSeen);
+            }
+          }
+          
+          console.log(`🔍 VISIBILITY: User ${avatar.name} - lastSeen: ${avatar.lastSeen}, isActive: ${isActive}, availability: ${avatar.availability}, statusText: ${statusText}, dotColor: ${statusDotColor}`);
+          
+          return `
+            <li class="user-item" data-user-id="${avatar.userId}" data-user-name="${avatar.name}" data-index="${index}">
+              <div class="avatar-container">
+                <img src="${avatar.avatarUrl}" alt="${avatar.name}" class="user-avatar-img" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover;" data-avatar-fallback="true">
+                ${isActive ? `<div class="status-dot-overlay" style="background-color: ${statusDotColor}; width: 8px; height: 8px; border-radius: 50%; position: absolute; bottom: 2px; right: 2px; border: 2px solid white;"></div>` : ''}
               </div>
-              <div class="status-dot-overlay online"></div>
-            </div>
-            <div class="item-details">
-              <div class="item-name">${avatar.name}</div>
-              <div class="item-status">Online</div>
-            </div>
-          </li>
-        `).join('')}
+              <div class="item-details">
+                <div class="item-name">${avatar.name}</div>
+                <div class="item-status">${statusText}</div>
+              </div>
+            </li>
+          `;
+        }).join('')}
       </ul>
     </div>
   `;
@@ -629,11 +711,487 @@ function updateVisibleTab(avatars) {
       requireAuth('view user profiles', () => openUserProfile(userId, userName));
     });
   });
+  
+  // Add error handling for broken avatar images
+  const avatarImages = visibleTab.querySelectorAll('.user-avatar-img[data-avatar-fallback="true"]');
+  avatarImages.forEach(img => {
+    img.addEventListener('error', () => {
+      console.log('❌ VISIBILITY: Avatar image failed to load, removing user from visible list');
+      // Remove the entire user item if avatar fails to load
+      const userItem = img.closest('.user-item');
+      if (userItem) {
+        userItem.remove();
+        // Update the count
+        const countElement = visibleTab.querySelector('.visible-count');
+        if (countElement) {
+          const currentCount = visibleTab.querySelectorAll('.user-item').length;
+          countElement.textContent = `${currentCount} visible`;
+        }
+      }
+    });
+  });
+
+  // Add search functionality
+  const searchInput = visibleTab.querySelector('#visible-search');
+  if (searchInput) {
+    searchInput.addEventListener('input', (e) => {
+      const searchTerm = e.target.value.toLowerCase();
+      const userItems = visibleTab.querySelectorAll('.user-item');
+      let visibleCount = 0;
+      
+      userItems.forEach(item => {
+        const userName = item.dataset.userName.toLowerCase();
+        const matches = userName.includes(searchTerm);
+        item.style.display = matches ? 'flex' : 'none';
+        if (matches) visibleCount++;
+      });
+      
+      // Update count
+      const countElement = visibleTab.querySelector('.visible-count');
+      if (countElement) {
+        countElement.textContent = `${visibleCount} visible${searchTerm ? ' (filtered)' : ''}`;
+      }
+    });
+  }
+
+  // Add go invisible functionality
+  const goInvisibleBtn = visibleTab.querySelector('#go-invisible-btn');
+  if (goInvisibleBtn) {
+    goInvisibleBtn.addEventListener('click', async () => {
+      console.log('🔍 VISIBILITY: User clicked Go Invisible');
+      try {
+        const currentUri = await getCurrentPageUri();
+        const userId = await getCurrentUserId();
+        
+        // Call visibility API to set user invisible
+        const response = await fetch(`${METALAYER_API_URL}/v1/visibility/set`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-user-email': await getCurrentUserEmail(),
+            'x-user-name': await getCurrentUserEmail(),
+            'x-user-avatar': ''
+          },
+          body: JSON.stringify({
+            url: currentUri,
+            isVisible: false
+          })
+        });
+        
+        if (response.ok) {
+          console.log('🔍 VISIBILITY: Successfully set user invisible');
+          // Reload the visible list
+          const result = await chrome.storage.local.get(['activeCommunities']);
+          const activeCommunities = result.activeCommunities || ['comm-001'];
+          await loadCombinedAvatars(activeCommunities);
+        } else {
+          console.error('🔍 VISIBILITY: Failed to set user invisible:', await response.text());
+        }
+      } catch (error) {
+        console.error('🔍 VISIBILITY: Error setting user invisible:', error);
+      }
+    });
+  }
+
+  // Add visibility settings button
+  const settingsBtn = document.createElement('button');
+  settingsBtn.textContent = '⚙️';
+  settingsBtn.style.cssText = 'padding: 4px 8px; background: var(--background-secondary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 4px; font-size: 12px; cursor: pointer; margin-left: 5px;';
+  settingsBtn.title = 'Visibility Settings';
+  
+  // Insert settings button after go invisible button
+  if (goInvisibleBtn && goInvisibleBtn.parentNode) {
+    goInvisibleBtn.parentNode.insertBefore(settingsBtn, goInvisibleBtn.nextSibling);
+  }
+  
+  // Add settings button click handler
+  settingsBtn.addEventListener('click', () => {
+    console.log('🔍 VISIBILITY: User clicked visibility settings');
+    showVisibilitySettingsModal();
+  });
 }
 
 function openUserProfile(userId, userName) {
   debug(`Opening profile for: ${userName} (${userId})`);
   // TODO: Implement user profile modal
+}
+
+// Get user's default visibility setting
+async function getUserDefaultVisibility(userId) {
+  try {
+    console.log('🔍 VISIBILITY MODAL: Getting default visibility for user:', userId);
+    const response = await fetch(`${METALAYER_API_URL}/v1/visibility/default`, {
+      headers: {
+        'x-user-email': await getCurrentUserEmail(),
+        'x-user-name': await getCurrentUserEmail(),
+        'x-user-avatar': ''
+      }
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      console.log('🔍 VISIBILITY MODAL: Default visibility response:', data);
+      return data.defaultVisibility || false;
+    } else {
+      console.error('🔍 VISIBILITY MODAL: Failed to get default visibility:', await response.text());
+      return false;
+    }
+  } catch (error) {
+    console.error('🔍 VISIBILITY MODAL: Error getting default visibility:', error);
+    return false;
+  }
+}
+
+// Get user's display visibility after exit setting
+async function getUserDisplayVisibilityAfterExit(userId) {
+  try {
+    console.log('🔍 VISIBILITY MODAL: Getting display visibility after exit for user:', userId);
+    const response = await fetch(`${METALAYER_API_URL}/v1/users/${userId}/display-visibility-after-exit`, {
+      headers: {
+        'x-user-email': await getCurrentUserEmail(),
+        'x-user-name': await getCurrentUserEmail(),
+        'x-user-avatar': ''
+      }
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      console.log('🔍 VISIBILITY MODAL: Display visibility after exit response:', data);
+      return data.user?.displayVisibilityAfterExit || 7;
+    } else {
+      console.error('🔍 VISIBILITY MODAL: Failed to get display visibility after exit:', await response.text());
+      return 7;
+    }
+  } catch (error) {
+    console.error('🔍 VISIBILITY MODAL: Error getting display visibility after exit:', error);
+    return 7;
+  }
+}
+
+// Get user's headline
+async function getUserHeadline(userId) {
+  try {
+    console.log('🔍 VISIBILITY MODAL: Getting headline for user:', userId);
+    const response = await fetch(`${METALAYER_API_URL}/v1/users/${userId}/headline`, {
+      headers: {
+        'x-user-email': await getCurrentUserEmail(),
+        'x-user-name': await getCurrentUserEmail(),
+        'x-user-avatar': ''
+      }
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      console.log('🔍 VISIBILITY MODAL: Headline response:', data);
+      return data.user?.headline || '';
+    } else {
+      console.error('🔍 VISIBILITY MODAL: Failed to get headline:', await response.text());
+      return '';
+    }
+  } catch (error) {
+    console.error('🔍 VISIBILITY MODAL: Error getting headline:', error);
+    return '';
+  }
+}
+
+// Show visibility settings modal
+async function showVisibilitySettingsModal() {
+  console.log('🔍 VISIBILITY MODAL: Opening visibility settings modal');
+  
+  try {
+    // Get current user data
+    const userId = await getCurrentUserId();
+    const userEmail = await getCurrentUserEmail();
+    
+    console.log('🔍 VISIBILITY MODAL: Current user data:', { userId, userEmail });
+    
+    // Create modal overlay (styled like color input modal)
+    const modalOverlay = document.createElement('div');
+    modalOverlay.id = 'visibility-settings-modal';
+    modalOverlay.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.6);
+      z-index: 10000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(4px);
+    `;
+    
+    // Create modal content (styled like color input modal)
+    const modalContent = document.createElement('div');
+    modalContent.style.cssText = `
+      background: var(--bg-primary);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 0;
+      max-width: 480px;
+      width: 90%;
+      max-height: 85vh;
+      overflow: hidden;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+      backdrop-filter: blur(10px);
+    `;
+    
+    // Get current user settings
+    const [defaultVisibility, displayVisibilityAfterExit, headline] = await Promise.all([
+      getUserDefaultVisibility(userId),
+      getUserDisplayVisibilityAfterExit(userId),
+      getUserHeadline(userId)
+    ]);
+    
+    console.log('🔍 VISIBILITY MODAL: Current settings:', { defaultVisibility, displayVisibilityAfterExit, headline });
+    
+    modalContent.innerHTML = `
+      <div style="display: flex; justify-content: space-between; align-items: center; padding: 20px 24px; border-bottom: 1px solid var(--border-color); background: var(--bg-secondary);">
+        <h3 style="margin: 0; color: var(--text-primary); font-size: 18px; font-weight: 600;">👁️ Visibility & Status</h3>
+        <button id="close-visibility-modal" style="background: none; border: none; color: var(--text-secondary); font-size: 18px; cursor: pointer; padding: 4px 8px; border-radius: 6px;">✕</button>
+      </div>
+      
+      <div style="padding: 24px; max-height: 60vh; overflow-y: auto;">
+        <!-- Status Section -->
+        <div style="margin-bottom: 24px;">
+          <label style="display: block; margin-bottom: 12px; color: var(--text-primary); font-weight: 600; font-size: 14px;">Current Status</label>
+          <div style="display: flex; gap: 12px; align-items: center;">
+            <div style="display: flex; background: var(--bg-secondary); border-radius: 20px; padding: 2px; border: 1px solid var(--border-color);">
+              <button id="status-available" style="padding: 8px 16px; border: none; border-radius: 18px; background: #22c55e; color: white; cursor: pointer; font-size: 13px; font-weight: 500;">🟢 Available</button>
+              <button id="status-working" style="padding: 8px 16px; border: none; border-radius: 18px; background: transparent; color: var(--text-secondary); cursor: pointer; font-size: 13px; font-weight: 500;">🟡 Working</button>
+              <button id="status-unavailable" style="padding: 8px 16px; border: none; border-radius: 18px; background: transparent; color: var(--text-secondary); cursor: pointer; font-size: 13px; font-weight: 500;">🔴 Unavailable</button>
+            </div>
+          </div>
+          <p style="margin: 8px 0 0 0; color: var(--text-secondary); font-size: 12px;">Control your status dot color across all pages</p>
+        </div>
+        
+        <!-- Default Visibility -->
+        <div style="margin-bottom: 24px;">
+          <label style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px; color: var(--text-primary); font-weight: 600; font-size: 14px; cursor: pointer;">
+            <input type="checkbox" id="default-visibility-toggle" style="width: 18px; height: 18px; accent-color: var(--accent-color);">
+            <span>Default Visibility</span>
+          </label>
+          <p style="margin: 4px 0 0 30px; color: var(--text-secondary); font-size: 12px;">Show as visible by default on new tabs</p>
+        </div>
+        
+        <!-- Display Visibility After Exit -->
+        <div style="margin-bottom: 24px;">
+          <label style="display: block; margin-bottom: 8px; color: var(--text-primary); font-weight: 600; font-size: 14px;">Display Visibility After Exit (days)</label>
+          <input type="number" id="display-visibility-days" min="0" max="365" value="${displayVisibilityAfterExit || 7}" 
+                 style="width: 100%; padding: 10px 12px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); color: var(--text-primary); font-size: 14px;">
+          <p style="margin: 8px 0 0 0; color: var(--text-secondary); font-size: 12px;">How long to keep showing as visible after leaving a page</p>
+        </div>
+        
+        <!-- Professional Headline -->
+        <div style="margin-bottom: 24px;">
+          <label style="display: block; margin-bottom: 8px; color: var(--text-primary); font-weight: 600; font-size: 14px;">Professional Headline</label>
+          <input type="text" id="user-headline" placeholder="e.g., Software Engineer at Tech Corp" value="${headline || ''}" 
+                 style="width: 100%; padding: 10px 12px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-secondary); color: var(--text-primary); font-size: 14px;">
+          <p style="margin: 8px 0 0 0; color: var(--text-secondary); font-size: 12px;">A brief professional description (like LinkedIn headline)</p>
+        </div>
+      </div>
+      
+      <div style="display: flex; gap: 12px; justify-content: flex-end; padding: 20px 24px; border-top: 1px solid var(--border-color); background: var(--bg-secondary);">
+        <button id="cancel-visibility-settings" style="padding: 10px 20px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-primary); color: var(--text-primary); cursor: pointer; font-size: 14px; font-weight: 500;">Cancel</button>
+        <button id="save-visibility-settings" style="padding: 10px 20px; border: none; border-radius: 8px; background: var(--accent-color); color: white; cursor: pointer; font-size: 14px; font-weight: 600;">Save Settings</button>
+      </div>
+    `;
+    
+    modalOverlay.appendChild(modalContent);
+    document.body.appendChild(modalOverlay);
+    
+    // Add event listeners
+    setupVisibilityModalEventListeners(modalOverlay, userId);
+    
+  } catch (error) {
+    console.error('🔍 VISIBILITY MODAL: Error opening modal:', error);
+    alert('Failed to open visibility settings. Please try again.');
+  }
+}
+
+// Setup event listeners for visibility settings modal
+function setupVisibilityModalEventListeners(modalOverlay, userId) {
+  console.log('🔍 VISIBILITY MODAL: Setting up event listeners for user:', userId);
+  
+  // Close modal handlers
+  const closeBtn = modalOverlay.querySelector('#close-visibility-modal');
+  const cancelBtn = modalOverlay.querySelector('#cancel-visibility-settings');
+  const saveBtn = modalOverlay.querySelector('#save-visibility-settings');
+  
+  const closeModal = () => {
+    console.log('🔍 VISIBILITY MODAL: Closing modal');
+    document.body.removeChild(modalOverlay);
+  };
+  
+  // Close button
+  if (closeBtn) {
+    closeBtn.addEventListener('click', closeModal);
+  }
+  
+  // Cancel button
+  if (cancelBtn) {
+    cancelBtn.addEventListener('click', closeModal);
+  }
+  
+  // Click outside to close
+  modalOverlay.addEventListener('click', (e) => {
+    if (e.target === modalOverlay) {
+      closeModal();
+    }
+  });
+  
+  // Status button handlers
+  const statusAvailable = modalOverlay.querySelector('#status-available');
+  const statusWorking = modalOverlay.querySelector('#status-working');
+  const statusUnavailable = modalOverlay.querySelector('#status-unavailable');
+  
+  const updateStatusButtons = (activeStatus) => {
+    [statusAvailable, statusWorking, statusUnavailable].forEach(btn => {
+      btn.style.background = 'transparent';
+      btn.style.color = 'var(--text-secondary)';
+    });
+    
+    if (activeStatus === 'available') {
+      statusAvailable.style.background = '#22c55e';
+      statusAvailable.style.color = 'white';
+    } else if (activeStatus === 'working') {
+      statusWorking.style.background = '#eab308';
+      statusWorking.style.color = 'white';
+    } else if (activeStatus === 'unavailable') {
+      statusUnavailable.style.background = '#ef4444';
+      statusUnavailable.style.color = 'white';
+    }
+  };
+  
+  if (statusAvailable) {
+    statusAvailable.addEventListener('click', () => updateStatusButtons('available'));
+  }
+  if (statusWorking) {
+    statusWorking.addEventListener('click', () => updateStatusButtons('working'));
+  }
+  if (statusUnavailable) {
+    statusUnavailable.addEventListener('click', () => updateStatusButtons('unavailable'));
+  }
+  
+  // Save button
+  if (saveBtn) {
+    saveBtn.addEventListener('click', async () => {
+      console.log('🔍 VISIBILITY MODAL: User clicked save settings');
+      
+      try {
+        // Get form values
+        const defaultVisibility = modalOverlay.querySelector('#default-visibility-toggle').checked;
+        const displayVisibilityDays = parseInt(modalOverlay.querySelector('#display-visibility-days').value);
+        const headline = modalOverlay.querySelector('#user-headline').value.trim();
+        
+        // Get current status
+        let currentStatus = 'available';
+        if (statusAvailable.style.background === '#22c55e') currentStatus = 'available';
+        else if (statusWorking.style.background === '#eab308') currentStatus = 'working';
+        else if (statusUnavailable.style.background === '#ef4444') currentStatus = 'unavailable';
+        
+        console.log('🔍 VISIBILITY MODAL: Form values:', { defaultVisibility, displayVisibilityDays, headline, currentStatus });
+        
+        // Validate inputs
+        if (displayVisibilityDays < 0 || displayVisibilityDays > 365) {
+          alert('Display visibility days must be between 0 and 365');
+          return;
+        }
+        
+        // Show loading state
+        saveBtn.textContent = 'Saving...';
+        saveBtn.disabled = true;
+        
+        // Update settings
+        const updatePromises = [];
+        
+        // Update default visibility
+        updatePromises.push(
+          fetch(`${METALAYER_API_URL}/v1/visibility/default`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-user-email': await getCurrentUserEmail(),
+              'x-user-name': await getCurrentUserEmail(),
+              'x-user-avatar': ''
+            },
+            body: JSON.stringify({ defaultVisibility })
+          })
+        );
+        
+        // Update display visibility after exit
+        updatePromises.push(
+          fetch(`${METALAYER_API_URL}/v1/users/${userId}/display-visibility-after-exit`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-user-email': await getCurrentUserEmail(),
+              'x-user-name': await getCurrentUserEmail(),
+              'x-user-avatar': ''
+            },
+            body: JSON.stringify({ days: displayVisibilityDays })
+          })
+        );
+        
+        // Update headline
+        updatePromises.push(
+          fetch(`${METALAYER_API_URL}/v1/users/${userId}/headline`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-user-email': await getCurrentUserEmail(),
+              'x-user-name': await getCurrentUserEmail(),
+              'x-user-avatar': ''
+            },
+            body: JSON.stringify({ headline })
+          })
+        );
+        
+        // Wait for all updates to complete
+        const responses = await Promise.all(updatePromises);
+        
+        // Check if all updates were successful
+        const allSuccessful = responses.every(response => response.ok);
+        
+        if (allSuccessful) {
+          console.log('🔍 VISIBILITY MODAL: All settings saved successfully');
+          closeModal();
+          
+          // Show success message
+          const successMsg = document.createElement('div');
+          successMsg.textContent = 'Settings saved successfully!';
+          successMsg.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: var(--accent-color);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 4px;
+            z-index: 10001;
+          `;
+          document.body.appendChild(successMsg);
+          
+          setTimeout(() => {
+            document.body.removeChild(successMsg);
+          }, 3000);
+          
+        } else {
+          console.error('🔍 VISIBILITY MODAL: Some settings failed to save');
+          alert('Some settings failed to save. Please try again.');
+        }
+        
+      } catch (error) {
+        console.error('🔍 VISIBILITY MODAL: Error saving settings:', error);
+        alert('Failed to save settings. Please try again.');
+      } finally {
+        // Reset button state
+        saveBtn.textContent = 'Save Settings';
+        saveBtn.disabled = false;
+      }
+    });
+  }
 }
 
 function switchCommunity(community) {
@@ -712,13 +1270,11 @@ function getCurrentUserAvatarColor() {
         resolve(result.customAvatarColor);
       } else {
         // Use the same color system as message avatars
-        const currentUser = getCurrentUser();
-        if (currentUser) {
-          const name = currentUser.user_metadata?.full_name || currentUser.email || 'User';
-          resolve(getAvatarColor(name));
-        } else {
+        getCurrentUserEmail().then(email => {
+          resolve(getAvatarColor(email));
+        }).catch(() => {
           resolve('#45B7D1'); // Default blue
-        }
+        });
       }
     });
   });
@@ -754,7 +1310,7 @@ async function setUserAvatarBgColor(color) {
     const result = await chrome.storage.local.get(['googleUser']);
     if (result.googleUser && result.googleUser.email) {
       // Generate the same UUID that the server uses
-      const serverUserId = await generateUUIDFromEmail(result.googleUser.email);
+      const serverUserId = result.googleUser.id; // Use the user ID from the database
       console.log('🔍 Saving aura color for user:', { email: result.googleUser.email, serverUserId });
       
       const response = await fetch(`${METALAYER_API_URL}/v1/users/${serverUserId}/aura-color`, {
@@ -955,6 +1511,25 @@ function addProfileAvatarClickHandler() {
     }
   } else {
     console.error('❌ Profile avatar or menu not found!');
+  }
+}
+
+function addVisibilitySettingsButtonClickHandler() {
+  const visibilitySettingsBtn = document.getElementById('visibility-settings-btn');
+  if (visibilitySettingsBtn) {
+    console.log('🔍 VISIBILITY: Adding click handler for visibility settings button');
+    visibilitySettingsBtn.addEventListener('click', () => {
+      console.log('🔍 VISIBILITY: User clicked visibility settings from profile menu');
+      // Hide the user menu
+      const userMenu = document.getElementById('user-menu');
+      if (userMenu) {
+        userMenu.style.display = 'none';
+      }
+      // Show the visibility settings modal
+      showVisibilitySettingsModal();
+    });
+  } else {
+    console.log('🔍 VISIBILITY: Visibility settings button not found');
   }
 }
 
@@ -1358,25 +1933,6 @@ async function checkAndAddThreadToggle(messageElement, conversationId) {
   }
 }
 
-// Generate UUID from email (same as server)
-async function generateUUIDFromEmail(email) {
-  // Use Web Crypto API to match server's SHA-256 behavior
-  const encoder = new TextEncoder();
-  const data = encoder.encode(email);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-  
-  // Format as UUID (same as server)
-  const uuid = [
-    hashHex.substring(0, 8),
-    hashHex.substring(8, 12),
-    hashHex.substring(12, 16),
-    hashHex.substring(16, 20),
-    hashHex.substring(20, 32)
-  ].join('-');
-  return uuid;
-}
 
 function convertUrlsToLinks(text) {
   // URL regex pattern
@@ -1458,7 +2014,7 @@ async function getMessageActionMenu(message) {
   // Generate the same UUID that the server uses for comparison
   let isOwner = false;
   if (currentUser) {
-    const serverUserId = await generateUUIDFromEmail(currentUser.email);
+    const serverUserId = currentUser.id; // Use the user ID from the database
     isOwner = (message.authorId === serverUserId);
   }
   
@@ -2012,7 +2568,7 @@ async function loadMessageReactions(messageId, reactionBtn) {
       
       if (currentUser) {
         // Generate the same UUID that the server uses
-        const serverUserId = await generateUUIDFromEmail(currentUser.email);
+        const serverUserId = currentUser.id; // Use the user ID from the database
         console.log(`🆔 Generated server user ID: ${serverUserId}`);
         
         // Find user reaction by ID or email (fallback for existing data)
@@ -2386,9 +2942,10 @@ async function loadChatHistory(communityId = null) {
     
     debug(`Loading chat history for active communities: ${activeCommunities.join(', ')}`);
     
-    // Get current page URI for page-specific messages
-    const currentUri = await getCurrentPageUri();
-    debug(`Loading chat history for URI: ${currentUri}`);
+    // Get normalized URL for page-specific messages - SAME AS VISIBILITY
+    const urlData = await normalizeCurrentUrl();
+    const currentUri = urlData.normalizedUrl; // Use normalized URL for consistency
+    debug(`Loading chat history for normalized URI: ${currentUri} (from raw: ${urlData.rawUrl})`);
     
     // Load messages from all active communities
     const allConversations = [];
@@ -2397,7 +2954,7 @@ async function loadChatHistory(communityId = null) {
     
     for (const communityId of activeCommunities) {
       try {
-        const response = await api.getChatHistory(communityId, null, currentUri);
+        const response = await api.getChatHistory(communityId, null, null); // Remove URI filtering to show all messages
         if (response.conversations && response.conversations.length > 0) {
           // Find community name
           const community = communities.find(c => c.id === communityId);
@@ -2568,6 +3125,7 @@ function updateUI(user) {
     setTimeout(() => {
       addAuraButtonClickHandler();
       addProfileAvatarClickHandler();
+      addVisibilitySettingsButtonClickHandler();
     }, 100);
   } else {
     // User is logged out - hide user info
@@ -2729,6 +3287,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.error('Error loading chat history:', error);
       }
     }, 1000); // Small delay to ensure communities are loaded first
+    
+    // Start presence tracking
+    setTimeout(async () => {
+      try {
+        await startPresenceTracking();
+      } catch (error) {
+        console.error('Error starting presence tracking:', error);
+      }
+    }, 2000); // Delay to ensure auth is complete
   } catch (error) {
     console.error('Error loading communities:', error);
   }
@@ -2737,6 +3304,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   console.log('UI will be updated by auth state listener');
   
   console.log('=== END Initialization ===');
+
+  // Add unload handler to stop presence tracking
+  window.addEventListener('beforeunload', () => {
+    stopPresenceTracking();
+  });
 
   // --- Now proceed with the rest of the setup ---
   debug("Document loaded (from JS)");
@@ -3088,19 +3660,24 @@ document.addEventListener('DOMContentLoaded', async () => {
                 delete chatInput.dataset.threadId;
               }
               
-              const response = await api.sendMessage(user.id, communityId, message, currentUri, parentId, threadId, optionalContent);
-              debug(`Message sent successfully: ${response?.id}`);
+              // Use email for user identification (consistent with presence API)
+              const userEmail = await getCurrentUserEmail();
+              const response = await api.sendMessage(userEmail, communityId, message, currentUri, parentId, threadId, optionalContent);
+              debug(`Message sent successfully: ${response?.msg?.id || response?.id}`);
               console.log('Message sent:', response);
               
               // Add message to chat display - handle both conversation and post responses
               let newPost = null;
-              if (response && response.id) {
-                // Check if this is a conversation response (new conversation) or post response (reply)
-                if (response.posts && response.posts.length > 0) {
+              if (response && (response.id || response.msg)) {
+                // Check if this is a server response with msg field
+                if (response.msg && response.msg.id) {
+                  // This is the new server response format with msg field
+                  newPost = response.msg;
+                } else if (response.posts && response.posts.length > 0) {
                   // This is a conversation response - get the first post
                   newPost = response.posts[0];
                   newPost.conversationId = response.id;
-  } else {
+                } else if (response.id) {
                   // This is a post response - use it directly
                   newPost = response;
                 }
@@ -3250,28 +3827,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     peopleTab.innerHTML = `
       <ul class="item-list">
-        <li>
-          <div class="avatar-container">
-            <div class="avatar-placeholder" style="background-color: #FF6B6B">A</div>
-            <div class="status-dot-overlay online"></div>
-          </div>
-          <div class="item-details">
-            <div class="item-name">Alice Johnson</div>
-            <div class="item-status">Online</div>
-          </div>
-          <button class="add-friend-btn" data-user-id="user1" data-user-name="Alice Johnson">+ Add</button>
-        </li>
-        <li>
-          <div class="avatar-container">
-            <div class="avatar-placeholder" style="background-color: #4ECDC4">B</div>
-            <div class="status-dot-overlay away"></div>
-          </div>
-          <div class="item-details">
-            <div class="item-name">Bob Smith</div>
-            <div class="item-status">Away</div>
-          </div>
-          <button class="add-friend-btn" data-user-id="user2" data-user-name="Bob Smith">+ Add</button>
-        </li>
+        <!-- NO MOCK USERS - Only real presence data -->
       </ul>
     `;
     
@@ -3327,12 +3883,19 @@ async function handleTabChange(tabId) {
     if (tab && tab.url) {
       console.log('New tab URL:', tab.url);
       debug(`New tab URL: ${tab.url}`);
-      // Reload chat history for the new page
+      
+      // Normalize the new URL ONCE at the top
+      await normalizeCurrentUrl();
+      console.log('🔄 TAB_UPDATE: URL normalized for new tab');
+      
+      // Reload chat history for the new page (uses normalized URL)
       await loadChatHistory();
-      // Update visibility list for the new page
+      // Update visibility list for the new page (uses normalized URL)
       const result = await chrome.storage.local.get(['activeCommunities']);
       const activeCommunities = result.activeCommunities || ['comm-001'];
       await loadCombinedAvatars(activeCommunities);
+      // Start presence tracking for the new URL (uses normalized URL)
+      await startPresenceTracking();
     } else {
       console.log('No tab or URL found for tab:', tabId);
       debug(`No tab or URL found for tab: ${tabId}`);
@@ -3348,12 +3911,18 @@ async function handleTabUpdate(tabId, url) {
   console.log('Handling tab update for tab:', tabId, 'URL:', url);
   debug(`Handling tab update for tab: ${tabId}, URL: ${url}`);
   try {
-    // Reload chat history for the new URL
+    // Normalize the new URL ONCE at the top
+    await normalizeCurrentUrl();
+    console.log('🔄 TAB_UPDATE: URL normalized for updated tab');
+    
+    // Reload chat history for the new URL (uses normalized URL)
     await loadChatHistory();
-    // Update visibility list for the new URL
+    // Update visibility list for the new URL (uses normalized URL)
     const result = await chrome.storage.local.get(['activeCommunities']);
     const activeCommunities = result.activeCommunities || ['comm-001'];
     await loadCombinedAvatars(activeCommunities);
+    // Start presence tracking for the new URL (uses normalized URL)
+    await startPresenceTracking();
   } catch (error) {
     console.error('Error handling tab update:', error);
     debug(`Error handling tab update: ${error.message}`);
@@ -3404,33 +3973,118 @@ async function toggleThreadReplies(threadId, messageElement) {
 // ===== PRESENCE TRACKING =====
 
 let presenceHeartbeatInterval = null;
+let visibleListPollingInterval = null;
 let currentPageId = null;
+
+// Start visible list polling every 5 seconds
+function startVisibleListPolling() {
+  // console.log('🔍 VISIBILITY: Starting visible list polling every 5 seconds');
+  
+  // Clear any existing polling
+  if (visibleListPollingInterval) {
+    clearInterval(visibleListPollingInterval);
+  }
+  
+  // Start polling every 15 seconds to reduce server load
+  visibleListPollingInterval = setInterval(async () => {
+    try {
+      console.log('🔍 VISIBILITY: Polling for visible list updates...');
+      await loadCombinedAvatars();
+    } catch (error) {
+      console.error('❌ VISIBILITY: Error during polling:', error);
+    }
+  }, 5000); // 5 seconds
+}
+
+// Stop visible list polling
+function stopVisibleListPolling() {
+  if (visibleListPollingInterval) {
+    console.log('🔍 VISIBILITY: Stopping visible list polling');
+    clearInterval(visibleListPollingInterval);
+    visibleListPollingInterval = null;
+  }
+}
 
 // Start presence tracking for the current page
 async function startPresenceTracking() {
   try {
-    // Get current page URI and generate a pageId
-    const currentUri = await getCurrentPageUri();
-    currentPageId = await generatePageId(currentUri);
+    // Get normalized URL data - SAME AS MESSAGES AND VISIBILITY
+    const urlData = await normalizeCurrentUrl();
+    currentPageId = urlData.pageId;
     
-    console.log('🔍 PRESENCE: Starting presence tracking for page:', currentUri, 'pageId:', currentPageId);
+    console.log('🔍 PRESENCE: Starting presence tracking for normalized page:', urlData.normalizedUrl, 'pageId:', currentPageId, '(from raw:', urlData.rawUrl, ')');
+    console.log('🔍 PRESENCE: Current user email:', await getCurrentUserEmail());
+    console.log('🔍 PRESENCE: Current user ID:', await getCurrentUserId());
     
     // Send initial ENTER event
+    console.log('🔍 PRESENCE: Sending initial ENTER event...');
     await sendPresenceEvent('ENTER');
+    console.log('🔍 PRESENCE: ENTER event sent successfully');
     
-    // Start heartbeat (every 30 seconds)
+    // Start heartbeat (every 30 seconds to reduce server load)
     presenceHeartbeatInterval = setInterval(async () => {
       try {
-        await sendPresenceEvent('HEARTBEAT');
+        // Get normalized URL data for heartbeat - SAME AS MESSAGES AND VISIBILITY
+        const urlData = await normalizeCurrentUrl();
+        const currentPageId = urlData.pageId;
+        console.log('💓 HEARTBEAT: Sending heartbeat for normalized page:', urlData.normalizedUrl, 'pageId:', currentPageId, '(from raw:', urlData.rawUrl, ')');
+        
+        // Send heartbeat with current page info
+        const userEmail = await getCurrentUserEmail();
+        const userId = await getCurrentUserId();
+        
+        const response = await fetch(`${METALAYER_API_URL}/v1/presence/event`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-user-email': userEmail,
+            'x-user-id': userId
+          },
+          body: JSON.stringify({
+            pageId: currentPageId,
+            kind: 'HEARTBEAT',
+            availability: null,
+            customLabel: null,
+            pageUrl: urlData.rawUrl // Use the raw URL from urlData
+          })
+        });
+        
+        if (response.ok) {
+          console.log('💓 HEARTBEAT: Heartbeat sent successfully');
+        } else {
+          console.error('💓 HEARTBEAT: Failed to send heartbeat:', response.status);
+        }
       } catch (error) {
-        console.warn('Presence heartbeat failed:', error);
+        console.error('💓 HEARTBEAT: Error sending heartbeat:', error);
       }
-    }, 30000);
+    }, 5000); // 5 seconds
     
     console.log('✅ PRESENCE: Presence tracking started');
+    
+    // Start polling for visible list updates every minute
+    startVisibleListPolling();
   } catch (error) {
     console.error('❌ PRESENCE: Failed to start presence tracking:', error);
   }
+}
+
+// Start polling for visible list updates
+function startVisibleListPolling() {
+  if (visibleListPollingInterval) {
+    clearInterval(visibleListPollingInterval);
+  }
+  
+  // Start polling every 15 seconds to reduce server load
+  visibleListPollingInterval = setInterval(async () => {
+    try {
+      console.log('🔍 VISIBILITY: Polling for visible list updates...');
+      const result = await chrome.storage.local.get(['activeCommunities']);
+      const activeCommunities = result.activeCommunities || ['comm-001'];
+      await loadCombinedAvatars(activeCommunities);
+    } catch (error) {
+      console.error('❌ VISIBILITY: Error polling visible list:', error);
+    }
+  }, 60000); // 1 minute
 }
 
 // Stop presence tracking
@@ -3438,6 +4092,11 @@ function stopPresenceTracking() {
   if (presenceHeartbeatInterval) {
     clearInterval(presenceHeartbeatInterval);
     presenceHeartbeatInterval = null;
+  }
+  
+  if (visibleListPollingInterval) {
+    clearInterval(visibleListPollingInterval);
+    visibleListPollingInterval = null;
   }
   
   // Note: We don't send explicit EXIT events anymore
@@ -3455,18 +4114,24 @@ async function sendPresenceEvent(kind, availability = null, customLabel = null) 
       return;
     }
     
-    const response = await fetch(`${API_BASE_URL}/v1/presence/event`, {
+    // Get normalized URL data - SAME AS MESSAGES AND VISIBILITY
+    const urlData = await normalizeCurrentUrl();
+    const userEmail = await getCurrentUserEmail();
+    const userId = await getCurrentUserId();
+    
+    const response = await fetch(`${METALAYER_API_URL}/v1/presence/event`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-user-email': getCurrentUserEmail(),
-        'x-user-id': getCurrentUserId()
+        'x-user-email': userEmail,
+        'x-user-id': userId
       },
       body: JSON.stringify({
         pageId: currentPageId,
         kind,
         availability,
-        customLabel
+        customLabel,
+        pageUrl: urlData.rawUrl // Use the raw URL from urlData
       })
     });
     
@@ -3476,128 +4141,184 @@ async function sendPresenceEvent(kind, availability = null, customLabel = null) 
       console.warn(`❌ PRESENCE: Failed to send ${kind} event:`, response.status);
     }
   } catch (error) {
-    console.warn(`❌ PRESENCE: Error sending ${kind} event:`, error);
+    if (error.message.includes('Failed to fetch') || error.message.includes('ERR_CONNECTION_REFUSED')) {
+      console.warn(`⚠️ PRESENCE: Connection refused for ${kind} event - server may be overloaded`);
+    } else {
+      console.error(`❌ PRESENCE: Error sending ${kind} event:`, error);
+    }
   }
 }
 
-// Generate a consistent pageId from URI
-async function generatePageId(uri) {
-  // For now, use a simple hash of the URI
-  // In a real implementation, this would query the database for existing pages
-  const encoder = new TextEncoder();
-  const data = encoder.encode(uri);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-  
-  // Convert to UUID format (simplified)
-  return `${hashHex.substring(0, 8)}-${hashHex.substring(8, 12)}-${hashHex.substring(12, 16)}-${hashHex.substring(16, 20)}-${hashHex.substring(20, 32)}`;
+// URL normalization cache and current state
+const urlNormalizationCache = new Map();
+let currentNormalizedUrl = null;
+let currentRawUrl = null;
+
+// Centralized URL normalization - call this once at startup and when tabs change
+async function normalizeCurrentUrl() {
+  try {
+    const rawUri = await getCurrentPageUri();
+    console.log(`🔍 URL_NORMALIZE: Normalizing current URL: ${rawUri}`);
+    
+    // Check if URL has changed
+    if (currentRawUrl === rawUri && currentNormalizedUrl && currentPageId) {
+      console.log(`🔍 URL_NORMALIZE: URL unchanged, using cached values`);
+      return { rawUrl: currentRawUrl, normalizedUrl: currentNormalizedUrl, pageId: currentPageId };
+    }
+    
+    // Check cache first
+    if (urlNormalizationCache.has(rawUri)) {
+      const cached = urlNormalizationCache.get(rawUri);
+      console.log(`🔍 URL_CACHE: Using cached result for ${rawUri}: ${cached.pageId}`);
+      currentRawUrl = rawUri;
+      currentNormalizedUrl = cached.normalizedUrl;
+      currentPageId = cached.pageId;
+      return { rawUrl: currentRawUrl, normalizedUrl: currentNormalizedUrl, pageId: currentPageId };
+    }
+    
+    console.log(`🔍 URL_NORMALIZE: Calling backend API for ${rawUri}`);
+    
+    // Call backend normalization API
+    const response = await fetch(`${METALAYER_API_URL}/v1/presence/normalize-url`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ url: rawUri })
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    
+    const result = await response.json();
+    
+    // Cache the result
+    urlNormalizationCache.set(rawUri, result);
+    
+    // Update current state
+    currentRawUrl = rawUri;
+    currentNormalizedUrl = result.normalizedUrl;
+    currentPageId = result.pageId;
+    
+    console.log(`✅ URL_NORMALIZE: Backend API result - Raw: ${rawUri}, Normalized: ${currentNormalizedUrl}, PageId: ${currentPageId}`);
+    return { rawUrl: currentRawUrl, normalizedUrl: currentNormalizedUrl, pageId: currentPageId };
+  } catch (error) {
+    console.error('❌ URL_NORMALIZE: Error calling backend API:', error);
+    
+    // Fallback to simple normalization
+    const rawUri = await getCurrentPageUri();
+    const fallbackPageId = rawUri.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 100);
+    
+    // Update current state
+    currentRawUrl = rawUri;
+    currentNormalizedUrl = rawUri; // Use raw URL as normalized in fallback
+    currentPageId = fallbackPageId;
+    
+    console.log(`🔄 URL_NORMALIZE: Using fallback for ${rawUri}: ${fallbackPageId}`);
+    return { rawUrl: currentRawUrl, normalizedUrl: currentNormalizedUrl, pageId: currentPageId };
+  }
 }
 
-// Get current user email for presence tracking
-function getCurrentUserEmail() {
-  // This should get the current user's email from storage
-  // For now, return a placeholder
-  return 'daveroom@gmail.com'; // TODO: Get from actual user data
+// Legacy function for backward compatibility - now uses centralized normalization
+async function generatePageId(uri) {
+  const urlData = await normalizeCurrentUrl();
+  return urlData.pageId;
 }
 
 // Get current user ID for presence tracking
-function getCurrentUserId() {
-  // This should get the current user's ID from storage
-  // For now, return a placeholder
-  return '5a4ca9ae-105b-a01b-e461-eaf8d83d90c7'; // TODO: Get from actual user data
+async function getCurrentUserId() {
+  try {
+    const result = await chrome.storage.local.get(['googleUser']);
+    const user = result.googleUser;
+    if (user && user.id) {
+      return user.id; // Use the actual user ID from chrome storage
+    } else {
+      // Fallback to email if no ID is stored
+      const email = await getCurrentUserEmail();
+      return email;
+    }
+  } catch (error) {
+    console.error('Error getting user ID:', error);
+    // Fallback to email
+    const email = await getCurrentUserEmail();
+    return email;
+  }
+}
+
+// Get current user email for presence tracking
+async function getCurrentUserEmail() {
+  try {
+    const result = await chrome.storage.local.get(['googleUser']);
+    const user = result.googleUser;
+    if (user && user.email) {
+      return user.email;
+    } else {
+      console.error('No user email found in storage - authentication required');
+      throw new Error('User not authenticated');
+    }
+  } catch (error) {
+    console.error('Error getting user email:', error);
+    throw error;
+  }
+}
+
+// Get current user email for presence tracking
+async function getCurrentUserEmail() {
+  try {
+    const result = await chrome.storage.local.get(['googleUser']);
+    const user = result.googleUser;
+    if (user && user.email) {
+      return user.email;
+    } else {
+      console.error('No user email found in storage - authentication required');
+      throw new Error('User not authenticated');
+    }
+  } catch (error) {
+    console.error('Error getting user email:', error);
+    throw error;
+  }
+}
+
+// Format time display for visibility list
+function formatTimeDisplay(lastSeen) {
+  if (!lastSeen) return 'Online for 0 seconds';
+  
+  const now = new Date();
+  const lastSeenDate = new Date(lastSeen);
+  const diffMs = now - lastSeenDate;
+  const diffSeconds = Math.floor(diffMs / 1000);
+  const diffMinutes = Math.floor(diffSeconds / 60);
+  const diffHours = Math.floor(diffMinutes / 60);
+  const diffDays = Math.floor(diffHours / 24);
+  const diffYears = Math.floor(diffDays / 365);
+  
+  console.log(`🕒 TIME: lastSeen: ${lastSeen}, now: ${now.toISOString()}, diffMs: ${diffMs}, diffSeconds: ${diffSeconds}`);
+  
+  // If the difference is negative, it means the timestamp is in the future
+  if (diffMs < 0) {
+    console.log(`🕒 TIME: Negative time difference detected - lastSeen is in the future!`);
+    return 'Online for 0 seconds';
+  }
+  
+  if (diffSeconds < 60) {
+    return `Online for ${diffSeconds} second${diffSeconds === 1 ? '' : 's'}`;
+  } else if (diffMinutes < 60) {
+    return `Online for ${diffMinutes} minute${diffMinutes === 1 ? '' : 's'}`;
+  } else if (diffHours < 24) {
+    return `Online for ${diffHours} hour${diffHours === 1 ? '' : 's'}`;
+  } else if (diffDays < 365) {
+    return `Online for ${diffDays} day${diffDays === 1 ? '' : 's'}`;
+  } else {
+    return `Online for ${diffYears} year${diffYears === 1 ? '' : 's'}`;
+  }
 }
 
 // ===== MOCK DATA FOR TESTING MULTI-USER SCENARIOS =====
 // Use these functions in the browser console to test different user perspectives
 
-const MOCK_USERS = [
-  {
-    id: 'user1',
-    name: 'Alice Johnson',
-    email: 'alice@example.com',
-    communities: ['comm-001', 'comm-002'],
-    avatarUrl: 'https://via.placeholder.com/40x40/FF6B6B/white?text=A'
-  },
-  {
-    id: 'user2', 
-    name: 'Bob Smith',
-    email: 'bob@example.com',
-    communities: ['comm-001', 'comm-003'],
-    avatarUrl: 'https://via.placeholder.com/40x40/4ECDC4/white?text=B'
-  },
-  {
-    id: 'user3',
-    name: 'Carol Davis', 
-    email: 'carol@example.com',
-    communities: ['comm-002', 'comm-003'],
-    avatarUrl: 'https://via.placeholder.com/40x40/45B7D1/white?text=C'
-  }
-];
+// NO MOCK USERS - Only real data
 
-const MOCK_MESSAGES = [
-  {
-    id: 'msg1',
-    userId: 'user1',
-    communityId: 'comm-001',
-    content: 'Hello everyone! This is Alice from Public Square.',
-    createdAt: new Date(Date.now() - 1000 * 60 * 5).toISOString(),
-    conversationId: 'conv1'
-  },
-  {
-    id: 'msg2',
-    userId: 'user2', 
-    communityId: 'comm-001',
-    content: 'Hi Alice! Bob here, also in Public Square.',
-    createdAt: new Date(Date.now() - 1000 * 60 * 3).toISOString(),
-    conversationId: 'conv1',
-    parentId: 'msg1'
-  },
-  {
-    id: 'msg3',
-    userId: 'user3',
-    communityId: 'comm-002', 
-    content: 'Carol here from Governance Circle. Different community!',
-    createdAt: new Date(Date.now() - 1000 * 60 * 2).toISOString(),
-    conversationId: 'conv2'
-  }
-];
+// NO MOCK MESSAGES - Only real data
 
-// Function to simulate different user perspectives
-function simulateUser(userId) {
-  const user = MOCK_USERS.find(u => u.id === userId);
-  if (!user) {
-    console.error('User not found:', userId);
-    return;
-  }
-  
-  console.log(`👤 Simulating user: ${user.name} (${user.email})`);
-  console.log(`🏘️ Communities: ${user.communities.join(', ')}`);
-  
-  // Update Chrome storage to simulate this user
-  chrome.storage.local.set({
-    googleUser: {
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      picture: user.avatarUrl
-    },
-    activeCommunities: user.communities,
-    primaryCommunity: user.communities[0]
-  });
-  
-  // Reload the UI
-  setTimeout(() => {
-    loadChatHistory();
-    loadCombinedAvatars(user.communities);
-  }, 100);
-}
-
-// Export for use in console
-window.simulateUser = simulateUser;
-window.MOCK_USERS = MOCK_USERS;
-
-console.log('🧪 Multi-user testing functions loaded:');
-console.log('- simulateUser("user1") - Simulate Alice (Public Square + Governance Circle)');
-console.log('- simulateUser("user2") - Simulate Bob (Public Square + Dev Hub)'); 
-console.log('- simulateUser("user3") - Simulate Carol (Governance Circle + Dev Hub)');
+// NO MOCK TESTING - Only real data
