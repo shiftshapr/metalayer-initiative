@@ -1,6 +1,6 @@
 { 
   "manifest_version": 3,
-  "name": "Presence",
+  "name": "Canopi",
   "version": "0.1.0",
   "description": "Adds a sidebar for collaboration and agent interaction on web pages.",
   "permissions": [

@@ -649,8 +649,8 @@ function showAuthError(error) {
   alert(`Authentication failed: ${error}`);
 }
 
-// Setup Discord button immediately
-setupDiscordButton();
+// Discord feature commented out - not needed for now
+// setupDiscordButton();
 
 // Setup Authentication Flow
 setupAuthenticationFlow(); 
@@ -1503,8 +1503,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // Setup people search
   setupPeopleSearch();
   
-  // Setup Discord button
-  setupDiscordButton();
+  // Discord feature commented out - not needed for now
+  // setupDiscordButton();
 });
 
 // Initialize People Tab

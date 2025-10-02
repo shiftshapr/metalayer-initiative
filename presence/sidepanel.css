@@ -1363,7 +1363,8 @@ body {
   cursor: pointer;
 }
 
-/* Discord Button */
+/* Discord Button - commented out - not needed for now */
+/*
 .discord-nav-tab {
   background: none;
   border: none;
@@ -1393,3 +1394,4 @@ body {
   height: 16px;
   color: currentColor;
 }
+*/
