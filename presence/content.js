@@ -135,6 +135,13 @@
 
     // Enhanced page content extraction function
     function extractPageContent() {
+        // Check if this is a YouTube page
+        const isYouTube = window.location.hostname.includes('youtube.com');
+        console.log('🔍 Content script: Is YouTube page?', isYouTube);
+        console.log('🔍 Content script: Current URL:', window.location.href);
+        const videoData = isYouTube ? extractYouTubeVideoData() : null;
+        console.log('🔍 Content script: Video data:', videoData);
+        
         // Remove unwanted elements (ads, scripts, styles, etc.)
         const unwantedSelectors = [
             'script', 'style', 'noscript', 'iframe[src*="ads"]', 
@@ -161,11 +168,17 @@
             timestamp: Date.now(),
             content: extractMainContent(tempDiv),
             metadata: extractMetadata(),
-            structure: extractPageStructure(tempDiv)
+            structure: extractPageStructure(tempDiv),
+            isYouTube: isYouTube,
+            videoData: videoData
         };
         
         // Generate content hash (excluding ads and dynamic content)
         pageData.contentHash = generateContentHash(pageData.content);
+        
+        console.log('🔍 Content script: Final page data:', pageData);
+        console.log('🔍 Content script: Is YouTube in final data:', pageData.isYouTube);
+        console.log('🔍 Content script: Video data in final data:', pageData.videoData);
         
         return pageData;
     }
@@ -289,6 +302,167 @@
             hash = hash & hash; // Convert to 32-bit integer
         }
         return Math.abs(hash).toString(36);
+    }
+
+    // YouTube video data extraction
+    function extractYouTubeVideoData() {
+        try {
+            const videoId = getYouTubeVideoId();
+            if (!videoId) return null;
+
+            const videoData = {
+                videoId: videoId,
+                title: extractVideoTitle(),
+                description: extractVideoDescription(),
+                channel: extractChannelInfo(),
+                duration: extractVideoDuration(),
+                views: extractViewCount(),
+                likes: extractLikeCount(),
+                publishedDate: extractPublishedDate(),
+                tags: extractVideoTags(),
+                transcript: null, // Will be populated by transcription service
+                summary: null // Will be populated by AI
+            };
+
+            console.log('YouTube video data extracted:', videoData);
+            return videoData;
+        } catch (error) {
+            console.error('Error extracting YouTube video data:', error);
+            return null;
+        }
+    }
+
+    function getYouTubeVideoId() {
+        const urlParams = new URLSearchParams(window.location.search);
+        return urlParams.get('v');
+    }
+
+    function extractVideoTitle() {
+        // Try multiple selectors for video title
+        const titleSelectors = [
+            'h1.title',
+            'h1[class*="title"]',
+            '.watch-main-col h1',
+            '#video-title',
+            'h1.ytd-video-primary-info-renderer'
+        ];
+        
+        for (const selector of titleSelectors) {
+            const element = document.querySelector(selector);
+            if (element && element.textContent.trim()) {
+                return element.textContent.trim();
+            }
+        }
+        
+        // Fallback to page title
+        return document.title.replace(' - YouTube', '');
+    }
+
+    function extractVideoDescription() {
+        const descriptionSelectors = [
+            '#description-text',
+            '.content-description',
+            '#watch-description-text',
+            '.ytd-video-secondary-info-renderer #description'
+        ];
+        
+        for (const selector of descriptionSelectors) {
+            const element = document.querySelector(selector);
+            if (element && element.textContent.trim()) {
+                return element.textContent.trim();
+            }
+        }
+        
+        return null;
+    }
+
+    function extractChannelInfo() {
+        const channelSelectors = [
+            '#owner-name a',
+            '.ytd-channel-name a',
+            '#channel-name a',
+            '.ytd-video-owner-renderer a'
+        ];
+        
+        for (const selector of channelSelectors) {
+            const element = document.querySelector(selector);
+            if (element) {
+                return {
+                    name: element.textContent.trim(),
+                    url: element.href
+                };
+            }
+        }
+        
+        return null;
+    }
+
+    function extractVideoDuration() {
+        const durationElement = document.querySelector('.ytp-time-duration');
+        return durationElement ? durationElement.textContent.trim() : null;
+    }
+
+    function extractViewCount() {
+        const viewSelectors = [
+            '#count .view-count',
+            '.view-count',
+            '#watch7-views-info .view-count'
+        ];
+        
+        for (const selector of viewSelectors) {
+            const element = document.querySelector(selector);
+            if (element && element.textContent.trim()) {
+                return element.textContent.trim();
+            }
+        }
+        
+        return null;
+    }
+
+    function extractLikeCount() {
+        const likeSelectors = [
+            '#top-level-buttons-computed #segmented-like-button button span',
+            '#segmented-like-button button span',
+            '.like-button-renderer button span'
+        ];
+        
+        for (const selector of likeSelectors) {
+            const element = document.querySelector(selector);
+            if (element && element.textContent.trim()) {
+                return element.textContent.trim();
+            }
+        }
+        
+        return null;
+    }
+
+    function extractPublishedDate() {
+        const dateSelectors = [
+            '#date',
+            '.date',
+            '#watch-uploader-info .date'
+        ];
+        
+        for (const selector of dateSelectors) {
+            const element = document.querySelector(selector);
+            if (element && element.textContent.trim()) {
+                return element.textContent.trim();
+            }
+        }
+        
+        return null;
+    }
+
+    function extractVideoTags() {
+        // YouTube doesn't show tags publicly, but we can try to extract from description
+        const description = extractVideoDescription();
+        if (description) {
+            // Look for hashtags in description
+            const hashtags = description.match(/#\w+/g);
+            return hashtags ? hashtags.map(tag => tag.substring(1)) : [];
+        }
+        
+        return [];
     }
 
 })(); 

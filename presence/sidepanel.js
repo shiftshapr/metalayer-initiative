@@ -145,6 +145,9 @@ class PeopleAPI {
 // Initialize People API
 const peopleAPI = new PeopleAPI(PEOPLE_API_URL);
 
+// Initialize YouTube Transcription Service
+const youtubeService = new YouTubeTranscriptionService();
+
 // Authentication Functions
 async function getCurrentUser() {
   try {
@@ -786,12 +789,121 @@ async function testAgent(message) {
       await new Promise(resolve => setTimeout(resolve, 1000));
     }
     
-    const response = await callDeepSeekAPI(message);
-    removeLoadingMessage(loadingId);
-    addMessageToAgentOutput('Agent', response, false);
+    // Debug: Log page content cache
+    console.log('🔍 Page content cache:', pageContentCache);
+    console.log('🔍 Is YouTube:', pageContentCache?.isYouTube);
+    console.log('🔍 Video data:', pageContentCache?.videoData);
+    console.log('🔍 Current URL:', window.location.href);
+    console.log('🔍 Page title:', document.title);
+    
+    // Check if this is a YouTube video and handle accordingly
+    if (pageContentCache && pageContentCache.isYouTube && pageContentCache.videoData) {
+      console.log('🎥 Processing YouTube video request...');
+      const response = await handleYouTubeVideoRequest(message, pageContentCache.videoData);
+      removeLoadingMessage(loadingId);
+      addMessageToAgentOutput('Agent', response, false);
+    } else {
+      // Fallback: Check if we're on a YouTube page even if content script didn't detect it
+      const isYouTubeFallback = window.location.hostname.includes('youtube.com') && window.location.pathname.includes('/watch');
+      if (isYouTubeFallback) {
+        console.log('🎥 YouTube fallback detection - processing as YouTube video...');
+        const videoId = new URLSearchParams(window.location.search).get('v');
+        if (videoId) {
+          const fallbackVideoData = {
+            videoId: videoId,
+            title: document.title.replace(' - YouTube', ''),
+            description: 'YouTube video',
+            channel: { name: 'YouTube' },
+            duration: 'Unknown',
+            views: 'Unknown',
+            likes: 'Unknown',
+            publishedDate: 'Unknown',
+            tags: []
+          };
+          const response = await handleYouTubeVideoRequest(message, fallbackVideoData);
+          removeLoadingMessage(loadingId);
+          addMessageToAgentOutput('Agent', response, false);
+          return;
+        }
+      }
+      
+      console.log('📄 Processing regular page content...');
+      // Regular page content processing
+      const response = await callDeepSeekAPI(message);
+      removeLoadingMessage(loadingId);
+      addMessageToAgentOutput('Agent', response, false);
+    }
   } catch (error) {
     removeLoadingMessage(loadingId);
     addMessageToAgentOutput('Agent', `Error: ${error.message}`, false);
+  }
+}
+
+// Handle YouTube video requests
+async function handleYouTubeVideoRequest(message, videoData) {
+  try {
+    console.log('🎥 Processing YouTube video:', videoData.title);
+    
+    // First, try to get transcript and process the video
+    const processedVideo = await youtubeService.processYouTubeVideo(videoData);
+    
+    // Create context for AI with video information
+    const context = {
+      videoTitle: videoData.title,
+      videoDescription: videoData.description,
+      channelName: videoData.channel?.name,
+      duration: videoData.duration,
+      views: videoData.views,
+      transcript: processedVideo.transcript,
+      summary: processedVideo.summary,
+      keyPoints: processedVideo.keyPoints,
+      questions: processedVideo.questions,
+      userQuestion: message,
+      timestamp: new Date().toISOString()
+    };
+
+    // Debug: Log what we're sending to the AI
+    console.log('🤖 Sending to AI agent:', {
+      message: message,
+      context: context,
+      type: 'youtube_analysis',
+      hasTranscript: !!context.transcript,
+      transcriptLength: context.transcript?.length || 0
+    });
+    
+    // Send to AI agent with YouTube context
+    const response = await fetch(AGENT_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        message: message,
+        context: context,
+        type: 'youtube_analysis',
+        videoData: videoData
+      })
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `API error: ${response.status} ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    return data.response;
+  } catch (error) {
+    console.error('❌ Error processing YouTube video:', error);
+    
+    // Fallback response if transcription fails
+    return `I detected this is a YouTube video: "${videoData.title}" by ${videoData.channel?.name || 'Unknown Channel'}.
+
+However, I'm having trouble accessing the video transcript at the moment. This could be because:
+- The video doesn't have captions available
+- The transcription service is temporarily unavailable
+- The video is private or restricted
+
+You can still ask me general questions about the video based on the title and description, or try refreshing the page and asking again.`;
   }
 }
 
@@ -1037,23 +1149,46 @@ function updateAgentWelcomeWithPageInfo(pageData) {
   const welcomeElement = agentOutput.querySelector('.agent-welcome');
   if (welcomeElement) {
     const isFallback = pageData.contentHash && pageData.contentHash.startsWith('fallback-');
+    const isYouTube = pageData.isYouTube && pageData.videoData;
     
-    welcomeElement.innerHTML = `
-      <h4>🤖 AI Agent Ready</h4>
-      <p>I can help you understand and discuss the content on this page. Ask me anything!</p>
-      <div class="page-info">
-        <strong>📄 ${pageData.title}</strong>
-        <p>${pageData.content.full.substring(0, 200)}...</p>
-        ${isFallback ? '<p style="color: #ffc107; font-size: 0.9em;">⚠️ Page content analysis is limited on this page.</p>' : ''}
-      </div>
-      <div class="agent-suggestions">
-        <button class="suggestion-btn" data-question="What is this page about?">What is this page about?</button>
-        <button class="suggestion-btn" data-question="Summarize the main points">Summarize the main points</button>
-        <button class="suggestion-btn" data-question="What are the key takeaways?">What are the key takeaways?</button>
-        <button class="suggestion-btn" data-question="Explain this in simple terms">Explain this in simple terms</button>
-        <button class="suggestion-btn" data-question="What questions should I ask about this?">What questions should I ask?</button>
-      </div>
-    `;
+    if (isYouTube) {
+      // YouTube-specific welcome message
+      welcomeElement.innerHTML = `
+        <h4>🎥 YouTube Video Detected!</h4>
+        <p>I can analyze this YouTube video and provide summaries, key points, and answer questions about its content.</p>
+        <div class="youtube-info">
+          <strong>📺 ${pageData.videoData.title}</strong>
+          <p><strong>Channel:</strong> ${pageData.videoData.channel?.name || 'Unknown'}</p>
+          <p><strong>Duration:</strong> ${pageData.videoData.duration || 'Unknown'}</p>
+          <p><strong>Views:</strong> ${pageData.videoData.views || 'Unknown'}</p>
+        </div>
+        <div class="agent-suggestions">
+          <button class="suggestion-btn youtube-btn" data-question="Summarize this video">📝 Summarize this video</button>
+          <button class="suggestion-btn youtube-btn" data-question="What are the key points in this video?">🔑 Key points</button>
+          <button class="suggestion-btn youtube-btn" data-question="What questions should I ask about this video?">❓ Generate questions</button>
+          <button class="suggestion-btn youtube-btn" data-question="Explain the main concepts in this video">💡 Main concepts</button>
+          <button class="suggestion-btn youtube-btn" data-question="What is this video about?">🎯 What's this about?</button>
+        </div>
+      `;
+    } else {
+      // Regular page welcome message
+      welcomeElement.innerHTML = `
+        <h4>🤖 AI Agent Ready</h4>
+        <p>I can help you understand and discuss the content on this page. Ask me anything!</p>
+        <div class="page-info">
+          <strong>📄 ${pageData.title}</strong>
+          <p>${pageData.content.full.substring(0, 200)}...</p>
+          ${isFallback ? '<p style="color: #ffc107; font-size: 0.9em;">⚠️ Page content analysis is limited on this page.</p>' : ''}
+        </div>
+        <div class="agent-suggestions">
+          <button class="suggestion-btn" data-question="What is this page about?">What is this page about?</button>
+          <button class="suggestion-btn" data-question="Summarize the main points">Summarize the main points</button>
+          <button class="suggestion-btn" data-question="What are the key takeaways?">What are the key takeaways?</button>
+          <button class="suggestion-btn" data-question="Explain this in simple terms">Explain this in simple terms</button>
+          <button class="suggestion-btn" data-question="What questions should I ask about this?">What questions should I ask?</button>
+        </div>
+      `;
+    }
     
     // Re-add event listeners to suggestion buttons
     const suggestionButtons = agentOutput.querySelectorAll('.suggestion-btn');

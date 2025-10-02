@@ -1395,3 +1395,38 @@ body {
   color: currentColor;
 }
 */
+
+/* YouTube-specific styles */
+.youtube-info {
+  background: linear-gradient(135deg, #ff0000 0%, #cc0000 100%);
+  color: white;
+  border-radius: 8px;
+  padding: 12px;
+  margin: 15px 0;
+  font-size: 0.9em;
+}
+
+.youtube-info strong {
+  display: block;
+  color: white;
+  margin-bottom: 8px;
+  font-size: 1em;
+}
+
+.youtube-info p {
+  margin: 4px 0;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.85em;
+}
+
+.youtube-btn {
+  background: linear-gradient(135deg, #ff0000 0%, #cc0000 100%) !important;
+  color: white !important;
+  border: none !important;
+}
+
+.youtube-btn:hover {
+  background: linear-gradient(135deg, #cc0000 0%, #990000 100%) !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(255, 0, 0, 0.4) !important;
+}
