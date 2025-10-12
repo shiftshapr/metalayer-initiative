@@ -1,10 +1,25 @@
 const { PrismaClient } = require('../generated/prisma');
+const { createClient } = require('@supabase/supabase-js');
 const UrlNormalizationService = require('./urlNormalizationService');
 
 class PresenceService {
   constructor(prisma) {
     this.prisma = prisma;
     this.urlNormalization = new UrlNormalizationService();
+    this.supabase = null;
+    this.initializeSupabase();
+  }
+
+  async initializeSupabase() {
+    try {
+      const SUPABASE_URL = process.env.SUPABASE_URL || 'https://zwxomzkmncwzwryvudwu.supabase.co';
+      const SUPABASE_KEY = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp3eG9temttbmN3endyeXZ1ZHd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk2Njg2ODQsImV4cCI6MjA3NTI0NDY4NH0.CoceGOzumiF6aYVGQSWily93snNYh9N9C4p8lrjrTyM';
+      
+      this.supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+      console.log('✅ Supabase client initialized in PresenceService');
+    } catch (error) {
+      console.error('❌ Failed to initialize Supabase in PresenceService:', error);
+    }
   }
 
   // Record a presence event (ENTER, HEARTBEAT, EXIT, AVAILABILITY)
@@ -145,90 +160,168 @@ class PresenceService {
   // Get active users on a specific page (users with recent HEARTBEAT or ENTER events)
   async getActiveUsers(pageId, communityId = null, minutesThreshold = 5, currentUserId = null) {
     try {
+      // Use Supabase to query presence data instead of Prisma
+      if (!this.supabase) {
+        console.error('❌ Supabase client not initialized');
+        return [];
+      }
+
       const thresholdTime = new Date(Date.now() - minutesThreshold * 60 * 1000);
       
-      // Get recent presence events for this page
-      // Note: We only look for ENTER and HEARTBEAT events
-      // EXIT events are inferred by heartbeat timeout, not explicit EXIT events
-      const recentEvents = await this.prisma.presenceEvent.findMany({
-        where: {
-          pageId,
-          kind: {
-            in: ['ENTER', 'HEARTBEAT']
-          },
-          createdAt: {
-            gte: thresholdTime
-          }
-        },
-        include: {
-          user: {
-            select: {
-              id: true,
-              name: true,
-              handle: true,
-              avatarUrl: true,
-              auraColor: true
-            }
-          }
-        },
-        orderBy: {
-          createdAt: 'desc'
-        }
-      });
-
-      // Group by user and get the most recent event for each user
-      const userMap = new Map();
-      const userEnterTimes = new Map(); // Track when each user first entered
+      // Query Supabase user_presence table for active users on this page
+      console.log(`🔍 DEBUG: Querying Supabase for pageId: ${pageId}, thresholdTime: ${thresholdTime.toISOString()}`);
       
-      recentEvents.forEach(event => {
-        // Don't skip the current user - we want to see all users on the page
+      // CRITICAL DIAGNOSTIC: Check if pageId has triple underscores (bug indicator)
+      if (pageId.includes('___')) {
+        console.error(`❌ PAGE_ID_BUG_DETECTED: Backend received pageId with TRIPLE underscores: ${pageId}`);
+        console.error(`❌ PAGE_ID_BUG_DETECTED: This indicates frontend cache poisoning!`);
+        console.error(`❌ PAGE_ID_BUG_DETECTED: User must hard refresh Chrome extension to fix!`);
+      }
+      
+      const { data: presenceData, error } = await this.supabase
+        .from('user_presence')
+        .select('*')
+        .eq('page_id', pageId)
+        .eq('is_active', true)
+        .gte('last_seen', thresholdTime.toISOString())
+        .order('last_seen', { ascending: false });
+
+      if (error) {
+        console.error('❌ Error querying Supabase presence data:', error);
+        return [];
+      }
+
+      console.log(`🔍 DEBUG: Raw Supabase query result: ${presenceData ? presenceData.length : 0} records`);
+      if (presenceData && presenceData.length > 0) {
+        presenceData.forEach((record, index) => {
+          console.log(`🔍 DEBUG: Record ${index + 1}: ${record.user_email} - last_seen: ${record.last_seen} (active: ${record.is_active})`);
+        });
+      }
+
+      if (!presenceData || presenceData.length === 0) {
+        console.log('🔍 No active users found in Supabase for page:', pageId);
+        // Let's also check what records exist for this page regardless of time/active status
+        const { data: allRecords, error: allError } = await this.supabase
+          .from('user_presence')
+          .select('*')
+          .eq('page_id', pageId);
         
-        // Track the earliest ENTER event for each user
-        if (event.kind === 'ENTER') {
-          if (!userEnterTimes.has(event.userId) || event.createdAt < userEnterTimes.get(event.userId)) {
-            userEnterTimes.set(event.userId, event.createdAt);
-          }
-        }
-        
-        // Keep the most recent event for each user
-        if (!userMap.has(event.userId) || event.createdAt > userMap.get(event.userId).createdAt) {
-          userMap.set(event.userId, {
-            id: event.user.id,
-            userId: event.user.id,
-            name: event.user.name || event.user.handle || 'Unknown',
-            handle: event.user.handle,
-            avatarUrl: event.user.avatarUrl,
-            auraColor: event.user.auraColor,
-            communityId: communityId,
-            communityName: communityId ? `Community ${communityId}` : 'Unknown',
-            lastSeen: event.createdAt,
-            availability: event.availability,
-            customLabel: event.customLabel,
-            enterTime: userEnterTimes.get(event.userId) || event.createdAt // When they first entered
+        if (!allError && allRecords) {
+          console.log(`🔍 DEBUG: All records for page ${pageId}: ${allRecords.length} found`);
+          allRecords.forEach((record, index) => {
+            const lastSeen = new Date(record.last_seen);
+            const isRecent = lastSeen > thresholdTime;
+            console.log(`🔍 DEBUG: All record ${index + 1}: ${record.user_email} - last_seen: ${record.last_seen} (active: ${record.is_active}, recent: ${isRecent})`);
           });
         }
+        return [];
+      }
+
+      console.log('🔍 Found', presenceData.length, 'active users in Supabase for page:', pageId);
+
+      // CRITICAL FIX: Query real user data from appUser table to get REAL Google avatars
+      const emailList = presenceData.map(p => p.user_email);
+      console.log('🔍 AVATAR_FIX: Querying appUser table for real avatars for emails:', emailList);
+      
+      const users = await this.prisma.appUser.findMany({
+        where: {
+          email: {
+            in: emailList
+          }
+        },
+        select: {
+          email: true,
+          name: true,
+          handle: true,
+          avatarUrl: true,
+          auraColor: true
+        }
+      });
+      
+      console.log('🔍 AVATAR_FIX: ========================================');
+      console.log('🔍 AVATAR_FIX: Queried appUser table with emails:', emailList);
+      console.log('🔍 AVATAR_FIX: Found', users.length, 'users in appUser table');
+      
+      if (users.length === 0) {
+        console.error('❌ AVATAR_FIX: NO USERS FOUND IN appUser TABLE!');
+        console.error('❌ AVATAR_FIX: This means avatars will be FAKE ui-avatars.com URLs!');
+        console.error('❌ AVATAR_FIX: Check if users exist in database with these emails:', emailList);
+      }
+      
+      users.forEach((user, index) => {
+        const isRealAvatar = user.avatarUrl && (
+          user.avatarUrl.includes('googleusercontent.com') ||
+          user.avatarUrl.includes('lh3.google')
+        );
+        console.log(`🔍 AVATAR_FIX: User ${index + 1}:`);
+        console.log(`   Email: ${user.email}`);
+        console.log(`   Name: ${user.name}`);
+        console.log(`   Handle: ${user.handle}`);
+        console.log(`   Avatar URL: ${user.avatarUrl}`);
+        console.log(`   Is Real Google Avatar: ${isRealAvatar}`);
+        console.log(`   Aura Color: ${user.auraColor}`);
+      });
+      console.log('🔍 AVATAR_FIX: ========================================');
+      
+      // Create a map for quick lookup
+      const userMap = new Map(users.map(u => [u.email, u]));
+
+      // Convert Supabase presence data to the expected format
+      const activeUsers = presenceData.map(presence => {
+        const email = presence.user_email;
+        const dbUser = userMap.get(email);
+        
+        // CRITICAL FIX: Use REAL avatar from database, not generated ui-avatars.com
+        const avatarUrl = dbUser?.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(email.split('@')[0])}&background=${presence.aura_color?.replace('#', '') || '45B7D1'}&color=fff`;
+        const name = dbUser?.name || email.split('@')[0];
+        const handle = dbUser?.handle || email.split('@')[0];
+        const auraColor = dbUser?.auraColor || presence.aura_color || '#45B7D1';
+        
+        const isRealAvatar = avatarUrl.includes('googleusercontent.com') || avatarUrl.includes('lh3.google');
+        console.log(`🔍 AVATAR_FIX: Building user object for ${email}:`);
+        console.log(`   avatarUrl: ${avatarUrl}`);
+        console.log(`   isReal: ${isRealAvatar}`);
+        console.log(`   dbUser exists: ${!!dbUser}`);
+        console.log(`   presence.enter_time: ${presence.enter_time}`);
+        console.log(`   presence.last_seen: ${presence.last_seen}`);
+        console.log(`   enterTime will be: ${presence.enter_time || presence.last_seen}`);
+        
+        // CRITICAL BUG FIX: Check if enter_time exists and is valid, otherwise log error
+        if (!presence.enter_time) {
+          console.error(`❌ ENTER_TIME_BUG: enter_time is ${presence.enter_time} for ${email}!`);
+          console.error(`❌ ENTER_TIME_BUG: This will cause time to reset to 'Now' on every update!`);
+          console.error(`❌ ENTER_TIME_BUG: Falling back to last_seen: ${presence.last_seen}`);
+        }
+        
+        return {
+          id: email,
+          userId: email,
+          email: email,
+          name: name,
+          handle: handle,
+          avatarUrl: avatarUrl, // USE REAL AVATAR FROM DATABASE!
+          auraColor: auraColor,
+          communityId: communityId || 'comm-001',
+          communityName: communityId ? `Community ${communityId}` : 'Community comm-001',
+          lastSeen: presence.last_seen,
+          availability: null,
+          customLabel: null,
+          enterTime: presence.enter_time || presence.last_seen, // CRITICAL FIX: Use enter_time if available
+          isActive: presence.is_active,
+          status: presence.is_active ? 'online' : 'offline'
+        };
       });
 
-      const activeUsers = Array.from(userMap.values());
-      
       // Sort by time on page (longest first) - users who entered earliest appear first
       activeUsers.sort((a, b) => {
-        const aEnterTime = a.enterTime || a.lastSeen;
-        const bEnterTime = b.enterTime || b.lastSeen;
+        const aEnterTime = new Date(a.enterTime);
+        const bEnterTime = new Date(b.enterTime);
         return aEnterTime - bEnterTime; // Earlier enter time = longer on page = appears first
       });
       
-      // Filter out users without valid avatars - only return users with real avatar images
-      const usersWithAvatars = activeUsers.filter(user => 
-        user.avatarUrl && 
-        user.avatarUrl !== 'null' && 
-        user.avatarUrl !== '' &&
-        user.avatarUrl.startsWith('http')
-      );
+      console.log(`🔍 PRESENCE: Returning ${activeUsers.length} active users from Supabase`);
       
-      // console.log(`🔍 PRESENCE: Returning ${usersWithAvatars.length} users with valid avatars (filtered from ${activeUsers.length} total)`);
-      
-      return usersWithAvatars;
+      return activeUsers;
     } catch (error) {
       console.error('Error getting active users:', error);
       throw new Error('Failed to get active users');
@@ -238,86 +331,124 @@ class PresenceService {
   // Get active users across multiple communities/pages
   async getActiveUsersForCommunities(communityIds, minutesThreshold = 0.17, currentUserId = null) {
     try {
-      // For now, just get all recent presence events since the database schema
-      // doesn't support community-based filtering yet
+      // Use Supabase to query presence data instead of Prisma
+      if (!this.supabase) {
+        console.error('❌ Supabase client not initialized');
+        return [];
+      }
+
       const thresholdTime = new Date(Date.now() - minutesThreshold * 60 * 1000);
       
-      const recentEvents = await this.prisma.presenceEvent.findMany({
+      // Query Supabase user_presence table for all active users
+      const { data: presenceData, error } = await this.supabase
+        .from('user_presence')
+        .select('*')
+        .eq('is_active', true)
+        .gte('last_seen', thresholdTime.toISOString())
+        .order('last_seen', { ascending: false });
+
+      if (error) {
+        console.error('❌ Error querying Supabase presence data for communities:', error);
+        return [];
+      }
+
+      if (!presenceData || presenceData.length === 0) {
+        console.log('🔍 No active users found in Supabase for communities');
+        return [];
+      }
+
+      console.log('🔍 Found', presenceData.length, 'active users in Supabase for communities');
+
+      // CRITICAL FIX: Query real user data from appUser table to get REAL Google avatars
+      const emailList = presenceData.map(p => p.user_email);
+      console.log('🔍 AVATAR_FIX (communities): Querying appUser table for real avatars for emails:', emailList);
+      
+      const users = await this.prisma.appUser.findMany({
         where: {
-          kind: {
-            in: ['ENTER', 'HEARTBEAT']
-          },
-          createdAt: {
-            gte: thresholdTime
+          email: {
+            in: emailList
           }
         },
-        include: {
-          user: {
-            select: {
-              id: true,
-              name: true,
-              handle: true,
-              avatarUrl: true,
-              auraColor: true
-            }
-          },
-          page: {
-            select: {
-              id: true,
-              canonicalUrl: true
-            }
-          }
-        },
-        orderBy: {
-          createdAt: 'desc'
+        select: {
+          email: true,
+          name: true,
+          handle: true,
+          avatarUrl: true,
+          auraColor: true
         }
       });
       
-      // Group by user and get the most recent event for each user
-      const userMap = new Map();
-      const now = new Date();
+      console.log('🔍 AVATAR_FIX (communities): ========================================');
+      console.log('🔍 AVATAR_FIX (communities): Queried appUser table with emails:', emailList);
+      console.log('🔍 AVATAR_FIX (communities): Found', users.length, 'users in appUser table');
       
-      recentEvents.forEach(event => {
-        // Don't skip the current user - we want to see all users
+      if (users.length === 0) {
+        console.error('❌ AVATAR_FIX (communities): NO USERS FOUND IN appUser TABLE!');
+        console.error('❌ AVATAR_FIX (communities): This means avatars will be FAKE ui-avatars.com URLs!');
+        console.error('❌ AVATAR_FIX (communities): Check if users exist in database with these emails:', emailList);
+      }
+      
+      users.forEach((user, index) => {
+        const isRealAvatar = user.avatarUrl && (
+          user.avatarUrl.includes('googleusercontent.com') ||
+          user.avatarUrl.includes('lh3.google')
+        );
+        console.log(`🔍 AVATAR_FIX (communities): User ${index + 1}:`);
+        console.log(`   Email: ${user.email}`);
+        console.log(`   Avatar URL: ${user.avatarUrl}`);
+        console.log(`   Is Real Google Avatar: ${isRealAvatar}`);
+      });
+      console.log('🔍 AVATAR_FIX (communities): ========================================');
+      
+      // Create a map for quick lookup
+      const userMap = new Map(users.map(u => [u.email, u]));
+
+      // Convert Supabase presence data to the expected format
+      const activeUsers = presenceData.map(presence => {
+        const email = presence.user_email;
+        const dbUser = userMap.get(email);
         
-        // Only include events that are truly recent (within 10 seconds)
-        const eventAge = now - event.createdAt;
-        if (eventAge > 10000) { // 10 seconds in milliseconds
-          // console.log(`🔍 PRESENCE: Skipping stale event for user ${event.userId} - age: ${Math.round(eventAge / 1000)}s`);
-          return;
+        // CRITICAL FIX: Use REAL avatar from database, not generated ui-avatars.com
+        const avatarUrl = dbUser?.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(email.split('@')[0])}&background=${presence.aura_color?.replace('#', '') || '45B7D1'}&color=fff`;
+        const name = dbUser?.name || email.split('@')[0];
+        const handle = dbUser?.handle || email.split('@')[0];
+        const auraColor = dbUser?.auraColor || presence.aura_color || '#45B7D1';
+        
+        const isRealAvatar = avatarUrl.includes('googleusercontent.com') || avatarUrl.includes('lh3.google');
+        console.log(`🔍 AVATAR_FIX (communities): Building user object for ${email}:`);
+        console.log(`   avatarUrl: ${avatarUrl}`);
+        console.log(`   isReal: ${isRealAvatar}`);
+        console.log(`   dbUser exists: ${!!dbUser}`);
+        console.log(`   presence.enter_time: ${presence.enter_time}`);
+        console.log(`   presence.last_seen: ${presence.last_seen}`);
+        
+        // CRITICAL BUG FIX: Check if enter_time exists and is valid, otherwise log error
+        if (!presence.enter_time) {
+          console.error(`❌ ENTER_TIME_BUG (communities): enter_time is ${presence.enter_time} for ${email}!`);
+          console.error(`❌ ENTER_TIME_BUG (communities): Falling back to last_seen: ${presence.last_seen}`);
         }
         
-        if (!userMap.has(event.userId) || event.createdAt > userMap.get(event.userId).createdAt) {
-          userMap.set(event.userId, {
-            id: event.user.id,
-            userId: event.user.id,
-            name: event.user.name || event.user.handle || 'Unknown',
-            handle: event.user.handle,
-            avatarUrl: event.user.avatarUrl,
-            auraColor: event.user.auraColor,
-            communityId: communityIds[0] || 'default', // Use first community for now
-            communityName: `Community ${communityIds[0] || 'default'}`,
-            lastSeen: event.createdAt,
-            availability: event.availability,
-            customLabel: event.customLabel,
-            pageUrl: event.page.canonicalUrl
-          });
-        }
+        return {
+          id: email,
+          userId: email,
+          email: email,
+          name: name,
+          handle: handle,
+          avatarUrl: avatarUrl, // USE REAL AVATAR FROM DATABASE!
+          auraColor: auraColor,
+          communityId: communityIds[0] || 'comm-001',
+          communityName: `Community ${communityIds[0] || 'comm-001'}`,
+          lastSeen: presence.last_seen,
+          availability: null,
+          customLabel: null,
+          pageUrl: presence.page_url,
+          enterTime: presence.enter_time || presence.last_seen // CRITICAL FIX: Use enter_time if available
+        };
       });
       
-      const activeUsers = Array.from(userMap.values());
+      console.log(`🔍 PRESENCE: Returning ${activeUsers.length} active users from Supabase for communities`);
       
-      // Filter out users without valid avatars - only return users with real avatar images
-      const usersWithAvatars = activeUsers.filter(user => 
-        user.avatarUrl && 
-        user.avatarUrl !== 'null' && 
-        user.avatarUrl !== '' &&
-        user.avatarUrl.startsWith('http')
-      );
-      
-      // console.log(`🔍 PRESENCE: Returning ${usersWithAvatars.length} users with valid avatars (filtered from ${activeUsers.length} total)`);
-      
-      return usersWithAvatars;
+      return activeUsers;
     } catch (error) {
       console.error('Error getting active users for communities:', error);
       throw new Error('Failed to get active users for communities');

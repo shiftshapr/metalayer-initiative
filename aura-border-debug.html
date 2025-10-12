@@ -1,0 +1,88 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Aura Border Debug Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; background: #f5f5f5; }
+        .debug-section { margin: 20px 0; padding: 20px; background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .debug-title { font-size: 18px; font-weight: bold; margin-bottom: 15px; color: #333; }
+        .avatar-test { display: flex; gap: 20px; flex-wrap: wrap; }
+        .avatar-item { text-align: center; }
+        .avatar-label { font-size: 12px; color: #666; margin-top: 8px; }
+        .measurement { font-size: 10px; color: #999; margin-top: 4px; }
+        .expected { color: #28a745; font-weight: bold; }
+        .issue { color: #dc3545; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>🔍 Aura Border Debug Test</h1>
+    <p>This test helps debug aura border issues in the Chrome extension.</p>
+    
+    <div class="debug-section">
+        <div class="debug-title">🎯 Current Implementation (Should be Fixed)</div>
+        <div class="avatar-test">
+            <div class="avatar-item">
+                <div style="position: relative; width: 32px; height: 32px; margin: 0 auto;">
+                    <div style="position: absolute; top: -2px; left: -2px; width: 36px; height: 36px; border-radius: 50%; background-color: #ff4040; z-index: 1;"></div>
+                    <img src="https://via.placeholder.com/32x32/4a90e2/ffffff?text=U" alt="User" style="position: relative; z-index: 2; width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 2px solid #ff4040;">
+                </div>
+                <div class="avatar-label">32px Avatar<br><span class="expected">✅ Should be even</span></div>
+                <div class="measurement">Aura: 36px, Avatar: 32px + 2px border</div>
+            </div>
+            
+            <div class="avatar-item">
+                <div style="position: relative; width: 48px; height: 48px; margin: 0 auto;">
+                    <div style="position: absolute; top: -2px; left: -2px; width: 52px; height: 52px; border-radius: 50%; background-color: #40ff40; z-index: 1;"></div>
+                    <img src="https://via.placeholder.com/48x48/4a90e2/ffffff?text=U" alt="User" style="position: relative; z-index: 2; width: 48px; height: 48px; border-radius: 50%; object-fit: cover; border: 2px solid #40ff40;">
+                </div>
+                <div class="avatar-label">48px Avatar<br><span class="expected">✅ Should be even</span></div>
+                <div class="measurement">Aura: 52px, Avatar: 48px + 2px border</div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="debug-section">
+        <div class="debug-title">🔍 Debugging Steps</div>
+        <ol>
+            <li><strong>Check Browser Console:</strong> Look for any CSS errors or warnings</li>
+            <li><strong>Inspect Element:</strong> Right-click on avatar and inspect to see actual styles</li>
+            <li><strong>Check Computed Styles:</strong> Look at the computed styles in DevTools</li>
+            <li><strong>Test Different Zoom Levels:</strong> Try 100%, 125%, 150% zoom</li>
+            <li><strong>Check High DPI:</strong> Test on high-resolution displays</li>
+            <li><strong>Clear Cache:</strong> Hard refresh (Ctrl+Shift+R) to clear cache</li>
+        </ol>
+    </div>
+    
+    <div class="debug-section">
+        <div class="debug-title">🐛 Common Issues & Solutions</div>
+        <ul>
+            <li><strong>Cache Issue:</strong> Hard refresh the extension page</li>
+            <li><strong>CSS Conflicts:</strong> Check for conflicting CSS rules</li>
+            <li><strong>Browser Zoom:</strong> Reset zoom to 100%</li>
+            <li><strong>High DPI:</strong> Check if display scaling affects rendering</li>
+            <li><strong>Extension Reload:</strong> Reload the extension in chrome://extensions</li>
+        </ul>
+    </div>
+    
+    <div class="debug-section">
+        <div class="debug-title">📊 Expected Measurements</div>
+        <div style="background: #f8f9fa; padding: 15px; border-radius: 4px; font-family: monospace;">
+            <p><strong>32px Avatar:</strong></p>
+            <ul>
+                <li>Container: 32px × 32px</li>
+                <li>Aura background: 36px × 36px (positioned at -2px, -2px)</li>
+                <li>Avatar image: 32px × 32px (with 2px border)</li>
+                <li>Result: 2px aura border on all sides</li>
+            </ul>
+            <p><strong>48px Avatar:</strong></p>
+            <ul>
+                <li>Container: 48px × 48px</li>
+                <li>Aura background: 52px × 52px (positioned at -2px, -2px)</li>
+                <li>Avatar image: 48px × 48px (with 2px border)</li>
+                <li>Result: 2px aura border on all sides</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>

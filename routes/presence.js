@@ -99,7 +99,7 @@ router.post('/event', authenticateUser, async (req, res) => {
 
 // GET /v1/presence/active - Get active users on a page
 router.get('/active', authenticateUser, async (req, res) => {
-  const { pageId, communityId, minutes = 5 } = req.query;
+  const { pageId, communityId, minutes = 0.5 } = req.query; // CRITICAL FIX: Reduced from 5 minutes to 30 seconds for faster visibility updates
   const { id: currentUserId } = req.user;
 
   if (!pageId) {
@@ -110,7 +110,7 @@ router.get('/active', authenticateUser, async (req, res) => {
     const activeUsers = await presenceService.getActiveUsers(
       pageId,
       communityId,
-      parseInt(minutes),
+      parseFloat(minutes), // Use parseFloat instead of parseInt to preserve decimal values
       currentUserId
     );
     
@@ -123,7 +123,7 @@ router.get('/active', authenticateUser, async (req, res) => {
 
 // GET /v1/presence/communities - Get active users across multiple communities
 router.get('/communities', authenticateUser, async (req, res) => {
-  const { communityIds, minutes = 5 } = req.query;
+  const { communityIds, minutes = 0.5 } = req.query; // CRITICAL FIX: Reduced from 5 minutes to 30 seconds for faster visibility updates
   const { id: currentUserId } = req.user;
 
   if (!communityIds) {
@@ -135,7 +135,7 @@ router.get('/communities', authenticateUser, async (req, res) => {
   try {
     const activeUsers = await presenceService.getActiveUsersForCommunities(
       communityIdArray,
-      parseInt(minutes),
+      parseFloat(minutes), // Use parseFloat instead of parseInt to preserve decimal values
       currentUserId
     );
     
@@ -148,7 +148,7 @@ router.get('/communities', authenticateUser, async (req, res) => {
 
 // GET /v1/presence/url - Get active users on a specific URL with optional community filtering
 router.get('/url', authenticateUser, async (req, res) => {
-  const { url, communityIds, minutes = 5 } = req.query;
+  const { url, communityIds, minutes = 0.5 } = req.query; // CRITICAL FIX: Reduced from 5 minutes to 30 seconds for faster visibility updates
   const { id: currentUserId } = req.user;
 
   if (!url) {
@@ -198,7 +198,7 @@ router.get('/url', authenticateUser, async (req, res) => {
     const activeUsers = await presenceService.getActiveUsers(
       page.id,
       communityIds ? communityIds.split(',')[0] : null, // Use first community for now
-      parseInt(minutes),
+      parseFloat(minutes), // Use parseFloat instead of parseInt to preserve decimal values
       currentUserId
     );
     

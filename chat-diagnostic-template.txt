@@ -1,0 +1,7 @@
+check JAUmemory for relevant memories
+Engage sd1 to step back and look at what could be causing the problem(s), come up with some hypothesees, add sufficient logging, and try the most likely fix 
+Engage te2 to fully test and to recommend to the senior engineer any test infrastructure (including fucntions that can be run within the console) or logging that could be be beneficial, as well as suggestions for fixes...
+store solutions in JAUmemory with tags
+link memories to agents
+
+

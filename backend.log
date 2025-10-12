@@ -1,0 +1,24 @@
+function
+✅ Supabase client initialized in PresenceService
+node:events:496
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: listen EADDRINUS🔍 URL_NORMALIZE: Normalizing URL: chrome://extensions/?errors=dbdjamnflfecdnioehkdmlhnmajffijl
+🔍 URL_NORMALIZE_BACKEND: Starting normalization for: chrome://extensions/?errors=dbdjamnflfecdnioehkdmlhnmajffijl
+🔍 URL_NORMALIZE_BACKEND: Getting normalization rules, cache size: 0
+🔍 URL_NORMALIZE_BACKEND: Fetching fresh rules from database...
+🔍 URL_NORMALIZE_BACKEND: Fetched 5 rules from database
+✅ URL_NORMALIZE_BACKEND: Rules cached successfully
+🔍 URL_NORMALIZE_BACKEND: Found 5 normalization rules
+🔍 URL_NORMALIZE_BACKEND: Applying rule QUERY_KEY_PRESERVE for domain chrome-extension
+🔍 URL_NORMALIZE_BACKEND: Rule applied, result: chrome://extensions/?errors=dbdjamnflfecdnioehkdmlhnmajffijl
+🔍 URL_NORMALIZE_BACKEND: Generated pageId: chrome_extensions_errors_dbdjamnflfecdnioehkdmlhnmajffijl
+✅ URL_NORMALIZE_BACKEND: Final result: {
+  normalizedUrl: 'chrome://extensions/?errors=dbdjamnflfecdnioehkdmlhnmajffijl',
+  pageId: 'chrome_extensions_errors_dbdjamnflfecdnioehkdmlhnmajffijl'
+}
+✅ URL_NORMALIZE: Result: {
+  normalizedUrl: 'chrome://extensions/?errors=dbdjamnflfecdnioehkdmlhnmajffijl',
+  pageId: 'chrome_extensions_errors_dbdjamnflfecdnioehkdmlhnmajffijl'
+}

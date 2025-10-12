@@ -10,6 +10,7 @@ exports.postMessage = async (req, res) => {
     }
 
     console.log(`✅ CHAT: Creating message for user ${userEmail} in community ${communityId} on URI ${uri}`);
+    console.log(`🔍 CHAT_CREATE: Message content: "${content}"`);
 
     // Look up user by email to get database user ID
     const user = await prisma.appUser.findUnique({
@@ -17,10 +18,12 @@ exports.postMessage = async (req, res) => {
     });
 
     if (!user) {
+      console.log(`❌ CHAT_CREATE: User not found for email: ${userEmail}`);
       return res.status(404).json({ error: 'User not found' });
     }
 
     const userId = user.id;
+    console.log(`🔍 CHAT_CREATE: Found user ${userId} for email ${userEmail}`);
 
     // Generate unique IDs
     const postId = `post-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -31,6 +34,7 @@ exports.postMessage = async (req, res) => {
     const urlNormalization = new UrlNormalizationService();
     const normalizedUrl = await urlNormalization.normalizeUrl(uri || 'general');
     const pageId = normalizedUrl.pageId;
+    console.log(`🔍 CHAT_CREATE: Normalized URI: ${normalizedUrl.normalizedUrl}, PageId: ${pageId}`);
     
     // Create or get the page
     await prisma.page.upsert({
@@ -43,6 +47,7 @@ exports.postMessage = async (req, res) => {
         spaceId: null
       }
     });
+    console.log(`🔍 CHAT_CREATE: Page upserted with ID: ${pageId}`);
     
     // Create or get the conversation
     await prisma.conversation.upsert({
@@ -56,6 +61,7 @@ exports.postMessage = async (req, res) => {
         communityId: communityId
       }
     });
+    console.log(`🔍 CHAT_CREATE: Conversation upserted with ID: ${conversationId}`);
 
     // Create message in database using Post table
     const msg = await prisma.post.create({
@@ -96,18 +102,56 @@ exports.getChatHistory = async (req, res) => {
       return res.status(400).json({ error: 'communityId query is required' });
     }
 
-    // Find conversations for this community
+    // Find conversations for this community, optionally filtered by URI
+    const whereClause = {
+      communityId: communityId
+    };
+    
+    // If URI is provided, filter by page URL
+    if (uri) {
+      // Get the pageId for this URI
+      const UrlNormalizationService = require('../services/urlNormalizationService');
+      const urlNormalization = new UrlNormalizationService();
+      const normalizedUrl = await urlNormalization.normalizeUrl(uri);
+      const pageId = normalizedUrl.pageId;
+      
+      whereClause.pageId = pageId;
+      console.log(`🔍 CHAT_FILTER: Filtering conversations by pageId: ${pageId} for URI: ${uri}`);
+      console.log(`🔍 CHAT_FILTER: Normalized URI: ${normalizedUrl.normalizedUrl}`);
+    } else {
+      console.log(`🔍 CHAT_FILTER: No URI filter applied - getting all conversations for community`);
+    }
+    
+    // DIAGNOSTIC: Check all conversations before filtering
+    const allConversationsForCommunity = await prisma.conversation.findMany({
+      where: { communityId: communityId },
+      select: {
+        id: true,
+        pageId: true,
+        page: {
+          select: {
+            url: true,
+            canonicalUrl: true
+          }
+        }
+      }
+    });
+    
+    console.log(`🔍 CHAT_DIAGNOSTIC: Total conversations in community ${communityId}: ${allConversationsForCommunity.length}`);
+    if (allConversationsForCommunity.length > 0) {
+      console.log(`🔍 CHAT_DIAGNOSTIC: All conversations:`, JSON.stringify(allConversationsForCommunity, null, 2));
+    }
+    
     const dbConversations = await prisma.conversation.findMany({
-      where: {
-        communityId: communityId
-      },
+      where: whereClause,
       select: {
         id: true
       }
     });
 
     const conversationIds = dbConversations.map(c => c.id);
-    console.log(`🔍 CHAT: Found ${conversationIds.length} conversations for community ${communityId}`);
+    console.log(`🔍 CHAT: Found ${conversationIds.length} conversations for community ${communityId} (after filtering)`);
+    console.log(`🔍 CHAT: Conversation IDs:`, conversationIds);
 
     if (conversationIds.length === 0) {
       console.log(`No conversations found for community ${communityId}`);
@@ -128,7 +172,9 @@ exports.getChatHistory = async (req, res) => {
             id: true,
             name: true,
             handle: true,
-            avatarUrl: true
+            avatarUrl: true,
+            email: true,
+            auraColor: true
           }
         },
         conversation: {
@@ -143,9 +189,10 @@ exports.getChatHistory = async (req, res) => {
       }
     });
 
-    console.log(`Found ${msgs.length} messages for community ${communityId}`);
+    console.log(`🔍 CHAT: Found ${msgs.length} messages for community ${communityId}`);
+    console.log(`🔍 CHAT: Messages found:`, msgs.map(m => ({ id: m.id, body: m.body, createdAt: m.createdAt, conversationId: m.conversationId })));
     if (uri) {
-      console.log(`After URI filter (${uri}): ${msgs.length} messages`);
+      console.log(`🔍 CHAT: URI-filtered messages for ${uri}: ${msgs.length} messages`);
     }
 
     // Transform messages into conversation format expected by frontend
@@ -178,7 +225,10 @@ exports.getChatHistory = async (req, res) => {
     }
     
     const conversations = Array.from(conversationsMap.values());
-    console.log(`Returning ${conversations.length} conversations with ${msgs.length} total messages`);
+    console.log(`✅ CHAT_RESULT: Returning ${conversations.length} conversations with ${msgs.length} total messages`);
+    if (uri) {
+      console.log(`🔍 CHAT_RESULT: URI-filtered results for ${uri}: ${conversations.length} conversations`);
+    }
     
     res.json({ conversations });
   } catch (error) {

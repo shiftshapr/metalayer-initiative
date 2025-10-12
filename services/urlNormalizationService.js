@@ -242,7 +242,13 @@ class UrlNormalizationService {
    * @returns {string} - Page ID
    */
   generatePageId(normalizedUrl) {
-    return normalizedUrl.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 100);
+    // Replace all non-alphanumeric characters with underscores
+    // CRITICAL FIX: Collapse multiple consecutive underscores into a single underscore
+    // This prevents page IDs like "chrome___extensions__errors_" from having double/triple underscores
+    return normalizedUrl
+      .replace(/[^a-zA-Z0-9]/g, '_')  // Replace non-alphanumeric with _
+      .replace(/_+/g, '_')              // Collapse multiple _ into single _
+      .substring(0, 100);               // Limit to 100 characters
   }
 
   /**

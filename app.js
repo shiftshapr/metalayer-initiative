@@ -53,6 +53,8 @@ app.use('/poh', require('./routes/poh'));
 app.use('/communities', require('./routes/communities'));
 app.use('/avatars', require('./routes/avatars'));
 app.use('/chat', require('./routes/chat'));
+app.use('/v1/presence', require('./routes/presence')); // CRITICAL FIX: Register presence routes
+app.use('/v1/users', require('./routes/users')); // CRITICAL FIX: Register users routes
 app.use(require('./routes/interaction'));
 app.use('/policy/enforce', require('./routes/policy'));
 // X-Owlz dynamic NFT endpoints

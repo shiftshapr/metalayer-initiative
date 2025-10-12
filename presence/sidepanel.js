@@ -1,5 +1,770 @@
-// Meta-Layer Initiative API Configuration
-const METALAYER_API_URL = 'http://216.238.91.120:3003';
+// Meta-Layer Initiative API Configuration - MODERNIZED
+// Use environment-based configuration instead of hardcoded URLs
+// MODERN CONFIGURATION: Use environment-based configuration
+// MODERN CONFIGURATION: Fully environment-based, no hardcoded fallbacks
+
+// Real Google auth will be loaded via script tag in HTML
+const METALAYER_API_URL = window.METALAYER_API_URL || (window.configManager ? window.configManager.get('apiUrl') : null);
+const METALAYER_WS_URL = window.METALAYER_WS_URL || (window.configManager ? window.configManager.get('wsUrl') : null);
+
+// Initialize comprehensive real-time logging
+let realtimeLogger = null;
+if (typeof window !== 'undefined' && window.realtimeLogger) {
+  realtimeLogger = window.realtimeLogger;
+} else {
+  // Fallback logging if realtime-logger.js not loaded
+  realtimeLogger = {
+    websocket: (level, msg, data) => console.log(`[WEBSOCKET] ${msg}`, data),
+    supabase: (level, msg, data) => console.log(`[SUPABASE] ${msg}`, data),
+    aura: (level, msg, data) => console.log(`[AURA] ${msg}`, data),
+    message: (level, msg, data) => console.log(`[MESSAGE] ${msg}`, data),
+    visibility: (level, msg, data) => console.log(`[VISIBILITY] ${msg}`, data),
+    presence: (level, msg, data) => console.log(`[PRESENCE] ${msg}`, data),
+    error: (level, msg, data) => console.error(`[ERROR] ${msg}`, data),
+    startFlow: (name, data) => console.log(`[FLOW_START] ${name}`, data),
+    endFlow: (name, success, data) => console.log(`[FLOW_END] ${name} (success: ${success})`, data),
+    stepFlow: (name, step, data) => console.log(`[FLOW_STEP] ${name} - ${step}`, data)
+  };
+}
+
+// Validate configuration is available
+if (!METALAYER_API_URL || !METALAYER_WS_URL) {
+  console.error('❌ CONFIG: Missing API configuration. Please ensure configManager is properly initialized.');
+}
+
+// ===== COMPLETE MODERN ARCHITECTURE INTEGRATION =====
+// StateManager, EventBus, LifecycleManager, and Supabase integration
+
+// Supabase configuration (using real credentials)
+const SUPABASE_URL = 'https://zwxomzkmncwzwryvudwu.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp3eG9temttbmN3endyeXZ1ZHd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk2Njg2ODQsImV4cCI6MjA3NTI0NDY4NH0.CoceGOzumiF6aYVGQSWily93snNYh9N9C4p8lrjrTyM';
+
+// Initialize Supabase client globally
+if (typeof window !== 'undefined' && typeof supabase !== 'undefined') {
+  window.supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  console.log('🔍 SUPABASE: Global client initialized for Real Google Auth');
+} else {
+  console.error('🔍 SUPABASE: Failed to initialize global client');
+}
+
+// Initialize all modern architecture components
+let stateManager = null;
+let eventBus = null;
+let lifecycleManager = null;
+let modernArchitectureInitialized = false;
+let supabaseRealtimeClient = null;
+
+// Initialize real Google auth for actual profile pictures
+let realGoogleAuth = null;
+
+async function initializeCompleteModernArchitecture() {
+  try {
+    // Prevent multiple initializations
+    if (modernArchitectureInitialized) {
+      console.log('🔄 MODERN: Architecture already initialized, skipping');
+      return true;
+    }
+    
+    console.log('🚀 MODERN: Initializing complete modern architecture...');
+    
+    // Check if StateManager is available
+    if (typeof StateManager === 'undefined') {
+      console.log('⚠️ MODERN: StateManager not available, skipping modern architecture');
+      return true;
+    }
+    
+    // Initialize StateManager
+    stateManager = new StateManager();
+    await stateManager.initialize({
+      userAvatarBgColor: '#45B7D1',
+      googleUser: null,
+      supabaseUser: null,
+      metalayerUser: null,
+      activeCommunities: ['comm-001'],
+      primaryCommunity: 'comm-001',
+      currentCommunity: 'comm-001',
+      communities: [],
+      theme: 'auto',
+      debugMode: false,
+      customAvatarColor: null,
+      lastMessageId: null,
+      lastLoadedUri: null,
+      currentUri: null,
+      presenceData: null,
+      chatData: [],
+      messagePollingInterval: null,
+      presenceHeartbeatInterval: null,
+      isInitialized: false
+    });
+    
+    // Initialize EventBus
+    if (typeof EventBus !== 'undefined') {
+      eventBus = new EventBus();
+      setupModernEventHandling();
+    }
+    
+    // Initialize LifecycleManager
+    if (typeof LifecycleManager !== 'undefined' && !lifecycleManager) {
+      try {
+        lifecycleManager = new LifecycleManager();
+        // Register the sidepanel component first
+        lifecycleManager.register('sidepanel', {
+          name: 'sidepanel',
+          version: '1.0.0',
+          dependencies: ['StateManager', 'EventBus'],
+          initialize: () => {
+            console.log('🔄 LifecycleManager: Sidepanel component initialized');
+            return true;
+          },
+          destroy: () => {
+            console.log('🔄 LifecycleManager: Sidepanel component destroyed');
+            return true;
+          }
+        });
+        // Then initialize it
+        await lifecycleManager.initialize('sidepanel');
+        console.log('✅ LifecycleManager: Initialized successfully');
+      } catch (error) {
+        console.error('❌ LifecycleManager: Error during initialization:', error);
+        // Continue without LifecycleManager
+        lifecycleManager = null;
+      }
+    } else if (lifecycleManager) {
+      console.log('🔄 LifecycleManager: Already initialized, skipping');
+    }
+    
+    console.log('✅ MODERN: Complete modern architecture initialized successfully');
+    modernArchitectureInitialized = true;
+    return true;
+  } catch (error) {
+    console.error('❌ MODERN: Error initializing modern architecture:', error);
+    return false;
+  }
+}
+
+function setupModernEventHandling() {
+  console.log('🎯 MODERN: Setting up modern event handling...');
+  
+  // Check if EventBus is available
+  if (!eventBus || !eventBus.on) {
+    console.log('⚠️ MODERN: EventBus not available, using direct chrome.storage communication');
+    return;
+  }
+  
+  // Avatar events
+  eventBus.on('avatar:colorChanged', (data) => {
+    console.log('🎨 MODERN: Avatar color changed:', data.color);
+    updateAvatarColor(data.color);
+    if (supabaseRealtimeClient) {
+      broadcastAuraColorChange(data.color);
+    }
+  });
+  
+  // Message events
+  eventBus.on('message:send', (data) => {
+    console.log('💬 MODERN: Sending message:', data.content);
+    sendMessageToAPI(data.content);
+  });
+  
+  eventBus.on('message:received', (data) => {
+    console.log('📨 MODERN: Message received:', data.message);
+    addMessageToChat(data.message);
+  });
+  
+  // Presence events
+  eventBus.on('presence:userJoined', (data) => {
+    console.log('👋 MODERN: User joined:', data.user);
+    refreshVisibilityAvatars();
+  });
+  
+  eventBus.on('presence:userLeft', (data) => {
+    console.log('👋 MODERN: User left:', data.user);
+    refreshVisibilityAvatars();
+  });
+  
+  // Cross-profile events
+  eventBus.on('crossProfile:auraChanged', (data) => {
+    console.log('📡 MODERN: Cross-profile aura changed:', data.userEmail, data.color);
+    updateUserAuraInUI(data.userEmail, data.color);
+  });
+  
+  eventBus.on('crossProfile:messageAdded', (data) => {
+    console.log('📡 MODERN: Cross-profile message added:', data.message.content);
+    addMessageToChat(data.message);
+  });
+  
+  console.log('✅ MODERN: Modern event handling setup complete');
+}
+
+function registerModernComponents() {
+  console.log('🎯 MODERN: Registering modern components...');
+  
+  // Avatar Component
+  lifecycleManager.registerComponent('avatar', {
+    name: 'Avatar Component',
+    autoInitialize: true,
+    autoMount: true,
+    priority: 1,
+    init() {
+      console.log('🎨 MODERN: Avatar component initialized');
+      this.initialized = true;
+    },
+    mount() {
+      console.log('🎨 MODERN: Avatar component mounted');
+      this.mounted = true;
+    },
+    update(data) {
+      console.log('🎨 MODERN: Avatar component updated:', data);
+      if (data.auraColor) {
+        this.updateAuraColor(data.auraColor);
+      }
+    },
+    unmount() {
+      console.log('🎨 MODERN: Avatar component unmounted');
+      this.mounted = false;
+    },
+    destroy() {
+      console.log('🎨 MODERN: Avatar component destroyed');
+      this.initialized = false;
+    },
+    updateAuraColor(color) {
+      // Profile avatar now uses unified avatar system - just update window.currentUser and refresh
+      if (window.currentUser) {
+        window.currentUser.auraColor = color;
+        updateUI(window.currentUser);
+      }
+    }
+  });
+  
+  // Chat Component
+  lifecycleManager.registerComponent('chat', {
+    name: 'Chat Component',
+    autoInitialize: true,
+    autoMount: true,
+    priority: 2,
+    init() {
+      console.log('💬 MODERN: Chat component initialized');
+      this.initialized = true;
+    },
+    mount() {
+      console.log('💬 MODERN: Chat component mounted');
+      this.mounted = true;
+    },
+    update(data) {
+      console.log('💬 MODERN: Chat component updated:', data);
+      if (data.message) {
+        this.addMessage(data.message);
+      }
+    },
+    unmount() {
+      console.log('💬 MODERN: Chat component unmounted');
+      this.mounted = false;
+    },
+    destroy() {
+      console.log('💬 MODERN: Chat component destroyed');
+      this.initialized = false;
+    },
+    addMessage(message) {
+      console.log('💬 MODERN: Adding message to chat:', message);
+    }
+  });
+  
+  console.log('✅ MODERN: Modern components registered');
+}
+
+function setupSupabaseEventHandling() {
+  if (!supabaseRealtimeClient) return;
+  
+  console.log('🎯 MODERN: Setting up Supabase event handling...');
+  
+  supabaseRealtimeClient.onUserUpdated = (user) => {
+    console.log('📡 MODERN: Supabase user updated:', user.user_email);
+    // EventBus was removed - use direct chrome.storage communication instead
+    if (eventBus && eventBus.emit) {
+      eventBus.emit('crossProfile:auraChanged', {
+        userEmail: user.user_email,
+        color: user.aura_color,
+        timestamp: Date.now()
+      });
+    } else {
+      console.log('📡 MODERN: EventBus not available, using direct storage communication');
+      // Direct chrome.storage communication for cross-profile updates
+      chrome.storage.local.set({
+        'crossProfile:auraChanged': {
+          userEmail: user.user_email,
+          color: user.aura_color,
+          timestamp: Date.now()
+        }
+      });
+    }
+  };
+  
+  supabaseRealtimeClient.onNewMessage = (message) => {
+    console.log('📡 MODERN: Supabase new message:', message.content);
+    if (eventBus && eventBus.emit) {
+      eventBus.emit('crossProfile:messageAdded', {
+        message: message,
+        timestamp: Date.now()
+      });
+    } else {
+      console.log('📡 MODERN: EventBus not available, using direct storage communication');
+      chrome.storage.local.set({
+        'crossProfile:messageAdded': {
+          message: message,
+          timestamp: Date.now()
+        }
+      });
+    }
+  };
+  
+  supabaseRealtimeClient.onVisibilityChanged = (visibility) => {
+    console.log('👁️ MODERN: Supabase visibility changed:', visibility.user_email, 'visible:', visibility.is_visible);
+    if (eventBus && eventBus.emit) {
+      eventBus.emit('presence:visibilityChanged', {
+        user: visibility,
+        timestamp: Date.now()
+      });
+    } else {
+      console.log('👁️ MODERN: EventBus not available, using direct storage communication');
+      chrome.storage.local.set({
+        'presence:visibilityChanged': {
+          user: visibility,
+          timestamp: Date.now()
+        }
+      });
+    }
+    // Refresh visibility avatars
+    refreshVisibilityAvatars();
+  };
+  
+  supabaseRealtimeClient.onUserJoined = (user) => {
+    console.log('📡 MODERN: Supabase user joined:', user.user_email);
+    if (eventBus && eventBus.emit) {
+      eventBus.emit('presence:userJoined', {
+        user: user,
+        timestamp: Date.now()
+      });
+    } else {
+      console.log('📡 MODERN: EventBus not available, using direct storage communication');
+      chrome.storage.local.set({
+        'presence:userJoined': {
+          user: user,
+          timestamp: Date.now()
+        }
+      });
+    }
+  };
+  
+  supabaseRealtimeClient.onUserLeft = (user) => {
+    console.log('📡 MODERN: Supabase user left:', user.user_email);
+    if (eventBus && eventBus.emit) {
+      eventBus.emit('presence:userLeft', {
+        user: user,
+        timestamp: Date.now()
+      });
+    } else {
+      console.log('📡 MODERN: EventBus not available, using direct storage communication');
+      chrome.storage.local.set({
+        'presence:userLeft': {
+          user: user,
+          timestamp: Date.now()
+        }
+      });
+    }
+  };
+  
+  console.log('✅ MODERN: Supabase event handling setup complete');
+}
+
+async function migrateFromChromeStorage() {
+  console.log('🔄 MODERN: Migrating from Chrome Storage...');
+  
+  try {
+    const result = await chrome.storage.local.get([
+      'userAvatarBgColor',
+      'googleUser',
+      'supabaseUser',
+      'metalayerUser',
+      'activeCommunities',
+      'primaryCommunity',
+      'currentCommunity',
+      'communities',
+      'theme',
+      'debugMode',
+      'customAvatarColor',
+      'pendingMessageContent',
+      'pendingMessageUri',
+      'pendingVisibilityContent',
+      'pendingVisibilityUri'
+    ]);
+    
+    for (const [key, value] of Object.entries(result)) {
+      if (value !== undefined && stateManager) {
+        try {
+          await stateManager.set(key, value);
+          console.log('✅ MODERN: Migrated', key, '=', value);
+        } catch (error) {
+          console.error('❌ MODERN: Error migrating', key, ':', error);
+        }
+      }
+    }
+    
+    console.log('✅ MODERN: Migration from Chrome Storage complete');
+  } catch (error) {
+    console.error('❌ MODERN: Error migrating from Chrome Storage:', error);
+  }
+}
+
+// Modern state management functions
+async function getState(key) {
+  if (stateManager && typeof stateManager.get === 'function') {
+    try {
+      return await stateManager.get(key);
+    } catch (error) {
+      console.error('❌ MODERN: Error getting state from StateManager:', error);
+      console.error('❌ MODERN: Error details:', {
+        message: error.message,
+        stack: error.stack,
+        key: key,
+        stateManager: !!stateManager,
+        stateManagerType: typeof stateManager,
+        stateManagerGet: typeof stateManager.get
+      });
+      // Fallback to chrome.storage.local
+      return new Promise((resolve) => {
+        chrome.storage.local.get([key], (result) => {
+          resolve(result[key] || null);
+        });
+      });
+    }
+  } else {
+    console.log('🔄 MODERN: StateManager not available, using chrome.storage.local fallback');
+    // Fallback to chrome.storage.local
+    return new Promise((resolve) => {
+      chrome.storage.local.get([key], (result) => {
+        resolve(result[key] || null);
+      });
+    });
+  }
+}
+
+async function setState(key, value) {
+  if (stateManager) {
+    try {
+      await stateManager.set(key, value);
+      console.log('🔄 MODERN: State updated:', key, '=', value);
+    } catch (error) {
+      console.error('❌ MODERN: Error setting state in StateManager:', error);
+      // Fallback to chrome.storage.local
+      chrome.storage.local.set({ [key]: value });
+    }
+  } else {
+    // Fallback to chrome.storage.local
+    chrome.storage.local.set({ [key]: value });
+  }
+}
+
+function emitEvent(eventName, data = {}) {
+  if (eventBus) {
+    eventBus.emit(eventName, data);
+    console.log('📡 MODERN: Emitted event:', eventName, data);
+  }
+}
+
+function onEvent(eventName, callback) {
+  if (eventBus) {
+    eventBus.on(eventName, callback);
+    console.log('👂 MODERN: Subscribed to event:', eventName);
+  }
+}
+
+// Modern cross-profile communication
+async function setupModernCrossProfileCommunication() {
+  console.log('📡 MODERN: Setting up modern cross-profile communication...');
+  
+  if (window.supabaseRealtimeClient) {
+    await setupSupabaseEventHandling();
+    console.log('✅ MODERN: Supabase cross-profile communication setup');
+  } else {
+    console.warn('⚠️ MODERN: Supabase not available, cross-profile communication limited');
+  }
+}
+
+// ===== END COMPLETE MODERN ARCHITECTURE INTEGRATION =====
+
+// ===== SUPABASE REAL-TIME INTEGRATION =====
+
+// Initialize Supabase real-time client (already declared above)
+
+async function initializeSupabaseRealtime() {
+  try {
+    console.log('🚀 SUPABASE: Initializing real-time client...');
+    
+    // Load Supabase client (you'll need to add the CDN script to your HTML)
+    if (typeof window !== 'undefined' && window.supabase) {
+      supabaseRealtimeClient = new SupabaseRealtimeClient();
+      const success = await supabaseRealtimeClient.initialize(SUPABASE_URL, SUPABASE_ANON_KEY);
+      
+      if (success) {
+        console.log('✅ SUPABASE: Real-time client initialized');
+        
+        // Set up event handlers
+        supabaseRealtimeClient.onUserJoined = (user) => {
+          console.log('👋 SUPABASE: User joined:', user.user_email);
+          // Refresh visibility avatars
+          refreshVisibilityAvatars();
+        };
+        
+        supabaseRealtimeClient.onUserUpdated = (user) => {
+          console.log('🔄 SUPABASE: User updated:', user.user_email);
+          // Update user's aura color in real-time
+          if (user.aura_color) {
+            updateUserAuraInUI(user.user_email, user.aura_color);
+          }
+        };
+        
+        supabaseRealtimeClient.onUserLeft = (user) => {
+          console.log('👋 SUPABASE: User left:', user.user_email);
+          // Refresh visibility avatars
+          refreshVisibilityAvatars();
+        };
+        
+        supabaseRealtimeClient.onNewMessage = (message) => {
+          console.log('💬 SUPABASE: New message:', message.content);
+          // Add message to chat
+          addMessageToChat(message);
+        };
+        
+        return true;
+      } else {
+        console.error('❌ SUPABASE: Failed to initialize real-time client');
+        return false;
+      }
+    } else {
+      console.warn('⚠️ SUPABASE: Supabase client not available, skipping real-time features');
+      return false;
+    }
+  } catch (error) {
+    console.error('❌ SUPABASE: Error initializing real-time client:', error);
+    return false;
+  }
+}
+
+async function joinPageWithSupabase(pageId, pageUrl) {
+  if (supabaseRealtimeClient) {
+    const userEmail = await getCurrentUserEmail();
+    const userId = await getCurrentUserId();
+    
+    await supabaseRealtimeClient.setCurrentUser(userEmail, userId);
+    await supabaseRealtimeClient.joinPage(pageId, pageUrl);
+    console.log('🌐 SUPABASE: Joined page with real-time updates');
+  }
+}
+
+async function broadcastAuraColorChange(color) {
+  if (supabaseRealtimeClient) {
+    await supabaseRealtimeClient.broadcastAuraColorChange(color);
+    console.log('🎨 SUPABASE: Aura color change broadcasted');
+  }
+}
+
+async function sendMessageViaSupabase(content) {
+  if (supabaseRealtimeClient) {
+    await supabaseRealtimeClient.sendMessage(content);
+    console.log('💬 SUPABASE: Message sent via real-time');
+  }
+  
+  // CHROME EXTENSION WEBSOCKET FIX: Send via background service worker
+  try {
+    const user = window.currentUser;
+    const urlData = await normalizeCurrentUrl();
+    
+    await sendSupabaseMessage({
+      type: 'MESSAGE_NEW',
+      content: content,
+      userEmail: user?.email,
+      userId: user?.id || user?.email,
+      pageId: urlData.pageId,
+      url: urlData.normalizedUrl,
+      timestamp: Date.now()
+    });
+    console.log('💬 WEBSOCKET: Message broadcast via background service worker');
+  } catch (error) {
+    console.error('💬 WEBSOCKET: Error broadcasting message:', error);
+  }
+}
+
+function updateUserAuraInUI(userEmail, auraColor) {
+  const timer = realtimeLogger.startTimer('aura_ui_update');
+  realtimeLogger.startFlow('aura_ui_update', { userEmail, auraColor, timestamp: Date.now() });
+  
+  realtimeLogger.aura('info', 'Starting aura color UI update', {
+    userEmail,
+    auraColor,
+    isCurrentUser: window.currentUser?.email === userEmail
+  });
+  
+  // Update message avatars for this user
+  realtimeLogger.stepFlow('aura_ui_update', 'Updating message avatars');
+  const messageContainers = document.querySelectorAll('.message');
+  let messageAvatarsUpdated = 0;
+  
+  realtimeLogger.aura('debug', 'Found message containers', { count: messageContainers.length });
+  
+  messageContainers.forEach((messageContainer, index) => {
+    const avatarContainer = messageContainer.querySelector('.avatar-container');
+    if (avatarContainer) {
+      const messageId = messageContainer.getAttribute('data-message-id');
+      if (messageId) {
+        const messageData = window.currentChatData?.find(msg => msg.id === messageId);
+        if (messageData && messageData.author && messageData.author.email === userEmail) {
+          // Update the author's aura color
+          messageData.author.auraColor = auraColor;
+          
+          // Re-render the avatar
+          const newAvatarHTML = getSenderAvatar(messageData.author);
+          avatarContainer.innerHTML = newAvatarHTML;
+          
+          messageAvatarsUpdated++;
+          realtimeLogger.aura('debug', 'Updated message avatar', {
+            messageId,
+            userEmail,
+            auraColor,
+            avatarIndex: index
+          });
+        }
+      }
+    }
+  });
+  
+  realtimeLogger.aura('info', 'Message avatars update complete', {
+    totalContainers: messageContainers.length,
+    avatarsUpdated: messageAvatarsUpdated
+  });
+  
+  // Update visibility avatars
+  realtimeLogger.stepFlow('aura_ui_update', 'Refreshing visibility avatars');
+  refreshVisibilityAvatars();
+  
+  // Update profile avatar if it's the current user
+  const currentUser = window.currentUser || {};
+  if (currentUser.email === userEmail) {
+    realtimeLogger.stepFlow('aura_ui_update', 'Updating profile avatar for current user');
+    const profileAvatarContainer = document.getElementById('user-avatar-container');
+    if (profileAvatarContainer) {
+      // Update profile avatar with new aura color
+      const newProfileAvatarHTML = createUnifiedAvatar({
+        id: currentUser.id || currentUser.email,
+        userId: currentUser.id || currentUser.email,
+        name: currentUser.name || currentUser.email,
+        email: currentUser.email,
+        avatarUrl: currentUser.avatarUrl,
+        auraColor: auraColor,
+      }, {
+        size: 24,
+        showAura: true,
+        showStatus: false,
+        context: 'profile'
+      });
+      
+      // Set the HTML directly on the container
+      profileAvatarContainer.innerHTML = newProfileAvatarHTML;
+      realtimeLogger.aura('info', 'Profile avatar updated using unified avatar', {
+        userEmail,
+        auraColor
+      });
+      console.log('🎨 Updated profile avatar for current user with aura ' + auraColor);
+    }
+  }
+  
+  console.log(`🎨 Aura color update complete: ${messageAvatarsUpdated} message avatars updated`);
+}
+
+async function refreshVisibilityAvatars() {
+  if (supabaseRealtimeClient && currentPageId) {
+    const users = await supabaseRealtimeClient.getPageUsers(currentPageId);
+    console.log('👁️ SUPABASE: Refreshing visibility with real-time users:', users.length);
+    
+    // Update combined avatars with real-time data
+    const activeCommunities = await chrome.storage.local.get(['activeCommunities']);
+    const communities = activeCommunities.activeCommunities || ['comm-001'];
+    await loadCombinedAvatars(communities);
+  }
+}
+
+// ===== END SUPABASE INTEGRATION =====
+
+// ===== DEBUGGING FUNCTIONS =====
+// Test function to debug visibility issues
+window.testVisibilitySystem = async function() {
+  console.log('🔍 DEBUG: Testing visibility system...');
+  
+  try {
+    // Get current user info
+    const currentUser = await getCurrentUserEmail();
+    console.log('🔍 DEBUG: Current user email:', currentUser);
+    
+    // Get current URL
+    const urlData = await normalizeCurrentUrl();
+    console.log('🔍 DEBUG: Current URL data:', urlData);
+    
+    // Test API call
+    console.log('🔍 DEBUG: Testing getPresenceByUrl API...');
+    const presenceData = await api.getPresenceByUrl(urlData.normalizedUrl, ['comm-001', 'comm-002']);
+    console.log('🔍 DEBUG: API response:', JSON.stringify(presenceData, null, 2));
+    
+    if (presenceData && presenceData.active) {
+      console.log('🔍 DEBUG: Found', presenceData.active.length, 'active users');
+      presenceData.active.forEach((user, index) => {
+        console.log(`🔍 DEBUG: User ${index + 1}:`, {
+          id: user.id,
+          userId: user.userId,
+          name: user.name,
+          email: user.email,
+          avatarUrl: user.avatarUrl,
+          isCurrentUser: user.userId === currentUser || user.email === currentUser
+        });
+      });
+    }
+    
+    // Test loadCombinedAvatars
+    console.log('🔍 DEBUG: Testing loadCombinedAvatars...');
+    await loadCombinedAvatars(['comm-001', 'comm-002']);
+    
+    console.log('🔍 DEBUG: Visibility system test complete');
+  } catch (error) {
+    console.error('🔍 DEBUG: Error testing visibility system:', error);
+  }
+};
+
+// Test function to force refresh visibility
+window.refreshVisibility = async function() {
+  console.log('🔍 DEBUG: Force refreshing visibility...');
+  try {
+    const activeCommunities = ['comm-001', 'comm-002'];
+    await loadCombinedAvatars(activeCommunities);
+    console.log('🔍 DEBUG: Visibility refresh complete');
+  } catch (error) {
+    console.error('🔍 DEBUG: Error refreshing visibility:', error);
+  }
+};
+
+// ===== EXTENSION RELOAD & BUILD TRACKING =====
+const EXTENSION_BUILD = '2025-10-12-ghost-fix'; // Updated: Fixed ghost presence on tab moves + EXIT events
+const BACKEND_EXPECTED_VERSION = '1.2.4-urlnorm-fix';
+const RELOAD_TIMESTAMP = new Date().toISOString();
+console.log('🚀 EXTENSION RELOADED:', {
+  build: EXTENSION_BUILD,
+  timestamp: RELOAD_TIMESTAMP,
+  expectedBackend: BACKEND_EXPECTED_VERSION,
+  userAgent: navigator.userAgent,
+  location: window.location.href
+});
+console.log('🔍 BUILD VERIFICATION: Extension version', EXTENSION_BUILD, 'loaded at', RELOAD_TIMESTAMP);
+console.log('🔍 BUILD VERIFICATION: Expected backend version:', BACKEND_EXPECTED_VERSION);
+
+// Clear URL normalization cache on extension reload to prevent stale data
+// (Function will be defined later in the file)
 
 // Avatar Background Color Configuration
 const AVATAR_BG_CONFIG = {
@@ -9,16 +774,21 @@ const AVATAR_BG_CONFIG = {
   // User's custom background color
   customBgColor: null,
   
-  // Get the current background color
+  // Get the current background color (which should ALWAYS be the aura color)
   getBgColor() {
     if (this.customBgColor) {
       return this.customBgColor;
     }
     
-    // If no custom color, use the same color system as message avatars
-    // For now, return the blue color that matches the message avatars
-    // The actual user-specific color will be set when the avatar is created
-    return '#45B7D1'; // Blue color that matches message avatars
+    // If no custom color, get the current aura color from the user
+    // The background color should ALWAYS match the aura color
+    const currentUser = window.currentUser;
+    if (currentUser && currentUser.auraColor) {
+      return currentUser.auraColor;
+    }
+    
+    // Fallback to default aura color
+    return '#aa00aa'; // Default aura color
   },
   
   // Set custom background color
@@ -41,9 +811,8 @@ class MetaLayerAPI {
   async request(endpoint, options = {}) {
     const url = `${this.baseURL}${endpoint}`;
     
-    // Get current user info to send in headers
-    const result = await chrome.storage.local.get(['googleUser']);
-    const user = result.googleUser;
+    // Get current user info to send in headers - use AuthManager
+    const user = await authManager.getCurrentUser();
     
     const config = {
       headers: {
@@ -71,9 +840,9 @@ class MetaLayerAPI {
   }
 
   async getCommunities() {
-    // Get current user to filter communities by membership
-    const result = await chrome.storage.local.get(['googleUser']);
-    const userId = result.googleUser?.email || result.googleUser?.id;
+    // Get current user to filter communities by membership - use AuthManager
+    const user = await authManager.getCurrentUser();
+    const userId = user?.email || user?.id;
     
     const url = userId ? `/communities?userId=${encodeURIComponent(userId)}` : '/communities';
     return this.request(url);
@@ -91,8 +860,7 @@ class MetaLayerAPI {
     }
     
     // Get current user for authentication
-    const result = await chrome.storage.local.get(['googleUser']);
-    const user = result.googleUser;
+    const user = await authManager.getCurrentUser();
     console.log('🔍 API: Using user for authentication:', user?.email);
     
     const response = await this.request(`/v1/presence/url?${params.toString()}`, { user });
@@ -105,8 +873,7 @@ class MetaLayerAPI {
     const params = new URLSearchParams({ communityIds: communityIds.join(',') });
     
     // Get current user for authentication
-    const result = await chrome.storage.local.get(['googleUser']);
-    const user = result.googleUser;
+    const user = await authManager.getCurrentUser();
     console.log('🔍 API: Using user for authentication:', user?.email);
     
     const response = await this.request(`/v1/presence/communities?${params.toString()}`, { user });
@@ -139,6 +906,7 @@ class MetaLayerAPI {
   async getChatHistory(communityId, threadId = null, uri = null) {
     // Use the existing chat API
     console.log(`🔍 CHAT_API: getChatHistory called with communityId=${communityId}, threadId=${threadId}, uri=${uri}`);
+    console.log(`🔍 CHAT_API: uri type: ${typeof uri}, value: ${JSON.stringify(uri)}`);
     
     if (!communityId) {
       console.error('❌ CHAT_API: communityId is required');
@@ -289,11 +1057,10 @@ function autoResize(textarea) {
 // --- Authentication Check Functions ---
 async function requireAuth(action, callback) {
   try {
-    // Check storage directly instead of relying on auth manager cache
-    const result = await chrome.storage.local.get(['googleUser', 'supabaseUser', 'metalayerUser']);
-    const currentUser = result.googleUser || result.supabaseUser || result.metalayerUser;
+    // Check window.currentUser from direct authentication
+    const currentUser = window.currentUser;
     
-    console.log('requireAuth called for:', action, 'currentUser:', currentUser);
+    console.log('[AUTH] requireAuth called for:', action, 'currentUser:', currentUser);
     debug(`requireAuth called for: ${action}, currentUser: ${currentUser ? 'exists' : 'null'}`);
     
     if (!currentUser) {
@@ -423,8 +1190,33 @@ async function loadCommunities() {
       await normalizeCurrentUrl();
       console.log('🔄 STARTUP: URL normalized for initial load');
       
+      // Wait for authentication before loading avatars
+      console.log('🔍 INIT: Waiting for authentication before loading avatars...');
+      let authAttempts = 0;
+      const maxAuthAttempts = 10;
+      
+      while (authAttempts < maxAuthAttempts) {
+        try {
+          const currentUser = await getCurrentUserEmail();
+          if (currentUser && currentUser !== 'undefined' && currentUser !== null) {
+            console.log('🔍 INIT: Authentication confirmed, loading avatars...');
+            break;
+          }
+        } catch (error) {
+          console.log(`🔍 INIT: Authentication not ready, attempt ${authAttempts + 1}/${maxAuthAttempts}... (${error.message})`);
+        }
+        await new Promise(resolve => setTimeout(resolve, 500)); // Wait 500ms
+        authAttempts++;
+      }
+      
       // Load combined avatars from all active communities (uses normalized URL)
-      await loadCombinedAvatars(activeCommunities);
+      try {
+        await loadCombinedAvatars(activeCommunities);
+      } catch (error) {
+        console.log('🔍 INIT: loadCombinedAvatars failed - user needs to authenticate first');
+        console.log('🔍 INIT: Skipping avatar loading until user signs in');
+        // Don't retry - wait for user to authenticate
+      }
       await loadChatHistory(primaryCommunity);
       
       // Update placeholder text with primary community name
@@ -460,6 +1252,21 @@ async function loadCombinedAvatars(communityIds) {
       if (urlResponse && urlResponse.active && urlResponse.active.length > 0) {
         avatarResponses = [urlResponse];
         console.log('🔍 VISIBILITY: Using URL-based presence data - found', urlResponse.active.length, 'active users');
+        
+        // Enhanced logging for each active user
+        urlResponse.active.forEach((user, index) => {
+          console.log(`🔍 VISIBILITY: Active user ${index + 1}:`, {
+            id: user.id,
+            userId: user.userId,
+            name: user.name,
+            handle: user.handle,
+            email: user.email,
+            avatarUrl: user.avatarUrl,
+            auraColor: user.auraColor,
+            isActive: user.isActive,
+            status: user.status
+          });
+        });
       } else {
         console.log('🔍 VISIBILITY: No active users found via URL-based presence');
         throw new Error('No active users found via URL-based presence');
@@ -467,20 +1274,42 @@ async function loadCombinedAvatars(communityIds) {
     } catch (urlError) {
       console.log('🔍 VISIBILITY: URL-based presence failed, falling back to community-based:', urlError.message);
       
-      // Fallback to community-based presence
-      try {
-        console.log('🔍 VISIBILITY: Trying community-based presence API');
-        const communityResponse = await api.getPresenceByCommunities(communityIds);
-        console.log('🔍 VISIBILITY: Community-based presence response:', JSON.stringify(communityResponse, null, 2));
-        avatarResponses = [communityResponse];
-      } catch (communityError) {
-        console.log('🔍 VISIBILITY: Community-based presence failed, using legacy avatars API:', communityError.message);
-        
-        // NO FALLBACK - If presence fails, show empty list
-        console.log('🔍 VISIBILITY: No presence data available - showing empty list');
-        return [];
-        
-        avatarResponses = await Promise.all(avatarPromises);
+          // If it's a 401 error, wait a bit and retry once
+          if (urlError.message.includes('401')) {
+            console.log('🔍 VISIBILITY: 401 error detected, waiting for authentication and retrying...');
+            await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
+
+            try {
+              console.log('🔍 VISIBILITY: Retrying URL-based presence API...');
+              const retryResponse = await api.getPresenceByUrl(currentUri, communityIds);
+              console.log('🔍 VISIBILITY: Retry response:', JSON.stringify(retryResponse, null, 2));
+
+              if (retryResponse && retryResponse.active && retryResponse.active.length > 0) {
+                console.log('🔍 VISIBILITY: Retry successful - found', retryResponse.active.length, 'active users');
+                avatarResponses = [retryResponse];
+              } else {
+                console.log('🔍 VISIBILITY: Retry successful but no active users found');
+                throw new Error('No active users found via URL-based presence retry');
+              }
+            } catch (retryError) {
+              console.log('🔍 VISIBILITY: Retry also failed:', retryError.message);
+            }
+          }
+      
+      // If retry didn't work or wasn't a 401, fall back to community-based presence
+      if (avatarResponses.length === 0) {
+        try {
+          console.log('🔍 VISIBILITY: Trying community-based presence API');
+          const communityResponse = await api.getPresenceByCommunities(communityIds);
+          console.log('🔍 VISIBILITY: Community-based presence response:', JSON.stringify(communityResponse, null, 2));
+          avatarResponses = [communityResponse];
+        } catch (communityError) {
+          console.log('🔍 VISIBILITY: Community-based presence failed, using legacy avatars API:', communityError.message);
+          
+          // NO FALLBACK - If presence fails, show empty list
+          console.log('🔍 VISIBILITY: No presence data available - showing empty list');
+          return [];
+        }
       }
     }
     
@@ -525,7 +1354,17 @@ async function loadCombinedAvatars(communityIds) {
       }
       
       // Add community info to each avatar and deduplicate
-      avatars.forEach(avatar => {
+      avatars.forEach((avatar, avatarIndex) => {
+        console.log(`🔍 VISIBILITY: Processing avatar ${avatarIndex + 1} from ${communityId}:`, {
+          id: avatar.id,
+          userId: avatar.userId,
+          name: avatar.name,
+          handle: avatar.handle,
+          email: avatar.email || avatar.userId || avatar.id,
+          avatarUrl: avatar.avatarUrl,
+          auraColor: avatar.auraColor
+        });
+        
         const userKey = `${avatar.userId || avatar.id}`;
         if (!seenUsers.has(userKey)) {
           seenUsers.add(userKey);
@@ -546,8 +1385,34 @@ async function loadCombinedAvatars(communityIds) {
     debug(`Combined avatars from ${communityIds.length} communities:`, allAvatars);
     debug(`Total unique avatars: ${allAvatars.length}`);
     
+    // Enhanced logging for final avatars before passing to updateVisibleTab
+    console.log('🔍 VISIBILITY: Final avatars to be processed by updateVisibleTab:');
+    allAvatars.forEach((avatar, index) => {
+      console.log(`🔍 VISIBILITY: Final avatar ${index + 1}:`, {
+        id: avatar.id,
+        userId: avatar.userId,
+        name: avatar.name,
+        handle: avatar.handle,
+        email: avatar.email,
+        avatarUrl: avatar.avatarUrl,
+        auraColor: avatar.auraColor,
+        communityId: avatar.communityId
+      });
+    });
+    
     // Update the visible tab with combined avatar data
     await updateVisibleTab(allAvatars);
+    
+    // CRITICAL FIX: Update profile avatar AFTER visibility data is loaded
+    // This ensures the profile avatar can access the real avatar URL from window.currentVisibilityDataUnfiltered
+    console.log('🔍 PROFILE_AVATAR_REFRESH: Refreshing profile avatar with real data from visibility...');
+    if (window.currentUser) {
+      console.log('🔍 PROFILE_AVATAR_REFRESH: Current user exists, calling updateUI()...');
+      await updateUI(window.currentUser);
+      console.log('✅ PROFILE_AVATAR_REFRESH: Profile avatar refreshed with real avatar data');
+    } else {
+      console.log('⚠️ PROFILE_AVATAR_REFRESH: No current user to refresh');
+    }
   } catch (error) {
     console.error('❌ VISIBILITY: Failed to load combined avatars:', error);
     debug(`Failed to load combined avatars: ${error.message}`);
@@ -614,6 +1479,48 @@ function updateCommunityDropdown(communities) {
 
 async function updateVisibleTab(avatars) {
   console.log('🔍 VISIBILITY: updateVisibleTab called with avatars:', JSON.stringify(avatars, null, 2));
+  
+  // CRITICAL DIAGNOSTIC: Check if API returned real Google avatars or fake ones
+  console.log('🔍 AVATAR_URL_DIAGNOSTIC: Analyzing avatar URLs from API...');
+  avatars.forEach((avatar, index) => {
+    const isRealGoogle = avatar.avatarUrl && (
+      avatar.avatarUrl.includes('lh3.googleusercontent.com') || 
+      avatar.avatarUrl.includes('googleusercontent.com')
+    );
+    const isFake = avatar.avatarUrl && avatar.avatarUrl.includes('ui-avatars.com');
+    
+    console.log(`🔍 AVATAR_URL_DIAGNOSTIC: User ${index + 1} (${avatar.name || avatar.email}):`, {
+      avatarUrl: avatar.avatarUrl,
+      isRealGoogle: isRealGoogle,
+      isFake: isFake,
+      auraColor: avatar.auraColor,
+      enterTime: avatar.enterTime
+    });
+  });
+  
+  // Store visibility data globally for real-time aura color access
+  window.currentVisibilityData = { active: avatars };
+  
+  // Clear any existing visibility update timer
+  if (window.visibilityUpdateTimer) {
+    clearInterval(window.visibilityUpdateTimer);
+  }
+  
+  // Set up a timer to update visibility times every 10 seconds
+  if (avatars && avatars.length > 0) {
+    window.visibilityUpdateTimer = setInterval(() => {
+      console.log('🔄 VISIBILITY: Updating visibility times...');
+      updateVisibilityTimes();
+    }, 10000); // Update every 10 seconds
+  }
+  console.log('🔄 VISIBILITY: Stored visibility data globally for real-time aura access');
+  
+    // Update profile avatar with real-time aura color if available
+    // Only update if we have a real-time aura color, don't replace with unified avatar
+    if (getLatestAuraColorFromPresence(window.currentUser.email)) {
+      updateProfileAvatarWithRealTimeAura();
+    }
+  
   const visibleTab = document.getElementById('canopi-visible');
   if (!visibleTab) {
     console.log('❌ VISIBILITY: visibleTab element not found');
@@ -622,29 +1529,57 @@ async function updateVisibleTab(avatars) {
   
   console.log(`🔍 VISIBILITY: Updating visible tab with ${avatars.length} avatars`);
   
-  // Filter out users without avatars and current user - only show users with real avatar images
+  // Get current user email for filtering
   const currentUserEmail = await getCurrentUserEmail();
+  console.log(`🔍 VISIBILITY: Current user email: ${currentUserEmail}`);
+  
+  // Enhanced logging for each avatar
+  console.log('🔍 VISIBILITY: Processing avatars:');
+  avatars.forEach((avatar, index) => {
+    console.log(`🔍 VISIBILITY: Avatar ${index + 1}:`, {
+      userId: avatar.userId,
+      name: avatar.name,
+      handle: avatar.handle,
+      avatarUrl: avatar.avatarUrl,
+      email: avatar.email || 'no email field'
+    });
+  });
+  
+  // CRITICAL FIX: Store ALL avatars (including current user) for profile avatar lookup
+  // Store the UNFILTERED data globally BEFORE filtering out current user
+  window.currentVisibilityDataUnfiltered = { active: avatars };
+  console.log(`🔍 VISIBILITY_UNFILTERED: Stored ${avatars.length} avatars (including current user) for profile avatar lookup`);
+  
+  // Filter out users without avatars and current user - only show users with real avatar images
   const usersWithAvatars = avatars.filter(avatar => {
+    console.log(`🔍 VISIBILITY: Checking avatar: ${avatar.name} (${avatar.userId})`);
+    
     // Filter out users without valid avatars
     if (!avatar.avatarUrl || 
         avatar.avatarUrl === 'null' || 
         avatar.avatarUrl === '' ||
         !avatar.avatarUrl.startsWith('http')) {
+      console.log(`🔍 VISIBILITY: Filtering out ${avatar.name} - invalid avatar URL: ${avatar.avatarUrl}`);
       return false;
     }
     
-    // Filter out current user
-    if (avatar.userId === currentUserEmail || 
-        avatar.handle === currentUserEmail.split('@')[0] ||
-        avatar.name === currentUserEmail.split('@')[0]) {
-      console.log(`🔍 VISIBILITY: Filtering out current user ${avatar.name}`);
+    // Check if this is the current user
+    const isCurrentUser = avatar.userId === currentUserEmail || 
+                         avatar.handle === currentUserEmail.split('@')[0] ||
+                         avatar.name === currentUserEmail.split('@')[0] ||
+                         avatar.email === currentUserEmail;
+    
+    if (isCurrentUser) {
+      console.log(`🔍 VISIBILITY: Filtering out current user ${avatar.name} (${avatar.userId})`);
       return false;
     }
     
+    console.log(`🔍 VISIBILITY: Keeping avatar: ${avatar.name} (${avatar.userId})`);
     return true;
   });
   
   console.log(`🔍 VISIBILITY: Showing ${usersWithAvatars.length} users with real avatars (filtered from ${avatars.length} total)`);
+  console.log('🔍 VISIBILITY: Final users to display:', usersWithAvatars.map(u => `${u.name} (${u.userId})`));
   
   // Create a compact header with search, count, and go invisible button
   visibleTab.innerHTML = `
@@ -658,38 +1593,70 @@ async function updateVisibleTab(avatars) {
       </div>
       <ul class="item-list">
         ${usersWithAvatars.map((avatar, index) => {
-          // Determine status based on presence data and user's availability setting
-          const isActive = avatar.lastSeen && new Date(avatar.lastSeen) > new Date(Date.now() - 5 * 60 * 1000); // Active if last seen within 5 minutes
+          // CRITICAL FIX: Use 30-second threshold for real-time accuracy, not 5 minutes!
+          // User is "active" if they have a heartbeat within the last 30 seconds
+          const now = Date.now();
+          const lastSeenTime = avatar.lastSeen ? new Date(avatar.lastSeen).getTime() : 0;
+          const timeSinceLastSeen = now - lastSeenTime;
+          const isActive = timeSinceLastSeen < (30 * 1000); // 30 seconds threshold
+          
+          // Check if user has explicitly left (EXIT event) or is inactive
+          const hasLeft = avatar.status === 'left' || !isActive;
+          
+          // COMPREHENSIVE DIAGNOSTIC LOGGING
+          console.log(`🔍 VISIBILITY_TIMING_FIX: === User ${avatar.name} ===`);
+          console.log(`🔍 VISIBILITY_TIMING_FIX:   enterTime: ${avatar.enterTime}`);
+          console.log(`🔍 VISIBILITY_TIMING_FIX:   lastSeen: ${avatar.lastSeen}`);
+          console.log(`🔍 VISIBILITY_TIMING_FIX:   timeSinceLastSeen: ${Math.floor(timeSinceLastSeen / 1000)}s`);
+          console.log(`🔍 VISIBILITY_TIMING_FIX:   isActive: ${isActive} (threshold: 30s)`);
+          console.log(`🔍 VISIBILITY_TIMING_FIX:   hasLeft: ${hasLeft}`);
+          console.log(`🔍 VISIBILITY_TIMING_FIX:   avatar.status: ${avatar.status}`);
+          console.log(`🔍 VISIBILITY_TIMING_FIX:   avatar.isActive: ${avatar.isActive}`);
+          console.log(`🔍 VISIBILITY_TIMING_FIX:   avatar.availability: ${avatar.availability}`);
           
           // Use the user's availability setting for status dot color
           let statusDotColor = '#6b7280'; // Default gray (offline)
           let statusText = 'Offline';
           
-          if (isActive) {
+          if (hasLeft) {
+            // User has left - show "last seen" status
+            statusDotColor = '#6b7280'; // Gray for inactive users
+            statusText = formatLastSeenDisplay(avatar.lastSeen);
+            console.log(`🔍 VISIBILITY_TIMING_FIX:   DECISION: User has LEFT → "${statusText}"`);
+          } else if (isActive) {
             // User is active - use their availability setting for status dot
             if (avatar.availability === 'AVAILABLE') {
               statusDotColor = '#22c55e'; // Green
-              statusText = formatTimeDisplay(avatar.lastSeen);
+              statusText = formatTimeDisplay(avatar.enterTime);
             } else if (avatar.availability === 'BUSY') {
               statusDotColor = '#eab308'; // Yellow (Working)
-              statusText = formatTimeDisplay(avatar.lastSeen);
+              statusText = formatTimeDisplay(avatar.enterTime);
             } else if (avatar.availability === 'AWAY') {
               statusDotColor = '#ef4444'; // Red (Unavailable)
-              statusText = formatTimeDisplay(avatar.lastSeen);
+              statusText = formatTimeDisplay(avatar.enterTime);
             } else {
               // Default to Available if no specific availability set
               statusDotColor = '#22c55e'; // Green (Available)
-              statusText = formatTimeDisplay(avatar.lastSeen);
+              statusText = formatTimeDisplay(avatar.enterTime);
             }
+            console.log(`🔍 VISIBILITY_TIMING_FIX:   DECISION: User is ACTIVE → "${statusText}"`);
           }
           
-          console.log(`🔍 VISIBILITY: User ${avatar.name} - lastSeen: ${avatar.lastSeen}, isActive: ${isActive}, availability: ${avatar.availability}, statusText: ${statusText}, dotColor: ${statusDotColor}`);
+          console.log(`🔍 VISIBILITY_TIMING_FIX:   FINAL: statusText="${statusText}", dotColor=${statusDotColor}`);
+          
+          // Aura color is now handled by createUnifiedAvatar()
+          console.log(`🔍 AURA_DEBUG: User ${avatar.name} - auraColor: ${avatar.auraColor}`);
           
           return `
             <li class="user-item" data-user-id="${avatar.userId}" data-user-name="${avatar.name}" data-index="${index}">
-              <div class="avatar-container">
-                <img src="${avatar.avatarUrl}" alt="${avatar.name}" class="user-avatar-img" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover;" data-avatar-fallback="true">
-                ${isActive ? `<div class="status-dot-overlay" style="background-color: ${statusDotColor}; width: 8px; height: 8px; border-radius: 50%; position: absolute; bottom: 2px; right: 2px; border: 2px solid white;"></div>` : ''}
+              <div class="avatar-container" style="position: relative; width: 32px; height: 32px;">
+                ${createUnifiedAvatar(avatar, {
+                  size: 32,
+                  showStatus: isActive,
+                  showAura: true,
+                  context: 'visibility',
+                  statusColor: statusDotColor
+                })}
               </div>
               <div class="item-details">
                 <div class="item-name">${avatar.name}</div>
@@ -763,29 +1730,21 @@ async function updateVisibleTab(avatars) {
         const currentUri = await getCurrentPageUri();
         const userId = await getCurrentUserId();
         
-        // Call visibility API to set user invisible
-        const response = await fetch(`${METALAYER_API_URL}/v1/visibility/set`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-user-email': await getCurrentUserEmail(),
-            'x-user-name': await getCurrentUserEmail(),
-            'x-user-avatar': ''
-          },
-          body: JSON.stringify({
-            url: currentUri,
-            isVisible: false
-          })
-        });
-        
-        if (response.ok) {
-          console.log('🔍 VISIBILITY: Successfully set user invisible');
-          // Reload the visible list
-          const result = await chrome.storage.local.get(['activeCommunities']);
-          const activeCommunities = result.activeCommunities || ['comm-001'];
-          await loadCombinedAvatars(activeCommunities);
+        // MODERN SUPABASE: Use Supabase real-time for visibility updates
+        if (supabaseRealtimeClient) {
+          const success = await supabaseRealtimeClient.setUserVisibility(false, currentUri);
+          if (success) {
+            await supabaseRealtimeClient.broadcastVisibilityChange(false, currentUri);
+            console.log('🔍 VISIBILITY: Successfully set user invisible via Supabase real-time');
+            // Reload the visible list
+            const result = await chrome.storage.local.get(['activeCommunities']);
+            const activeCommunities = result.activeCommunities || ['comm-001'];
+            await loadCombinedAvatars(activeCommunities);
+          } else {
+            console.error('🔍 VISIBILITY: Failed to set user invisible via Supabase');
+          }
         } else {
-          console.error('🔍 VISIBILITY: Failed to set user invisible:', await response.text());
+          console.error('🔍 VISIBILITY: Supabase real-time client not available');
         }
       } catch (error) {
         console.error('🔍 VISIBILITY: Error setting user invisible:', error);
@@ -822,9 +1781,7 @@ async function getUserDefaultVisibility(userId) {
     console.log('🔍 VISIBILITY MODAL: Getting default visibility for user:', userId);
     const response = await fetch(`${METALAYER_API_URL}/v1/visibility/default`, {
       headers: {
-        'x-user-email': await getCurrentUserEmail(),
-        'x-user-name': await getCurrentUserEmail(),
-        'x-user-avatar': ''
+        'x-user-email': await getCurrentUserEmail()
       }
     });
     
@@ -848,9 +1805,7 @@ async function getUserDisplayVisibilityAfterExit(userId) {
     console.log('🔍 VISIBILITY MODAL: Getting display visibility after exit for user:', userId);
     const response = await fetch(`${METALAYER_API_URL}/v1/users/${userId}/display-visibility-after-exit`, {
       headers: {
-        'x-user-email': await getCurrentUserEmail(),
-        'x-user-name': await getCurrentUserEmail(),
-        'x-user-avatar': ''
+        'x-user-email': await getCurrentUserEmail()
       }
     });
     
@@ -874,9 +1829,7 @@ async function getUserHeadline(userId) {
     console.log('🔍 VISIBILITY MODAL: Getting headline for user:', userId);
     const response = await fetch(`${METALAYER_API_URL}/v1/users/${userId}/headline`, {
       headers: {
-        'x-user-email': await getCurrentUserEmail(),
-        'x-user-name': await getCurrentUserEmail(),
-        'x-user-avatar': ''
+        'x-user-email': await getCurrentUserEmail()
       }
     });
     
@@ -1112,9 +2065,7 @@ function setupVisibilityModalEventListeners(modalOverlay, userId) {
             method: 'PUT',
             headers: {
               'Content-Type': 'application/json',
-              'x-user-email': await getCurrentUserEmail(),
-              'x-user-name': await getCurrentUserEmail(),
-              'x-user-avatar': ''
+              'x-user-email': await getCurrentUserEmail()
             },
             body: JSON.stringify({ defaultVisibility })
           })
@@ -1126,9 +2077,7 @@ function setupVisibilityModalEventListeners(modalOverlay, userId) {
             method: 'PUT',
             headers: {
               'Content-Type': 'application/json',
-              'x-user-email': await getCurrentUserEmail(),
-              'x-user-name': await getCurrentUserEmail(),
-              'x-user-avatar': ''
+              'x-user-email': await getCurrentUserEmail()
             },
             body: JSON.stringify({ days: displayVisibilityDays })
           })
@@ -1140,9 +2089,7 @@ function setupVisibilityModalEventListeners(modalOverlay, userId) {
             method: 'PUT',
             headers: {
               'Content-Type': 'application/json',
-              'x-user-email': await getCurrentUserEmail(),
-              'x-user-name': await getCurrentUserEmail(),
-              'x-user-avatar': ''
+              'x-user-email': await getCurrentUserEmail()
             },
             body: JSON.stringify({ headline })
           })
@@ -1213,12 +2160,14 @@ function switchCommunity(community) {
   }
   
   // Get current active communities and update primary community
-  chrome.storage.local.get(['activeCommunities'], (result) => {
-    const activeCommunities = result.activeCommunities || [community.id];
+  // Modernized: Use StateManager instead of Chrome Storage
+  getState('activeCommunities').then((activeCommunities) => {
+    const communities = activeCommunities || [community.id];
     
     // Store updated primary community
-    chrome.storage.local.get(['communities'], (result) => {
-      chrome.storage.local.set({ 
+    // Modernized: Use StateManager instead of Chrome Storage
+    getState('communities').then((communities) => {
+      setState('communities', { 
         primaryCommunity: community.id,
         currentCommunity: community.id, // For backward compatibility
         communities: result.communities // Keep existing communities
@@ -1233,11 +2182,101 @@ function switchCommunity(community) {
   });
 }
 
+// ===== UNIFIED AVATAR SYSTEM =====
+// This system ensures consistent avatar rendering across all contexts:
+// - Profile header avatars
+// - Message avatars  
+// - Visibility list avatars
+
 function getAvatarColor(name) {
   // Generate a consistent color based on the name (for message avatars)
   const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F'];
   const index = name.charCodeAt(0) % colors.length;
   return colors[index];
+}
+
+/**
+ * TRULY UNIFIED avatar display function - SAME implementation for ALL contexts
+ * This function creates identical visual appearance regardless of context
+ * @param {Object} user - User object with name, avatarUrl, auraColor, etc.
+ * @param {Object} options - Rendering options
+ * @param {number} options.size - Avatar size in pixels (default: 32)
+ * @param {boolean} options.showStatus - Show status dot (default: true)
+ * @param {boolean} options.showAura - Show aura border (default: true)
+ * @param {string} options.context - Context: 'profile', 'message', 'visibility'
+ * @returns {string} HTML string for the avatar
+ */
+function createUnifiedAvatar(user, options = {}) {
+  const {
+    size = 32,
+    showStatus = true,
+    showAura = true,
+    context = 'message',
+    statusColor = null
+  } = options;
+  
+  const name = user.name || user.handle || user.email || 'Unknown';
+  const avatarUrl = user.avatarUrl;
+  
+  // Debug logging
+  console.log(`🔍 UNIFIED_AVATAR: [BUILD ${EXTENSION_BUILD}] Creating avatar for user:`, {
+    name: name,
+    email: user.email,
+    id: user.id,
+    userId: user.userId,
+    auraColor: user.auraColor,
+    context: context
+  });
+  
+  // COMPREHENSIVE AURA COLOR DEBUGGING
+  console.log(`🔍 AURA_DEBUG: [BUILD ${EXTENSION_BUILD}] === AURA COLOR ANALYSIS ===`);
+  console.log(`🔍 AURA_DEBUG: [BUILD ${EXTENSION_BUILD}] Context: ${context}`);
+  console.log(`🔍 AURA_DEBUG: [BUILD ${EXTENSION_BUILD}] user.auraColor: ${user.auraColor}`);
+  console.log(`🔍 AURA_DEBUG: [BUILD ${EXTENSION_BUILD}] user.auraColor type: ${typeof user.auraColor}`);
+  console.log(`🔍 AURA_DEBUG: [BUILD ${EXTENSION_BUILD}] user.auraColor === null: ${user.auraColor === null}`);
+  console.log(`🔍 AURA_DEBUG: [BUILD ${EXTENSION_BUILD}] user.auraColor === 'null': ${user.auraColor === 'null'}`);
+  console.log(`🔍 AURA_DEBUG: [BUILD ${EXTENSION_BUILD}] user.auraColor === undefined: ${user.auraColor === undefined}`);
+  console.log(`🔍 AURA_DEBUG: [BUILD ${EXTENSION_BUILD}] Full user object:`, JSON.stringify(user, null, 2));
+  
+  // Ensure consistent aura color for the same user across all contexts
+  let auraColor;
+  if (user.auraColor && user.auraColor !== null && user.auraColor !== 'null') {
+    auraColor = user.auraColor;
+    console.log(`🔍 UNIFIED_AVATAR: Using provided aura color: ${auraColor}`);
+  } else {
+    // Use a consistent color based on user ID or email for the same user
+    const userIdentifier = user.id || user.userId || user.email || name;
+    auraColor = getAvatarColor(userIdentifier);
+    console.log(`🔍 UNIFIED_AVATAR: [BUILD ${EXTENSION_BUILD}] Generated aura color for ${userIdentifier}: ${auraColor}`);
+  }
+  
+  // Determine status dot color - use provided statusColor or default to green
+  const dotColor = statusColor || '#22c55e'; // Default to green if no status color provided
+  console.log(`🔍 UNIFIED_AVATAR: [BUILD ${EXTENSION_BUILD}] Status dot color: ${dotColor}`);
+  
+  // UNIFIED VISUAL IMPLEMENTATION - SAME FOR ALL CONTEXTS
+  // Always use the same structure: aura background + img with border + status dot
+  if (avatarUrl && avatarUrl !== 'null' && avatarUrl !== '' && avatarUrl.startsWith('http')) {
+    const avatarHTML = `<div style="position: relative; width: ${size}px; height: ${size}px;">
+      ${showAura ? `<div style="position: absolute; top: -2px; left: -2px; width: ${size + 4}px; height: ${size + 4}px; border-radius: 50%; background-color: ${auraColor}; z-index: 1;"></div>` : ''}
+      <img src="${avatarUrl}" alt="${name}" style="position: relative; z-index: 2; width: ${size}px; height: ${size}px; border-radius: 50%; object-fit: cover; border: 2px solid ${auraColor};" data-avatar-fallback="true">
+      ${showStatus ? `<div style="position: absolute; bottom: -2px; right: -2px; width: 8px; height: 8px; border-radius: 50%; background-color: ${dotColor}; border: 2px solid white; z-index: 3;"></div>` : ''}
+    </div>`;
+    console.log(`🔍 UNIFIED_AVATAR: [BUILD ${EXTENSION_BUILD}] Generated UNIFIED avatar with image - auraColor: ${auraColor}, showAura: ${showAura}`);
+    return avatarHTML;
+  }
+  
+  // UNIFIED FALLBACK - SAME structure for all contexts
+  const initial = name.charAt(0).toUpperCase();
+  const fontSize = Math.max(10, size * 0.4);
+  
+  const avatarHTML = `<div style="position: relative; width: ${size}px; height: ${size}px;">
+    ${showAura ? `<div style="position: absolute; top: -2px; left: -2px; width: ${size + 4}px; height: ${size + 4}px; border-radius: 50%; background-color: ${auraColor}; z-index: 1;"></div>` : ''}
+    <div style="position: relative; z-index: 2; width: ${size}px; height: ${size}px; border-radius: 50%; background-color: ${auraColor}; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: ${fontSize}px; border: 2px solid ${auraColor};">${initial}</div>
+    ${showStatus ? `<div style="position: absolute; bottom: -2px; right: -2px; width: 8px; height: 8px; border-radius: 50%; background-color: ${dotColor}; border: 2px solid white; z-index: 3;"></div>` : ''}
+  </div>`;
+  console.log(`🔍 UNIFIED_AVATAR: [BUILD ${EXTENSION_BUILD}] Generated UNIFIED avatar with initial - auraColor: ${auraColor}, showAura: ${showAura}`);
+  return avatarHTML;
 }
 
 // Global function to set custom avatar color for the current user
@@ -1248,7 +2287,8 @@ function setCustomAvatarColor(color) {
   }
   
   // Store the custom color
-  chrome.storage.local.set({ customAvatarColor: color }, () => {
+  // Modernized: Use StateManager instead of Chrome Storage
+  setState('customAvatarColor', color).then(() => {
     // Refresh the profile avatar
     refreshUserAvatar();
   });
@@ -1256,7 +2296,8 @@ function setCustomAvatarColor(color) {
 
 // Global function to reset to default avatar color
 function resetCustomAvatarColor() {
-  chrome.storage.local.remove(['customAvatarColor'], () => {
+  // Modernized: Use StateManager instead of Chrome Storage
+  setState('customAvatarColor', null).then(() => {
     // Refresh the profile avatar
     refreshUserAvatar();
   });
@@ -1265,7 +2306,8 @@ function resetCustomAvatarColor() {
 // Get the avatar color for the current user (custom or default)
 function getCurrentUserAvatarColor() {
   return new Promise((resolve) => {
-    chrome.storage.local.get(['customAvatarColor'], (result) => {
+    // Modernized: Use StateManager instead of Chrome Storage
+    getState('customAvatarColor').then((customAvatarColor) => {
       if (result.customAvatarColor) {
         resolve(result.customAvatarColor);
       } else {
@@ -1285,72 +2327,85 @@ function getUserAvatarBgColor() {
   return AVATAR_BG_CONFIG.getBgColor();
 }
 
-// User Avatar Background Color Management Functions
-async function setUserAvatarBgColor(color) {
-  // Validate color is a valid hex color
-  const hexColorRegex = /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/;
-  if (!hexColorRegex.test(color)) {
-    console.error(`Invalid color format: ${color}. Must be a valid hex color (e.g., #FF6B6B)`);
-    return false;
-  }
+// REMOVED - No separate background color function needed
+// The aura color IS the background color - use aura color directly
+// async function setUserAvatarBgColor(color) {
+//   // MODERN SECURITY: Validate and sanitize input
+//   if (window.securityManager) {
+//     if (!window.securityManager.validateHexColor(color)) {
+//       window.logger?.error('SECURITY', 'Invalid hex color format', { color });
+//       console.error(`Invalid color format: ${color}. Must be a valid hex color (e.g., #FF6B6B)`);
+//       return false;
+//     }
+//     
+//     // Sanitize the color input
+//     color = window.securityManager.sanitizeInput(color);
+//   } else {
+//     // Fallback validation
+//     const hexColorRegex = /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/;
+//     if (!hexColorRegex.test(color)) {
+//       console.error(`Invalid color format: ${color}. Must be a valid hex color (e.g., #FF6B6B)`);
+//       return false;
+//     }
+//   }
   
-  AVATAR_BG_CONFIG.setBgColor(color);
+  // MODERN LOGGING
+  // window.logger?.info('AURA', 'Setting user avatar background color', { color });
   
-  // Apply the color directly to the profile avatar element
-  const userAvatar = document.getElementById('user-avatar');
-  if (userAvatar) {
-    userAvatar.style.backgroundColor = color;
-  }
+  // AVATAR_BG_CONFIG.setBgColor(color);
+  
+  // Apply the aura color as BOTH border AND background - they should ALWAYS be the same
+  // const userAvatar = document.getElementById('user-avatar');
+  // if (userAvatar) {
+  //   userAvatar.style.borderColor = color;
+  //   userAvatar.style.borderWidth = '2px';
+  //   userAvatar.style.borderStyle = 'solid';
+  //   // The aura color IS the background color - they are the same thing
+  //   userAvatar.style.backgroundColor = color;
+  // }
   
   // Save to chrome storage for persistence
-  chrome.storage.local.set({ userAvatarBgColor: color });
+  // chrome.storage.local.set({ userAvatarBgColor: color });
   
   // Save to database
-  try {
-    const result = await chrome.storage.local.get(['googleUser']);
-    if (result.googleUser && result.googleUser.email) {
-      // Generate the same UUID that the server uses
-      const serverUserId = result.googleUser.id; // Use the user ID from the database
-      console.log('🔍 Saving aura color for user:', { email: result.googleUser.email, serverUserId });
-      
-      const response = await fetch(`${METALAYER_API_URL}/v1/users/${serverUserId}/aura-color`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-email': result.googleUser.email,
-          'x-user-name': result.googleUser.user_metadata?.full_name || result.googleUser.email,
-          'x-user-avatar': result.googleUser.user_metadata?.avatar_url || ''
-        },
-        body: JSON.stringify({ auraColor: color })
-      });
-      
-      if (response.ok) {
-        // Aura color saved successfully
-      } else {
-        const errorText = await response.text();
-        console.error('❌ Failed to save aura color to database:', response.status, errorText);
-      }
-    } else {
-      console.error('❌ No user data found for saving aura color');
-    }
-  } catch (error) {
-    console.error('❌ Error saving aura color to database:', error);
-  }
-  
-  // Refresh only the profile avatar
-  refreshUserAvatar();
-  
-  return true;
-}
+  // try {
+  //   const result = await chrome.storage.local.get(['googleUser']);
+  //   if (result.googleUser && result.googleUser.email) {
+  //     // Use email-based approach - get the database user ID first
+  //     console.log('🔍 Saving aura color for user:', { email: result.googleUser.email });
+  //     
+  //     // First, get the database user ID by email
+  //     const userEmail = result.googleUser.email;
+  //     const userLookupUrl = `${METALAYER_API_URL}/v1/users/me`;
+  //     console.log(`🔍 AURA_COLOR_SAVE: [BUILD ${EXTENSION_BUILD}] Looking up user by email: ${userEmail}`);
+  //     console.log(`🔍 AURA_COLOR_SAVE: [BUILD ${EXTENSION_BUILD}] API URL: ${userLookupUrl}`);
+  //     
+  //     const userResponse = await fetch(userLookupUrl, {
+  //       headers: {
+  //         'x-user-email': userEmail
+  //       }
+  //     });
 
-function resetUserAvatarBgColor() {
+async function resetUserAvatarBgColor() {
   AVATAR_BG_CONFIG.resetToDefault();
   
   // Remove from chrome storage
   chrome.storage.local.remove(['userAvatarBgColor']);
   
-  // Refresh only the profile avatar
-  refreshUserAvatar();
+  // Refresh all avatars (profile, message, and visibility)
+  await refreshAllAvatars();
+  
+  // Broadcast aura color reset to other profiles
+  try {
+    chrome.runtime.sendMessage({
+      type: 'AURA_COLOR_CHANGED',
+      color: 'reset',
+      timestamp: Date.now()
+    });
+    console.log('📡 AURA: Broadcasted aura color reset to other profiles');
+  } catch (error) {
+    console.log('📡 AURA: Could not broadcast to other profiles:', error);
+  }
 }
 
 function getCurrentUserAvatarBgColor() {
@@ -1358,13 +2413,98 @@ function getCurrentUserAvatarBgColor() {
 }
 
 function refreshUserAvatar() {
-  // Refresh only the profile avatar
-  const result = chrome.storage.local.get(['googleUser']);
-  result.then(({ googleUser }) => {
-    if (googleUser) {
-      updateUI(googleUser);
+  // Refresh only the profile avatar - use window.currentUser
+  if (window.currentUser) {
+    updateUI(window.currentUser);
+  }
+}
+
+// Function to refresh all avatars when aura color changes
+async function refreshAllAvatars() {
+  console.log('🎨 Refreshing all avatars after aura color change...');
+  
+  // Refresh profile avatar
+  refreshUserAvatar();
+  
+  // Refresh message avatars with current presence data
+  await refreshMessageAvatarsWithCurrentPresence();
+  
+  // Refresh visibility avatars by reloading combined avatars
+  const result = await chrome.storage.local.get(['activeCommunities']);
+  const activeCommunities = result.activeCommunities || ['comm-001'];
+  await loadCombinedAvatars(activeCommunities);
+  
+  console.log('✅ All avatars refreshed');
+}
+
+// Function to refresh message avatars with current presence data
+async function refreshMessageAvatarsWithCurrentPresence() {
+  console.log('🔄 MESSAGE_AVATAR: Refreshing message avatars with current presence data...');
+  
+  try {
+    // Get current presence data to get updated aura colors
+    const currentUrl = window.location.href;
+    const normalizedUrl = await normalizeCurrentUrl();
+    const presenceData = await api.getPresenceByUrl(normalizedUrl.normalizedUrl);
+    
+    // Store presence data globally for real-time aura color access
+    window.currentPresenceData = presenceData;
+    console.log('🔄 MESSAGE_AVATAR: Stored presence data globally for real-time aura access');
+    
+    if (presenceData && presenceData.active) {
+      console.log('🔄 MESSAGE_AVATAR: Found presence data with', presenceData.active.length, 'active users');
+      
+      // Create a map of user emails to their current aura colors
+      const auraColorMap = {};
+      presenceData.active.forEach(user => {
+        // Check both email and userId fields for user identification
+        const userEmail = user.email || user.userId || user.id;
+        if (userEmail && user.auraColor) {
+          auraColorMap[userEmail] = user.auraColor;
+          console.log(`🔄 MESSAGE_AVATAR: Updated aura for ${userEmail}: ${user.auraColor}`);
+        }
+      });
+      
+      // Find all message containers and re-render their avatars with updated aura colors
+      const messageContainers = document.querySelectorAll('.message');
+      console.log(`🔄 MESSAGE_AVATAR: Found ${messageContainers.length} message containers to update`);
+      
+      messageContainers.forEach(messageContainer => {
+        const avatarContainer = messageContainer.querySelector('.avatar-container');
+        if (avatarContainer) {
+          // Get the message data to find the author
+          const messageId = messageContainer.getAttribute('data-message-id');
+          if (messageId) {
+            // Find the message in the current chat data
+            const messageData = window.currentChatData?.find(msg => msg.id === messageId);
+            if (messageData && messageData.author) {
+              const author = messageData.author;
+              const userEmail = author.email;
+              
+              if (userEmail && auraColorMap[userEmail]) {
+                console.log(`🔄 MESSAGE_AVATAR: Re-rendering avatar for ${userEmail} with aura ${auraColorMap[userEmail]}`);
+                
+                // Update the author's aura color
+                author.auraColor = auraColorMap[userEmail];
+                
+                // Re-render the avatar with the updated aura color
+                const newAvatarHTML = getSenderAvatar(author);
+                avatarContainer.innerHTML = newAvatarHTML;
+                
+                console.log(`🔄 MESSAGE_AVATAR: Re-rendered avatar for ${userEmail}`);
+              }
+            }
+          }
+        }
+      });
+      
+      console.log('✅ MESSAGE_AVATAR: Message avatars refreshed with current presence data');
+    } else {
+      console.log('⚠️ MESSAGE_AVATAR: No presence data found, skipping avatar refresh');
     }
-  });
+  } catch (error) {
+    console.error('❌ MESSAGE_AVATAR: Error refreshing message avatars:', error);
+  }
 }
 
 async function loadUserAvatarBgConfig() {
@@ -1379,16 +2519,58 @@ async function loadUserAvatarBgConfig() {
 }
 
 // Global functions for user avatar background color configuration (accessible from browser console)
-window.setUserAvatarBgColor = setUserAvatarBgColor;
-window.resetUserAvatarBgColor = resetUserAvatarBgColor;
+// REMOVED - No separate background color functions needed
+// window.setUserAvatarBgColor = setUserAvatarBgColor;
+// window.resetUserAvatarBgColor = resetUserAvatarBgColor;
 window.getCurrentUserAvatarBgColor = getCurrentUserAvatarBgColor;
 
 // Color Picker Modal Functions
+// Global function for updating color preview
+function updateColorPreview(hex) {
+  console.log('🔍 Updating preview with hex:', hex);
+  const previewCircle = document.getElementById('color-preview-circle');
+  const previewText = document.getElementById('color-preview-text');
+  
+  if (!previewCircle) {
+    console.error('❌ Preview circle not found');
+    return;
+  }
+  
+  if (!previewText) {
+    console.error('❌ Preview text not found');
+    return;
+  }
+  
+  if (isValidHex(hex)) {
+    const color = '#' + hex;
+    previewCircle.style.backgroundColor = color;
+    previewText.textContent = color;
+    console.log('✅ Preview updated with color:', color);
+  } else {
+    previewCircle.style.backgroundColor = '#cccccc';
+    previewText.textContent = 'Invalid color';
+    console.log('❌ Invalid hex color:', hex);
+  }
+}
+
+function isValidHex(hex) {
+  return /^[A-Fa-f0-9]{6}$/.test(hex);
+}
+
 function showColorPickerModal() {
   console.log('🎨 Opening color picker modal...');
+  
+  // Check if modal already exists and is visible
+  const existingModal = document.getElementById('color-picker-modal');
+  if (existingModal) {
+    console.log('🎨 Modal already exists, showing it');
+    existingModal.style.display = 'flex';
+    return;
+  }
+  
   // Create modal HTML
   const modalHTML = `
-    <div class="color-picker-modal" id="color-picker-modal">
+    <div class="color-picker-modal" id="color-picker-modal" style="display: flex;">
       <div class="color-picker-content">
         <div class="color-picker-header">
           <h3 class="color-picker-title">Change Aura Color</h3>
@@ -1413,82 +2595,96 @@ function showColorPickerModal() {
   // Add modal to page
   document.body.insertAdjacentHTML('beforeend', modalHTML);
   
-  const modal = document.getElementById('color-picker-modal');
-  const colorInput = document.getElementById('color-input');
-  const previewCircle = document.getElementById('color-preview-circle');
-  const previewText = document.getElementById('color-preview-text');
-  const closeBtn = document.getElementById('color-picker-close');
-  const resetBtn = document.getElementById('color-picker-reset');
-  const saveBtn = document.getElementById('color-picker-save');
-  
-  // Get current color and set initial values
-  const currentColor = getCurrentUserAvatarBgColor();
-  const currentHex = currentColor.replace('#', '');
-  colorInput.value = currentHex;
-  updatePreview(currentHex);
-  
-  // Event listeners
-  colorInput.addEventListener('input', (e) => {
-    const hex = e.target.value.replace('#', '');
-    updatePreview(hex);
-  });
-  
-  closeBtn.addEventListener('click', closeColorPickerModal);
-  modal.addEventListener('click', (e) => {
-    if (e.target === modal) closeColorPickerModal();
-  });
-  
-  resetBtn.addEventListener('click', () => {
-    // Get the dynamic default color (based on user's name)
-    // Get user from chrome storage
-    chrome.storage.local.get(['googleUser']).then(({ googleUser }) => {
+  // Wait for DOM to be ready before attaching event listeners
+  setTimeout(() => {
+    const modal = document.getElementById('color-picker-modal');
+    const colorInput = document.getElementById('color-input');
+    const previewCircle = document.getElementById('color-preview-circle');
+    const previewText = document.getElementById('color-preview-text');
+    const closeBtn = document.getElementById('color-picker-close');
+    const resetBtn = document.getElementById('color-picker-reset');
+    const saveBtn = document.getElementById('color-picker-save');
+    
+    if (!modal || !colorInput || !previewCircle || !previewText || !closeBtn || !resetBtn || !saveBtn) {
+      console.error('❌ Modal elements not found after creation');
+      return;
+    }
+    
+    // Get current color and set initial values
+    const currentColor = getCurrentUserAvatarBgColor();
+    const currentHex = currentColor.replace('#', '');
+    colorInput.value = currentHex;
+    updateColorPreview(currentHex);
+    
+    // Remove any existing event listeners to prevent duplicates
+    const newColorInput = colorInput.cloneNode(true);
+    colorInput.parentNode.replaceChild(newColorInput, colorInput);
+    
+    // Event listeners
+    newColorInput.addEventListener('input', (e) => {
+      const hex = e.target.value.replace('#', '');
+      updateColorPreview(hex);
+    });
+    
+    closeBtn.addEventListener('click', closeColorPickerModal);
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) closeColorPickerModal();
+    });
+    
+    resetBtn.addEventListener('click', () => {
+      // Get the dynamic default color (based on user's name) - use window.currentUser
       let defaultColor = '#45B7D1'; // Fallback
-      if (googleUser) {
-        const name = googleUser.user_metadata?.full_name || googleUser.email || 'User';
+      const user = window.currentUser;
+      if (user) {
+        const name = user.user_metadata?.full_name || user.name || user.email || 'User';
         defaultColor = getAvatarColor(name);
       }
       const defaultHex = defaultColor.replace('#', '');
-      colorInput.value = defaultHex;
-      updatePreview(defaultHex);
+      newColorInput.value = defaultHex;
+      updateColorPreview(defaultHex);
     });
-  });
-  
-  saveBtn.addEventListener('click', async () => {
-    const hex = colorInput.value.replace('#', '');
-    if (isValidHex(hex)) {
-      await setUserAvatarBgColor('#' + hex);
-      closeColorPickerModal();
-    } else {
-      alert('Please enter a valid 6-digit hex color (e.g., 45B7D1)');
-    }
-  });
-  
-  // Focus the input
-  colorInput.focus();
-  colorInput.select();
-  
-  function updatePreview(hex) {
-    console.log('🔍 Updating preview with hex:', hex);
-    if (isValidHex(hex)) {
-      const color = '#' + hex;
-      previewCircle.style.backgroundColor = color;
-      previewText.textContent = color;
-    } else {
-      previewCircle.style.backgroundColor = '#cccccc';
-      previewText.textContent = 'Invalid color';
-      console.log('❌ Invalid hex color:', hex);
-    }
-  }
-  
-  function isValidHex(hex) {
-    return /^[A-Fa-f0-9]{6}$/.test(hex);
-  }
+    
+    saveBtn.addEventListener('click', async () => {
+      const hex = newColorInput.value.replace('#', '');
+      if (isValidHex(hex)) {
+        console.log('🎨 Saving aura color:', '#' + hex);
+        // Use aura color directly - no separate background color function needed
+        const auraColor = '#' + hex;
+        console.log('🎨 Setting aura color:', auraColor);
+        
+        // Apply aura color to profile avatar using unified system
+        if (window.currentUser) {
+          window.currentUser.auraColor = auraColor;
+          updateUI(window.currentUser);
+        }
+        
+        // Save aura color to storage and database
+        chrome.storage.local.set({ userAvatarBgColor: auraColor });
+        
+        // Update UI with new aura color
+        updateUserAuraInUI(auraColor);
+        
+        // Broadcast aura change via WebSocket
+        broadcastAuraChange(auraColor);
+        
+        closeColorPickerModal();
+      } else {
+        alert('Please enter a valid 6-digit hex color (e.g., 45B7D1)');
+      }
+    });
+    
+    // Focus the input
+    newColorInput.focus();
+    newColorInput.select();
+    
+    console.log('🎨 Modal setup complete');
+  }, 50);
 }
 
 function closeColorPickerModal() {
   const modal = document.getElementById('color-picker-modal');
   if (modal) {
-    modal.remove();
+    modal.style.display = 'none';
   }
 }
 
@@ -1497,12 +2693,12 @@ function closeColorPickerModal() {
 let clickOutsideListenerAdded = false;
 
 function addProfileAvatarClickHandler() {
-  const userAvatar = document.getElementById('user-avatar');
+  const userAvatarContainer = document.getElementById('user-avatar-container');
   const userMenu = document.getElementById('user-menu');
-  if (userAvatar && userMenu) {
+  if (userAvatarContainer && userMenu) {
     // Remove any existing click listeners to avoid duplicates
-    userAvatar.removeEventListener('click', handleAvatarClick);
-    userAvatar.addEventListener('click', handleAvatarClick);
+    userAvatarContainer.removeEventListener('click', handleAvatarClick);
+    userAvatarContainer.addEventListener('click', handleAvatarClick);
     
     // Only add click-outside listener once
     if (!clickOutsideListenerAdded) {
@@ -1534,7 +2730,7 @@ function addVisibilitySettingsButtonClickHandler() {
 }
 
 function handleAvatarClick(e) {
-  const userAvatar = document.getElementById('user-avatar');
+  const userAvatarContainer = document.getElementById('user-avatar-container');
   const userMenu = document.getElementById('user-menu');
   
   console.log('👤 Profile avatar clicked!');
@@ -1550,10 +2746,10 @@ function handleAvatarClick(e) {
 }
 
 function handleClickOutside(e) {
-  const userAvatar = document.getElementById('user-avatar');
+  const userAvatarContainer = document.getElementById('user-avatar-container');
   const userMenu = document.getElementById('user-menu');
   
-  if (userAvatar && userMenu && !userAvatar.contains(e.target) && !userMenu.contains(e.target)) {
+  if (userAvatarContainer && userMenu && !userAvatarContainer.contains(e.target) && !userMenu.contains(e.target)) {
     console.log('🖱️ Clicked outside, hiding menu');
     userMenu.style.display = 'none';
   }
@@ -1686,12 +2882,27 @@ async function getPrimaryCommunityName() {
 
 
 async function addMessageToChat(message) {
+  console.log('🔍 ADD_MESSAGE: Starting addMessageToChat with message:', message);
+  
+  // CRITICAL: Filter out deleted messages without replies
+  // Check both deletedAt field and [Deleted] body content
+  const isDeleted = message.deletedAt || (message.body && message.body.trim() === '[Deleted]');
+  if (isDeleted && !message.hasReplies) {
+    console.log('🔍 ADD_MESSAGE: SKIPPING deleted message without replies:', message.id);
+    return;
+  }
+  
   const chatMessages = document.querySelector('.chat-messages');
-  if (!chatMessages) return;
+  if (!chatMessages) {
+    console.log('❌ ADD_MESSAGE: No chat-messages element found');
+    return;
+  }
+  console.log('✅ ADD_MESSAGE: Found chat-messages element');
 
   // Remove placeholder text if it exists
   const placeholder = chatMessages.querySelector('p[style*="text-align: center"]');
   if (placeholder) {
+    console.log('🔍 ADD_MESSAGE: Removing placeholder text');
     placeholder.remove();
   }
 
@@ -1716,6 +2927,7 @@ async function addMessageToChat(message) {
   }
   
   // Create message element
+  console.log('🔍 ADD_MESSAGE: Creating message element for:', message.id);
   const messageDiv = document.createElement('div');
   
   // Determine message type and add appropriate classes
@@ -1783,18 +2995,27 @@ async function addMessageToChat(message) {
   
   // Check if message is deleted
   if (message.deletedAt) {
+    console.log(`🔍 DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] === DELETED MESSAGE ANALYSIS ===`);
+    console.log(`🔍 DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] Message ID: ${message.id}`);
+    console.log(`🔍 DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] Message deletedAt: ${message.deletedAt}`);
+    console.log(`🔍 DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] Message hasReplies: ${message.hasReplies}`);
+    console.log(`🔍 DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] Message replyCount: ${message.replyCount}`);
+    console.log(`🔍 DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] Full message object:`, JSON.stringify(message, null, 2));
+    
     // Only show deleted messages if they have replies
     if (!message.hasReplies) {
-      console.log('Skipping deleted message without replies in addMessageToChat:', message.id);
+      console.log(`🔍 DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] SKIPPING deleted message without replies: ${message.id}`);
       return;
     }
+    
+    console.log(`🔍 DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] SHOWING deleted message WITH replies: ${message.id}`);
     
     // For deleted messages, use the same structure as regular messages
     // but with "This message was deleted" as content
     
     // Use the same message structure as regular messages
     messageDiv.innerHTML = `
-      <div class="message-avatar">${getSenderAvatar(author)}</div>
+      <div class="avatar-container">${getSenderAvatar(author)}</div>
       <div class="message-content-wrapper">
         <div class="message-header-new">
           <span class="message-sender-name">${senderName}${communityName ? ` • ${communityName}` : ''}</span>
@@ -1837,7 +3058,7 @@ async function addMessageToChat(message) {
   
   
           messageDiv.innerHTML = `
-            <div class="message-avatar">${getSenderAvatar(author)}</div>
+            <div class="avatar-container">${getSenderAvatar(author)}</div>
             <div class="message-content-wrapper">
               <div class="message-header-new">
                 <span class="message-sender-name">${senderName}${communityName ? ` • ${communityName}` : ''}</span>
@@ -1877,7 +3098,37 @@ async function addMessageToChat(message) {
     }
   }
   
+  console.log('🔍 ADD_MESSAGE: Adding message to DOM:', message.id);
   chatMessages.appendChild(messageDiv);
+  console.log('✅ ADD_MESSAGE: Message added to DOM successfully');
+  
+  // Add message to global storage for avatar updates
+  if (!window.currentChatData) {
+    window.currentChatData = [];
+  }
+  // Check if message already exists in global storage
+  const existingIndex = window.currentChatData.findIndex(m => m.id === message.id);
+  if (existingIndex >= 0) {
+    // Update existing message
+    window.currentChatData[existingIndex] = message;
+  } else {
+    // Add new message
+    window.currentChatData.push(message);
+  }
+  console.log('✅ ADD_MESSAGE: Message added to global storage, total:', window.currentChatData.length);
+  
+  // Log the current state of chat messages
+  const allMessages = chatMessages.querySelectorAll('.message');
+  console.log('🔍 ADD_MESSAGE: Total messages in chat now:', allMessages.length);
+  console.log('🔍 ADD_MESSAGE: Message IDs in chat:', Array.from(allMessages).map(m => m.getAttribute('data-message-id')));
+  
+  // Update polling tracking
+  lastMessageCount = allMessages.length;
+  if (allMessages.length > 0) {
+    const lastMessage = allMessages[allMessages.length - 1];
+    lastMessageId = lastMessage.getAttribute('data-message-id');
+    console.log('🔍 ADD_MESSAGE: Updated last message ID:', lastMessageId);
+  }
   
   // Add avatar error handlers for CSP compliance
   const avatarImg = messageDiv.querySelector('img[data-avatar-fallback="true"]');
@@ -1954,21 +3205,138 @@ function getSenderInitial(name) {
   return (name || 'U').charAt(0).toUpperCase();
 }
 
+// Update profile avatar with real-time aura color
+function updateProfileAvatarWithRealTimeAura() {
+  try {
+    if (!window.currentUser || !window.currentUser.email) {
+      console.log('🔍 PROFILE_AVATAR_UPDATE: No current user found');
+      return;
+    }
+
+    const userEmail = window.currentUser.email;
+    const realTimeAuraColor = getLatestAuraColorFromPresence(userEmail);
+    
+    if (realTimeAuraColor) {
+      console.log(`🔍 PROFILE_AVATAR_UPDATE: Found real-time aura color for profile: ${realTimeAuraColor}`);
+      
+      // Update the profile avatar with the real-time aura color
+      const profileAvatar = document.querySelector('#user-avatar');
+      if (profileAvatar) {
+        console.log(`🔍 PROFILE_AVATAR_UPDATE: Found profile avatar element:`, profileAvatar);
+        
+        // Check if the profile avatar has been replaced with unified avatar structure
+        const hasUnifiedStructure = profileAvatar.querySelector('div[style*="position: relative"]');
+        
+        if (hasUnifiedStructure) {
+          // If it's been replaced with unified avatar, restore the original structure
+          console.log('🔍 PROFILE_AVATAR_UPDATE: Restoring original profile avatar structure');
+          
+          // Get the original image source
+          const img = profileAvatar.querySelector('img');
+          const originalSrc = img ? img.src : 'https://lh3.googleusercontent.com/a/ACg8ocLF_0TdjZoB2Bx_dBmaVxeuLl5fqbsJrYWi7zFYSTycnLXT57s=s96-c';
+          
+          // Restore the original structure
+          profileAvatar.innerHTML = `<img src="${originalSrc}" alt="Profile Avatar" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover;">`;
+        }
+        
+        // Update the border color
+        profileAvatar.style.borderColor = realTimeAuraColor;
+        profileAvatar.style.borderWidth = '2px';
+        profileAvatar.style.borderStyle = 'solid';
+        console.log(`🔍 PROFILE_AVATAR_UPDATE: Updated profile avatar border color to: ${realTimeAuraColor}`);
+      } else {
+        console.log('🔍 PROFILE_AVATAR_UPDATE: Profile avatar element not found');
+      }
+    } else {
+      console.log('🔍 PROFILE_AVATAR_UPDATE: No real-time aura color found for profile');
+    }
+  } catch (error) {
+    console.error('❌ PROFILE_AVATAR_UPDATE: Error updating profile avatar:', error);
+  }
+}
+
+// Get the latest aura color from presence data for any user
+function getLatestAuraColorFromPresence(userEmail) {
+  try {
+    // Check if we have presence data stored
+    const presenceData = window.currentPresenceData || window.presenceData;
+    if (presenceData && presenceData.active) {
+      const user = presenceData.active.find(u => u.email === userEmail || u.id === userEmail || u.userId === userEmail);
+      if (user && user.auraColor) {
+        console.log(`🔍 GET_LATEST_AURA: Found real-time aura color for ${userEmail}: ${user.auraColor}`);
+        return user.auraColor;
+      }
+    }
+    
+    // Fallback: try to get from current visibility data
+    const visibilityData = window.currentVisibilityData;
+    if (visibilityData && visibilityData.active) {
+      const user = visibilityData.active.find(u => u.email === userEmail || u.id === userEmail || u.userId === userEmail);
+      if (user && user.auraColor) {
+        console.log(`🔍 GET_LATEST_AURA: Found visibility aura color for ${userEmail}: ${user.auraColor}`);
+        return user.auraColor;
+      }
+    }
+    
+    // Additional fallback: check if this is the current user and get from stored aura color
+    if (window.currentUser && window.currentUser.email === userEmail) {
+      const storedAuraColor = window.currentUser.auraColor;
+      if (storedAuraColor && storedAuraColor !== null && storedAuraColor !== 'null') {
+        console.log(`🔍 GET_LATEST_AURA: Found stored aura color for current user ${userEmail}: ${storedAuraColor}`);
+        return storedAuraColor;
+      }
+    }
+    
+    console.log(`🔍 GET_LATEST_AURA: No real-time aura color found for ${userEmail}`);
+    return null;
+  } catch (error) {
+    console.error(`❌ GET_LATEST_AURA: Error getting latest aura color for ${userEmail}:`, error);
+    return null;
+  }
+}
+
 function getSenderAvatar(author) {
   if (!author) return getSenderInitial('Unknown');
   
-  // If there's an avatarUrl, use it
-  if (author.avatarUrl && author.avatarUrl !== 'null' && author.avatarUrl !== '') {
-    return `<img src="${author.avatarUrl}" alt="${author.name || author.handle || 'User'}" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover;" data-avatar-fallback="true">
-      <div style="width: 32px; height: 32px; border-radius: 50%; background-color: ${getAvatarColor(author.name || author.handle || 'Unknown')}; display: none; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 14px;">${(author.name || author.handle || 'Unknown').charAt(0).toUpperCase()}</div>`;
+  console.log(`🔍 GET_SENDER_AVATAR: [BUILD ${EXTENSION_BUILD}] Creating message avatar for:`, {
+    name: author.name,
+    email: author.email,
+    auraColor: author.auraColor
+  });
+  
+  // Always try to get the latest aura color from presence data
+  // This ensures cross-profile updates work correctly for ALL users
+  const currentUserEmail = getCurrentUserEmail();
+  if (author.email === currentUserEmail) {
+    // For current user's messages, use current aura color
+    const currentAuraColor = getCurrentUserAvatarBgColor();
+    if (currentAuraColor) {
+      author.auraColor = currentAuraColor;
+      console.log(`🔍 GET_SENDER_AVATAR: [BUILD ${EXTENSION_BUILD}] Using current aura color for current user:`, currentAuraColor);
+    }
+  } else {
+    // For other users' messages, try to get the latest aura color from presence data
+    // This ensures real-time aura updates for all users
+    const latestAuraColor = getLatestAuraColorFromPresence(author.email);
+    if (latestAuraColor) {
+      author.auraColor = latestAuraColor;
+      console.log(`🔍 GET_SENDER_AVATAR: [BUILD ${EXTENSION_BUILD}] Using real-time aura color for other user:`, latestAuraColor);
+    } else {
+      console.log(`🔍 GET_SENDER_AVATAR: [BUILD ${EXTENSION_BUILD}] Using stored aura color for other user:`, author.auraColor);
+    }
   }
   
-  // Fallback to initial with colored background
-  const name = author.name || author.handle || 'Unknown';
-  const initial = name.charAt(0).toUpperCase();
-  const color = getAvatarColor(name);
-  console.log('⚠️ No avatar URL, using fallback:', { name, initial, color });
-  return `<div style="width: 32px; height: 32px; border-radius: 50%; background-color: ${color}; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 14px;">${initial}</div>`;
+  // Use unified avatar system for consistency
+  const avatarHTML = createUnifiedAvatar(author, {
+    size: 32,
+    showStatus: true,
+    showAura: true,
+    context: 'message',
+    statusColor: '#22c55e' // Default green for message avatars
+  });
+  
+  console.log(`🔍 GET_SENDER_AVATAR: [BUILD ${EXTENSION_BUILD}] Generated message avatar HTML:`, avatarHTML);
+  return avatarHTML;
 }
 
 function formatMessageTime(createdAt) {
@@ -2001,26 +3369,38 @@ function formatMessageTime(createdAt) {
 }
 
 async function getMessageActionMenu(message) {
+  console.log(`🔍 MESSAGE_OPTIONS_DEBUG: Getting action menu for message ${message.id}`);
+  console.log(`🔍 MESSAGE_OPTIONS_DEBUG: Message author: ${message.authorId}, createdAt: ${message.createdAt}`);
+  console.log(`🔍 MESSAGE_OPTIONS_DEBUG: Message author object:`, message.author);
+  
   const now = new Date();
   const messageDate = new Date(message.createdAt);
   const diffMs = now - messageDate;
   const diffMinutes = Math.floor(diffMs / (1000 * 60));
   const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
   
-  // Get current user to check ownership
-  const result = await chrome.storage.local.get(['googleUser']);
-  const currentUser = result.googleUser;
+  console.log(`🔍 MESSAGE_OPTIONS_DEBUG: Time diff - minutes: ${diffMinutes}, hours: ${diffHours}`);
   
-  // Generate the same UUID that the server uses for comparison
+  // Get current user to check ownership - use window.currentUser from direct auth
+  const currentUser = window.currentUser;
+  
+  console.log(`🔍 MESSAGE_OPTIONS_DEBUG: Current user from window.currentUser:`, currentUser);
+  console.log(`🔍 MESSAGE_OPTIONS_DEBUG: Current user email: ${currentUser ? currentUser.email : 'none'}`);
+  
+  // Use email for user identification - NO UUIDs
   let isOwner = false;
-  if (currentUser) {
-    const serverUserId = currentUser.id; // Use the user ID from the database
-    isOwner = (message.authorId === serverUserId);
+  if (currentUser && currentUser.email) {
+    // Compare by email - the message should have author email
+    const authorEmail = message.authorEmail || (message.author && message.author.email);
+    isOwner = (authorEmail === currentUser.email);
+    console.log(`🔍 MESSAGE_OPTIONS_DEBUG: Is owner check - author email: ${authorEmail}, current user email: ${currentUser.email}, isOwner: ${isOwner}`);
   }
   
   // Check if user can edit/delete (only if they own the message)
   const canEdit = isOwner && diffHours < 1; // Can edit within 1 hour
   const canDelete = isOwner; // User can only delete their own messages
+  
+  console.log(`🔍 MESSAGE_OPTIONS_DEBUG: Permissions - canEdit: ${canEdit}, canDelete: ${canDelete}`);
   const silentEdit = diffMinutes <= 5; // Silent edit within 5 minutes
   
   return `
@@ -2032,6 +3412,9 @@ async function getMessageActionMenu(message) {
         ${canEdit ? `<button class="action-item edit-btn" data-message-id="${message.id}">✏️ Edit</button>` : ''}
         ${canDelete ? `<button class="action-item delete-btn" data-message-id="${message.id}">🗑️ Delete</button>` : ''}
         <button class="action-item copy-link-btn" data-message-id="${message.id}">🔗 Copy link</button>
+        <button class="action-item share-navigate-btn" data-message-id="${message.id}">🧭 Go to message</button>
+        <button class="action-item share-focus-btn" data-message-id="${message.id}">🎯 Focus here</button>
+        <button class="action-item share-notify-btn" data-message-id="${message.id}">📌 Reference</button>
         <button class="action-item block-btn" data-message-id="${message.id}" style="display:none;">🚫 Block user</button>
       </div>
     </div>
@@ -2043,12 +3426,11 @@ function canUserEditMessage(message) {
   const messageTime = new Date(message.createdAt);
   const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
   
-  // For now, we'll check against stored user ID
-  // In a real implementation, this would check against the authenticated user
-  const result = chrome.storage.local.get(['googleUser']);
-  const currentUserId = result.googleUser?.id;
+  // Check against stored user email (not ID) - use window.currentUser
+  const currentUserEmail = window.currentUser?.email;
   
-  return message.authorId === currentUserId && messageTime > oneHourAgo;
+  const authorEmail = message.authorEmail || (message.author && message.author.email);
+  return authorEmail === currentUserEmail && messageTime > oneHourAgo;
 }
 
 function addMessageActionListeners(messageDiv, message) {
@@ -2110,6 +3492,31 @@ function addMessageActionListeners(messageDiv, message) {
     copyLinkBtn.addEventListener('click', () => {
       dropdown.style.display = 'none';
       handleCopyLink(message);
+    });
+  }
+  
+  // Enhanced sharing buttons
+  const shareNavigateBtn = messageDiv.querySelector('.share-navigate-btn');
+  if (shareNavigateBtn) {
+    shareNavigateBtn.addEventListener('click', () => {
+      dropdown.style.display = 'none';
+      handleShareMessage(message, 'navigate');
+    });
+  }
+  
+  const shareFocusBtn = messageDiv.querySelector('.share-focus-btn');
+  if (shareFocusBtn) {
+    shareFocusBtn.addEventListener('click', () => {
+      dropdown.style.display = 'none';
+      handleShareMessage(message, 'focus');
+    });
+  }
+  
+  const shareNotifyBtn = messageDiv.querySelector('.share-notify-btn');
+  if (shareNotifyBtn) {
+    shareNotifyBtn.addEventListener('click', () => {
+      dropdown.style.display = 'none';
+      handleShareMessage(message, 'notify');
     });
   }
   
@@ -2297,6 +3704,35 @@ async function handleDeleteMessage(message) {
         if (messageDiv) {
           messageDiv.remove();
         }
+        
+        // Broadcast deletion to other profiles
+        try {
+          chrome.runtime.sendMessage({
+            type: 'MESSAGE_DELETED',
+            messageId: message.id,
+            timestamp: Date.now()
+          });
+          console.log('📡 DELETION: Broadcasted deletion to other profiles');
+        } catch (error) {
+          console.log('📡 DELETION: Could not broadcast to other profiles:', error);
+        }
+        
+        // Force refresh the chat to ensure all profiles see the deletion
+        console.log('🔄 DELETION: Refreshing chat after message deletion');
+        await loadChatHistory();
+        
+        // Broadcast deletion to other profiles via chrome.runtime
+        try {
+          chrome.runtime.sendMessage({
+            type: 'MESSAGE_DELETED',
+            messageId: message.id,
+            timestamp: Date.now()
+          });
+          console.log('📡 DELETION: Broadcasted deletion to other profiles');
+        } catch (error) {
+          console.log('📡 DELETION: Could not broadcast to other profiles:', error);
+        }
+        
         showNotification('Message deleted successfully');
       }
     } catch (error) {
@@ -2308,7 +3744,9 @@ async function handleDeleteMessage(message) {
 
 async function handleCopyLink(message) {
   try {
-    // Create shareable URL for the message
+    console.log('🔗 SHARE: Creating shareable link for message:', message.id);
+    
+    // Create shareable URL for the message using the abstracted navigation system
     const baseUrl = window.location.origin + window.location.pathname;
     const messageUrl = `${baseUrl}#message=${message.id}&conversation=${message.conversationId}`;
     
@@ -2325,12 +3763,225 @@ async function handleCopyLink(message) {
       }, 2000);
     }
     
+    // Add to notification history for tracking
+    if (window.notificationHistory) {
+      await window.notificationHistory.addNotification({
+        type: 'MESSAGE_SHARED',
+        title: '🔗 Message link copied',
+        message: `Link to message "${message.body?.substring(0, 50)}..." copied to clipboard`,
+        url: messageUrl,
+        target: `[data-message-id="${message.id}"]`,
+        data: {
+          messageId: message.id,
+          conversationId: message.conversationId,
+          authorName: message.author?.name || 'Unknown'
+        }
+      });
+    }
+    
     debug('Message link copied to clipboard');
+    console.log('🔗 SHARE: Message link created and copied:', messageUrl);
   } catch (error) {
-    console.error('Failed to copy link:', error);
+    console.error('🔗 SHARE: Failed to copy message link:', error);
     debug('Failed to copy link: ' + error.message);
   }
 }
+
+// Enhanced message sharing with navigation system
+async function handleShareMessage(message, shareType = 'link') {
+  try {
+    console.log('🔗 SHARE: Sharing message via', shareType, ':', message.id);
+    
+    const baseUrl = window.location.origin + window.location.pathname;
+    const messageUrl = `${baseUrl}#message=${message.id}&conversation=${message.conversationId}`;
+    
+    switch (shareType) {
+      case 'link':
+        await handleCopyLink(message);
+        break;
+        
+      case 'navigate':
+        // Use the abstracted navigation system to navigate to the message
+        if (window.navigationManager) {
+          await window.navigationManager.navigateToUrl(messageUrl, `[data-message-id="${message.id}"]`);
+        } else {
+          // Fallback: open in new tab
+          await chrome.tabs.create({ url: messageUrl });
+        }
+        break;
+        
+      case 'focus':
+        // Focus on the message in current view
+        await focusOnMessage(message);
+        break;
+        
+      case 'notify':
+        // Create a notification about this message
+        if (window.notificationHistory) {
+          await window.notificationHistory.addNotification({
+            type: 'MESSAGE_REFERENCE',
+            title: `📌 Message reference`,
+            message: `Referenced message from ${message.author?.name || 'Unknown'}`,
+            url: messageUrl,
+            target: `[data-message-id="${message.id}"]`,
+            data: {
+              messageId: message.id,
+              conversationId: message.conversationId,
+              authorName: message.author?.name,
+              content: message.body
+            }
+          });
+        }
+        break;
+    }
+    
+    console.log('🔗 SHARE: Message shared successfully via', shareType);
+  } catch (error) {
+    console.error('🔗 SHARE: Error sharing message:', error);
+    showNotification('Failed to share message');
+  }
+}
+
+// Focus on a specific message in the current view
+async function focusOnMessage(message) {
+  try {
+    console.log('🎯 FOCUS: Focusing on message:', message.id);
+    
+    // Find the message element
+    const messageElement = document.querySelector(`[data-message-id="${message.id}"]`);
+    if (!messageElement) {
+      console.warn('🎯 FOCUS: Message element not found:', message.id);
+      return;
+    }
+    
+    // Scroll to message with smooth animation
+    messageElement.scrollIntoView({ 
+      behavior: 'smooth', 
+      block: 'center',
+      inline: 'nearest'
+    });
+    
+    // Highlight the message temporarily
+    messageElement.style.transition = 'all 0.3s ease';
+    messageElement.style.backgroundColor = 'rgba(0, 123, 255, 0.1)';
+    messageElement.style.borderLeft = '3px solid #007bff';
+    
+    // Remove highlight after 3 seconds
+    setTimeout(() => {
+      messageElement.style.backgroundColor = '';
+      messageElement.style.borderLeft = '';
+    }, 3000);
+    
+    console.log('🎯 FOCUS: Message focused and highlighted');
+  } catch (error) {
+    console.error('🎯 FOCUS: Error focusing on message:', error);
+  }
+}
+
+// Enhanced message URL parsing and navigation
+function parseMessageUrl(url) {
+  try {
+    const urlObj = new URL(url);
+    const messageId = urlObj.hash.match(/message=([^&]+)/)?.[1];
+    const conversationId = urlObj.hash.match(/conversation=([^&]+)/)?.[1];
+    
+    return {
+      messageId,
+      conversationId,
+      isValid: !!(messageId && conversationId)
+    };
+  } catch (error) {
+    console.error('🔗 PARSE: Error parsing message URL:', error);
+    return { isValid: false };
+  }
+}
+
+// Handle incoming message URLs (e.g., from shared links)
+async function handleIncomingMessageUrl() {
+  try {
+    const currentUrl = window.location.href;
+    const messageData = parseMessageUrl(currentUrl);
+    
+    if (messageData.isValid) {
+      console.log('🔗 INCOMING: Processing incoming message URL:', messageData);
+      
+      // Wait for messages to load
+      setTimeout(async () => {
+        // Find the message element
+        const messageElement = document.querySelector(`[data-message-id="${messageData.messageId}"]`);
+        if (messageElement) {
+          // Focus and highlight the message
+          await focusOnMessage({ id: messageData.messageId });
+          
+          // Add to notification history
+          if (window.notificationHistory) {
+            await window.notificationHistory.addNotification({
+              type: 'MESSAGE_NAVIGATED',
+              title: '🔗 Navigated to shared message',
+              message: 'Opened via shared link',
+              url: currentUrl,
+              target: `[data-message-id="${messageData.messageId}"]`,
+              data: {
+                messageId: messageData.messageId,
+                conversationId: messageData.conversationId,
+                source: 'shared_link'
+              }
+            });
+          }
+        } else {
+          console.warn('🔗 INCOMING: Message not found in current view:', messageData.messageId);
+        }
+      }, 2000); // Wait for messages to load
+    }
+  } catch (error) {
+    console.error('🔗 INCOMING: Error handling incoming message URL:', error);
+  }
+}
+
+// Initialize message URL handling
+if (window.location.hash.includes('message=')) {
+  handleIncomingMessageUrl();
+}
+
+// Test enhanced sharing system
+window.testEnhancedSharing = async function() {
+  try {
+    console.log('🔗 SHARING TEST: Testing enhanced sharing system...');
+    
+    // Find the first message to test with
+    const firstMessage = document.querySelector('[data-message-id]');
+    if (!firstMessage) {
+      console.error('🔗 SHARING TEST: No messages found to test with');
+      return;
+    }
+    
+    const messageId = firstMessage.dataset.messageId;
+    const message = {
+      id: messageId,
+      body: 'Test message for sharing',
+      author: { name: 'Test User' },
+      conversationId: 'test-conversation'
+    };
+    
+    console.log('🔗 SHARING TEST: Testing with message:', messageId);
+    
+    // Test different sharing methods
+    console.log('🔗 SHARING TEST: Testing link sharing...');
+    await handleShareMessage(message, 'link');
+    
+    console.log('🔗 SHARING TEST: Testing focus sharing...');
+    await handleShareMessage(message, 'focus');
+    
+    console.log('🔗 SHARING TEST: Testing notification sharing...');
+    await handleShareMessage(message, 'notify');
+    
+    console.log('🔗 SHARING TEST: Enhanced sharing system test completed');
+    console.log('🔗 SHARING TEST: Check notification history for results');
+    
+  } catch (error) {
+    console.error('🔗 SHARING TEST: Error testing enhanced sharing:', error);
+  }
+};
 
 async function handleMessageFocus(message) {
   try {
@@ -2350,7 +4001,9 @@ async function handleMessageFocus(message) {
     // Get conversation title for the header
     let conversationTitle = 'Thread';
     try {
-      const conversationResponse = await api.getChatHistory(null, message.conversationId);
+      // Get the community ID from the message or use the first active community
+      const communityId = message.communityId || (window.activeCommunities && window.activeCommunities[0]) || 'comm-001';
+      const conversationResponse = await api.getChatHistory(communityId, message.conversationId);
       if (conversationResponse && conversationResponse.title) {
         conversationTitle = conversationResponse.title;
       }
@@ -2384,7 +4037,8 @@ async function handleMessageFocus(message) {
     chatMessages.appendChild(backNav);
     
     // Get the full conversation data first
-    const response = await api.getChatHistory(null, message.conversationId);
+    const focusCommunityId = message.communityId || (window.activeCommunities && window.activeCommunities[0]) || 'comm-001';
+    const response = await api.getChatHistory(focusCommunityId, message.conversationId);
     
     // Calculate reply count for the focused message
     let replyCount = 0;
@@ -2404,7 +4058,8 @@ async function handleMessageFocus(message) {
     await addMessageToChat(focusedMsg);
     
     // Load and show replies to this message (expanded by default)
-    await loadMessageReplies(message.id, message.conversationId);
+    const replyCommunityId = message.communityId || (window.activeCommunities && window.activeCommunities[0]) || 'comm-001';
+    await loadMessageReplies(message.id, message.conversationId, replyCommunityId);
     
   } catch (error) {
     console.error('Failed to focus on message:', error);
@@ -2412,10 +4067,13 @@ async function handleMessageFocus(message) {
   }
 }
 
-async function loadMessageReplies(messageId, conversationId) {
+async function loadMessageReplies(messageId, conversationId, communityId = null) {
   try {
+    // Get the community ID from parameter or use the first active community
+    const resolvedCommunityId = communityId || (window.activeCommunities && window.activeCommunities[0]) || 'comm-001';
+    
     // Get the full conversation to find replies to this specific message
-    const response = await api.getChatHistory(null, conversationId);
+    const response = await api.getChatHistory(resolvedCommunityId, conversationId);
     
     if (response && response.posts) {
       const replies = response.posts.filter(post => post.parentId === messageId);
@@ -2457,7 +4115,8 @@ async function handleBackNavigation() {
       // We need to find the parent message and focus on it
       try {
         // Get the conversation to find the parent message
-        const response = await api.getChatHistory(null, focusedMessage.conversationId);
+        const parentCommunityId = focusedMessage.communityId || (window.activeCommunities && window.activeCommunities[0]) || 'comm-001';
+        const response = await api.getChatHistory(parentCommunityId, focusedMessage.conversationId);
         if (response && response.conversations && response.conversations.length > 0) {
           const conversation = response.conversations[0];
           const parentMessage = conversation.posts.find(post => post.id === focusedMessage.parentId);
@@ -2468,8 +4127,8 @@ async function handleBackNavigation() {
             
             // Calculate proper counts for the parent message
             const directReplies = conversation.posts.filter(p => p.parentId === parentMessage.id);
-            parentMessage.hasReplies = directReplies.filter(r => !r.deletedAt).length > 0;
-            parentMessage.replyCount = directReplies.filter(r => !r.deletedAt).length;
+            parentMessage.hasReplies = directReplies.filter(r => !r.deletedAt && r.body && r.body.trim() !== '[Deleted]').length > 0;
+            parentMessage.replyCount = directReplies.filter(r => !r.deletedAt && r.body && r.body.trim() !== '[Deleted]').length;
             // Calculate reaction count for this specific message
             const parentReactions = conversation.reactions ? conversation.reactions.filter(r => r.postId === parentMessage.id) : [];
             parentMessage.reactionCount = parentReactions.length;
@@ -2492,8 +4151,9 @@ async function handleBackNavigation() {
 // Theme management functions
 function initializeTheme() {
   // Load saved theme from storage or default to light
-  chrome.storage.local.get(['theme'], (result) => {
-    const savedTheme = result.theme || 'light';
+  // Modernized: Use StateManager instead of Chrome Storage
+  getState('theme').then((theme) => {
+    const savedTheme = theme || 'light';
     setTheme(savedTheme);
   });
 }
@@ -2561,9 +4221,8 @@ async function loadMessageReactions(messageId, reactionBtn) {
         console.log(`📊 Updated count to: ${reactions.length}`);
       }
       
-      // Check if current user has reacted
-      const result = await chrome.storage.local.get(['googleUser']);
-      const currentUser = result.googleUser;
+      // Check if current user has reacted - use window.currentUser
+      const currentUser = window.currentUser;
       console.log(`👤 Current user:`, currentUser);
       
       if (currentUser) {
@@ -2940,12 +4599,46 @@ async function loadChatHistory(communityId = null) {
     const result = await chrome.storage.local.get(['activeCommunities', 'primaryCommunity', 'currentCommunity']);
     const activeCommunities = result.activeCommunities || [result.primaryCommunity || result.currentCommunity || 'comm-001'];
     
+    // MODERN LOGGING: Structured logging for chat loading
+    window.logger?.info('CHAT', 'Loading chat history for active communities', { 
+      communities: activeCommunities,
+      count: activeCommunities.length 
+    });
+    console.log(`🔍 CHAT_LOAD: Loading chat history for active communities: ${activeCommunities.join(', ')}`);
     debug(`Loading chat history for active communities: ${activeCommunities.join(', ')}`);
     
     // Get normalized URL for page-specific messages - SAME AS VISIBILITY
     const urlData = await normalizeCurrentUrl();
     const currentUri = urlData.normalizedUrl; // Use normalized URL for consistency
+    // MODERN LOGGING: Structured logging for URI processing
+    window.logger?.info('CHAT', 'Loading chat history for normalized URI', { 
+      normalizedUri: currentUri,
+      rawUrl: urlData.rawUrl,
+      communities: activeCommunities
+    });
+    console.log(`🔍 CHAT_LOAD: Loading chat history for normalized URI: ${currentUri} (from raw: ${urlData.rawUrl})`);
+    console.log(`🔍 CHAT_LOAD: urlData object:`, JSON.stringify(urlData));
+    console.log(`🔍 CHAT_LOAD: currentUri before loop: ${currentUri}`);
+    console.log(`🔍 CHAT_LOAD: currentUri type: ${typeof currentUri}, value: ${JSON.stringify(currentUri)}`);
     debug(`Loading chat history for normalized URI: ${currentUri} (from raw: ${urlData.rawUrl})`);
+    
+    // Check if we're reloading the same URI unnecessarily
+    if (lastLoadedUri === currentUri) {
+      console.log(`🔍 CHAT_LOAD: Skipping reload - same URI as last load: ${currentUri}`);
+      console.log(`🔍 CHAT_LOAD: Last loaded URI: ${lastLoadedUri}, Current URI: ${currentUri}`);
+      return;
+    }
+    
+    // NOTE: No polling needed - messages arrive via Supabase real-time
+    
+    console.log(`🔍 CHAT_LOAD: URI changed - reloading chat history`);
+    console.log(`🔍 CHAT_LOAD: Last loaded URI: ${lastLoadedUri}, Current URI: ${currentUri}`);
+    
+    // Add a longer delay to ensure server has processed any recent messages
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    // Update last loaded URI
+    lastLoadedUri = currentUri;
     
     // Load messages from all active communities
     const allConversations = [];
@@ -2954,8 +4647,29 @@ async function loadChatHistory(communityId = null) {
     
     for (const communityId of activeCommunities) {
       try {
-        const response = await api.getChatHistory(communityId, null, null); // Remove URI filtering to show all messages
+        console.log(`🔍 CHAT_LOAD: === LOADING MESSAGES FOR COMMUNITY ${communityId} ===`);
+        console.log(`🔍 CHAT_LOAD: Requesting chat history for community ${communityId} with URI: ${currentUri}`);
+        console.log(`🔍 CHAT_LOAD: currentUri type: ${typeof currentUri}, value: ${JSON.stringify(currentUri)}`);
+        console.log(`🔍 CHAT_LOAD: About to call api.getChatHistory with communityId=${communityId}, threadId=null, uri=${currentUri}`);
+        console.log(`🔍 CHAT_LOAD: currentUri in loop: ${currentUri}`);
+        
+        const response = await api.getChatHistory(communityId, null, currentUri); // Use current URI for URL-specific messages
+        
+        console.log(`🔍 CHAT_LOAD: === API RESPONSE FOR COMMUNITY ${communityId} ===`);
+        console.log(`🔍 CHAT_LOAD: Response object:`, JSON.stringify(response, null, 2));
+        console.log(`🔍 CHAT_LOAD: Has conversations: ${!!response.conversations}`);
+        console.log(`🔍 CHAT_LOAD: Conversations count: ${response.conversations ? response.conversations.length : 0}`);
+        
         if (response.conversations && response.conversations.length > 0) {
+          console.log(`✅ CHAT_LOAD: Found ${response.conversations.length} conversations for community ${communityId}`);
+          response.conversations.forEach((conv, index) => {
+            console.log(`🔍 CHAT_LOAD: Conversation ${index + 1}:`, {
+              id: conv.id,
+              messageCount: conv.messages ? conv.messages.length : 0,
+              firstMessage: conv.messages && conv.messages.length > 0 ? conv.messages[0].body.substring(0, 50) : 'N/A'
+            });
+          });
+          
           // Find community name
           const community = communities.find(c => c.id === communityId);
           const communityName = community ? community.name : `Community ${communityId}`;
@@ -2967,64 +4681,133 @@ async function loadChatHistory(communityId = null) {
             communityName: communityName
           }));
           allConversations.push(...conversationsWithCommunity);
+          console.log(`✅ CHAT_LOAD: Added ${conversationsWithCommunity.length} conversations from ${communityName}`);
+        } else {
+          console.warn(`⚠️ CHAT_LOAD: No conversations found for community ${communityId} - Empty or no messages on this page`);
         }
       } catch (error) {
-        console.warn(`Failed to load chat history for community ${communityId}:`, error);
+        console.error(`❌ CHAT_LOAD: Failed to load chat history for community ${communityId}:`, error);
+        console.error(`❌ CHAT_LOAD: Error details:`, {
+          name: error.name,
+          message: error.message,
+          stack: error.stack
+        });
       }
     }
     
-    console.log('Combined chat history from all communities:', allConversations);
+    console.log('🔍 CHAT_LOAD: === FINAL COMBINED RESULTS ===');
+    console.log(`🔍 CHAT_LOAD: Total conversations from all communities: ${allConversations.length}`);
+    console.log('🔍 CHAT_LOAD: Combined chat history from all communities:', allConversations);
     debug(`Combined chat history from all communities: ${JSON.stringify(allConversations)}`);
     
     const chatMessages = document.querySelector('.chat-messages');
-    if (!chatMessages) return;
+    if (!chatMessages) {
+      console.error('❌ CHAT_LOAD: No .chat-messages element found in DOM!');
+      return;
+    }
+    console.log('✅ CHAT_LOAD: Found .chat-messages element');
+    
+    // Log current messages before clearing
+    const currentMessages = chatMessages.querySelectorAll('.message');
+    console.log(`🔍 CHAT_LOAD: Current messages before clearing: ${currentMessages.length}`);
+    console.log('🔍 CHAT_LOAD: Current message IDs:', Array.from(currentMessages).map(m => m.getAttribute('data-message-id')));
     
     // Clear existing messages
+    console.log('🔍 CHAT_LOAD: Clearing existing messages');
     chatMessages.innerHTML = '';
+    // Clear global chat data storage
+    window.currentChatData = [];
+    console.log('✅ CHAT_LOAD: Messages cleared and global storage reset');
+    
+    if (allConversations.length === 0) {
+      console.warn('⚠️ CHAT_LOAD: NO MESSAGES TO DISPLAY - No conversations found for any active community on this page');
+      console.warn('⚠️ CHAT_LOAD: Leaving placeholder text in place');
+      chatMessages.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 20px;">No messages yet. Start a conversation!</p>';
+      return;
+    }
+    
+    console.log(`🔍 CHAT_LOAD: Processing ${allConversations.length} conversations for display`);
     
     // Handle combined conversations from all communities
     if (allConversations.length > 0) {
       // Process each conversation as a thread
       for (const conversation of allConversations) {
         if (conversation.posts && conversation.posts.length > 0) {
+          console.log('🔍 CHAT_LOAD: Processing conversation with posts:', conversation.posts.length);
+          console.log('🔍 CHAT_LOAD: All posts in conversation:', conversation.posts.map(p => ({ id: p.id, body: p.body, createdAt: p.createdAt, parentId: p.parentId })));
+          
           // Sort posts within each conversation by creation time
           const sortedPosts = conversation.posts.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+          console.log('🔍 CHAT_LOAD: Sorted posts:', sortedPosts.map(p => ({ id: p.id, body: p.body, createdAt: p.createdAt, parentId: p.parentId })));
           
-          // Find the main thread post (parentId === null)
-          const mainThreadPost = sortedPosts.find(p => p.parentId === null);
-          if (!mainThreadPost) return; // Skip if no main thread post
+          // Find ALL main thread posts (parentId === null) - not just the first one
+          const mainThreadPosts = sortedPosts.filter(p => p.parentId === null);
+          console.log('🔍 CHAT_LOAD: Found main thread posts:', mainThreadPosts.length);
+          console.log('🔍 CHAT_LOAD: Main thread posts:', mainThreadPosts.map(p => ({ id: p.id, body: p.body, createdAt: p.createdAt })));
           
-          // Find direct replies to the main thread
-          const directReplies = sortedPosts.filter(p => p.parentId === mainThreadPost.id);
+          if (mainThreadPosts.length === 0) return; // Skip if no main thread posts
           
-          // Add conversation info to main thread post
-          mainThreadPost.conversationId = conversation.id;
-          mainThreadPost.conversationTitle = conversation.title;
-          mainThreadPost.conversation = conversation; // Include full conversation data
-          mainThreadPost.isReply = false;
-          mainThreadPost.isFirstInThread = true;
-          mainThreadPost.hasReplies = directReplies.filter(r => !r.deletedAt).length > 0; // Only count NON-DELETED replies
-          mainThreadPost.replyCount = directReplies.filter(r => !r.deletedAt).length; // Count only non-deleted replies for display
-          // Calculate reaction count for this specific message
-          const messageReactions = conversation.reactions ? conversation.reactions.filter(r => r.postId === mainThreadPost.id) : [];
-          mainThreadPost.reactionCount = messageReactions.length;
-          
-          // Skip deleted main thread unless it has NON-DELETED replies
-          if (mainThreadPost.deletedAt && !mainThreadPost.hasReplies) {
-            console.log('Skipping deleted main thread without NON-DELETED replies:', mainThreadPost.id, 'hasReplies:', mainThreadPost.hasReplies, 'totalReplies:', directReplies.length, 'nonDeletedReplies:', directReplies.filter(r => !r.deletedAt).length);
-            return; // Don't add deleted main thread without non-deleted replies
-          }
-          
-          // Debug: Log when deleted main thread has non-deleted replies
-          if (mainThreadPost.deletedAt && mainThreadPost.hasReplies) {
-            console.log('Deleted main thread WITH non-deleted replies:', mainThreadPost.id, 'hasReplies:', mainThreadPost.hasReplies, 'totalReplies:', directReplies.length, 'nonDeletedReplies:', directReplies.filter(r => !r.deletedAt).length);
-          }
-          
-          // Add the main thread post to chat
-          await addMessageToChat(mainThreadPost);
-          
-          // Add direct replies (but not nested replies)
-          for (const reply of directReplies) {
+          // Add ALL main thread posts in chronological order
+          for (let i = 0; i < mainThreadPosts.length; i++) {
+            const mainThreadPost = mainThreadPosts[i];
+            
+            // Find direct replies to this specific main thread post
+            const directReplies = sortedPosts.filter(p => p.parentId === mainThreadPost.id);
+            
+            // Add conversation info to main thread post
+            mainThreadPost.conversationId = conversation.id;
+            mainThreadPost.conversationTitle = conversation.title;
+            mainThreadPost.conversation = conversation; // Include full conversation data
+            mainThreadPost.isReply = false;
+            mainThreadPost.isFirstInThread = (i === 0); // Only the first post is "first in thread"
+            const nonDeletedReplies = directReplies.filter(r => !r.deletedAt && r.body && r.body.trim() !== '[Deleted]');
+            mainThreadPost.hasReplies = nonDeletedReplies.length > 0; // Only count NON-DELETED replies
+            mainThreadPost.replyCount = nonDeletedReplies.length; // Count only non-deleted replies for display
+            
+            // COMPREHENSIVE DELETED MESSAGE DEBUGGING
+            console.log(`🔍 DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] === MAIN THREAD MESSAGE ANALYSIS ===`);
+            console.log(`🔍 DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] Message ID: ${mainThreadPost.id}`);
+            console.log(`🔍 DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] Message deletedAt: ${mainThreadPost.deletedAt}`);
+            console.log(`🔍 DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] Total direct replies: ${directReplies.length}`);
+            console.log(`🔍 DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] Non-deleted replies: ${nonDeletedReplies.length}`);
+            console.log(`🔍 DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] hasReplies: ${mainThreadPost.hasReplies}`);
+            console.log(`🔍 DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] replyCount: ${mainThreadPost.replyCount}`);
+            if (directReplies.length > 0) {
+              console.log(`🔍 DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] Direct replies details:`, directReplies.map(r => ({ id: r.id, deletedAt: r.deletedAt, body: r.body })));
+            }
+            
+            // Check if this message should be skipped
+            if (mainThreadPost.deletedAt && !mainThreadPost.hasReplies) {
+              console.log(`🔍 DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] SKIPPING deleted main thread without replies: ${mainThreadPost.id}`);
+              continue;
+            } else if (mainThreadPost.deletedAt && mainThreadPost.hasReplies) {
+              console.log(`🔍 DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] SHOWING deleted main thread WITH replies: ${mainThreadPost.id}`);
+            }
+            // Calculate reaction count for this specific message
+            const messageReactions = conversation.reactions ? conversation.reactions.filter(r => r.postId === mainThreadPost.id) : [];
+            mainThreadPost.reactionCount = messageReactions.length;
+            
+            // Skip deleted main thread unless it has NON-DELETED replies
+            // Check both deletedAt field and [Deleted] body content
+            const isMainThreadDeleted = mainThreadPost.deletedAt || (mainThreadPost.body && mainThreadPost.body.trim() === '[Deleted]');
+            if (isMainThreadDeleted && !mainThreadPost.hasReplies) {
+              console.log('Skipping deleted main thread without NON-DELETED replies:', mainThreadPost.id, 'hasReplies:', mainThreadPost.hasReplies, 'totalReplies:', directReplies.length, 'nonDeletedReplies:', directReplies.filter(r => !r.deletedAt).length);
+              continue; // Skip this deleted main thread, but continue with others
+            }
+            
+            // Debug: Log when deleted main thread has non-deleted replies
+            if (mainThreadPost.deletedAt && mainThreadPost.hasReplies) {
+              console.log('Deleted main thread WITH non-deleted replies:', mainThreadPost.id, 'hasReplies:', mainThreadPost.hasReplies, 'totalReplies:', directReplies.length, 'nonDeletedReplies:', directReplies.filter(r => !r.deletedAt).length);
+            }
+            
+            // Add the main thread post to chat
+            console.log('🔍 CHAT_LOAD: Adding main thread post:', mainThreadPost.id);
+            console.log('🔍 CHAT_LOAD: Main thread post details:', { id: mainThreadPost.id, body: mainThreadPost.body, createdAt: mainThreadPost.createdAt });
+            await addMessageToChat(mainThreadPost);
+            console.log('✅ CHAT_LOAD: Main thread post added');
+            
+            // Add direct replies to this main thread post (but not nested replies)
+            for (const reply of directReplies) {
             // Count nested replies for this reply (only non-deleted ones)
             const nestedReplies = sortedPosts.filter(p => p.parentId === reply.id && !p.deletedAt);
             
@@ -3033,24 +4816,31 @@ async function loadChatHistory(communityId = null) {
             reply.conversation = conversation; // Include full conversation data
             reply.isReply = true;
             reply.isFirstInThread = false;
-            reply.hasReplies = nestedReplies.length > 0; // Show toggle if has nested replies
-            reply.replyCount = nestedReplies.length;
+            reply.hasReplies = nestedReplies.filter(r => !r.deletedAt && r.body && r.body.trim() !== '[Deleted]').length > 0; // Only count NON-DELETED nested replies
+            reply.replyCount = nestedReplies.filter(r => !r.deletedAt && r.body && r.body.trim() !== '[Deleted]').length; // Count only non-deleted nested replies
             // Calculate reaction count for this specific reply
             const replyReactions = conversation.reactions ? conversation.reactions.filter(r => r.postId === reply.id) : [];
             reply.reactionCount = replyReactions.length;
             
             // Skip deleted replies unless they have nested replies
-            if (reply.deletedAt && !reply.hasReplies) {
+            // Check both deletedAt field and [Deleted] body content
+            const isReplyDeleted = reply.deletedAt || (reply.body && reply.body.trim() === '[Deleted]');
+            if (isReplyDeleted && !reply.hasReplies) {
               console.log('Skipping deleted reply without nested replies:', reply.id);
               continue;
             }
             
             await addMessageToChat(reply);
+            }
           }
           
-          // Debug logging for thread detection
-          if (mainThreadPost.hasReplies) {
-            console.log('Thread toggle should show for post:', mainThreadPost.id, 'in conversation:', mainThreadPost.conversationId);
+          // Update polling tracking after processing all messages in this conversation
+          const allMessages = document.querySelectorAll('.message');
+          lastMessageCount = allMessages.length;
+          if (allMessages.length > 0) {
+            const lastMessage = allMessages[allMessages.length - 1];
+            lastMessageId = lastMessage.getAttribute('data-message-id');
+            console.log('🔍 CHAT_LOAD: Updated last message ID:', lastMessageId);
           }
         }
       }
@@ -3063,63 +4853,1179 @@ async function loadChatHistory(communityId = null) {
   }
 }
 
-// --- UI Update Function ---
-function updateUI(user) {
-  const userInfoDiv = document.getElementById('user-info');
-  const userMenuName = document.getElementById('user-menu-name');
-  const userAvatarImg = document.getElementById('user-avatar');
-
-  if (user) {
-    // User is logged in - show user info
-    if (userInfoDiv) userInfoDiv.style.display = 'flex';
-    if (userMenuName) userMenuName.textContent = user.user_metadata?.full_name || user.email;
-    if (userAvatarImg) {
-      const avatarUrl = user.user_metadata?.avatar_url || user.picture;
-      if (avatarUrl && avatarUrl !== 'null' && avatarUrl !== '') {
-        userAvatarImg.src = avatarUrl;
-        userAvatarImg.alt = user.user_metadata?.full_name || user.email;
-        userAvatarImg.style.display = 'block';
-        userAvatarImg.setAttribute('data-profile-avatar', 'true');
+// --- Supabase Real-time Client Initialization ---
+async function initializeSupabaseRealtimeClient() {
+  try {
+    console.log('🚀 SUPABASE: Waiting for Supabase library to load...');
+    
+    // Wait for Supabase library to load
+    const waitForSupabase = () => {
+      return new Promise((resolve) => {
+        let attempts = 0;
+        const maxAttempts = 50; // 5 seconds max wait
         
-        // Set the background color for the profile avatar
-        const customColor = getUserAvatarBgColor();
-        userAvatarImg.style.backgroundColor = customColor;
+        const checkSupabase = () => {
+          attempts++;
+          
+          // Check if window.supabase client is available (already initialized at top of file)
+          // window.supabase is the CLIENT instance, not the library, so check for .from method
+          if (typeof window.supabase !== 'undefined' && window.supabase && typeof window.supabase.from === 'function') {
+            console.log('✅ SUPABASE CLIENT: Loaded and initialized successfully');
+            console.log('✅ SUPABASE CLIENT: Available methods:', Object.keys(window.supabase).slice(0, 10));
+            resolve(true);
+          } else if (attempts >= maxAttempts) {
+            console.error('❌ SUPABASE LIBRARY: Failed to load after 5 seconds');
+            console.error('❌ SUPABASE LIBRARY: window.supabase:', typeof window.supabase);
+            console.error('❌ SUPABASE LIBRARY: Available window keys:', Object.keys(window).filter(k => k.toLowerCase().includes('supabase')));
+            resolve(false);
+          } else {
+            if (attempts % 10 === 0) {
+              console.log(`⏳ SUPABASE LIBRARY: Waiting... (attempt ${attempts}/${maxAttempts})`);
+            }
+            setTimeout(checkSupabase, 100);
+          }
+        };
         
-        // Add error handler to fallback to colored initial if image fails to load
-        userAvatarImg.addEventListener('error', function() {
-          console.log('❌ Avatar image failed to load, falling back to colored initial');
-          userAvatarImg.style.display = 'none';
-          const name = user.user_metadata?.full_name || user.email || 'User';
-          const initial = name.charAt(0).toUpperCase();
-          // Use the user's custom avatar background color or fallback to message avatar color
-          const customColor = getUserAvatarBgColor();
-          const defaultColor = getAvatarColor(name);
-          const color = customColor !== '#45B7D1' ? customColor : defaultColor; // Use custom if set, otherwise use name-based color
-          const avatarDiv = document.createElement('div');
-          avatarDiv.style.cssText = `width: 24px; height: 24px; border-radius: 50%; background-color: ${color}; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 12px;`;
-          avatarDiv.textContent = initial;
-          userAvatarImg.parentNode.insertBefore(avatarDiv, userAvatarImg);
-        });
+        checkSupabase();
+      });
+    };
+    
+    // Wait for library to load
+    const loaded = await waitForSupabase();
+    
+    if (!loaded) {
+      console.error('❌ SUPABASE: Cannot initialize without Supabase library');
+      return;
+    }
+    
+    console.log('🚀 SUPABASE: Initializing Supabase real-time client...');
+    
+    // Initialize Supabase real-time client
+    if (typeof SupabaseRealtimeClient !== 'undefined') {
+      window.supabaseRealtimeClient = new SupabaseRealtimeClient();
+      
+      // Initialize with Supabase credentials
+      const supabaseUrl = 'https://zwxomzkmncwzwryvudwu.supabase.co';
+      const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp3eG9temttbmN3endyeXZ1ZHd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk2Njg2ODQsImV4cCI6MjA3NTI0NDY4NH0.CoceGOzumiF6aYVGQSWily93snNYh9N9C4p8lrjrTyM';
+      
+      const success = await window.supabaseRealtimeClient.initialize(supabaseUrl, supabaseKey);
+      
+      if (success) {
+        console.log('✅ SUPABASE: Real-time client initialized successfully');
+        console.log('✅ SUPABASE: Supabase client:', window.supabaseRealtimeClient.supabase);
+        setupSupabaseEventHandlers();
       } else {
-        // Use a colored initial instead of placeholder image
-        const name = user.user_metadata?.full_name || user.email || 'User';
-        const initial = name.charAt(0).toUpperCase();
-        // Use the user's custom avatar background color or fallback to message avatar color
-        const customColor = getUserAvatarBgColor();
-        const defaultColor = getAvatarColor(name);
-        const color = customColor !== '#45B7D1' ? customColor : defaultColor; // Use custom if set, otherwise use name-based color
-        userAvatarImg.style.display = 'none';
+        console.error('❌ SUPABASE: Failed to initialize real-time client');
+      }
+    } else {
+      console.error('❌ SUPABASE: SupabaseRealtimeClient not available');
+    }
+    
+  } catch (error) {
+    console.error('❌ SUPABASE: Error initializing real-time client:', error);
+  }
+}
+
+function initializeRealGoogleAuth() {
+  try {
+    console.log('🚀 REAL_GOOGLE_AUTH: Initializing for actual Google profile pictures...');
+    
+    // Initialize real Google auth
+    if (typeof RealGoogleAuth !== 'undefined') {
+      realGoogleAuth = new RealGoogleAuth();
+      realGoogleAuth.initialize().then(success => {
+        if (success) {
+          console.log('✅ REAL_GOOGLE_AUTH: Real Google Auth initialized successfully');
+          console.log('✅ REAL_GOOGLE_AUTH: Will now use actual Google profile pictures');
+        } else {
+          console.error('❌ REAL_GOOGLE_AUTH: Failed to initialize');
+        }
+      });
+    } else {
+      console.warn('⚠️ REAL_GOOGLE_AUTH: RealGoogleAuth not available - check if script is loaded');
+    }
+  } catch (error) {
+    console.error('❌ REAL_GOOGLE_AUTH: Error initializing:', error);
+  }
+}
+
+// Setup Supabase real-time event handlers
+function setupSupabaseEventHandlers() {
+  if (!window.supabaseRealtimeClient) return;
+  
+  // Set up event handlers
+  window.supabaseRealtimeClient.onUserJoined = (user) => {
+    console.log('👋 SUPABASE: User joined:', user.user_email);
+    // Reload avatars to show new user
+    loadCombinedAvatars().catch(err => console.error('Error loading avatars after user joined:', err));
+  };
+  
+  window.supabaseRealtimeClient.onUserLeft = (user) => {
+    console.log('👋 SUPABASE: User left:', user.user_email);
+    // Reload avatars to hide user
+    loadCombinedAvatars().catch(err => console.error('Error loading avatars after user left:', err));
+  };
+  
+  window.supabaseRealtimeClient.onUserUpdated = (user) => {
+    console.log('🔄 SUPABASE: User updated:', user.user_email);
+    // Update aura color if changed
+    if (user.aura_color) {
+      updateUserAuraInUI(user.user_email, user.aura_color);
+    }
+  };
+  
+  window.supabaseRealtimeClient.onNewMessage = (message) => {
+    console.log('💬 SUPABASE: New message:', message);
+    // Reload chat history to show new message
+    loadChatHistory().catch(err => console.error('Error loading chat after new message:', err));
+    
+    // Show notification for new message
+    if (window.showNotification) {
+      window.showNotification(`New message from ${message.user_email}`);
+    }
+  };
+  
+  window.supabaseRealtimeClient.onVisibilityChanged = (visibility) => {
+    console.log('👁️ SUPABASE: Visibility changed:', visibility.user_email, visibility.is_visible);
+    // Reload avatars to reflect visibility change
+    loadCombinedAvatars().catch(err => console.error('Error loading avatars after visibility change:', err));
+  };
+  
+  console.log('✅ SUPABASE: Event handlers configured');
+}
+
+// CHROME EXTENSION WEBSOCKET FIX: Handle WebSocket messages from background service worker
+function handleWebSocketMessage(data) {
+  console.log('[WEBSOCKET] Handling message in side panel:', data);
+  
+  switch (data.type) {
+    case 'MESSAGE_NEW':
+      console.log('[WEBSOCKET] New message received:', data.message);
+      // Reload chat history to show new message
+      loadChatHistory().catch(err => console.error('[WEBSOCKET] Error loading chat after new message:', err));
+      
+      // Show notification for new message
+      if (window.notificationManager) {
+        window.notificationManager.showNotification('MESSAGE_NEW', {
+          authorName: data.message?.author?.name || 'Someone',
+          content: data.message?.content || 'New message',
+          authorEmail: data.message?.author?.email
+        });
         
-        // Create a colored div to replace the image
-        const avatarDiv = document.createElement('div');
-        avatarDiv.style.cssText = `width: 24px; height: 24px; border-radius: 50%; background-color: ${color}; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 12px;`;
-        avatarDiv.textContent = initial;
-        userAvatarImg.parentNode.insertBefore(avatarDiv, userAvatarImg);
-        console.log('No avatar URL, using colored initial with user background color:', color);
+        // Show notification badge
+        showNotificationBadge();
+      }
+      break;
+      
+    // REMOVED: AURA_COLOR_CHANGED case - now handled by Supabase real-time only
+    // Aura changes are received via supabaseRealtimeClient.onUserUpdated
+    // This prevents dual pathways (Supabase + chrome.runtime.onMessage)
+      
+    case 'PRESENCE_UPDATE':
+      console.log('[WEBSOCKET] Presence update:', data.userEmail, data.availability);
+      // Reload visible avatars
+      loadCombinedAvatars().catch(err => console.error('[WEBSOCKET] Error loading avatars after presence update:', err));
+      break;
+      
+    case 'VISIBILITY_UPDATE':
+      console.log('[WEBSOCKET] Visibility update:', data.userEmail, data.is_visible);
+      // Reload visible avatars
+      loadCombinedAvatars().catch(err => console.error('[WEBSOCKET] Error loading avatars after visibility update:', err));
+      break;
+      
+    case 'CONNECTION_ESTABLISHED':
+      console.log('[WEBSOCKET] Connection established:', data.message);
+      // Subscribe to current page for real-time updates
+      subscribeToCurrentPage();
+      break;
+      
+    case 'CONNECTION_ACKNOWLEDGED':
+      console.log('[WEBSOCKET] Connection acknowledged:', data.message);
+      // Connection is fully ready, start real-time features
+      startRealTimeFeatures();
+      break;
+      
+    default:
+      console.log('[WEBSOCKET] Unknown message type:', data.type);
+  }
+}
+
+// Subscribe to current page for real-time updates
+async function subscribeToCurrentPage() {
+  try {
+    console.log('[WEBSOCKET] Subscribing to current page for real-time updates...');
+    
+    // Get current page info
+    const urlData = await normalizeCurrentUrl();
+    const user = window.currentUser;
+    
+    if (!user) {
+      console.warn('[WEBSOCKET] No user found, cannot subscribe to page');
+      return;
+    }
+    
+    // Send subscription message
+    await sendSupabaseMessage({
+      type: 'PAGE_SUBSCRIPTION',
+      userEmail: user.email,
+      userId: user.id || user.email,
+      pageId: urlData.pageId,
+      url: urlData.normalizedUrl,
+      timestamp: Date.now()
+    });
+    
+    console.log('[WEBSOCKET] Page subscription sent for:', urlData.pageId);
+  } catch (error) {
+    console.error('[WEBSOCKET] Error subscribing to current page:', error);
+  }
+}
+
+// Start real-time features after WebSocket connection is established
+function startRealTimeFeatures() {
+  console.log('[WEBSOCKET] Starting real-time features...');
+  
+  // NOTE: Removed pageSubscriptionInterval polling
+  // Supabase handles reconnection automatically
+  
+  console.log('[WEBSOCKET] Real-time features started');
+}
+
+// Initialize notification settings UI
+async function initializeNotificationSettings() {
+  try {
+    console.log('🔔 SETTINGS: Initializing notification settings UI...');
+    
+    const settingsContainer = document.getElementById('notification-settings');
+    if (!settingsContainer) {
+      console.warn('🔔 SETTINGS: Notification settings container not found');
+      return;
+    }
+    
+    if (!window.notificationManager) {
+      console.warn('🔔 SETTINGS: Notification manager not available');
+      return;
+    }
+    
+    // Wait for notification manager to initialize
+    await window.notificationManager.initialize();
+    
+    // Get all notification types
+    const notificationTypes = window.notificationManager.getAllNotificationTypes();
+    
+    // Clear existing content
+    settingsContainer.innerHTML = '';
+    
+    // Create notification items
+    notificationTypes.forEach(notification => {
+      const notificationItem = document.createElement('div');
+      notificationItem.className = 'notification-item';
+      notificationItem.innerHTML = `
+        <div class="notification-info">
+          <div class="notification-icon">${notification.icon}</div>
+          <div class="notification-details">
+            <h5>${notification.name}</h5>
+            <p>${notification.description}</p>
+          </div>
+        </div>
+        <label class="notification-toggle">
+          <input type="checkbox" ${notification.enabled ? 'checked' : ''} 
+                 data-notification-type="${notification.id}">
+          <span class="notification-slider"></span>
+        </label>
+      `;
+      
+      settingsContainer.appendChild(notificationItem);
+    });
+    
+    // Add event listeners for toggles
+    const toggles = settingsContainer.querySelectorAll('.notification-toggle input');
+    toggles.forEach(toggle => {
+      toggle.addEventListener('change', async (e) => {
+        const notificationType = e.target.dataset.notificationType;
+        const enabled = e.target.checked;
+        
+        console.log(`🔔 SETTINGS: ${notificationType} ${enabled ? 'enabled' : 'disabled'}`);
+        
+        await window.notificationManager.setEnabled(notificationType, enabled);
+      });
+    });
+    
+    console.log('🔔 SETTINGS: Notification settings UI initialized');
+  } catch (error) {
+    console.error('🔔 SETTINGS: Error initializing notification settings:', error);
+  }
+}
+
+// Initialize notification icon in header
+function initializeNotificationIcon() {
+  try {
+    console.log('🔔 ICON: Initializing notification icon...');
+    
+    const notificationIcon = document.getElementById('notification-icon');
+    if (!notificationIcon) {
+      console.warn('🔔 ICON: Notification icon not found');
+      return;
+    }
+    
+    // Add click handler to open settings
+    notificationIcon.addEventListener('click', () => {
+      console.log('🔔 ICON: Notification icon clicked');
+      
+      // Switch to Settings tab
+      const settingsTab = document.querySelector('[data-tab="settings-tab"]');
+      if (settingsTab) {
+        settingsTab.click();
+      }
+    });
+    
+    // Add hover effect
+    notificationIcon.addEventListener('mouseenter', () => {
+      notificationIcon.style.backgroundColor = 'rgba(0, 0, 0, 0.1)';
+      notificationIcon.style.borderRadius = '4px';
+    });
+    
+    notificationIcon.addEventListener('mouseleave', () => {
+      notificationIcon.style.backgroundColor = 'transparent';
+    });
+    
+    console.log('🔔 ICON: Notification icon initialized');
+  } catch (error) {
+    console.error('🔔 ICON: Error initializing notification icon:', error);
+  }
+}
+
+// Show notification badge
+function showNotificationBadge() {
+  try {
+    const badge = document.getElementById('notification-badge');
+    if (badge) {
+      badge.style.display = 'block';
+      
+      // Auto-hide after 5 seconds
+      setTimeout(() => {
+        badge.style.display = 'none';
+      }, 5000);
+    }
+  } catch (error) {
+    console.error('🔔 BADGE: Error showing notification badge:', error);
+  }
+}
+
+// Test notification system (for debugging)
+window.testNotification = async function(type = 'MESSAGE_NEW') {
+  try {
+    console.log('🔔 TEST: Testing notification system...');
+    
+    if (!window.notificationManager) {
+      console.error('🔔 TEST: Notification manager not available');
+      return;
+    }
+    
+    const testData = {
+      MESSAGE_NEW: {
+        authorName: 'Test User',
+        content: 'This is a test message notification',
+        authorEmail: 'test@example.com'
+      },
+      FRIEND_AURA_CHANGE: {
+        userName: 'Test Friend',
+        auraColor: '#ff0000',
+        userEmail: 'friend@example.com'
+      }
+    };
+    
+    await window.notificationManager.showNotification(type, testData[type] || testData.MESSAGE_NEW);
+    showNotificationBadge();
+    
+    console.log('🔔 TEST: Test notification sent');
+  } catch (error) {
+    console.error('🔔 TEST: Error testing notification:', error);
+  }
+};
+
+// Test notification icon visibility
+window.testNotificationIcon = function() {
+  try {
+    console.log('🔔 ICON TEST: Testing notification icon visibility...');
+    
+    const notificationIcon = document.getElementById('notification-icon');
+    if (!notificationIcon) {
+      console.error('🔔 ICON TEST: Notification icon not found in DOM');
+      return;
+    }
+    
+    console.log('🔔 ICON TEST: Notification icon found:', notificationIcon);
+    console.log('🔔 ICON TEST: Icon display style:', notificationIcon.style.display);
+    console.log('🔔 ICON TEST: Icon computed style:', window.getComputedStyle(notificationIcon).display);
+    
+    // Make sure it's visible
+    notificationIcon.style.display = 'block';
+    notificationIcon.style.visibility = 'visible';
+    
+    // Test badge
+    const badge = document.getElementById('notification-badge');
+    if (badge) {
+      badge.style.display = 'block';
+      badge.textContent = '1';
+      console.log('🔔 ICON TEST: Badge shown');
+    }
+    
+    console.log('🔔 ICON TEST: Notification icon should now be visible');
+  } catch (error) {
+    console.error('🔔 ICON TEST: Error testing notification icon:', error);
+  }
+};
+
+// Comprehensive notification system test
+window.testFullNotificationSystem = async function() {
+  try {
+    console.log('🔔 FULL TEST: Testing complete notification system...');
+    
+    // 1. Test notification icon visibility
+    console.log('🔔 FULL TEST: Step 1 - Testing notification icon...');
+    window.testNotificationIcon();
+    
+    // 2. Test Chrome desktop notification
+    console.log('🔔 FULL TEST: Step 2 - Testing Chrome desktop notification...');
+    await window.testNotification('MESSAGE_NEW');
+    
+    // 3. Test notification badge
+    console.log('🔔 FULL TEST: Step 3 - Testing notification badge...');
+    showNotificationBadge();
+    
+    // 4. Test notification history modal
+    console.log('🔔 FULL TEST: Step 4 - Testing notification history modal...');
+    window.openNotificationsModal();
+    
+    console.log('🔔 FULL TEST: Complete notification system test finished');
+    console.log('🔔 FULL TEST: You should see:');
+    console.log('  - A Chrome desktop notification popup');
+    console.log('  - A red badge on the notification icon');
+    console.log('  - The notifications modal should be open');
+    console.log('  - Click the notification icon to open notifications');
+    
+  } catch (error) {
+    console.error('🔔 FULL TEST: Error testing notification system:', error);
+  }
+};
+
+// Enhanced Notification History System
+class NotificationHistoryManager {
+  constructor() {
+    this.notifications = [];
+    this.maxNotifications = 100;
+    this.storageKey = 'notificationHistory';
+    this.initialize();
+  }
+  
+  async initialize() {
+    try {
+      // Load existing notifications from storage
+      const result = await chrome.storage.local.get([this.storageKey]);
+      this.notifications = result[this.storageKey] || [];
+      console.log('🔔 HISTORY: Loaded', this.notifications.length, 'notifications from storage');
+    } catch (error) {
+      console.error('🔔 HISTORY: Error loading notifications:', error);
+      this.notifications = [];
+    }
+  }
+  
+  async addNotification(notification) {
+    try {
+      const notificationData = {
+        id: `notif_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        type: notification.type,
+        title: notification.title,
+        message: notification.message,
+        url: notification.url,
+        target: notification.target, // Element selector or ID to highlight
+        timestamp: Date.now(),
+        read: false,
+        data: notification.data || {}
+      };
+      
+      // Add to beginning of array (most recent first)
+      this.notifications.unshift(notificationData);
+      
+      // Keep only max notifications
+      if (this.notifications.length > this.maxNotifications) {
+        this.notifications = this.notifications.slice(0, this.maxNotifications);
+      }
+      
+      // Save to storage
+      await this.saveNotifications();
+      
+      // Update UI if modal is open
+      this.updateNotificationsUI();
+      
+      // Update badge
+      this.updateBadge();
+      
+      console.log('🔔 HISTORY: Added notification:', notificationData.title);
+    } catch (error) {
+      console.error('🔔 HISTORY: Error adding notification:', error);
+    }
+  }
+  
+  async markAsRead(notificationId) {
+    try {
+      const notification = this.notifications.find(n => n.id === notificationId);
+      if (notification) {
+        notification.read = true;
+        await this.saveNotifications();
+        this.updateNotificationsUI();
+        this.updateBadge();
+        console.log('🔔 HISTORY: Marked notification as read:', notificationId);
+      }
+    } catch (error) {
+      console.error('🔔 HISTORY: Error marking notification as read:', error);
+    }
+  }
+  
+  async markAllAsRead() {
+    try {
+      this.notifications.forEach(notification => {
+        notification.read = true;
+      });
+      await this.saveNotifications();
+      this.updateNotificationsUI();
+      this.updateBadge();
+      console.log('🔔 HISTORY: Marked all notifications as read');
+    } catch (error) {
+      console.error('🔔 HISTORY: Error marking all notifications as read:', error);
+    }
+  }
+  
+  async clearAll() {
+    try {
+      this.notifications = [];
+      await this.saveNotifications();
+      this.updateNotificationsUI();
+      this.updateBadge();
+      console.log('🔔 HISTORY: Cleared all notifications');
+    } catch (error) {
+      console.error('🔔 HISTORY: Error clearing notifications:', error);
+    }
+  }
+  
+  async saveNotifications() {
+    try {
+      await chrome.storage.local.set({ [this.storageKey]: this.notifications });
+    } catch (error) {
+      console.error('🔔 HISTORY: Error saving notifications:', error);
+    }
+  }
+  
+  updateNotificationsUI() {
+    const notificationsList = document.getElementById('notifications-list');
+    const noNotifications = document.getElementById('no-notifications');
+    
+    if (!notificationsList) return;
+    
+    if (this.notifications.length === 0) {
+      notificationsList.style.display = 'none';
+      noNotifications.style.display = 'block';
+      return;
+    }
+    
+    notificationsList.style.display = 'block';
+    noNotifications.style.display = 'none';
+    
+    // Clear existing notifications
+    notificationsList.innerHTML = '';
+    
+    // Add each notification
+    this.notifications.forEach((notification, index) => {
+      const notificationElement = this.createNotificationElement(notification, index);
+      notificationsList.appendChild(notificationElement);
+    });
+  }
+  
+  createNotificationElement(notification, index) {
+    const element = document.createElement('div');
+    element.className = `notification-item ${notification.read ? 'read' : 'unread'}`;
+    element.dataset.notificationId = notification.id;
+    
+    // Add slide-in animation for new notifications
+    if (index < 3) { // Only animate first 3 notifications
+      element.classList.add('notification-slide-in');
+    }
+    
+    const timeAgo = this.getTimeAgo(notification.timestamp);
+    const icon = this.getNotificationIcon(notification.type);
+    
+    element.innerHTML = `
+      <div class="notification-icon">${icon}</div>
+      <div class="notification-content">
+        <div class="notification-title">${notification.title}</div>
+        <div class="notification-message">${notification.message}</div>
+        <div class="notification-meta">
+          <span class="notification-time">${timeAgo}</span>
+          ${notification.url ? `<span class="notification-url" title="${notification.url}">${this.truncateUrl(notification.url)}</span>` : ''}
+        </div>
+        <div class="notification-actions">
+          ${notification.url ? `<button class="notification-action-btn primary" data-action="navigate" data-url="${notification.url}" data-target="${notification.target || ''}">Go to Page</button>` : ''}
+          <button class="notification-action-btn" data-action="mark-read" data-id="${notification.id}">Mark Read</button>
+          <button class="notification-action-btn" data-action="dismiss" data-id="${notification.id}">Dismiss</button>
+        </div>
+      </div>
+    `;
+    
+    // Add click handlers
+    this.addNotificationHandlers(element, notification);
+    
+    return element;
+  }
+  
+  addNotificationHandlers(element, notification) {
+    // Click on notification item
+    element.addEventListener('click', (e) => {
+      if (e.target.closest('.notification-action-btn')) return; // Don't trigger on buttons
+      
+      this.handleNotificationClick(notification);
+    });
+    
+    // Action buttons
+    element.querySelectorAll('.notification-action-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const action = btn.dataset.action;
+        
+        switch (action) {
+          case 'navigate':
+            this.navigateToUrl(btn.dataset.url, btn.dataset.target);
+            break;
+          case 'mark-read':
+            this.markAsRead(btn.dataset.id);
+            break;
+          case 'dismiss':
+            this.dismissNotification(btn.dataset.id);
+            break;
+        }
+      });
+    });
+  }
+  
+  async handleNotificationClick(notification) {
+    try {
+      // Mark as read
+      await this.markAsRead(notification.id);
+      
+      // Navigate if URL exists
+      if (notification.url) {
+        this.navigateToUrl(notification.url, notification.target);
+      }
+    } catch (error) {
+      console.error('🔔 HISTORY: Error handling notification click:', error);
+    }
+  }
+  
+  async navigateToUrl(url, target) {
+    try {
+      console.log('🔔 NAVIGATION: Navigating to:', url, 'target:', target);
+      
+      // Use the abstracted navigation system
+      if (window.navigationManager) {
+        await window.navigationManager.navigateToUrl(url, target);
+      } else {
+        // Fallback: simple navigation
+        await chrome.tabs.create({ url: url });
+      }
+    } catch (error) {
+      console.error('🔔 NAVIGATION: Error navigating to URL:', error);
+    }
+  }
+  
+  async dismissNotification(notificationId) {
+    try {
+      this.notifications = this.notifications.filter(n => n.id !== notificationId);
+      await this.saveNotifications();
+      this.updateNotificationsUI();
+      this.updateBadge();
+      console.log('🔔 HISTORY: Dismissed notification:', notificationId);
+    } catch (error) {
+      console.error('🔔 HISTORY: Error dismissing notification:', error);
+    }
+  }
+  
+  updateBadge() {
+    const unreadCount = this.notifications.filter(n => !n.read).length;
+    const badge = document.getElementById('notification-badge');
+    const userMenuBadge = document.getElementById('user-menu-notification-badge');
+    
+    if (badge) {
+      if (unreadCount > 0) {
+        badge.style.display = 'block';
+        badge.textContent = unreadCount > 99 ? '99+' : unreadCount.toString();
+      } else {
+        badge.style.display = 'none';
       }
     }
+    
+    if (userMenuBadge) {
+      if (unreadCount > 0) {
+        userMenuBadge.style.display = 'block';
+        userMenuBadge.textContent = unreadCount > 99 ? '99+' : unreadCount.toString();
+      } else {
+        userMenuBadge.style.display = 'none';
+      }
+    }
+  }
+  
+  getTimeAgo(timestamp) {
+    const now = Date.now();
+    const diff = now - timestamp;
+    
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(diff / 3600000);
+    const days = Math.floor(diff / 86400000);
+    
+    if (minutes < 1) return 'Just now';
+    if (minutes < 60) return `${minutes}m ago`;
+    if (hours < 24) return `${hours}h ago`;
+    return `${days}d ago`;
+  }
+  
+  getNotificationIcon(type) {
+    const icons = {
+      'MESSAGE_NEW': '💬',
+      'MENTION': '🗣️',
+      'COMMUNITY_JOIN': '👥',
+      'FRIEND_AURA_CHANGE': '✨',
+      'default': '🔔'
+    };
+    return icons[type] || icons.default;
+  }
+  
+  truncateUrl(url) {
+    if (url.length <= 30) return url;
+    return url.substring(0, 27) + '...';
+  }
+}
+
+// Abstracted Navigation System
+class NavigationManager {
+  constructor() {
+    this.initialize();
+  }
+  
+  async initialize() {
+    console.log('🧭 NAVIGATION: Navigation manager initialized');
+  }
+  
+  async navigateToUrl(url, target) {
+    try {
+      console.log('🧭 NAVIGATION: Navigating to URL:', url, 'with target:', target);
+      
+      // Get current active tab
+      const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      
+      if (activeTab && activeTab.url === url) {
+        // Already on the target page, just focus and highlight
+        await this.focusAndHighlight(target);
+      } else {
+        // Navigate to the URL
+        await chrome.tabs.update(activeTab.id, { url: url });
+        
+        // Wait for page to load, then highlight
+        setTimeout(() => {
+          this.focusAndHighlight(target);
+        }, 2000);
+      }
+    } catch (error) {
+      console.error('🧭 NAVIGATION: Error navigating:', error);
+    }
+  }
+  
+  async focusAndHighlight(target) {
+    try {
+      if (!target) return;
+      
+      console.log('🧭 NAVIGATION: Focusing and highlighting target:', target);
+      
+      // Send message to content script to highlight the target
+      const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      
+      if (activeTab) {
+        await chrome.tabs.sendMessage(activeTab.id, {
+          type: 'HIGHLIGHT_TARGET',
+          target: target
+        });
+      }
+    } catch (error) {
+      console.error('🧭 NAVIGATION: Error focusing target:', error);
+    }
+  }
+}
+
+// Initialize notification history system
+window.notificationHistory = new NotificationHistoryManager();
+window.navigationManager = new NavigationManager();
+
+// Open notifications modal
+window.openNotificationsModal = function() {
+  try {
+    console.log('🔔 MODAL: Opening notifications modal...');
+    
+    const modal = document.getElementById('notifications-modal');
+    if (!modal) {
+      console.error('🔔 MODAL: Notifications modal not found');
+      return;
+    }
+    
+    // Show modal
+    modal.style.display = 'flex';
+    
+    // Update notifications UI
+    window.notificationHistory.updateNotificationsUI();
+    
+    // Add event listeners for modal actions
+    const markAllReadBtn = document.getElementById('mark-all-read-btn');
+    const clearAllBtn = document.getElementById('clear-all-btn');
+    const closeBtn = modal.querySelector('.close-button');
+    
+    if (markAllReadBtn) {
+      markAllReadBtn.onclick = () => window.notificationHistory.markAllAsRead();
+    }
+    
+    if (clearAllBtn) {
+      clearAllBtn.onclick = () => window.notificationHistory.clearAll();
+    }
+    
+    if (closeBtn) {
+      closeBtn.onclick = () => {
+        modal.style.display = 'none';
+      };
+    }
+    
+    // Close modal when clicking outside
+    modal.onclick = (e) => {
+      if (e.target === modal) {
+        modal.style.display = 'none';
+      }
+    };
+    
+    console.log('🔔 MODAL: Notifications modal opened');
+  } catch (error) {
+    console.error('🔔 MODAL: Error opening notifications modal:', error);
+  }
+};
+
+// Enhanced notification system integration
+function initializeEnhancedNotifications() {
+  try {
+    console.log('🔔 ENHANCED: Initializing enhanced notification system...');
+    
+    // Add notifications button to profile dropdown
+    const notificationsBtn = document.getElementById('notifications-btn');
+    if (notificationsBtn) {
+      notificationsBtn.addEventListener('click', () => {
+        window.openNotificationsModal();
+      });
+    }
+    
+    // Override the existing showNotification function to also add to history
+    const originalShowNotification = window.showNotification;
+    window.showNotification = function(message, type = 'info', url = null, target = null) {
+      // Call original function
+      if (originalShowNotification) {
+        originalShowNotification(message);
+      }
+      
+      // Add to notification history
+      window.notificationHistory.addNotification({
+        type: type,
+        title: type === 'info' ? 'Notification' : type.charAt(0).toUpperCase() + type.slice(1),
+        message: message,
+        url: url,
+        target: target
+      });
+    };
+    
+    // Enhanced WebSocket message handling
+    const originalHandleWebSocketMessage = window.handleWebSocketMessage;
+    window.handleWebSocketMessage = function(data) {
+      // Call original function
+      if (originalHandleWebSocketMessage) {
+        originalHandleWebSocketMessage(data);
+      }
+      
+      // Add to notification history based on message type
+      switch (data.type) {
+        case 'MESSAGE_NEW':
+          window.notificationHistory.addNotification({
+            type: 'MESSAGE_NEW',
+            title: `💬 New message from ${data.message?.author?.name || 'Someone'}`,
+            message: data.message?.content || 'New message',
+            url: data.url || window.location.href,
+            target: `[data-message-id="${data.message?.id}"]`
+          });
+          break;
+          
+        case 'AURA_COLOR_CHANGED':
+          if (data.userEmail !== window.currentUser?.email) {
+            window.notificationHistory.addNotification({
+              type: 'FRIEND_AURA_CHANGE',
+              title: `✨ ${data.userName || data.userEmail} changed their aura`,
+              message: `Their new aura color is ${data.auraColor}`,
+              url: data.url || window.location.href,
+              target: `[data-user-email="${data.userEmail}"]`
+            });
+          }
+          break;
+      }
+    };
+    
+    console.log('🔔 ENHANCED: Enhanced notification system initialized');
+  } catch (error) {
+    console.error('🔔 ENHANCED: Error initializing enhanced notifications:', error);
+  }
+}
+
+// Initialize enhanced notifications when DOM is ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initializeEnhancedNotifications);
+} else {
+  initializeEnhancedNotifications();
+}
+
+// Broadcast aura color change to all users on the same page
+async function broadcastAuraChange(auraColor) {
+  try {
+    console.log('[WEBSOCKET] Broadcasting aura color change:', auraColor);
+    
+    const user = window.currentUser;
+    if (!user) {
+      console.warn('[WEBSOCKET] No user found, cannot broadcast aura change');
+      return;
+    }
+    
+    // Get current page info
+    const urlData = await normalizeCurrentUrl();
+    
+    // Send aura change message
+    await sendSupabaseMessage({
+      type: 'AURA_COLOR_CHANGED',
+      userEmail: user.email,
+      userId: user.id || user.email,
+      auraColor: auraColor,
+      pageId: urlData.pageId,
+      url: urlData.normalizedUrl,
+      timestamp: Date.now()
+    });
+    
+    console.log('[WEBSOCKET] Aura color change broadcast sent');
+  } catch (error) {
+    console.error('[WEBSOCKET] Error broadcasting aura change:', error);
+  }
+}
+
+// CHROME EXTENSION WEBSOCKET FIX: Send WebSocket message via background service worker
+// SUPABASE REAL-TIME: Send message via Supabase real-time
+async function sendSupabaseMessage(message) {
+  const timer = realtimeLogger.startTimer('supabase_send');
+  realtimeLogger.startFlow('supabase_send', { messageType: message.type, timestamp: Date.now() });
+  
+  try {
+    if (!window.supabaseRealtimeClient) {
+      console.error('❌ SUPABASE: Real-time client not initialized');
+      return false;
+    }
+    
+    realtimeLogger.supabase('info', 'Sending message via Supabase real-time', {
+      type: message.type,
+      hasContent: !!message.content,
+      hasUserEmail: !!message.userEmail,
+      hasAuraColor: !!message.auraColor,
+      timestamp: message.timestamp
+    });
+    
+    realtimeLogger.stepFlow('supabase_send', 'Preparing Supabase real-time message');
+    
+    let success = false;
+    
+    switch (message.type) {
+      case 'MESSAGE_NEW':
+        success = await window.supabaseRealtimeClient.sendMessage(message.content);
+        break;
+      case 'AURA_COLOR_CHANGED':
+        success = await window.supabaseRealtimeClient.broadcastAuraColorChange(message.color);
+        break;
+      case 'PRESENCE_UPDATE':
+        success = await window.supabaseRealtimeClient.updatePresence(
+          message.pageId, 
+          message.pageUrl, 
+          message.auraColor
+        );
+        break;
+      case 'VISIBILITY_UPDATE':
+        success = await window.supabaseRealtimeClient.setUserVisibility(
+          message.isVisible, 
+          message.pageUrl
+        );
+        break;
+      default:
+        console.warn('❓ SUPABASE: Unknown message type:', message.type);
+        return false;
+    }
+    
+    realtimeLogger.stepFlow('supabase_send', 'Received response from Supabase');
+    
+    if (success) {
+      realtimeLogger.supabase('info', 'Message sent successfully via Supabase', {
+        messageType: message.type,
+        responseTime: realtimeLogger.endTimer(timer)
+      });
+      realtimeLogger.endFlow('supabase_send', true, { success });
+      return true;
+    } else {
+      realtimeLogger.supabase('error', 'Failed to send message via Supabase', {
+        messageType: message.type,
+        responseTime: realtimeLogger.endTimer(timer)
+      });
+      realtimeLogger.endFlow('supabase_send', false, { success });
+      return false;
+    }
+  } catch (error) {
+    realtimeLogger.supabase('error', 'Error sending message via Supabase', {
+      messageType: message.type,
+      error: error.message,
+      stack: error.stack,
+      responseTime: realtimeLogger.endTimer(timer)
+    });
+    realtimeLogger.endFlow('supabase_send', false, { error: error.message });
+    return false;
+  }
+}
+
+// --- UI Update Function ---
+async function updateUI(user) {
+  console.log('[UPDATE_UI] === START updateUI ===');
+  console.log('[UPDATE_UI] User object:', user);
+  
+  const userInfoDiv = document.getElementById('user-info');
+  const userMenuName = document.getElementById('user-menu-name');
+  const userAvatarContainer = document.getElementById('user-avatar-container');
+  
+  console.log('[UPDATE_UI] DOM elements found:');
+  console.log('[UPDATE_UI]   userInfoDiv:', !!userInfoDiv, userInfoDiv);
+  console.log('[UPDATE_UI]   userMenuName:', !!userMenuName, userMenuName);
+  console.log('[UPDATE_UI]   userAvatarContainer:', !!userAvatarContainer, userAvatarContainer);
+
+  if (user) {
+    console.log('[UPDATE_UI] User is authenticated, updating UI...');
+    // Store current user globally for aura color access
+    window.currentUser = {
+      email: user.email,
+      name: user.user_metadata?.full_name || user.email,
+      auraColor: user.auraColor || null
+    };
+    
+    // Old WebSocket code removed - now using Supabase real-time for all real-time features
+    
+    // User is logged in - show user info
+    console.log('[UPDATE_UI] Setting userInfoDiv display to flex');
+    if (userInfoDiv) {
+      userInfoDiv.style.display = 'flex';
+      console.log('[UPDATE_UI] userInfoDiv.style.display set to:', userInfoDiv.style.display);
+    }
+    
+    console.log('[UPDATE_UI] Setting userMenuName text');
+    if (userMenuName) {
+      userMenuName.textContent = user.user_metadata?.full_name || user.email;
+      console.log('[UPDATE_UI] userMenuName.textContent set to:', userMenuName.textContent);
+    }
+    
+    console.log('[UPDATE_UI] Setting up user avatar using UNIFIED createUnifiedAvatar()');
+    if (userAvatarContainer) {
+      // Use UNIFIED avatar system for profile avatar - SAME CODE AS MESSAGE/VISIBILITY AVATARS
+      // IMPORTANT: Get the user's aura color using the same logic as message avatars
+      let userAuraColor = null;
+      
+      // First try to get from stored aura color (same as message avatars)
+      if (user.auraColor && user.auraColor !== null && user.auraColor !== 'null') {
+        userAuraColor = user.auraColor;
+        console.log(`🔍 PROFILE_AVATAR: [BUILD ${EXTENSION_BUILD}] Using stored aura color: ${userAuraColor}`);
+      } else {
+        // Try to get from real-time presence data (same as message avatars)
+        userAuraColor = getLatestAuraColorFromPresence(user.email);
+        if (userAuraColor) {
+          console.log(`🔍 PROFILE_AVATAR: [BUILD ${EXTENSION_BUILD}] Using real-time aura color: ${userAuraColor}`);
+        } else {
+          console.log(`🔍 PROFILE_AVATAR: [BUILD ${EXTENSION_BUILD}] No real-time aura color found, will use generated color`);
+        }
+      }
+      
+      // CRITICAL FIX: Get the REAL avatar URL from presence/visibility data
+      // The auth system generates fake ui-avatars.com URLs, but we need the REAL Google avatar
+      // that's stored in the database and returned by the presence API
+      let realAvatarUrl = user.user_metadata?.avatar_url || user.picture;
+      
+      // Try to get the real avatar from UNFILTERED visibility data (which includes current user)
+      // We use the unfiltered data because the filtered data excludes the current user
+      if (window.currentVisibilityDataUnfiltered && window.currentVisibilityDataUnfiltered.active) {
+        const currentUserInVisibility = window.currentVisibilityDataUnfiltered.active.find(
+          u => u.email === user.email || u.userId === user.email || u.id === user.email
+        );
+        if (currentUserInVisibility && currentUserInVisibility.avatarUrl) {
+          console.log(`🔍 PROFILE_AVATAR_FIX: Found REAL avatar in UNFILTERED visibility data: ${currentUserInVisibility.avatarUrl}`);
+          console.log(`🔍 PROFILE_AVATAR_FIX: Replacing fake avatar: ${realAvatarUrl}`);
+          console.log(`🔍 PROFILE_AVATAR_FIX: User found in unfiltered data:`, {
+            email: currentUserInVisibility.email,
+            userId: currentUserInVisibility.userId,
+            avatarUrl: currentUserInVisibility.avatarUrl
+          });
+          realAvatarUrl = currentUserInVisibility.avatarUrl;
+        } else {
+          console.log(`🔍 PROFILE_AVATAR_FIX: Current user NOT found in UNFILTERED visibility data`);
+          console.log(`🔍 PROFILE_AVATAR_FIX: Looking for: ${user.email}`);
+          console.log(`🔍 PROFILE_AVATAR_FIX: Available users:`, window.currentVisibilityDataUnfiltered.active.map(u => ({
+            email: u.email,
+            userId: u.userId,
+            id: u.id
+          })));
+        }
+      } else {
+        console.log(`🔍 PROFILE_AVATAR_FIX: No UNFILTERED visibility data available, using auth avatar`);
+      }
+      
+      const userData = {
+        id: user.id || user.email,
+        userId: user.id || user.email,
+        name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
+        email: user.email,
+        avatarUrl: realAvatarUrl,  // USE THE REAL AVATAR URL FROM DATABASE
+        auraColor: userAuraColor // Use aura color from presence API
+      };
+      
+      console.log(`🔍 PROFILE_AVATAR: [BUILD ${EXTENSION_BUILD}] Creating UNIFIED avatar for profile:`, {
+        name: userData.name,
+        email: userData.email,
+        avatarUrl: userData.avatarUrl,
+        auraColor: userData.auraColor,
+        source: realAvatarUrl === (user.user_metadata?.avatar_url || user.picture) ? 'auth' : 'visibility-data'
+      });
+      
+      // ✅ CREATE UNIFIED AVATAR HTML - SAME AS MESSAGE/VISIBILITY AVATARS
+      // CRITICAL: USE SAME SIZE AS VISIBILITY/MESSAGE AVATARS (32px) FOR CONSISTENCY
+      const avatarHTML = createUnifiedAvatar(userData, {
+        size: 32,  // MUST MATCH visibility (32px) and message (32px)
+        showStatus: false,  // No status dot on profile avatar
+        showAura: true,     // Show aura color
+        context: 'profile'
+      });
+      
+      console.log('[UPDATE_UI] Setting avatar HTML using createUnifiedAvatar() - UNIFIED RENDERING');
+      userAvatarContainer.innerHTML = avatarHTML;
+      
+      console.log('[UPDATE_UI] ✅ Avatar configured using UNIFIED createUnifiedAvatar() system');
+    } else {
+      console.error('[UPDATE_UI] ERROR: userAvatarContainer element not found!');
+    }
+    
     debug(`User logged in: ${userMenuName?.textContent}`);
-    console.log('UI updated: User authenticated, showing user info');
+    console.log('[UPDATE_UI] UI updated: User authenticated, showing user info');
+    console.log('[UPDATE_UI] === END updateUI ===');
     
     // Add click handlers after UI update (with small delay to ensure DOM is ready)
     setTimeout(() => {
@@ -3128,8 +6034,11 @@ function updateUI(user) {
       addVisibilitySettingsButtonClickHandler();
     }, 100);
   } else {
-    // User is logged out - hide user info
-    if (userInfoDiv) userInfoDiv.style.display = 'none';
+    // User is logged out - hide user info but DON'T destroy the HTML structure
+    console.log('[UPDATE_UI] User is null - hiding user info but preserving HTML structure');
+    if (userInfoDiv) {
+      userInfoDiv.style.display = 'none';
+    }
     debug('User logged out or not logged in.');
     console.log('UI updated: User not authenticated, hiding user info');
   }
@@ -3138,14 +6047,29 @@ function updateUI(user) {
 // --- Auth Functions ---
 async function signInWithGoogle() {
   try {
-    debug('Attempting Google sign-in...');
-    const result = await authManager.signIn('google');
-    debug('Google sign-in successful:', result);
+    debug('Attempting Google sign-in for REAL profile pictures...');
     
-    // Update UI with the authenticated user
-    if (result && result.user) {
-      updateUI(result.user);
-      debug(`User authenticated: ${result.user.email}`);
+    // Use real Google auth for actual profile pictures
+    if (realGoogleAuth) {
+      const result = await realGoogleAuth.signInWithGoogle();
+      debug('Real Google sign-in successful:', result);
+      
+      // Update UI with the authenticated user
+      if (result && result.user) {
+        await updateUI(result.user);
+        debug(`User authenticated with REAL profile picture: ${result.user.email}`);
+        console.log('🔍 REAL_GOOGLE_AUTH: Real avatar URL:', result.user.user_metadata?.avatar_url);
+      }
+    } else {
+      // Fallback to AuthManager
+      const result = await authManager.signIn('google');
+      debug('Google sign-in successful (fallback):', result);
+      
+      // Update UI with the authenticated user
+      if (result && result.user) {
+        await updateUI(result.user);
+        debug(`User authenticated (fallback): ${result.user.email}`);
+      }
     }
   } catch (error) {
     console.error('Google sign-in failed:', error);
@@ -3175,7 +6099,7 @@ async function sendMagicLink() {
     
     if (result && result.user) {
       document.getElementById('magic-link-status').textContent = 'Magic link sent! Check your email.';
-      updateUI(result.user);
+      await updateUI(result.user);
       debug(`Magic link successful: ${result.user.email}`);
     } else {
       document.getElementById('magic-link-status').textContent = 'Magic link sent! Check your email.';
@@ -3201,9 +6125,137 @@ async function signOut() {
 
 // JavaScript for the Collaborative Sidebar
 
+// Setup cross-profile communication for real-time updates
+function setupCrossProfileCommunication() {
+  console.log('📡 Setting up cross-profile communication...');
+  
+  // Listen for messages from other profiles
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    console.log('📡 Received cross-profile message:', message);
+    
+    if (message.type === 'MESSAGE_DELETED') {
+      console.log('📡 DELETION: Received deletion notification for message:', message.messageId);
+      
+      // Remove the deleted message from this profile's UI
+      const messageDiv = document.querySelector(`[data-message-id="${message.messageId}"]`);
+      if (messageDiv) {
+        messageDiv.remove();
+        console.log('📡 DELETION: Removed message from UI');
+      }
+      
+      // Force refresh chat to ensure consistency
+      loadChatHistory().then(() => {
+        console.log('📡 DELETION: Refreshed chat after cross-profile deletion');
+      });
+    }
+    
+    if (message.type === 'AURA_COLOR_CHANGED') {
+      console.log('📡 AURA: Received aura color change notification');
+      
+      // Refresh message avatars with current presence data to get updated aura colors
+      console.log('📡 AURA: Refreshing message avatars with current presence data');
+      refreshMessageAvatarsWithCurrentPresence().then(() => {
+        console.log('📡 AURA: Message avatars refreshed with updated aura colors');
+      });
+      
+      // Also refresh visibility avatars
+      const result = chrome.storage.local.get(['activeCommunities']);
+      result.then(({ activeCommunities }) => {
+        const communities = activeCommunities || ['comm-001'];
+        loadCombinedAvatars(communities).then(() => {
+          console.log('📡 AURA: Refreshed visibility avatars after cross-profile aura change');
+        });
+      });
+      
+      // Force refresh of all message avatars to use current presence data
+      setTimeout(() => {
+        console.log('📡 AURA: Forcing message avatar refresh with current presence data');
+        refreshMessageAvatarsWithCurrentPresence();
+      }, 1000);
+    }
+    
+    if (message.type === 'NEW_MESSAGE_ADDED') {
+      console.log('📡 MESSAGE: Received new message notification');
+      
+      // Add the new message to this profile's chat
+      if (message.message) {
+        console.log('📡 MESSAGE: Adding new message to chat:', message.messageId);
+        addMessageToChat(message.message).then(() => {
+          console.log('📡 MESSAGE: New message added to remote profile');
+        });
+      }
+    }
+    
+    sendResponse({ received: true });
+  });
+  
+  // REMOVED: chrome.storage.onChanged listener for aura changes
+  // Aura changes are now handled exclusively via Supabase real-time subscriptions
+  // This prevents dual pathways that could cause race conditions
+  // See: supabaseRealtimeClient.onUserUpdated handler above
+  
+  console.log('✅ Cross-profile communication setup complete');
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
+  // MODERN INITIALIZATION
+  console.log('🚀 MODERN: Initializing fully modernized extension...');
+  
+  // Initialize modern systems
+  if (window.logger) {
+    window.logger.info('INIT', 'Modern extension initialization started');
+  }
+  
+  if (window.performanceOptimizer) {
+    window.performanceOptimizer.startOperation('extension_init');
+  }
+  
+  if (window.securityManager) {
+    console.log('🔒 SECURITY: Security manager available');
+  }
+  
   debug("DOMContentLoaded event fired.");
   console.log("DOMContentLoaded event fired.");
+
+  try {
+    // === Initialize Complete Modern Architecture ===
+    console.log('🚀 INIT: Initializing complete modern architecture...');
+    await initializeCompleteModernArchitecture();
+    console.log('✅ INIT: Complete modern architecture initialized');
+  } catch (error) {
+    console.error('❌ INIT: Failed to initialize modern architecture:', error);
+    console.error('❌ INIT: Error stack:', error.stack);
+  }
+  
+  try {
+    // === Setup Modern Cross-Profile Communication ===
+    console.log('🚀 INIT: Setting up modern cross-profile communication...');
+    await setupModernCrossProfileCommunication();
+    console.log('✅ INIT: Modern cross-profile communication setup complete');
+  } catch (error) {
+    console.error('❌ INIT: Failed to setup cross-profile communication:', error);
+    console.error('❌ INIT: Error stack:', error.stack);
+  }
+
+  try {
+    // === Initialize Supabase Real-time Client ===
+    console.log('🚀 INIT: Initializing Supabase real-time client...');
+    await initializeSupabaseRealtimeClient();
+    console.log('✅ INIT: Supabase real-time client initialized');
+  } catch (error) {
+    console.error('❌ INIT: Failed to initialize Supabase real-time client:', error);
+    console.error('❌ INIT: Error stack:', error.stack);
+  }
+  
+  try {
+    // === Initialize Real Google Auth for Actual Profile Pictures ===
+    console.log('🚀 INIT: Initializing real Google auth...');
+    initializeRealGoogleAuth();
+    console.log('✅ INIT: Real Google auth initialized');
+  } catch (error) {
+    console.error('❌ INIT: Failed to initialize real Google auth:', error);
+    console.error('❌ INIT: Error stack:', error.stack);
+  }
 
   // === Initialize Theme ===
   initializeTheme();
@@ -3249,9 +6301,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       console.log('Current provider:', authManager.currentProvider?.name);
       
       // Set up auth state listener
-      authManager.onAuthStateChange((event, data) => {
+      authManager.onAuthStateChange(async (event, data) => {
         console.log('Auth state changed:', event, data);
-        updateUI(data?.user ?? null);
+        // data IS the user object, not { user: ... }
+        await updateUI(data);
       });
       
       // Check initial auth state
@@ -3259,7 +6312,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       console.log('Initial user:', user);
       
       // Update UI with current user
-      updateUI(user);
+      await updateUI(user);
       
       // Check for pending content from selection widget
       await handlePendingContent();
@@ -3274,26 +6327,45 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Don't clear UI here - let the auth state listener handle it
   }
   
+  // Use Supabase authentication only - no hardcoded auth
+
   // Load communities and initialize the interface
   try {
-    loadCommunities();
+    console.log('🔍 INIT: Loading communities...');
+    const result = await loadCommunities();
+    console.log('🔍 INIT: Communities loaded:', result);
     
     // Also load chat history for the current page
+    console.log('🔍 INIT: Setting up chat history timeout (1 second)...');
     setTimeout(async () => {
       try {
+        console.log('🔍 INIT: Chat history timeout executed');
         await loadChatHistory();
-        console.log('Chat history loaded for current page');
+        console.log('🔍 INIT: Chat history loaded for current page');
       } catch (error) {
-        console.error('Error loading chat history:', error);
+        console.error('❌ INIT: Error loading chat history:', error);
       }
     }, 1000); // Small delay to ensure communities are loaded first
     
     // Start presence tracking
+    console.log('🔍 INIT: Setting up presence tracking timeout (2 seconds)...');
     setTimeout(async () => {
       try {
+        console.log('🔍 INIT: Timeout executed - about to call startPresenceTracking()');
+        const currentUser = await getCurrentUserEmail();
+        console.log('🔍 INIT: Current user before presence tracking:', currentUser);
+        
+        if (!currentUser) {
+          console.log('🔍 INIT: No authenticated user, skipping presence tracking');
+          console.log('🔍 INIT: Authentication prompt should be visible - user needs to sign in');
+          return;
+        }
+        
         await startPresenceTracking();
+        console.log('🔍 INIT: startPresenceTracking() completed successfully');
       } catch (error) {
-        console.error('Error starting presence tracking:', error);
+        console.error('❌ INIT: Error starting presence tracking:', error);
+        console.error('❌ INIT: Error stack:', error.stack);
       }
     }, 2000); // Delay to ensure auth is complete
   } catch (error) {
@@ -3307,7 +6379,23 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Add unload handler to stop presence tracking
   window.addEventListener('beforeunload', () => {
-    stopPresenceTracking();
+    // Send EXIT event synchronously (fire and forget)
+    if (currentPageId) {
+      sendPresenceEvent('EXIT').catch(error => {
+        console.error('❌ PRESENCE: Error sending EXIT event:', error);
+      });
+    }
+    
+    // Stop intervals
+    if (presenceHeartbeatInterval) {
+      clearInterval(presenceHeartbeatInterval);
+      presenceHeartbeatInterval = null;
+    }
+    
+    if (visibleListPollingInterval) {
+      clearInterval(visibleListPollingInterval);
+      visibleListPollingInterval = null;
+    }
   });
 
   // --- Now proceed with the rest of the setup ---
@@ -3579,6 +6667,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     debugHeader.addEventListener('click', toggleDebugPanel);
   }
   
+  // Initialize notification settings UI
+  initializeNotificationSettings();
+  
+  // Initialize notification icon
+  initializeNotificationIcon();
+  
+  // Handle notification clicks from background
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message.type === 'NOTIFICATION_CLICKED') {
+      console.log('🔔 SIDEPANEL: Notification clicked:', message.notificationId, message.buttonIndex);
+      
+      if (window.notificationManager) {
+        window.notificationManager.handleNotificationClick(message.notificationId, message.buttonIndex);
+      }
+    }
+  });
+  
   if (chatInput) {
     chatInput.addEventListener('focus', () => {
       if (!requireAuth('send messages', () => {
@@ -3616,15 +6721,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.log('Sending message:', message);
         
         try {
-          // Get current user and primary community
-          const result = await chrome.storage.local.get(['googleUser', 'primaryCommunity', 'currentCommunity']);
-          const user = result.googleUser;
+          // Get current user and primary community - use window.currentUser for user
+          const result = await chrome.storage.local.get(['primaryCommunity', 'currentCommunity']);
+          const user = window.currentUser;
           const communityId = result.primaryCommunity || result.currentCommunity || 'comm-001';
           
           if (user && user.id) {
             try {
-              // Get current page URI
-              const currentUri = await getCurrentPageUri();
+              // Get normalized URL for consistency with presence and visibility
+              const urlData = await normalizeCurrentUrl();
+              const currentUri = urlData.normalizedUrl;
               debug(`Current page URI: ${currentUri}`);
               
               // Check if this is a message with selected content
@@ -3662,9 +6768,15 @@ document.addEventListener('DOMContentLoaded', async () => {
               
               // Use email for user identification (consistent with presence API)
               const userEmail = await getCurrentUserEmail();
+              console.log(`🔍 CHAT_SEND: Sending message for user ${userEmail} in community ${communityId} on URI ${currentUri}`);
+              console.log(`🔍 CHAT_SEND: Message content: "${message}"`);
               const response = await api.sendMessage(userEmail, communityId, message, currentUri, parentId, threadId, optionalContent);
+              console.log(`✅ CHAT_SEND: Message sent successfully: ${response?.msg?.id || response?.id}`);
               debug(`Message sent successfully: ${response?.msg?.id || response?.id}`);
               console.log('Message sent:', response);
+              
+              // Send message via Supabase real-time
+              await sendMessageViaSupabase(message);
               
               // Add message to chat display - handle both conversation and post responses
               let newPost = null;
@@ -3699,6 +6811,45 @@ document.addEventListener('DOMContentLoaded', async () => {
                 
                 await addMessageToChat(newPost);
                 console.log('New post added to chat successfully');
+                
+                // Broadcast new message to other profiles
+                try {
+                  chrome.runtime.sendMessage({
+                    type: 'NEW_MESSAGE_ADDED',
+                    messageId: newPost.id,
+                    message: newPost,
+                    timestamp: Date.now()
+                  });
+                  console.log('📡 MESSAGE: Broadcasted new message to other profiles');
+                } catch (error) {
+                  console.log('📡 MESSAGE: Could not broadcast to other profiles:', error);
+                }
+                
+                // Reset last loaded URI to force reload on next loadChatHistory call
+                console.log(`🔍 CHAT_SEND: Resetting lastLoadedUri from ${lastLoadedUri} to null`);
+                lastLoadedUri = null;
+                
+                // Update last message count for polling
+                lastMessageCount = document.querySelectorAll('.message').length;
+                console.log(`🔍 CHAT_SEND: Updated last message count to ${lastMessageCount}`);
+                
+                // Force a reload to ensure other users see the new message
+                console.log(`🔍 CHAT_SEND: Forcing chat history reload for real-time sync`);
+                await loadChatHistory();
+                
+                // Verify the message is in the database by checking the server response
+                console.log(`🔍 CHAT_SEND: Verifying message exists in database...`);
+                try {
+                  const verifyResponse = await api.getChatHistory('comm-001', null, currentUri);
+                  const messageExists = verifyResponse.conversations?.[0]?.posts?.some(post => post.id === newPost.id);
+                  console.log(`🔍 CHAT_SEND: Message verification result:`, messageExists ? 'FOUND' : 'NOT FOUND');
+                  if (!messageExists) {
+                    console.log(`⚠️ CHAT_SEND: Message not found in database, adding additional delay...`);
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                  }
+                } catch (error) {
+                  console.log(`⚠️ CHAT_SEND: Error verifying message in database:`, error);
+                }
                 
                 // If this was a reply, expand the thread after adding the message
                 if (newPost.parentId && newPost.conversationId) {
@@ -3741,7 +6892,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }
                   }, 100);
                 }
-              } else {
+  } else {
                 console.log('No valid post in response:', response);
                 console.log('Response structure:', {
                   hasResponse: !!response,
@@ -3751,23 +6902,41 @@ document.addEventListener('DOMContentLoaded', async () => {
               }
               
               // Clear input and reset height
+              console.log(`🔍 CHAT_CLEAR: [BUILD ${EXTENSION_BUILD}] Clearing input field and resetting styling`);
+              console.log(`🔍 CHAT_CLEAR: [BUILD ${EXTENSION_BUILD}] Input field current height:`, chatInput.style.height);
+              console.log(`🔍 CHAT_CLEAR: [BUILD ${EXTENSION_BUILD}] Input field computed height:`, window.getComputedStyle(chatInput).height);
+              console.log(`🔍 CHAT_CLEAR: [BUILD ${EXTENSION_BUILD}] Input field value before clear:`, chatInput.value);
+              
+              // Clear the input value
               chatInput.value = '';
-              chatInput.style.height = 'auto';
-              chatInput.style.overflowY = 'hidden';
               
               // Clear context bar and reset input styling
               const contextBar = document.getElementById('context-bar');
               if (contextBar) {
                 contextBar.style.display = 'none';
+                console.log(`🔍 CHAT_CLEAR: Context bar hidden`);
               }
               chatInput.placeholder = 'Start thread in Public Square';
               chatInput.style.borderColor = '';
               chatInput.style.backgroundColor = '';
               
-              // Force reset to minimum height
-              setTimeout(() => {
-                chatInput.style.height = '20px';
-              }, 10);
+              // Reset height and overflow properties
+              chatInput.style.height = 'auto';
+              chatInput.style.maxHeight = 'none';
+              chatInput.style.minHeight = 'auto';
+              chatInput.style.overflowY = 'hidden';
+              console.log(`🔍 CHAT_CLEAR: Input field height set to auto`);
+              
+              // Force a reflow and then set to natural height
+              chatInput.offsetHeight; // Force reflow
+              chatInput.style.height = 'auto';
+              chatInput.style.maxHeight = '120px'; // Allow expansion up to 120px
+              chatInput.style.minHeight = '40px'; // Minimum reasonable height
+              console.log(`🔍 CHAT_CLEAR: [BUILD ${EXTENSION_BUILD}] Input field cleared and styling reset`);
+              console.log(`🔍 CHAT_CLEAR: [BUILD ${EXTENSION_BUILD}] Final input field height:`, chatInput.style.height);
+              console.log(`🔍 CHAT_CLEAR: [BUILD ${EXTENSION_BUILD}] Final computed height:`, window.getComputedStyle(chatInput).height);
+              console.log(`🔍 CHAT_CLEAR: [BUILD ${EXTENSION_BUILD}] Input field value after clear:`, chatInput.value);
+              console.log(`🔍 CHAT_CLEAR: [BUILD ${EXTENSION_BUILD}] Message field reset completed successfully`);
             } catch (error) {
               debug(`Failed to send message: ${error.message}`);
               console.error('Failed to send message:', error);
@@ -3852,6 +7021,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   window.addFriend = addFriend;
   window.openUserProfile = openUserProfile;
 
+  // Direct authentication already happened above - no need to repeat
   console.log("Sidebar setup complete");
   debug("Sidebar setup complete (from JS)");
 });
@@ -3875,18 +7045,27 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 // Handle tab changes
 async function handleTabChange(tabId) {
-  console.log('Handling tab change for tab:', tabId);
+  console.log('🔄 TAB_CHANGE: === HANDLING TAB CHANGE ===');
+  console.log('🔄 TAB_CHANGE: Tab ID:', tabId);
   debug(`Handling tab change for tab: ${tabId}`);
   try {
+    // CRITICAL FIX: Leave current page BEFORE switching to new page
+    // This prevents "ghost presence" where user appears on old page for 30 seconds
+    if (window.supabaseRealtimeClient) {
+      console.log('🚪 TAB_CHANGE: Leaving current page before switching...');
+      await window.supabaseRealtimeClient.leaveCurrentPage();
+      console.log('✅ TAB_CHANGE: Left current page successfully');
+    }
+    
     // Get the current tab URL
     const tab = await chrome.tabs.get(tabId);
     if (tab && tab.url) {
-      console.log('New tab URL:', tab.url);
+      console.log('🔄 TAB_CHANGE: New tab URL:', tab.url);
       debug(`New tab URL: ${tab.url}`);
       
       // Normalize the new URL ONCE at the top
       await normalizeCurrentUrl();
-      console.log('🔄 TAB_UPDATE: URL normalized for new tab');
+      console.log('🔄 TAB_CHANGE: URL normalized for new tab');
       
       // Reload chat history for the new page (uses normalized URL)
       await loadChatHistory();
@@ -3896,21 +7075,31 @@ async function handleTabChange(tabId) {
       await loadCombinedAvatars(activeCommunities);
       // Start presence tracking for the new URL (uses normalized URL)
       await startPresenceTracking();
-    } else {
-      console.log('No tab or URL found for tab:', tabId);
+      console.log('✅ TAB_CHANGE: Tab change complete');
+  } else {
+      console.log('⚠️ TAB_CHANGE: No tab or URL found for tab:', tabId);
       debug(`No tab or URL found for tab: ${tabId}`);
     }
   } catch (error) {
-    console.error('Error handling tab change:', error);
+    console.error('❌ TAB_CHANGE: Error handling tab change:', error);
     debug(`Error handling tab change: ${error.message}`);
   }
 }
 
 // Handle tab updates (URL changes)
 async function handleTabUpdate(tabId, url) {
-  console.log('Handling tab update for tab:', tabId, 'URL:', url);
+  console.log('🔄 TAB_UPDATE: === HANDLING TAB UPDATE ===');
+  console.log('🔄 TAB_UPDATE: Tab ID:', tabId, 'URL:', url);
   debug(`Handling tab update for tab: ${tabId}, URL: ${url}`);
   try {
+    // CRITICAL FIX: Leave current page BEFORE switching to new URL
+    // This prevents "ghost presence" where user appears on old URL for 30 seconds
+    if (window.supabaseRealtimeClient) {
+      console.log('🚪 TAB_UPDATE: Leaving current page before URL change...');
+      await window.supabaseRealtimeClient.leaveCurrentPage();
+      console.log('✅ TAB_UPDATE: Left current page successfully');
+    }
+    
     // Normalize the new URL ONCE at the top
     await normalizeCurrentUrl();
     console.log('🔄 TAB_UPDATE: URL normalized for updated tab');
@@ -3923,8 +7112,9 @@ async function handleTabUpdate(tabId, url) {
     await loadCombinedAvatars(activeCommunities);
     // Start presence tracking for the new URL (uses normalized URL)
     await startPresenceTracking();
+    console.log('✅ TAB_UPDATE: Tab update complete');
   } catch (error) {
-    console.error('Error handling tab update:', error);
+    console.error('❌ TAB_UPDATE: Error handling tab update:', error);
     debug(`Error handling tab update: ${error.message}`);
   }
 }
@@ -3971,139 +7161,48 @@ async function toggleThreadReplies(threadId, messageElement) {
 }
 
 // ===== PRESENCE TRACKING =====
+// NOTE: All polling removed - now using Supabase real-time only
+// See realtime-presence-handler.js for implementation
 
-let presenceHeartbeatInterval = null;
-let visibleListPollingInterval = null;
 let currentPageId = null;
 
-// Start visible list polling every 5 seconds
-function startVisibleListPolling() {
-  // console.log('🔍 VISIBILITY: Starting visible list polling every 5 seconds');
-  
-  // Clear any existing polling
-  if (visibleListPollingInterval) {
-    clearInterval(visibleListPollingInterval);
-  }
-  
-  // Start polling every 15 seconds to reduce server load
-  visibleListPollingInterval = setInterval(async () => {
-    try {
-      console.log('🔍 VISIBILITY: Polling for visible list updates...');
-      await loadCombinedAvatars();
-    } catch (error) {
-      console.error('❌ VISIBILITY: Error during polling:', error);
-    }
-  }, 5000); // 5 seconds
-}
-
-// Stop visible list polling
-function stopVisibleListPolling() {
-  if (visibleListPollingInterval) {
-    console.log('🔍 VISIBILITY: Stopping visible list polling');
-    clearInterval(visibleListPollingInterval);
-    visibleListPollingInterval = null;
-  }
-}
-
 // Start presence tracking for the current page
+// NOW USES: RealtimePresenceHandler (no polling!)
 async function startPresenceTracking() {
+  console.log('🔍 PRESENCE_FUNCTION: === startPresenceTracking() called ===');
+  
   try {
-    // Get normalized URL data - SAME AS MESSAGES AND VISIBILITY
+    // Get normalized URL data
     const urlData = await normalizeCurrentUrl();
     currentPageId = urlData.pageId;
     
-    console.log('🔍 PRESENCE: Starting presence tracking for normalized page:', urlData.normalizedUrl, 'pageId:', currentPageId, '(from raw:', urlData.rawUrl, ')');
-    console.log('🔍 PRESENCE: Current user email:', await getCurrentUserEmail());
-    console.log('🔍 PRESENCE: Current user ID:', await getCurrentUserId());
+    console.log('🔍 PRESENCE: Starting for page:', currentPageId);
+    console.log('🔍 PRESENCE: URL:', urlData.normalizedUrl);
+    console.log('🔍 PRESENCE: User:', await getCurrentUserEmail());
     
-    // Send initial ENTER event
-    console.log('🔍 PRESENCE: Sending initial ENTER event...');
-    await sendPresenceEvent('ENTER');
-    console.log('🔍 PRESENCE: ENTER event sent successfully');
-    
-    // Start heartbeat (every 30 seconds to reduce server load)
-    presenceHeartbeatInterval = setInterval(async () => {
-      try {
-        // Get normalized URL data for heartbeat - SAME AS MESSAGES AND VISIBILITY
-        const urlData = await normalizeCurrentUrl();
-        const currentPageId = urlData.pageId;
-        console.log('💓 HEARTBEAT: Sending heartbeat for normalized page:', urlData.normalizedUrl, 'pageId:', currentPageId, '(from raw:', urlData.rawUrl, ')');
-        
-        // Send heartbeat with current page info
-        const userEmail = await getCurrentUserEmail();
-        const userId = await getCurrentUserId();
-        
-        const response = await fetch(`${METALAYER_API_URL}/v1/presence/event`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-user-email': userEmail,
-            'x-user-id': userId
-          },
-          body: JSON.stringify({
-            pageId: currentPageId,
-            kind: 'HEARTBEAT',
-            availability: null,
-            customLabel: null,
-            pageUrl: urlData.rawUrl // Use the raw URL from urlData
-          })
-        });
-        
-        if (response.ok) {
-          console.log('💓 HEARTBEAT: Heartbeat sent successfully');
-        } else {
-          console.error('💓 HEARTBEAT: Failed to send heartbeat:', response.status);
-        }
-      } catch (error) {
-        console.error('💓 HEARTBEAT: Error sending heartbeat:', error);
-      }
-    }, 5000); // 5 seconds
-    
-    console.log('✅ PRESENCE: Presence tracking started');
-    
-    // Start polling for visible list updates every minute
-    startVisibleListPolling();
-  } catch (error) {
-    console.error('❌ PRESENCE: Failed to start presence tracking:', error);
-  }
-}
-
-// Start polling for visible list updates
-function startVisibleListPolling() {
-  if (visibleListPollingInterval) {
-    clearInterval(visibleListPollingInterval);
-  }
-  
-  // Start polling every 15 seconds to reduce server load
-  visibleListPollingInterval = setInterval(async () => {
-    try {
-      console.log('🔍 VISIBILITY: Polling for visible list updates...');
-      const result = await chrome.storage.local.get(['activeCommunities']);
-      const activeCommunities = result.activeCommunities || ['comm-001'];
-      await loadCombinedAvatars(activeCommunities);
-    } catch (error) {
-      console.error('❌ VISIBILITY: Error polling visible list:', error);
+    // Use new real-time handler (no polling!)
+    if (window.realtimePresenceHandler) {
+      await window.realtimePresenceHandler.start(currentPageId, urlData.normalizedUrl);
+      console.log('✅ PRESENCE: Started via RealtimePresenceHandler');
+    } else {
+      console.error('❌ PRESENCE: RealtimePresenceHandler not available');
     }
-  }, 60000); // 1 minute
+  } catch (error) {
+    console.error('❌ PRESENCE: Failed to start:', error);
+  }
 }
 
 // Stop presence tracking
-function stopPresenceTracking() {
-  if (presenceHeartbeatInterval) {
-    clearInterval(presenceHeartbeatInterval);
-    presenceHeartbeatInterval = null;
+async function stopPresenceTracking() {
+  console.log('🛑 PRESENCE: Stopping');
+  
+  // Use new real-time handler
+  if (window.realtimePresenceHandler) {
+    await window.realtimePresenceHandler.stop();
+    console.log('✅ PRESENCE: Stopped via RealtimePresenceHandler');
   }
   
-  if (visibleListPollingInterval) {
-    clearInterval(visibleListPollingInterval);
-    visibleListPollingInterval = null;
-  }
-  
-  // Note: We don't send explicit EXIT events anymore
-  // EXIT is inferred by heartbeat timeout (5 minutes of no heartbeats)
-  // This allows users to reconnect and resume presence without explicit re-ENTER
-  
-  console.log('🛑 PRESENCE: Presence tracking stopped (EXIT will be inferred by heartbeat timeout)');
+  currentPageId = null;
 }
 
 // Send a presence event to the server
@@ -4137,6 +7236,18 @@ async function sendPresenceEvent(kind, availability = null, customLabel = null) 
     
     if (response.ok) {
       console.log(`✅ PRESENCE: ${kind} event sent successfully`);
+      
+           // CHROME EXTENSION WEBSOCKET FIX: Send via background service worker
+           await sendSupabaseMessage({
+             type: 'PRESENCE_UPDATE',
+             kind: kind,
+             availability: availability,
+             customLabel: customLabel,
+             pageId: currentPageId,
+             userEmail: userEmail,
+             timestamp: Date.now()
+           });
+           console.log(`👥 WEBSOCKET: ${kind} event broadcast via background service worker`);
     } else {
       console.warn(`❌ PRESENCE: Failed to send ${kind} event:`, response.status);
     }
@@ -4154,26 +7265,71 @@ const urlNormalizationCache = new Map();
 let currentNormalizedUrl = null;
 let currentRawUrl = null;
 
+// Add cache invalidation function to prevent stale data
+function clearUrlNormalizationCache() {
+  console.log('🧹 URL_CACHE: Clearing URL normalization cache');
+  urlNormalizationCache.clear();
+  currentNormalizedUrl = null;
+  currentRawUrl = null;
+  currentPageId = null;
+}
+
+// Clear cache on extension startup to prevent stale data
+clearUrlNormalizationCache();
+
+// Track last loaded URI to prevent unnecessary reloads
+let lastLoadedUri = null;
+
+// Global storage for current chat data (for avatar updates)
+window.currentChatData = [];
+
+// REMOVED: Message polling code (replaced with Supabase real-time)
+// All messages now received via supabaseRealtimeClient.onNewMessage
+// No polling intervals - messages arrive instantly via WebSocket subscriptions
+
 // Centralized URL normalization - call this once at startup and when tabs change
 async function normalizeCurrentUrl() {
   try {
     const rawUri = await getCurrentPageUri();
     console.log(`🔍 URL_NORMALIZE: Normalizing current URL: ${rawUri}`);
     
+    // CRITICAL FIX: Cache busting - detect if pageId uses triple underscores (old bug)
+    // If it does, invalidate the cache and force re-normalization from backend
+    const hasBadCache = currentPageId && currentPageId.includes('___');
+    if (hasBadCache) {
+      console.error(`❌ CACHE_BUG_DETECTED: Found triple underscores in cached pageId: ${currentPageId}`);
+      console.error(`❌ CACHE_BUG_DETECTED: Invalidating cache and forcing backend re-normalization...`);
+      currentRawUrl = null;
+      currentNormalizedUrl = null;
+      currentPageId = null;
+      urlNormalizationCache.delete(rawUri);
+    }
+    
     // Check if URL has changed
-    if (currentRawUrl === rawUri && currentNormalizedUrl && currentPageId) {
+    if (currentRawUrl === rawUri && currentNormalizedUrl && currentPageId && !hasBadCache) {
       console.log(`🔍 URL_NORMALIZE: URL unchanged, using cached values`);
+      console.log(`🔍 URL_NORMALIZE: Cached urlData:`, JSON.stringify({ rawUrl: currentRawUrl, normalizedUrl: currentNormalizedUrl, pageId: currentPageId }));
       return { rawUrl: currentRawUrl, normalizedUrl: currentNormalizedUrl, pageId: currentPageId };
     }
     
     // Check cache first
-    if (urlNormalizationCache.has(rawUri)) {
+    if (urlNormalizationCache.has(rawUri) && !hasBadCache) {
       const cached = urlNormalizationCache.get(rawUri);
-      console.log(`🔍 URL_CACHE: Using cached result for ${rawUri}: ${cached.pageId}`);
-      currentRawUrl = rawUri;
-      currentNormalizedUrl = cached.normalizedUrl;
-      currentPageId = cached.pageId;
-      return { rawUrl: currentRawUrl, normalizedUrl: currentNormalizedUrl, pageId: currentPageId };
+      
+      // CRITICAL FIX: Validate cached pageId doesn't have triple underscores
+      if (cached.pageId && cached.pageId.includes('___')) {
+        console.error(`❌ CACHE_BUG_DETECTED: Cached pageId has triple underscores: ${cached.pageId}`);
+        console.error(`❌ CACHE_BUG_DETECTED: Invalidating this cache entry...`);
+        urlNormalizationCache.delete(rawUri);
+        // Fall through to backend API call
+      } else {
+        console.log(`🔍 URL_CACHE: Using cached result for ${rawUri}: ${cached.pageId}`);
+        currentRawUrl = rawUri;
+        currentNormalizedUrl = cached.normalizedUrl;
+        currentPageId = cached.pageId;
+        console.log(`🔍 URL_CACHE: Cache urlData:`, JSON.stringify({ rawUrl: currentRawUrl, normalizedUrl: currentNormalizedUrl, pageId: currentPageId }));
+        return { rawUrl: currentRawUrl, normalizedUrl: currentNormalizedUrl, pageId: currentPageId };
+      }
     }
     
     console.log(`🔍 URL_NORMALIZE: Calling backend API for ${rawUri}`);
@@ -4202,13 +7358,18 @@ async function normalizeCurrentUrl() {
     currentPageId = result.pageId;
     
     console.log(`✅ URL_NORMALIZE: Backend API result - Raw: ${rawUri}, Normalized: ${currentNormalizedUrl}, PageId: ${currentPageId}`);
+    console.log(`🔍 URL_NORMALIZE: Returning urlData:`, JSON.stringify({ rawUrl: currentRawUrl, normalizedUrl: currentNormalizedUrl, pageId: currentPageId }));
     return { rawUrl: currentRawUrl, normalizedUrl: currentNormalizedUrl, pageId: currentPageId };
   } catch (error) {
     console.error('❌ URL_NORMALIZE: Error calling backend API:', error);
     
     // Fallback to simple normalization
     const rawUri = await getCurrentPageUri();
-    const fallbackPageId = rawUri.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 100);
+    // CRITICAL FIX: Collapse multiple underscores to match backend logic
+    const fallbackPageId = rawUri
+      .replace(/[^a-zA-Z0-9]/g, '_')  // Replace non-alphanumeric with _
+      .replace(/_+/g, '_')             // Collapse multiple _ into single _
+      .substring(0, 100);
     
     // Update current state
     currentRawUrl = rawUri;
@@ -4216,6 +7377,7 @@ async function normalizeCurrentUrl() {
     currentPageId = fallbackPageId;
     
     console.log(`🔄 URL_NORMALIZE: Using fallback for ${rawUri}: ${fallbackPageId}`);
+    console.log(`🔍 URL_NORMALIZE: Fallback urlData:`, JSON.stringify({ rawUrl: currentRawUrl, normalizedUrl: currentNormalizedUrl, pageId: currentPageId }));
     return { rawUrl: currentRawUrl, normalizedUrl: currentNormalizedUrl, pageId: currentPageId };
   }
 }
@@ -4229,10 +7391,10 @@ async function generatePageId(uri) {
 // Get current user ID for presence tracking
 async function getCurrentUserId() {
   try {
-    const result = await chrome.storage.local.get(['googleUser']);
-    const user = result.googleUser;
+    // Use window.currentUser from direct authentication
+    const user = window.currentUser;
     if (user && user.id) {
-      return user.id; // Use the actual user ID from chrome storage
+      return user.id; // Use the actual user ID
     } else {
       // Fallback to email if no ID is stored
       const email = await getCurrentUserEmail();
@@ -4249,40 +7411,202 @@ async function getCurrentUserId() {
 // Get current user email for presence tracking
 async function getCurrentUserEmail() {
   try {
-    const result = await chrome.storage.local.get(['googleUser']);
-    const user = result.googleUser;
-    if (user && user.email) {
-      return user.email;
-    } else {
-      console.error('No user email found in storage - authentication required');
-      throw new Error('User not authenticated');
+    // FIRST: Try real Google auth for actual profile pictures
+    if (realGoogleAuth) {
+      const user = await realGoogleAuth.getCurrentUser();
+      console.log('[AUTH] Real Google Auth returned user:', user);
+      
+      if (user && user.email) {
+        console.log('[AUTH] Found authenticated user with REAL profile picture:', user.email);
+        console.log('[AUTH] Real avatar URL:', user.user_metadata?.avatar_url);
+        return user.email;
+      }
     }
+    
+    // SECOND: Fallback to AuthManager
+    const user = await authManager.getCurrentUser();
+    console.log('[AUTH] AuthManager returned user:', user);
+    
+    if (user && user.email) {
+      console.log('[AUTH] Found authenticated user (fallback):', user.email);
+      return user.email;
+    }
+    
+    console.error('[AUTH] No authenticated user found via any method');
+    
+    // Show authentication prompt for proper OAuth flow
+    console.log('[AUTH] No user found, showing authentication prompt...');
+    showAuthPrompt('access presence features');
+    
+    // Return null instead of throwing error to allow graceful handling
+    return null;
   } catch (error) {
-    console.error('Error getting user email:', error);
-    throw error;
+    console.error('[AUTH] Error getting current user:', error.message);
+    throw new Error('User not authenticated');
   }
 }
 
-// Get current user email for presence tracking
-async function getCurrentUserEmail() {
-  try {
-    const result = await chrome.storage.local.get(['googleUser']);
-    const user = result.googleUser;
-    if (user && user.email) {
-      return user.email;
-    } else {
-      console.error('No user email found in storage - authentication required');
-      throw new Error('User not authenticated');
+// Duplicate function removed - using the one above
+
+// DIAGNOSTIC FUNCTIONS - Run in browser console for debugging
+window.debugAvatar = function() {
+  console.log("=== AVATAR DIAGNOSTIC ===");
+  console.log("Current user:", window.currentUser);
+  console.log("User avatar_url:", window.currentUser?.user_metadata?.avatar_url);
+  console.log("Profile avatar container:", document.getElementById("user-avatar-container"));
+  console.log("Profile avatar HTML:", document.getElementById("user-avatar-container")?.innerHTML);
+  console.log("AuthManager user:", authManager.getCurrentUser());
+};
+
+window.debugVisibility = function() {
+  console.log("=== VISIBILITY DIAGNOSTIC ===");
+  console.log("Current visibility data:", window.currentVisibilityData);
+  console.log("Visibility timer:", window.visibilityUpdateTimer);
+  console.log("User elements:", document.querySelectorAll(".user-item"));
+  console.log("Status elements:", document.querySelectorAll(".user-status"));
+  console.log("Status texts:", Array.from(document.querySelectorAll(".user-status")).map(el => el.textContent));
+};
+
+window.testTimeUpdate = function() {
+  console.log("=== MANUAL TIME UPDATE TEST ===");
+  updateVisibilityTimes();
+  console.log("Time update triggered manually");
+};
+
+window.forceAvatarRefresh = function() {
+  console.log("=== FORCE AVATAR REFRESH ===");
+  const user = window.currentUser;
+  if (user) {
+    updateUI(user);
+    console.log("Avatar refresh triggered");
+  } else {
+    console.log("No current user found");
+  }
+};
+
+window.restartVisibilityTimer = function() {
+  console.log("=== RESTART VISIBILITY TIMER ===");
+  if (window.visibilityUpdateTimer) {
+    clearInterval(window.visibilityUpdateTimer);
+  }
+  window.visibilityUpdateTimer = setInterval(updateVisibilityTimes, 10000);
+  console.log("Timer restarted");
+};
+
+// Update visibility times for all visible users
+function updateVisibilityTimes() {
+  console.log('🔄 VISIBILITY: === STARTING TIME UPDATE ===');
+  console.log('🔄 VISIBILITY: Current data:', window.currentVisibilityData);
+  
+  if (!window.currentVisibilityData || !window.currentVisibilityData.active) {
+    console.log('🔄 VISIBILITY: No visibility data available for time update');
+    return;
+  }
+  
+  const visibleUsers = window.currentVisibilityData.active;
+  console.log(`🔄 VISIBILITY: Updating times for ${visibleUsers.length} users`);
+  console.log('🔄 VISIBILITY: Visible users:', visibleUsers.map(u => ({ name: u.name, enterTime: u.enterTime })));
+  
+  // Find all user status elements in the DOM and update their times
+  const userElements = document.querySelectorAll('.user-item');
+  console.log('🔄 VISIBILITY: Found', userElements.length, 'user elements in DOM');
+  
+  userElements.forEach((element, index) => {
+    console.log(`🔄 VISIBILITY: Processing element ${index}:`, element);
+    
+    // CRITICAL FIX: Use data-user-id to find the correct user, NOT array index!
+    // Array index doesn't work because window.currentVisibilityData.active includes ALL users
+    // but the DOM only shows FILTERED users (excluding current user)
+    const userId = element.getAttribute('data-user-id');
+    const userName = element.getAttribute('data-user-name');
+    console.log(`🔄 VISIBILITY: Element ${index} - userId: ${userId}, userName: ${userName}`);
+    
+    // Find the matching user in the visibility data by userId
+    const user = visibleUsers.find(u => u.userId === userId || u.email === userId || u.id === userId);
+    
+    if (!user) {
+      console.log(`🔄 VISIBILITY: ⚠️ Could not find user data for userId: ${userId}`);
+      return;
     }
-  } catch (error) {
-    console.error('Error getting user email:', error);
-    throw error;
+    
+    console.log(`🔄 VISIBILITY: Found matching user:`, { name: user.name, enterTime: user.enterTime, userId: user.userId });
+    
+    // FIX: Visibility avatars use .item-status NOT .user-status!
+    const statusElement = element.querySelector('.item-status');
+    console.log(`🔄 VISIBILITY: Status element for ${userName}:`, statusElement);
+    
+    if (statusElement && user.enterTime) {
+      const oldText = statusElement.textContent;
+      const newStatusText = formatTimeDisplay(user.enterTime);
+      statusElement.textContent = newStatusText;
+      console.log(`🔄 VISIBILITY: ✅ Updated time for ${user.name}: "${oldText}" → "${newStatusText}"`);
+    } else {
+      console.log(`🔄 VISIBILITY: ⚠️ Skipping user ${user.name} - no status element (${!!statusElement}) or enterTime (${!!user.enterTime})`);
+    }
+  });
+  
+  console.log('🔄 VISIBILITY: === TIME UPDATE COMPLETE ===');
+}
+
+// Format time display for visibility list - calculates time since enterTime
+function formatTimeDisplay(enterTime) {
+  // REDUCED LOGGING - Only log when time changes categories (Now -> minutes -> hours -> days)
+  const now = new Date();
+  
+  if (!enterTime) {
+    return 'Now';
+  }
+  
+  const enterTimeDate = new Date(enterTime);
+  const diffMs = now - enterTimeDate;
+  const diffSeconds = Math.floor(diffMs / 1000);
+  const diffMinutes = Math.floor(diffSeconds / 60);
+  const diffHours = Math.floor(diffMinutes / 60);
+  const diffDays = Math.floor(diffHours / 24);
+  
+  // Log time calculations for debugging
+  const timeInfo = {
+    enterTime: enterTime,
+    now: now.toISOString(),
+    enterTimeDate: enterTimeDate.toISOString(),
+    diffSeconds: diffSeconds,
+    diffMinutes: diffMinutes,
+    diffHours: diffHours,
+    diffDays: diffDays
+  };
+  
+  // Only log if seconds > 55 (approaching minute threshold) or if already in minutes/hours/days
+  if (diffSeconds > 55 || diffMinutes > 0) {
+    console.log('🕒 TIME_CALC:', timeInfo);
+  }
+  
+  // If the difference is negative, it means the timestamp is in the future
+  if (diffMs < 0) {
+    console.log('🕒 TIME_DEBUG: Negative time difference detected - enterTime is in the future!');
+    return 'Now';
+  }
+  
+  // User requirements: 
+  // a) If user is still on tab, show "Now" for under 60 seconds, then minutes, hours, days
+  // b) If user has left tab, show "Last seen X minutes ago"
+  // c) After 1 month threshold, don't show last seen
+  // d) If someone leaves and comes back, reset ENTER and null EXIT
+  
+  if (diffSeconds < 60) {
+    return 'Now'; // Don't show seconds, show "Now"
+  } else if (diffMinutes < 60) {
+    return `Online for ${diffMinutes} minute${diffMinutes === 1 ? '' : 's'}`;
+  } else if (diffHours < 24) {
+    return `Online for ${diffHours} hour${diffHours === 1 ? '' : 's'}`;
+  } else if (diffDays < 30) { // 1 month threshold
+    return `Online for ${diffDays} day${diffDays === 1 ? '' : 's'}`;
+  } else {
+    return 'Last seen over a month ago'; // Don't show after 1 month
   }
 }
 
-// Format time display for visibility list
-function formatTimeDisplay(lastSeen) {
-  if (!lastSeen) return 'Online for 0 seconds';
+function formatLastSeenDisplay(lastSeen) {
+  if (!lastSeen) return 'Last seen unknown';
   
   const now = new Date();
   const lastSeenDate = new Date(lastSeen);
@@ -4291,26 +7615,20 @@ function formatTimeDisplay(lastSeen) {
   const diffMinutes = Math.floor(diffSeconds / 60);
   const diffHours = Math.floor(diffMinutes / 60);
   const diffDays = Math.floor(diffHours / 24);
-  const diffYears = Math.floor(diffDays / 365);
-  
-  console.log(`🕒 TIME: lastSeen: ${lastSeen}, now: ${now.toISOString()}, diffMs: ${diffMs}, diffSeconds: ${diffSeconds}`);
   
   // If the difference is negative, it means the timestamp is in the future
   if (diffMs < 0) {
-    console.log(`🕒 TIME: Negative time difference detected - lastSeen is in the future!`);
-    return 'Online for 0 seconds';
+    return 'Last seen just now';
   }
   
   if (diffSeconds < 60) {
-    return `Online for ${diffSeconds} second${diffSeconds === 1 ? '' : 's'}`;
+    return `Last seen ${diffSeconds} second${diffSeconds === 1 ? '' : 's'} ago`;
   } else if (diffMinutes < 60) {
-    return `Online for ${diffMinutes} minute${diffMinutes === 1 ? '' : 's'}`;
+    return `Last seen ${diffMinutes} minute${diffMinutes === 1 ? '' : 's'} ago`;
   } else if (diffHours < 24) {
-    return `Online for ${diffHours} hour${diffHours === 1 ? '' : 's'}`;
-  } else if (diffDays < 365) {
-    return `Online for ${diffDays} day${diffDays === 1 ? '' : 's'}`;
+    return `Last seen ${diffHours} hour${diffHours === 1 ? '' : 's'} ago`;
   } else {
-    return `Online for ${diffYears} year${diffYears === 1 ? '' : 's'}`;
+    return `Last seen ${diffDays} day${diffDays === 1 ? '' : 's'} ago`;
   }
 }
 

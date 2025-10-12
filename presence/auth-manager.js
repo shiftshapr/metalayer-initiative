@@ -8,8 +8,8 @@ class AuthManager {
     this.currentUser = null;
     this.listeners = [];
     this.config = {
-      defaultProvider: 'metalayer',
-      fallbackProvider: 'supabase'
+      defaultProvider: 'supabase',
+      fallbackProvider: 'metalayer'
     };
   }
 
@@ -183,26 +183,31 @@ class SupabaseAuthProvider extends BaseAuthProvider {
 
   async initialize() {
     try {
-      if (typeof window.supabase === 'object' && window.supabase !== null && typeof window.supabase.createClient === 'function') {
-        // Test if Supabase URL is reachable
-        try {
-          const response = await fetch('https://bvshfzikwwjasluumfkr.supabase.co/rest/v1/', {
-            method: 'HEAD'
-          });
-          
-          this.supabase = window.supabase.createClient(
-            'https://bvshfzikwwjasluumfkr.supabase.co',
-            'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ2c2hmemlrd3dqYXNsdXVtZmtyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDQxNDU3NjUsImV4cCI6MjA1OTcyMTc2NX0.YuBpfklO3IxI-yFwFBP_2GIlSO-IGYia6CwpRyRd7VA'
-          );
-          this.initialized = true;
-          console.log('Supabase auth provider initialized');
-          return true;
-        } catch (networkError) {
-          console.warn('Supabase URL not reachable, skipping initialization:', networkError.message);
-          throw new Error(`Supabase service unavailable: ${networkError.message}`);
+      // Wait for Supabase to be available
+      let attempts = 0;
+      while (attempts < 10) {
+        if (typeof window !== 'undefined' && window.supabase && typeof window.supabase.createClient === 'function') {
+          break;
         }
+        console.log(`Supabase not ready, attempt ${attempts + 1}/10...`);
+        await new Promise(resolve => setTimeout(resolve, 100));
+        attempts++;
       }
-      throw new Error('Supabase library not available');
+      
+      // CRITICAL FIX: window.supabase IS the client instance, not the constructor
+      // It's already created in sidepanel.js via supabase.createClient()
+      if (typeof window !== 'undefined' && window.supabase && typeof window.supabase.auth === 'object') {
+        this.supabase = window.supabase; // Use the existing client instance
+        this.initialized = true;
+        console.log('✅ AUTH_MANAGER: Supabase auth provider initialized using existing window.supabase client');
+        console.log('✅ AUTH_MANAGER: Supabase auth methods available:', Object.keys(window.supabase.auth));
+        return true;
+      } else {
+        console.error('❌ AUTH_MANAGER: window.supabase not available or missing auth property');
+        console.error('❌ AUTH_MANAGER: window.supabase exists:', !!window.supabase);
+        console.error('❌ AUTH_MANAGER: window.supabase.auth exists:', !!(window.supabase && window.supabase.auth));
+        throw new Error('Supabase client not available');
+      }
     } catch (error) {
       console.error('Failed to initialize Supabase auth provider:', error);
       throw error;
@@ -224,21 +229,53 @@ class SupabaseAuthProvider extends BaseAuthProvider {
   }
 
   async signInWithGoogle() {
-    // Use Chrome's background script for Google OAuth
-    return new Promise((resolve, reject) => {
-      chrome.runtime.sendMessage({ type: 'GOOGLE_AUTH_REQUEST' }, (response) => {
-        if (chrome.runtime.lastError) {
-          reject(new Error(chrome.runtime.lastError.message));
-          return;
-        }
-        
-        if (response.success) {
-          resolve({ user: response.user, session: { access_token: 'google-token' } });
-        } else {
-          reject(new Error(response.error || 'Google authentication failed'));
-        }
+    try {
+      // Use Chrome identity API for OAuth
+      const redirectUrl = chrome.identity.getRedirectURL();
+      const authUrl = `https://bvshfzikwwjasluumfkr.supabase.co/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(redirectUrl)}`;
+      
+      // Launch OAuth flow
+      const responseUrl = await new Promise((resolve, reject) => {
+        chrome.identity.launchWebAuthFlow({
+          url: authUrl,
+          interactive: true
+        }, (responseUrl) => {
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message));
+          } else {
+            resolve(responseUrl);
+          }
+        });
       });
-    });
+      
+      // Extract session from response URL
+      const url = new URL(responseUrl);
+      const accessToken = url.searchParams.get('access_token');
+      const refreshToken = url.searchParams.get('refresh_token');
+      
+      if (!accessToken) {
+        throw new Error('No access token received from OAuth flow');
+      }
+      
+      // Get user info from Supabase
+      const { data: { user }, error } = await this.supabase.auth.getUser(accessToken);
+      if (error) throw error;
+      
+      // Store session in chrome storage
+      const session = {
+        access_token: accessToken,
+        refresh_token: refreshToken,
+        user: user
+      };
+      
+      await chrome.storage.local.set({ supabaseUser: user, supabaseSession: session });
+      console.log('SupabaseAuthProvider: Google sign-in successful, user stored');
+      
+      return { user: user, session: session };
+    } catch (error) {
+      console.error('SupabaseAuthProvider: Google sign-in failed:', error);
+      throw error;
+    }
   }
 
   async signInWithMagicLink(email) {
@@ -258,9 +295,139 @@ class SupabaseAuthProvider extends BaseAuthProvider {
     if (error) throw error;
   }
 
+  async getGoogleProfilePicture(email) {
+    try {
+      console.log('🔍 AUTH_DEBUG: Getting Google profile picture for:', email);
+      
+      // The Chrome identity API doesn't provide profile pictures directly
+      // We need to use a different approach. For now, let's use a more sophisticated
+      // fallback that creates better-looking avatars
+      const name = email.split('@')[0];
+      
+      // Create a more personalized avatar using the user's initials
+      // This is better than the generic ui-avatars approach
+      const initials = name.substring(0, 2).toUpperCase();
+      const backgroundColor = this.generateColorFromEmail(email);
+      
+      console.log('🔍 AUTH_DEBUG: Generated avatar with initials:', initials, 'color:', backgroundColor);
+      
+      return `https://ui-avatars.com/api/?name=${encodeURIComponent(initials)}&background=${backgroundColor}&color=fff&size=96&format=png&bold=true`;
+    } catch (error) {
+      console.log('🔍 AUTH_DEBUG: Error getting Google profile picture:', error.message);
+      // Fallback to ui-avatars with better styling
+      const name = email.split('@')[0];
+      return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random&color=fff&size=96&format=png`;
+    }
+  }
+  
+  generateColorFromEmail(email) {
+    // Generate a consistent color based on email
+    let hash = 0;
+    for (let i = 0; i < email.length; i++) {
+      hash = email.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const color = Math.abs(hash).toString(16).substring(0, 6);
+    return `#${color.padEnd(6, '0')}`;
+  }
+
   async getCurrentUser() {
-    const { data: { user } } = await this.supabase.auth.getUser();
-    return user;
+    try {
+      // FIRST: Try to get Supabase OAuth user (real Google profile with avatar)
+      const { data: { user }, error } = await this.supabase.auth.getUser();
+      if (user && !error) {
+        console.log('SupabaseAuthProvider: Using Supabase OAuth user:', user.email);
+        console.log('🔍 AUTH_DEBUG: Supabase user object:', user);
+        console.log('🔍 AUTH_DEBUG: Real avatar URL:', user.user_metadata?.avatar_url);
+        
+        // Store for future use
+        await chrome.storage.local.set({ supabaseUser: user });
+        return user;
+      }
+      
+      // SECOND: Try Chrome profile user and FETCH REAL AVATAR from database
+      if (typeof chrome !== 'undefined' && chrome.identity && chrome.identity.getProfileUserInfo) {
+        const profileInfo = await new Promise((resolve) => {
+          chrome.identity.getProfileUserInfo({ accountStatus: 'ANY' }, resolve);
+        });
+        
+        if (profileInfo && profileInfo.email) {
+          console.log('SupabaseAuthProvider: Using Chrome profile user:', profileInfo.email);
+          console.log('🔍 AUTH_DEBUG: profileInfo object:', profileInfo);
+          
+          // CRITICAL FIX: Query backend API to get REAL avatar from database
+          let realAvatarUrl = null;
+          let realName = profileInfo.email.split('@')[0];
+          let realAuraColor = null;
+          
+          try {
+            console.log('🔍 AUTH_FIX: Fetching REAL avatar from backend API...');
+            // CRITICAL FIX: Use correct domain (.org NOT .com)
+            const METALAYER_API_URL = window.METALAYER_API_URL || 'https://api.themetalayer.org';
+            const response = await fetch(`${METALAYER_API_URL}/v1/users/${encodeURIComponent(profileInfo.email)}`, {
+              method: 'GET',
+              headers: {
+                'Content-Type': 'application/json'
+              }
+            });
+            
+            if (response.ok) {
+              const userData = await response.json();
+              console.log('🔍 AUTH_FIX: Backend returned user data:', userData);
+              
+              if (userData.avatarUrl) {
+                realAvatarUrl = userData.avatarUrl;
+                console.log('✅ AUTH_FIX: Got REAL avatar from database:', realAvatarUrl);
+              }
+              if (userData.name) {
+                realName = userData.name;
+              }
+              if (userData.auraColor) {
+                realAuraColor = userData.auraColor;
+              }
+            } else {
+              console.warn('⚠️ AUTH_FIX: Backend API returned', response.status, '- using fallback avatar');
+            }
+          } catch (apiError) {
+            console.error('❌ AUTH_FIX: Failed to fetch real avatar from backend:', apiError);
+          }
+          
+          // Fallback to generated avatar if backend query failed
+          if (!realAvatarUrl) {
+            realAvatarUrl = await this.getGoogleProfilePicture(profileInfo.email);
+            console.log('🔍 AUTH_DEBUG: Using fallback avatar URL:', realAvatarUrl);
+          }
+          
+          const user = {
+            id: profileInfo.email,
+            email: profileInfo.email,
+            user_metadata: {
+              full_name: realName,
+              avatar_url: realAvatarUrl
+            },
+            auraColor: realAuraColor
+          };
+          
+          console.log('🔍 AUTH_DEBUG: Final user object with REAL avatar:', user);
+          
+          // Store for future use
+          await chrome.storage.local.set({ supabaseUser: user });
+          return user;
+        }
+      }
+      
+      // SECOND: Check for stored session
+      const result = await chrome.storage.local.get(['supabaseUser']);
+      if (result.supabaseUser) {
+        console.log('SupabaseAuthProvider: Found stored user:', result.supabaseUser.email);
+        return result.supabaseUser;
+      }
+      
+      // THIRD: If no Chrome profile and no stored session, return null
+      return null;
+    } catch (error) {
+      console.error('SupabaseAuthProvider: Error getting current user:', error);
+      return null;
+    }
   }
 
   getAvailableMethods() {
@@ -303,7 +470,7 @@ class MetalayerAuthProvider extends BaseAuthProvider {
       this.api = new MetaLayerAPI('http://216.238.91.120:3002');
       this.initialized = true;
       console.log('Metalayer auth provider initialized (no network check)');
-      return true;
+//       return true;
     } catch (error) {
       console.error('Failed to initialize Metalayer auth provider:', error);
       throw error;
@@ -327,21 +494,53 @@ class MetalayerAuthProvider extends BaseAuthProvider {
   }
 
   async signInWithGoogle() {
-    // Use Chrome's background script for Google OAuth
-    return new Promise((resolve, reject) => {
-      chrome.runtime.sendMessage({ type: 'GOOGLE_AUTH_REQUEST' }, (response) => {
-        if (chrome.runtime.lastError) {
-          reject(new Error(chrome.runtime.lastError.message));
-          return;
-        }
-        
-        if (response.success) {
-          resolve({ user: response.user, session: { access_token: 'google-token' } });
-        } else {
-          reject(new Error(response.error || 'Google authentication failed'));
-        }
+    try {
+      // Use Chrome identity API for OAuth
+      const redirectUrl = chrome.identity.getRedirectURL();
+      const authUrl = `https://bvshfzikwwjasluumfkr.supabase.co/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(redirectUrl)}`;
+      
+      // Launch OAuth flow
+      const responseUrl = await new Promise((resolve, reject) => {
+        chrome.identity.launchWebAuthFlow({
+          url: authUrl,
+          interactive: true
+        }, (responseUrl) => {
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message));
+          } else {
+            resolve(responseUrl);
+          }
+        });
       });
-    });
+      
+      // Extract session from response URL
+      const url = new URL(responseUrl);
+      const accessToken = url.searchParams.get('access_token');
+      const refreshToken = url.searchParams.get('refresh_token');
+      
+      if (!accessToken) {
+        throw new Error('No access token received from OAuth flow');
+      }
+      
+      // Get user info from Supabase
+      const { data: { user }, error } = await this.supabase.auth.getUser(accessToken);
+      if (error) throw error;
+      
+      // Store session in chrome storage
+      const session = {
+        access_token: accessToken,
+        refresh_token: refreshToken,
+        user: user
+      };
+      
+      await chrome.storage.local.set({ supabaseUser: user, supabaseSession: session });
+      console.log('SupabaseAuthProvider: Google sign-in successful, user stored');
+      
+      return { user: user, session: session };
+    } catch (error) {
+      console.error('SupabaseAuthProvider: Google sign-in failed:', error);
+      throw error;
+    }
   }
 
   async signInMock() {
@@ -350,16 +549,28 @@ class MetalayerAuthProvider extends BaseAuthProvider {
   }
 
   async signInWithMagicLink(email) {
-    // This would integrate with your existing magic link system
-    // For now, return a mock response
-    return {
-      user: {
-        id: `magic-${email}`,
+    try {
+      // Use Supabase magic link authentication
+      const { data, error } = await this.supabase.auth.signInWithOtp({
         email: email,
-        user_metadata: { full_name: email.split('@')[0] }
-      },
-      session: { access_token: 'mock-token' }
-    };
+        options: {
+          emailRedirectTo: chrome.identity.getRedirectURL()
+        }
+      });
+      
+      if (error) throw error;
+      
+      // Store user in chrome storage for persistence
+      if (data.user) {
+        await chrome.storage.local.set({ supabaseUser: data.user });
+        console.log('MetalayerAuthProvider: Magic link sign-in successful, user stored');
+      }
+      
+      return { user: data.user, session: data.session };
+    } catch (error) {
+      console.error('MetalayerAuthProvider: Magic link sign-in failed:', error);
+      throw error;
+    }
   }
 
   async signOut() {
@@ -391,10 +602,26 @@ class MetalayerAuthProvider extends BaseAuthProvider {
 
   async getCurrentUser() {
     try {
-      // For Chrome extension, get user from storage instead of API
-      const result = await chrome.storage.local.get(['googleUser', 'supabaseUser', 'metalayerUser']);
-      return result.googleUser || result.supabaseUser || result.metalayerUser || null;
+      // Use Supabase authentication
+      if (this.supabase) {
+        const { data: { user } } = await this.supabase.auth.getUser();
+        if (user) {
+          console.log('MetalayerAuthProvider: Found authenticated user:', user.email);
+          return user;
+        }
+      }
+      
+      // Check for existing session in storage as fallback
+      const result = await chrome.storage.local.get(['supabaseUser', 'googleUser', 'metalayerUser']);
+      const user = result.supabaseUser || result.googleUser || result.metalayerUser;
+      if (user) {
+        console.log('MetalayerAuthProvider: Found user in storage:', user.email);
+        return user;
+      }
+      
+      return null;
     } catch (error) {
+      console.error('MetalayerAuthProvider: Error getting current user:', error);
       return null;
     }
   }
@@ -414,7 +641,7 @@ class OfflineAuthProvider extends BaseAuthProvider {
   async initialize() {
     this.initialized = true;
     console.log('Offline auth provider initialized (mock mode)');
-    return true;
+//     return true;
   }
 
   async signIn(method, ...args) {

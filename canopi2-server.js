@@ -7,6 +7,10 @@ const { WebSocketServer } = require('ws');
 const Canopi2Controller = require('./controllers/canopi2Controller');
 require('dotenv').config();
 
+// Server version and start time for health checks
+const SERVER_VERSION = '1.2.4-urlnorm-fix'; // Updated: 2025-10-12 - URL normalization fix
+const SERVER_START_TIME = new Date().toISOString();
+
 // Initialize Prisma client
 const prisma = new PrismaClient();
 
@@ -32,10 +36,15 @@ app.use(cors({
 
 app.use(express.json());
 
-// Health check endpoint
+// Health check endpoint - Enhanced with version and uptime tracking
 app.get('/health', (req, res) => {
   res.json({ 
-    ok: true, 
+    ok: true,
+    version: SERVER_VERSION,
+    startTime: SERVER_START_TIME,
+    uptime: Math.floor(process.uptime()),
+    uptimeDays: Math.floor(process.uptime() / 86400),
+    nodeVersion: process.version,
     features: FEATURES,
     timestamp: new Date().toISOString()
   });

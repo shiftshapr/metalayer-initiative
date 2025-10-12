@@ -4,12 +4,44 @@
   <title>Presence</title>
   <meta charset="utf-8">
   <link rel="stylesheet" href="sidepanel.css">
-  <!-- Load LOCAL Supabase JS Library -->
+  <!-- Load Debug Configuration -->
+  <script src="debug-config.js"></script>
+  <!-- Load Performance Monitor -->
+  <script src="performance-monitor.js"></script>
+  <!-- Load Real-time Logger -->
+  <script src="realtime-logger.js"></script>
+  <!-- Load LOCAL Supabase JS Library (CDN blocked by CSP) -->
   <script src="lib/supabase.min.js"></script>
+  <script src="supabase-realtime-client.js"></script>
   <!-- Load Loosely Coupled Auth Manager -->
   <script src="auth-manager.js"></script>
+  <!-- Load Real Google Auth for Actual Profile Pictures -->
+  <script src="real-google-auth.js"></script>
+  <!-- Load Notification Manager -->
+  <script src="notification-manager.js"></script>
   <!-- Load URL Normalization Utility -->
   <script src="urlNormalization.js"></script>
+  <!-- Load Real-time Diagnostics -->
+  <script src="realtime-diagnostics.js"></script>
+  <!-- Load Real-time Presence Handler (NO POLLING!) -->
+  <script src="realtime-presence-handler.js"></script>
+  <!-- Test Suite: Verify Polling Removal -->
+  <script src="test-polling-removal.js"></script>
+  <!-- Test Suite: Aura Changes -->
+  <script src="test-aura-changes.js"></script>
+  <!-- Test Suite: Notifications -->
+  <script src="test-notifications.js"></script>
+  <!-- Test Suite: Comprehensive Real-time Tests -->
+  <script src="test-realtime-comprehensive.js"></script>
+  <!-- Enhanced Diagnostic: Real-time Event Monitor -->
+  <script src="realtime-event-monitor.js"></script>
+  <!-- WebSocket Diagnostic Tool (TE2) -->
+  <script src="websocket-diagnostic.js"></script>
+  <!-- Realtime Events Test (SD1 + TE2) -->
+  <script src="test-realtime-events.js"></script>
+  
+  <!-- TE2 Comprehensive Diagnostics -->
+  <script src="comprehensive-realtime-diagnostics.js"></script>
 </head>
 <body>
   <!-- Main Sidebar Container -->
@@ -42,12 +74,21 @@
           </ul>
         </div>
         <!-- Auth buttons removed - auth will be triggered on-demand -->
-        <div id="user-info" style="display: none; margin-left: 10px; display: flex; align-items: center; gap: 5px; position: relative;">
-          <img id="user-avatar" src="" alt="Avatar" style="width: 24px; height: 24px; border-radius: 50%; cursor: pointer;">
-          <div id="user-menu" class="user-menu" style="display: none; position: absolute; top: 100%; right: 0; z-index: 1000; min-width: 120px;">
+        <div id="user-info" style="display: none; margin-left: 10px; align-items: center; gap: 5px; position: relative;">
+          <div id="notification-icon" class="notification-icon" style="position: relative; cursor: pointer; padding: 4px;">
+            <span style="font-size: 16px;">🔔</span>
+            <div id="notification-badge" class="notification-badge" style="display: none; position: absolute; top: 0; right: 0; background: #ff4444; color: white; border-radius: 50%; width: 12px; height: 12px; font-size: 8px; text-align: center; line-height: 12px;">1</div>
+          </div>
+          <div id="user-avatar-container" style="position: relative; width: 24px; height: 24px; cursor: pointer;"></div>
+          <div id="user-menu" class="user-menu" style="display: none; position: absolute; top: 100%; right: 0; z-index: 1000; min-width: 200px;">
             <div style="padding: 8px 12px; border-bottom: 1px solid #eee; font-size: 0.9em; color: #666;">Signed in as</div>
             <div id="user-menu-name" style="padding: 4px 12px; font-weight: bold; font-size: 0.9em;"></div>
             <div style="padding: 4px 0; border-top: 1px solid #eee;">
+              <button id="notifications-btn" style="width: 100%; padding: 8px 12px; border: none; background: none; text-align: left; cursor: pointer; font-size: 0.9em; display: flex; align-items: center; gap: 8px; position: relative;">
+                <span>🔔</span>
+                <span>Notifications</span>
+                <div id="user-menu-notification-badge" class="notification-badge" style="display: none; position: absolute; right: 8px; background: #ff4444; color: white; border-radius: 50%; width: 16px; height: 16px; font-size: 10px; text-align: center; line-height: 16px;">1</div>
+              </button>
               <button id="aura-btn" style="width: 100%; padding: 8px 12px; border: none; background: none; text-align: left; cursor: pointer; font-size: 0.9em; display: flex; align-items: center; gap: 8px;">
                 <span>🎨</span>
                 <span>Change Aura Color</span>
@@ -73,6 +114,7 @@
       <button class="main-nav-tab" data-tab="rooms-tab">Rooms</button>
       <button class="main-nav-tab" data-tab="people-tab">People</button>
       <button class="main-nav-tab" data-tab="agent-tab">Agent</button>
+      <button class="main-nav-tab" data-tab="settings-tab">Settings</button>
     </div>
     
     <!-- Main Tab Contents -->
@@ -131,6 +173,31 @@
           <p>Agent responses will appear here...</p>
         </div>
       </div>
+      
+      <!-- Settings Tab Content -->
+      <div id="settings-tab" class="main-tab-content">
+        <h3>Settings</h3>
+        
+        <!-- Notification Settings -->
+        <div class="settings-section">
+          <h4>🔔 Notifications</h4>
+          <div id="notification-settings" class="notification-settings">
+            <!-- Notification settings will be populated by JavaScript -->
+          </div>
+        </div>
+        
+        <!-- Other Settings -->
+        <div class="settings-section">
+          <h4>⚙️ General</h4>
+          <div class="setting-item">
+            <label for="theme-select">Theme:</label>
+            <select id="theme-select">
+              <option value="light">Light</option>
+              <option value="dark">Dark</option>
+            </select>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
   
@@ -151,11 +218,49 @@
     </div>
   </div>
   
+  <!-- Notifications Modal -->
+  <div id="notifications-modal" class="modal" style="display: none;">
+    <div class="modal-content" style="max-width: 500px; max-height: 600px;">
+      <div class="modal-header">
+        <h3>🔔 Notifications</h3>
+        <div style="display: flex; gap: 10px; align-items: center;">
+          <button id="mark-all-read-btn" style="padding: 4px 8px; font-size: 0.8em; background: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer;">Mark All Read</button>
+          <button id="clear-all-btn" style="padding: 4px 8px; font-size: 0.8em; background: #dc3545; color: white; border: none; border-radius: 3px; cursor: pointer;">Clear All</button>
+          <button class="close-button">&times;</button>
+        </div>
+      </div>
+      <div class="modal-body" style="padding: 0; max-height: 500px; overflow-y: auto;">
+        <div id="notifications-list" class="notifications-list">
+          <!-- Notifications will be populated here -->
+        </div>
+        <div id="no-notifications" style="text-align: center; padding: 40px; color: #666; display: none;">
+          <div style="font-size: 48px; margin-bottom: 16px;">🔔</div>
+          <div>No notifications yet</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
   <!-- Debug Functions - REMOVED INLINE SCRIPT -->
+  <!-- Load Modern Systems -->
+  <script src="config.js"></script>
+  <script src="security.js"></script>
+  <script src="performance-optimizer.js"></script>
+  <script src="logger.js"></script>
+  <!-- Load Modernization Classes -->
+  <script src="StateManager.js"></script>
+  <script src="EventBus.js"></script>
+  <script src="LifecycleManager.js"></script>
+  <!-- Debug script loading -->
+  <script src="script-loading-debug.js"></script>
+  
   <!-- The debug logic is now in sidepanel.js -->
   
-  <!-- Include the main sidebar JavaScript -->
-  <script src="sidepanel.js"></script>
+<!-- WebSocket Client for Real-time Communication -->
+<!-- CHROME EXTENSION WEBSOCKET FIX: WebSocket client removed - now handled by background service worker -->
+<!-- <script src="websocket-client.js"></script> -->
+<!-- Include the main sidebar JavaScript -->
+<script src="sidepanel.js"></script>
 
   <!-- Context Bar for Reply/Edit - Separate row above input -->
   <div id="context-bar" style="display: none; position: fixed; bottom: 60px; left: 0; right: 0; background: #e8f4fd; padding: 2px 8px; border-bottom: 1px solid #b3d9ff; font-size: 10px; color: #0066cc; line-height: 1.2; height: 18px; overflow: hidden; z-index: 1001;">
@@ -164,7 +269,7 @@
   </div>
 
   <!-- Chat Input Area - Fixed at bottom -->
-  <div class="chat-input-area" style="position: fixed; bottom: 0; left: 0; right: 0; background: #f8f9fa; border-top: 1px solid #dee2e6; z-index: 1000; padding: 0;">
+  <div class="chat-input-area" style="position: fixed; bottom: 0; left: 0; right: 0; background: #f8f9fa; border-top: 1px solid #dee2e6; z-index: 1000; padding: 0; width: 100% !important;">
     <textarea id="chat-textarea" placeholder="Start thread in Public Square" style="width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 0; font-size: 14px; resize: none; min-height: 20px; font-family: inherit; box-sizing: border-box; margin: 0; border-left: none; border-right: none; border-bottom: none; overflow-y: hidden;"></textarea>
   </div>
 
@@ -287,5 +392,40 @@
       cursor: not-allowed;
     }
   </style>
-</body>
-</html>
+  
+  <!-- Console Test Functions for Supabase -->
+  <script src="console-test-supabase-fix.js"></script>
+  
+          <!-- Avatar Fix Test Suite -->
+          <script src="test-avatar-fixes.js"></script>
+          
+    <!-- Avatar & Visibility Diagnostics -->
+    <script src="test-avatar-visibility-diagnostics.js"></script>
+    <!-- Comprehensive Test Suite for TE2 -->
+    <script src="test-avatar-visibility-comprehensive.js"></script>
+    
+<!-- Cache Bug Fix Test Suite for TE2 -->
+<script src="test-cache-bug-fix.js"></script>
+
+<!-- Visibility Timing & Messages Test Suite for TE2 -->
+<script src="test-visibility-messages-fix.js"></script>
+    
+    <!-- TE2 TEST: Tab Navigation & Ghost Presence Fix -->
+    <script src="test-tab-navigation-fix.js"></script>
+    
+<!-- TE2 TEST: Supabase Initialization Fix Verification -->
+<script src="test-supabase-init-fix.js"></script>
+
+<!-- TE2 COMPREHENSIVE: Visibility Timing & Ghost Presence Diagnostics -->
+<script src="test-visibility-timing-comprehensive.js"></script>
+    
+    <!-- TE2 DIAGNOSTIC: Page ID Mismatch Checker -->
+    <script src="diagnostic-page-id.js"></script>
+    
+    <!-- SD1: Comprehensive Diagnostic Script -->
+    <script src="diagnostic-comprehensive-sd1.js"></script>
+    
+    <!-- TE2: Comprehensive Test Infrastructure -->
+    <script src="test-infrastructure-te2.js"></script>
+        </body>
+        </html>

@@ -1,0 +1,354 @@
+// Supabase Real-time Client for Cross-User Communication
+class SupabaseRealtimeClient {
+  constructor() {
+    this.supabase = null;
+    this.presenceChannel = null;
+    this.chatChannel = null;
+    this.currentUser = null;
+    this.currentPage = null;
+    this.isConnected = false;
+    
+    console.log('🚀 Supabase Real-time Client initialized');
+  }
+
+  async initialize(supabaseUrl, supabaseKey) {
+    try {
+      // Import Supabase client (you'll need to add this to your extension)
+      // const { createClient } = await import('https://cdn.skypack.dev/@supabase/supabase-js');
+      
+      this.supabase = createClient(supabaseUrl, supabaseKey);
+      console.log('✅ Supabase client initialized');
+      
+      // Test connection
+// Top-level await wrapped in async IIFE
+(async () => {
+      const { data, error } = await this.supabase.from('user_presence').select('count');
+})();
+      if (error) {
+        console.error('❌ Supabase connection failed:', error);
+        return false;
+      }
+      
+      console.log('✅ Supabase connection successful');
+      return true;
+    } catch (error) {
+      console.error('❌ Failed to initialize Supabase:', error);
+      return false;
+    }
+  }
+
+  async setCurrentUser(userEmail, userId) {
+    this.currentUser = { userEmail, userId };
+    console.log('👤 Current user set:', userEmail);
+  }
+
+  async joinPage(pageId, pageUrl) {
+    if (!this.currentUser) {
+      console.error('❌ No current user set');
+      return;
+    }
+
+    this.currentPage = { pageId, pageUrl };
+    
+    // Update user presence
+// Top-level await wrapped in async IIFE
+(async () => {
+    await this.updatePresence(pageId, pageUrl);
+})();
+    
+    // Subscribe to real-time updates for this page
+// Top-level await wrapped in async IIFE
+(async () => {
+    await this.subscribeToPageUpdates(pageId);
+})();
+    
+    console.log('🌐 Joined page:', pageUrl);
+  }
+
+  async updatePresence(pageId, pageUrl, auraColor = null) {
+    if (!this.currentUser) return;
+
+    const presenceData = {
+      user_id: this.currentUser.userId,
+      user_email: this.currentUser.userEmail,
+      page_id: pageId,
+      page_url: pageUrl,
+      is_active: true,
+      last_seen: new Date().toISOString()
+    };
+
+    if (auraColor) {
+      presenceData.aura_color = auraColor;
+    }
+
+    try {
+      // Upsert presence data
+// Top-level await wrapped in async IIFE
+(async () => {
+      const { error } = await this.supabase
+})();
+        .from('user_presence')
+        .upsert(presenceData, { 
+          onConflict: 'user_id,page_id',
+          ignoreDuplicates: false 
+        });
+
+      if (error) {
+        console.error('❌ Failed to update presence:', error);
+      } else {
+        console.log('✅ Presence updated for page:', pageId);
+      }
+    } catch (error) {
+      console.error('❌ Error updating presence:', error);
+    }
+  }
+
+  async subscribeToPageUpdates(pageId) {
+    if (!this.currentPage) return;
+
+    // Subscribe to presence changes
+    this.presenceChannel = this.supabase
+      .channel(`presence-${pageId}`)
+      .on('postgres_changes', 
+        { 
+          event: '*', 
+          schema: 'public', 
+          table: 'user_presence',
+          filter: `page_id=eq.${pageId}`
+        },
+        (payload) => {
+          console.log('👁️ Presence update received:', payload);
+          this.handlePresenceUpdate(payload);
+        }
+      )
+      .on('postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: `page_id=eq.${pageId}`
+        },
+        (payload) => {
+          console.log('💬 New message received:', payload);
+          this.handleNewMessage(payload);
+        }
+      )
+      .on('postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'user_visibility',
+          filter: `page_url=eq.${this.currentPage.pageUrl}`
+        },
+        (payload) => {
+          console.log('👁️ Visibility update received:', payload);
+          this.handleVisibilityUpdate(payload);
+        }
+      )
+      .subscribe((status) => {
+        console.log('📡 Subscription status:', status);
+        this.isConnected = status === 'SUBSCRIBED';
+      });
+  }
+
+  handlePresenceUpdate(payload) {
+    const { eventType, new: newRecord, old: oldRecord } = payload;
+    
+    switch (eventType) {
+      case 'INSERT':
+        console.log('👋 User joined page:', newRecord.user_email);
+        this.onUserJoined?.(newRecord);
+        break;
+      case 'UPDATE':
+        console.log('🔄 User presence updated:', newRecord.user_email);
+        this.onUserUpdated?.(newRecord);
+        break;
+      case 'DELETE':
+        console.log('👋 User left page:', oldRecord.user_email);
+        this.onUserLeft?.(oldRecord);
+        break;
+    }
+  }
+
+  handleNewMessage(payload) {
+    const { new: message } = payload;
+    console.log('💬 New message from:', message.user_email);
+    this.onNewMessage?.(message);
+  }
+
+  handleVisibilityUpdate(payload) {
+    const { new: visibility } = payload;
+    console.log('👁️ Visibility update for:', visibility.user_email, 'visible:', visibility.is_visible);
+    this.onVisibilityChanged?.(visibility);
+  }
+
+  async broadcastAuraColorChange(color) {
+    if (!this.currentUser || !this.currentPage) return;
+
+    try {
+      const { error } = await this.supabase
+        .from('user_presence')
+        .update({ 
+          aura_color: color,
+          updated_at: new Date().toISOString()
+        })
+        .eq('user_id', this.currentUser.userId)
+        .eq('page_id', this.currentPage.pageId);
+
+      if (error) {
+        console.error('❌ Failed to broadcast aura color:', error);
+      } else {
+        console.log('🎨 Aura color broadcasted:', color);
+      }
+    } catch (error) {
+      console.error('❌ Error broadcasting aura color:', error);
+    }
+  }
+
+  async sendMessage(content) {
+    if (!this.currentUser || !this.currentPage) return;
+
+    try {
+      const { error } = await this.supabase
+        .from('messages')
+        .insert({
+          page_id: this.currentPage.pageId,
+          user_id: this.currentUser.userId,
+          user_email: this.currentUser.userEmail,
+          content: content
+        });
+
+      if (error) {
+        console.error('❌ Failed to send message:', error);
+      } else {
+        console.log('💬 Message sent:', content);
+      }
+    } catch (error) {
+      console.error('❌ Error sending message:', error);
+    }
+  }
+
+  async getPageUsers(pageId) {
+    try {
+      const { data, error } = await this.supabase
+        .from('user_presence')
+        .select('*')
+        .eq('page_id', pageId)
+        .eq('is_active', true);
+
+      if (error) {
+        console.error('❌ Failed to get page users:', error);
+        return [];
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('❌ Error getting page users:', error);
+      return [];
+    }
+  }
+
+  // VISIBILITY FUNCTIONS - Real-time visibility updates via Supabase
+  async setUserVisibility(isVisible, pageUrl = null) {
+    if (!this.currentUser) {
+      console.error('❌ No current user set for visibility update');
+      return;
+    }
+
+    try {
+      const { error } = await this.supabase
+        .from('user_visibility')
+        .upsert({
+          user_id: this.currentUser.userId,
+          user_email: this.currentUser.userEmail,
+          page_url: pageUrl || this.currentPage?.pageUrl,
+          is_visible: isVisible,
+          updated_at: new Date().toISOString()
+        });
+
+      if (error) {
+        console.error('❌ Failed to update visibility:', error);
+        return false;
+      } else {
+        console.log(`👁️ VISIBILITY: User ${isVisible ? 'visible' : 'invisible'} via Supabase real-time`);
+        return true;
+      }
+    } catch (error) {
+      console.error('❌ Error updating visibility:', error);
+      return false;
+    }
+  }
+
+  async broadcastVisibilityChange(isVisible, pageUrl = null) {
+    if (!this.presenceChannel) {
+      console.warn('⚠️ No presence channel for visibility broadcast');
+      return;
+    }
+
+    try {
+      await this.presenceChannel.send({
+        type: 'VISIBILITY_UPDATE',
+        user_email: this.currentUser.userEmail,
+        is_visible: isVisible,
+        page_url: pageUrl || this.currentPage?.pageUrl,
+        timestamp: Date.now()
+      });
+      
+      console.log(`👁️ VISIBILITY: Broadcasted visibility change via Supabase real-time`);
+    } catch (error) {
+      console.error('❌ Error broadcasting visibility change:', error);
+    }
+  }
+
+  async leavePage() {
+    if (!this.currentUser || !this.currentPage) return;
+
+    try {
+      // Mark user as inactive
+      const { error } = await this.supabase
+        .from('user_presence')
+        .update({ 
+          is_active: false,
+          updated_at: new Date().toISOString()
+        })
+        .eq('user_id', this.currentUser.userId)
+        .eq('page_id', this.currentPage.pageId);
+
+      if (error) {
+        console.error('❌ Failed to leave page:', error);
+      } else {
+        console.log('👋 Left page:', this.currentPage.pageUrl);
+      }
+    } catch (error) {
+      console.error('❌ Error leaving page:', error);
+    }
+
+    // Unsubscribe from channels
+    if (this.presenceChannel) {
+      await this.supabase.removeChannel(this.presenceChannel);
+      this.presenceChannel = null;
+    }
+
+    this.currentPage = null;
+  }
+
+  // Event handlers (set these from your main code)
+  set onUserJoined(callback) { this._onUserJoined = callback; }
+  set onUserUpdated(callback) { this._onUserUpdated = callback; }
+  set onUserLeft(callback) { this._onUserLeft = callback; }
+  set onNewMessage(callback) { this._onNewMessage = callback; }
+  set onVisibilityChanged(callback) { this._onVisibilityChanged = callback; }
+
+  get onUserJoined() { return this._onUserJoined; }
+  get onUserUpdated() { return this._onUserUpdated; }
+  get onUserLeft() { return this._onUserLeft; }
+  get onNewMessage() { return this._onNewMessage; }
+  get onVisibilityChanged() { return this._onVisibilityChanged; }
+}
+
+// Export for use in your extension
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = SupabaseRealtimeClient;
+} else {
+  window.SupabaseRealtimeClient = SupabaseRealtimeClient;
+}

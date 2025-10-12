@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Script Loading Test</title>
+    <script src="src/core/StateManager.js"></script>
+    <script src="src/core/EventBus.js"></script>
+    <script src="src/core/LifecycleManager.js"></script>
+</head>
+<body>
+    <h1>Script Loading Test</h1>
+    <div id="results"></div>
+    
+    <script>
+        function testScriptLoading() {
+            const results = document.getElementById('results');
+            let output = '<h2>Script Loading Results:</h2>';
+            
+            // Test StateManager
+            if (typeof StateManager !== 'undefined') {
+                output += '<p>✅ StateManager loaded successfully</p>';
+                try {
+                    const sm = new StateManager();
+                    output += '<p>✅ StateManager can be instantiated</p>';
+                } catch (error) {
+                    output += '<p>❌ StateManager instantiation failed: ' + error.message + '</p>';
+                }
+            } else {
+                output += '<p>❌ StateManager not loaded</p>';
+            }
+            
+            // Test EventBus
+            if (typeof EventBus !== 'undefined') {
+                output += '<p>✅ EventBus loaded successfully</p>';
+                try {
+                    const eb = new EventBus();
+                    output += '<p>✅ EventBus can be instantiated</p>';
+                } catch (error) {
+                    output += '<p>❌ EventBus instantiation failed: ' + error.message + '</p>';
+                }
+            } else {
+                output += '<p>❌ EventBus not loaded</p>';
+            }
+            
+            // Test LifecycleManager
+            if (typeof LifecycleManager !== 'undefined') {
+                output += '<p>✅ LifecycleManager loaded successfully</p>';
+                try {
+                    const lm = new LifecycleManager();
+                    output += '<p>✅ LifecycleManager can be instantiated</p>';
+                } catch (error) {
+                    output += '<p>❌ LifecycleManager instantiation failed: ' + error.message + '</p>';
+                }
+            } else {
+                output += '<p>❌ LifecycleManager not loaded</p>';
+            }
+            
+            results.innerHTML = output;
+        }
+        
+        // Run test when page loads
+        window.addEventListener('load', testScriptLoading);
+    </script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+

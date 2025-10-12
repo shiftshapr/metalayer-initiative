@@ -4,6 +4,287 @@
     box-sizing: border-box;
 }
 
+/* Notification Settings Styles */
+.settings-section {
+    margin-bottom: 20px;
+    padding: 15px;
+    background: var(--background-secondary);
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+}
+
+.settings-section h4 {
+    margin: 0 0 15px 0;
+    color: var(--text-primary);
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.notification-settings {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.notification-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px;
+    background: var(--background-primary);
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    transition: all 0.2s ease;
+}
+
+.notification-item:hover {
+    background: var(--background-hover);
+}
+
+.notification-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+}
+
+.notification-icon {
+    font-size: 18px;
+    width: 24px;
+    text-align: center;
+}
+
+.notification-details h5 {
+    margin: 0 0 4px 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.notification-details p {
+    margin: 0;
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.3;
+}
+
+.notification-toggle {
+    position: relative;
+    display: inline-block;
+    width: 44px;
+    height: 24px;
+}
+
+.notification-toggle input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.notification-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #ccc;
+    transition: 0.3s;
+    border-radius: 24px;
+}
+
+.notification-slider:before {
+    position: absolute;
+    content: "";
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: 0.3s;
+    border-radius: 50%;
+}
+
+.notification-toggle input:checked + .notification-slider {
+    background-color: var(--primary-accent);
+}
+
+.notification-toggle input:checked + .notification-slider:before {
+    transform: translateX(20px);
+}
+
+.setting-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.setting-item:last-child {
+    border-bottom: none;
+}
+
+.setting-item label {
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+    .setting-item select {
+        padding: 6px 10px;
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        background: var(--background-primary);
+        color: var(--text-primary);
+        font-size: 14px;
+    }
+    
+    /* Notification History System Styles */
+    .notifications-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+    }
+    
+    .notification-item {
+        display: flex;
+        align-items: flex-start;
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--border-color);
+        cursor: pointer;
+        transition: all 0.2s ease;
+        position: relative;
+    }
+    
+    .notification-item:hover {
+        background: var(--background-hover);
+    }
+    
+    .notification-item.unread {
+        background: rgba(0, 123, 255, 0.05);
+        border-left: 3px solid #007bff;
+    }
+    
+    .notification-item.read {
+        opacity: 0.6;
+    }
+    
+    .notification-item.read:hover {
+        opacity: 1;
+    }
+    
+    .notification-icon {
+        font-size: 20px;
+        margin-right: 12px;
+        margin-top: 2px;
+        flex-shrink: 0;
+    }
+    
+    .notification-content {
+        flex: 1;
+        min-width: 0;
+    }
+    
+    .notification-title {
+        font-weight: 600;
+        font-size: 14px;
+        color: var(--text-primary);
+        margin: 0 0 4px 0;
+        line-height: 1.3;
+    }
+    
+    .notification-message {
+        font-size: 13px;
+        color: var(--text-secondary);
+        margin: 0 0 6px 0;
+        line-height: 1.4;
+        word-wrap: break-word;
+    }
+    
+    .notification-meta {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 11px;
+        color: var(--text-muted);
+    }
+    
+    .notification-time {
+        font-size: 11px;
+        color: var(--text-muted);
+    }
+    
+    .notification-url {
+        font-size: 11px;
+        color: #007bff;
+        text-decoration: none;
+        max-width: 200px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    
+    .notification-actions {
+        display: flex;
+        gap: 4px;
+        margin-top: 8px;
+    }
+    
+    .notification-action-btn {
+        padding: 4px 8px;
+        font-size: 11px;
+        background: var(--background-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: 3px;
+        cursor: pointer;
+        color: var(--text-primary);
+        transition: all 0.2s ease;
+    }
+    
+    .notification-action-btn:hover {
+        background: var(--background-hover);
+    }
+    
+    .notification-action-btn.primary {
+        background: #007bff;
+        color: white;
+        border-color: #007bff;
+    }
+    
+    .notification-action-btn.primary:hover {
+        background: #0056b3;
+    }
+    
+    .notification-fade-out {
+        animation: fadeOut 0.3s ease-out forwards;
+    }
+    
+    @keyframes fadeOut {
+        from {
+            opacity: 1;
+            transform: translateX(0);
+        }
+        to {
+            opacity: 0;
+            transform: translateX(-20px);
+        }
+    }
+    
+    .notification-slide-in {
+        animation: slideIn 0.3s ease-out forwards;
+    }
+    
+    @keyframes slideIn {
+        from {
+            opacity: 0;
+            transform: translateX(20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateX(0);
+        }
+    }
+
 :root {
     /* Light theme colors */
     --background-primary: #ffffff;
@@ -15,6 +296,8 @@
     --text-link: #0d6efd; /* Blue */
     --border-color: #dee2e6; /* Light border */
     --primary-accent: #0d6efd; /* Blue accent */
+    --primary-accent-hover: #0b5ed7; /* Darker blue for hover */
+    --background-hover: #f8f9fa; /* Light grey for hover */
     --online-status: #28a745; /* Green */
     --away-status: #ffc107; /* Yellow */
     --self-message-bg: #e7f5ff; /* Light blue for own messages */
@@ -38,6 +321,8 @@
     --text-link: #4dabf7;
     --border-color: #555555; /* Lighter gray */
     --primary-accent: #4dabf7;
+    --primary-accent-hover: #339af0; /* Darker blue for hover in dark mode */
+    --background-hover: #4a4a4a; /* Darker grey for hover in dark mode */
     --online-status: #51cf66;
     --away-status: #ffd43b;
     --self-message-bg: #1e3a8a;
@@ -1103,17 +1388,35 @@ div.message.message-reply.visible div.message-content-wrapper div.message-header
 }
 
 .message-avatar {
+  position: relative; /* CRITICAL: Match avatar-container exactly */
+  display: flex; /* CRITICAL: Use flexbox for proper centering */
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
   width: 32px;
   height: 32px;
-  border-radius: 50%;
-  background: #007bff;
-  color: white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: bold;
-  font-size: 14px;
+  /* CRITICAL: Ensure proper centering for unified avatar system */
+  text-align: center;
+  vertical-align: middle;
+  /* CRITICAL: Don't override unified avatar positioning */
+  /* The unified avatar system handles all positioning internally */
+  /* Any CSS here should not interfere with the aura border positioning */
+}
+
+/* Ensure unified avatar system works correctly in message context */
+.message-avatar > div {
+  /* Don't override the unified avatar's internal positioning */
+  position: relative !important;
+}
+
+.message-avatar > div > div {
+  /* Don't override the aura background positioning */
+  position: absolute !important;
+}
+
+.message-avatar > div > img {
+  /* Don't override the avatar image positioning */
+  position: relative !important;
 }
 
 .message-content-wrapper {
@@ -1713,6 +2016,8 @@ div.message.message-reply.visible div.message-content-wrapper div.message-header
 .message-group .avatar-container {
     width: 32px; /* Smaller avatar for chat */
     height: 32px; /* Smaller avatar for chat */
+    /* CRITICAL: Don't override unified avatar positioning */
+    /* The unified avatar system handles all internal positioning */
     /* position: relative; Inherited or implied */
     /* flex-shrink: 0; Inherited or implied */
 }
@@ -1919,13 +2224,18 @@ div.message.message-reply.visible div.message-content-wrapper div.message-header
   position: fixed !important;
   bottom: 0 !important;
   left: 0 !important;
-  width: 100vw !important;
+  right: 0 !important;
   background: #f8f9fa !important;
   border-top: 1px solid #dee2e6 !important;
   z-index: 1000 !important;
   padding: 0 !important;
   max-height: 50vh !important; /* Prevent it from taking up too much space */
   overflow-y: auto !important; /* Allow scrolling if content exceeds */
+}
+
+.chat-input-area input[type="text"] {
+  max-height: none !important; /* Allow input to expand naturally */
+  min-height: auto !important; /* Allow input to shrink naturally */
 }
 
 .message-sender-name {
