@@ -17,12 +17,7 @@
     "googleapis": "^161.0.0",
     "openai": "^6.1.0",
     "passport": "^0.7.0",
-    "passport-google-oauth20": "^2.0.0",
-    "puppeteer": "^24.23.0",
-    "youtube-captions-scraper": "^2.0.3",
-    "youtube-transcript": "^1.2.1",
-    "youtubei": "^1.7.0",
-    "ytdl-core": "^4.11.5"
+    "passport-google-oauth20": "^2.0.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"

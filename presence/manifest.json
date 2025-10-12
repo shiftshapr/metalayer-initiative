@@ -13,8 +13,6 @@
   ],
   "host_permissions": [
     "https://app.themetalayer.org/*",
-    "https://www.youtube.com/*",
-    "https://youtube.com/*"
   ],
   "oauth2": {
     "client_id": "874969116680-cn0vnij95npbq2s71dd3voc8vhdqh5fg.apps.googleusercontent.com",
@@ -49,6 +47,6 @@
     }
   ],
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' https://bvshfzikwwjasluumfkr.supabase.co wss://bvshfzikwwjasluumfkr.supabase.co http://localhost:3001 ws://localhost:3001 http://216.238.91.120:3002 ws://216.238.91.120:3002 https://app.themetalayer.org https://www.googleapis.com wss://echo.websocket.org https://www.youtube.com;"
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' https://bvshfzikwwjasluumfkr.supabase.co wss://bvshfzikwwjasluumfkr.supabase.co http://localhost:3001 ws://localhost:3001 http://216.238.91.120:3002 ws://216.238.91.120:3002 https://app.themetalayer.org https://www.googleapis.com wss://echo.websocket.org;"
   }
 } 

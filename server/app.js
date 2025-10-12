@@ -13,9 +13,6 @@ const interactionRoutes = require('../routes/interaction');
 const pohRoutes = require('../routes/poh');
 const policyRoutes = require('../routes/policy');
 const peopleRoutes = require('../routes/people');
-const youtubeRoutes = require('./routes/youtube');
-const youtubeFreeRoutes = require('./routes/youtube-free');
-const youtubeApiRoutes = require('./routes/youtube-api');
 // Future: Blockchain, TEE, Agent orchestration routes
 
 const app = express();
@@ -55,9 +52,6 @@ app.use('/interaction', interactionRoutes);
 app.use('/poh', pohRoutes);
 app.use('/policy', policyRoutes);
 app.use('/people', peopleRoutes);
-app.use('/api/youtube', youtubeRoutes);
-app.use('/api/youtube-free', youtubeFreeRoutes);
-app.use('/api/youtube-api', youtubeApiRoutes);
 
 // Google Auth routes
 app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
@@ -193,50 +187,24 @@ app.post('/api/agent', async (req, res) => {
     // Build enhanced system prompt with RAG context
     let systemPrompt = 'You are a helpful AI assistant that can analyze web page content and answer questions about it. You have access to the current page content and should provide clear, accurate, and helpful responses based on that content.';
     
-    // Handle YouTube video context
-    if (type === 'youtube_analysis' && context && context.transcript) {
-      systemPrompt = `You are a helpful AI assistant that can analyze YouTube videos. You have access to the full video transcript and metadata. Provide detailed, accurate responses based on the video content.
-
-VIDEO INFORMATION:
-- Title: ${context.videoTitle || 'Unknown'}
-- Channel: ${context.channelName || 'Unknown'}
-- Duration: ${context.duration || 'Unknown'}
-- Views: ${context.views || 'Unknown'}
-
-FULL VIDEO TRANSCRIPT:
-${context.transcript}
-
-VIDEO SUMMARY:
-${context.summary || 'Not available'}
-
-KEY POINTS:
-${context.keyPoints || 'Not available'}
-
-GENERATED QUESTIONS:
-${context.questions || 'Not available'}
-
-IMPORTANT: You have access to the complete video transcript above. Use this information to answer the user's question about the video. Do not say you cannot see the video content - you have the full transcript right here.`;
-    }
     // Handle regular page content
-    else {
-      if (context && context.relevantContent && context.relevantContent.length > 0) {
-        systemPrompt += `\n\nRELEVANT PAGE CONTENT:\n${context.relevantContent.join('\n\n')}`;
-      }
-      
-      if (pageContent && pageContent.title) {
-        systemPrompt += `\n\nPAGE TITLE: ${pageContent.title}`;
-      }
-      
-      if (pageContent && pageContent.metadata && pageContent.metadata.description) {
-        systemPrompt += `\n\nPAGE DESCRIPTION: ${pageContent.metadata.description}`;
-      }
-      
-      if (pageContent && pageContent.content && pageContent.content.full) {
-        systemPrompt += `\n\nFULL PAGE CONTENT: ${pageContent.content.full.substring(0, 2000)}...`;
-      }
-      
-      systemPrompt += `\n\nIMPORTANT: You have access to the page content above. Use this information to answer the user's question about the page. Do not say you cannot see the page - you have the content right here.`;
+    if (context && context.relevantContent && context.relevantContent.length > 0) {
+      systemPrompt += `\n\nRELEVANT PAGE CONTENT:\n${context.relevantContent.join('\n\n')}`;
     }
+    
+    if (pageContent && pageContent.title) {
+      systemPrompt += `\n\nPAGE TITLE: ${pageContent.title}`;
+    }
+    
+    if (pageContent && pageContent.metadata && pageContent.metadata.description) {
+      systemPrompt += `\n\nPAGE DESCRIPTION: ${pageContent.metadata.description}`;
+    }
+    
+    if (pageContent && pageContent.content && pageContent.content.full) {
+      systemPrompt += `\n\nFULL PAGE CONTENT: ${pageContent.content.full.substring(0, 2000)}...`;
+    }
+    
+    systemPrompt += `\n\nIMPORTANT: You have access to the page content above. Use this information to answer the user's question about the page. Do not say you cannot see the page - you have the content right here.`;
     
     const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
       method: 'POST',
