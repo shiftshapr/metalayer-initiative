@@ -6,16 +6,37 @@
 // MODERN CONFIGURATION: Fully environment-based, no hardcoded fallbacks
 
 // CRITICAL FIX: Ensure Logger is available before using it
-if (typeof Logger === 'undefined') {
-  console.error('🚨 CRITICAL: Logger utility not loaded! Falling back to console.log');
-  // Create fallback Logger object
+if (typeof Logger === 'undefined' || typeof window.Logger === 'undefined') {
+  console.error('🚨 CRITICAL: Logger utility not loaded! Creating fallback Logger...');
+  // Create comprehensive fallback Logger object with ALL methods
   window.Logger = {
-    debug: (msg, data, context) => console.log(`🔍 ${msg}`, data),
-    info: (msg, data, context) => console.log(`ℹ️ ${msg}`, data),
-    warn: (msg, data, context) => console.warn(`⚠️ ${msg}`, data),
-    error: (msg, data, context) => console.error(`❌ ${msg}`, data),
-    success: (msg, data, context) => console.log(`✅ ${msg}`, data)
+    // Basic logging methods
+    debug: (msg, data, context) => console.log(`🔍 [DEBUG] ${msg}`, data || ''),
+    info: (msg, data, context) => console.log(`ℹ️ [INFO] ${msg}`, data || ''),
+    warn: (msg, data, context) => console.warn(`⚠️ [WARN] ${msg}`, data || ''),
+    error: (msg, data, context) => console.error(`❌ [ERROR] ${msg}`, data || ''),
+    success: (msg, data, context) => console.log(`✅ [SUCCESS] ${msg}`, data || ''),
+    
+    // Context-specific methods
+    avatar: (msg, data) => console.log(`🎨 [AVATAR] ${msg}`, data || ''),
+    presence: (msg, data) => console.log(`👤 [PRESENCE] ${msg}`, data || ''),
+    auth: (msg, data) => console.log(`🔐 [AUTH] ${msg}`, data || ''),
+    visibility: (msg, data) => console.log(`👁️ [VISIBILITY] ${msg}`, data || ''),
+    realtime: (msg, data) => console.log(`📡 [REALTIME] ${msg}`, data || ''),
+    
+    // Flow methods
+    startFlow: (name, data) => console.log(`▶️ [FLOW START] ${name}`, data || ''),
+    endFlow: (name, success, data) => console.log(`⏸️ [FLOW END] ${name} (${success ? 'SUCCESS' : 'FAILED'})`, data || ''),
+    stepFlow: (name, step, data) => console.log(`➡️ [FLOW STEP] ${name} - ${step}`, data || ''),
+    
+    // Utility methods
+    getHistory: () => [],
+    clearHistory: () => {},
+    exportLogs: () => '[]',
+    setLevel: () => {},
+    setEnabled: () => {}
   };
+  console.log('✅ Fallback Logger created with all methods');
 }
 
 Logger.info("SIDEPANEL.JS LOADING STARTED", null, 'general');
