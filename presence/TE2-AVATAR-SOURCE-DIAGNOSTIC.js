@@ -358,10 +358,14 @@ window.compareAvatarSources = async function() {
     // Source 3: visibility data
     let visibilityAvatar = null;
     if (window.currentVisibilityDataUnfiltered) {
-      const userInVisibility = window.currentVisibilityDataUnfiltered.find(
-        u => u.email === currentUser.email || u.userId === currentUser.email
-      );
-      visibilityAvatar = userInVisibility?.avatarUrl || null;
+      // CRITICAL FIX: currentVisibilityDataUnfiltered is an object with 'active' array
+      const visibilityArray = window.currentVisibilityDataUnfiltered.active || window.currentVisibilityDataUnfiltered;
+      if (Array.isArray(visibilityArray)) {
+        const userInVisibility = visibilityArray.find(
+          u => u.email === currentUser.email || u.userId === currentUser.email
+        );
+        visibilityAvatar = userInVisibility?.avatarUrl || null;
+      }
     }
     console.log(`3️⃣  visibility data: ${visibilityAvatar || 'NOT SET'}`);
     

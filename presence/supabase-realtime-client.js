@@ -237,13 +237,19 @@ class SupabaseRealtimeClient {
     
     // 4. Try unfiltered visibility data (might have avatar from previous session)
     if (!avatarUrl && typeof window !== 'undefined' && window.currentVisibilityDataUnfiltered) {
-      const userInVisibility = window.currentVisibilityDataUnfiltered.find(u => 
-        u.email === this.currentUser.userEmail || 
-        u.userId === this.currentUser.userEmail
-      );
-      if (userInVisibility?.avatarUrl) {
-        avatarUrl = userInVisibility.avatarUrl;
-        console.log(`🔍 SD1 AVATAR_SOURCE: Found avatar in visibility data: ${avatarUrl}`);
+      // CRITICAL FIX: currentVisibilityDataUnfiltered is an OBJECT with 'active' array, not an array itself
+      const visibilityArray = window.currentVisibilityDataUnfiltered.active || window.currentVisibilityDataUnfiltered;
+      if (Array.isArray(visibilityArray)) {
+        const userInVisibility = visibilityArray.find(u => 
+          u.email === this.currentUser.userEmail || 
+          u.userId === this.currentUser.userEmail
+        );
+        if (userInVisibility?.avatarUrl) {
+          avatarUrl = userInVisibility.avatarUrl;
+          console.log(`🔍 SD1 AVATAR_SOURCE: Found avatar in visibility data: ${avatarUrl}`);
+        }
+      } else {
+        console.warn(`⚠️ SD1 AVATAR_SOURCE: currentVisibilityDataUnfiltered is not an array:`, typeof visibilityArray);
       }
     }
     
