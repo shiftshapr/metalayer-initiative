@@ -253,14 +253,14 @@ class SupabaseRealtimeClient {
       }
     }
     
-    // Only add avatar_url if we found a REAL one (not fallback/default)
+    // SD1 CRITICAL FIX: Do NOT add avatar_url to presence data - column doesn't exist in database!
+    // The avatar URL is fetched from the backend API separately, not stored in user_presence table
     if (avatarUrl && !avatarUrl.includes('default-user')) {
-      presenceData.avatar_url = avatarUrl;
-      console.log(`✅ SD1 AVATAR_FIX: Including REAL avatar URL in presence: ${avatarUrl}`);
+      console.log(`✅ SD1 AVATAR_SOURCE: Found REAL avatar (${avatarUrl}) but NOT saving to user_presence (column doesn't exist)`);
     } else if (avatarUrl) {
-      console.log(`⚠️ SD1 AVATAR_FIX: Skipping fallback avatar URL: ${avatarUrl}`);
+      console.log(`⚠️ SD1 AVATAR_SOURCE: Found fallback avatar (${avatarUrl}) - not using`);
     } else {
-      console.log(`⚠️ SD1 AVATAR_FIX: No avatar URL found - will need to fetch from auth later`);
+      console.log(`⚠️ SD1 AVATAR_SOURCE: No avatar URL found - backend API will fetch from user profile`);
     }
 
     console.log(`🔍 PRESENCE_UPDATE: Data being sent:`, JSON.stringify(presenceData, null, 2));

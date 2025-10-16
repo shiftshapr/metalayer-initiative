@@ -41,12 +41,29 @@ class AvatarUtils {
       
       // PRIORITY 3: For other users, use visibility data (same as profile avatar system)
       if (!avatarUrl) {
+        Logger.avatar(`🔍 SD1 AVATAR DEBUG: Checking visibility data for ${user.user_email || user.email}`);
+        Logger.avatar(`🔍 SD1 AVATAR DEBUG: currentVisibilityDataUnfiltered exists: ${!!window.currentVisibilityDataUnfiltered}`);
+        
         if (window.currentVisibilityDataUnfiltered && window.currentVisibilityDataUnfiltered.active) {
+          Logger.avatar(`🔍 SD1 AVATAR DEBUG: visibility data active array length: ${window.currentVisibilityDataUnfiltered.active.length}`);
+          Logger.avatar(`🔍 SD1 AVATAR DEBUG: visibility data users:`, window.currentVisibilityDataUnfiltered.active.map(u => ({
+            email: u.email,
+            userId: u.userId,
+            id: u.id,
+            avatarUrl: u.avatarUrl
+          })));
+          
           const userInVisibility = window.currentVisibilityDataUnfiltered.active.find(
             u => u.email === (user.user_email || user.email) || 
                  u.userId === (user.user_email || user.email) || 
                  u.id === (user.user_email || user.email)
           );
+          
+          Logger.avatar(`🔍 SD1 AVATAR DEBUG: userInVisibility found: ${!!userInVisibility}`);
+          if (userInVisibility) {
+            Logger.avatar(`🔍 SD1 AVATAR DEBUG: userInVisibility details:`, userInVisibility);
+          }
+          
           if (userInVisibility && userInVisibility.avatarUrl) {
             avatarUrl = userInVisibility.avatarUrl;
             userName = userInVisibility.name || userName;
