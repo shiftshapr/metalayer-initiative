@@ -376,3 +376,4 @@ console.log('Available functions:');
 console.log('- window.runRefactoringTests() - Run full test suite');
 console.log('- window.quickRefactoringCheck() - Quick status check');
 console.log('- window.RefactoringTestSuite - Test suite class');
+

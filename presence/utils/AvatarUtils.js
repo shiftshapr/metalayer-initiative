@@ -213,3 +213,4 @@ if (typeof module !== 'undefined' && module.exports) {
 }
 
 Logger.success('AvatarUtils initialized');
+

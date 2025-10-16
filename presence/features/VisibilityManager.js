@@ -286,3 +286,4 @@ if (typeof window !== 'undefined') {
 }
 
 console.log('✅ VisibilityManager initialized');
+

@@ -315,3 +315,4 @@ console.log('- window.testLogger() - Run full diagnostic test');
 console.log('- window.quickLoggerCheck() - Quick status check');
 console.log('- window.fixLoggerIfBroken() - Attempt to fix Logger issues');
 console.log('- window.LoggerDiagnosticTest - Test suite class');
+

@@ -223,3 +223,4 @@ After reloading the extension:
 - ✅ Other users should show with correct "Last seen" or "Now" status
 - ✅ No more "Profile avatar element not found" errors in console
 
+

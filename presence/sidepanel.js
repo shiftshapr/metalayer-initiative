@@ -688,7 +688,7 @@ function updateUserAuraInUI(userEmail, auraColor) {
     const profileAvatarContainer = document.getElementById('user-avatar-container');
     if (profileAvatarContainer) {
       // Update profile avatar with new aura color
-      const newProfileAvatarHTML = createUnifiedAvatar({
+      const newProfileAvatarHTML = AvatarUtils.createUnifiedAvatar({
         id: currentUser.id || currentUser.email,
         userId: currentUser.id || currentUser.email,
         name: currentUser.name || currentUser.email,
@@ -760,57 +760,24 @@ async function refreshVisibilityAvatars() {
               let userHandle = user.user_email.split('@')[0];
               let avatarSource = 'none';
               
-              Logger.debug(`SD1 AVATAR: Processing user ${user.user_email} using PROFILE AVATAR SYSTEM`, null, 'general');
+              Logger.debug(`SD1 AVATAR: Processing user ${user.user_email} using AvatarUtils`, null, 'general');
               
               try {
-                // SD1 CRITICAL FIX: Use the EXACT same system that works for profile avatars
-                // The profile avatar system gets real avatars from currentUser.user_metadata.avatar_url
-                // and from window.currentVisibilityDataUnfiltered.active
+                // Use AvatarUtils for consistent avatar URL fetching
+                const avatarData = AvatarUtils.getAvatarUrl(user, 'visibility');
+                avatarUrl = avatarData.avatarUrl;
+                userName = avatarData.userName;
+                avatarSource = avatarData.source;
                 
-                // First, check if this user is the current user and use their stored avatar
-                const currentUser = window.currentUser || {};
-                if (user.user_email === currentUser.email && currentUser.user_metadata?.avatar_url) {
-                  avatarUrl = currentUser.user_metadata.avatar_url;
-                  userName = currentUser.user_metadata.full_name || userName;
-                  avatarSource = 'current_user_metadata';
-                  Logger.success(`SD1 AVATAR: Using current user metadata for ${user.user_email} - avatarUrl: ${avatarUrl}`, null, 'general');
-                } else {
-                  // For other users, use the SAME system that profile avatars use
-                  // Check if we have unfiltered visibility data with real avatars
-                  if (window.currentVisibilityDataUnfiltered && window.currentVisibilityDataUnfiltered.active) {
-                    const userInVisibility = window.currentVisibilityDataUnfiltered.active.find(
-                      u => u.email === user.user_email || u.userId === user.user_email || u.id === user.user_email
-                    );
-                    if (userInVisibility && userInVisibility.avatarUrl) {
-                      avatarUrl = userInVisibility.avatarUrl;
-                      userName = userInVisibility.name || userName;
-                      avatarSource = 'visibility_data';
-                      Logger.success(`SD1 AVATAR: Found REAL avatar in visibility data for ${user.user_email} - avatarUrl: ${avatarUrl}`, null, 'general');
-                    } else {
-                      Logger.info(`ℹ️ SD1 AVATAR: User ${user.user_email} not found in visibility data`, null, 'general');
-                    }
-                  } else {
-                    Logger.info(`ℹ️ SD1 AVATAR: No unfiltered visibility data available`, null, 'general');
-                  }
-                }
-                
+                Logger.debug(`SD1 AVATAR RESULT: ${user.user_email} - avatarUrl: ${avatarUrl}, source: ${avatarSource}, name: ${userName}`, null, 'general');
               } catch (error) {
-                console.error(`❌ SD1 AVATAR: Exception processing ${user.user_email}:`, error);
+                Logger.error(`❌ SD1 AVATAR: Exception processing ${user.user_email}:`, error, 'general');
+                
+                // Fallback if AvatarUtils fails
+                avatarUrl = `https://lh3.googleusercontent.com/a/default-user=s96-c`;
+                avatarSource = 'fallback';
+                Logger.warn(`SD1 FALLBACK: Using generic avatar for ${user.user_email}: ${avatarUrl}`, null, 'general');
               }
-              
-              // SD1 FALLBACK: Only use generic avatar if we absolutely can't find a real one
-              if (!avatarUrl) {
-                try {
-                  Logger.debug(`SD1 FALLBACK: No real avatar found, using generic for ${user.user_email}`, null, 'general');
-                  avatarUrl = `https://lh3.googleusercontent.com/a/default-user=s96-c`;
-                  avatarSource = 'generic-fallback';
-                  Logger.warn(`SD1 FALLBACK: Using generic avatar for ${user.user_email}: ${avatarUrl}`, null, 'general');
-                } catch (fallbackError) {
-                  Logger.error(`SD1 FALLBACK: Generic avatar generation failed for ${user.user_email}:`, fallbackError.message, 'general');
-                }
-              }
-              
-              Logger.debug(`SD1 AVATAR RESULT: ${user.user_email} - avatarUrl: ${avatarUrl}, source: ${avatarSource}, name: ${userName}`, null, 'general');
               
               return {
                 id: user.user_email,
@@ -1988,7 +1955,7 @@ async function updateVisibleTab(avatars) {
           return `
             <li class="user-item" data-user-id="${avatar.userId}" data-user-name="${avatar.name}" data-index="${index}">
               <div class="avatar-container" style="position: relative; width: 32px; height: 32px;">
-                ${createUnifiedAvatar(avatar, {
+                ${AvatarUtils.createUnifiedAvatar(avatar, {
                   size: 32,
                   showStatus: isActive,
                   showAura: true,
@@ -2544,77 +2511,10 @@ function getAvatarColor(name) {
  * @param {string} options.context - Context: 'profile', 'message', 'visibility'
  * @returns {string} HTML string for the avatar
  */
+// DEPRECATED: Use AvatarUtils.createUnifiedAvatar() instead
 function createUnifiedAvatar(user, options = {}) {
-  const {
-    size = 32,
-    showStatus = true,
-    showAura = true,
-    context = 'message',
-    statusColor = null
-  } = options;
-  
-  const name = user.name || user.handle || user.email || 'Unknown';
-  const avatarUrl = user.avatarUrl;
-  
-  // Debug logging
-  Logger.debug(`UNIFIED_AVATAR: [BUILD ${EXTENSION_BUILD}] Creating avatar for user:`, {
-    name: name,
-    email: user.email,
-    id: user.id,
-    userId: user.userId,
-    auraColor: user.auraColor,
-    context: context
-  }, 'general');
-  
-  // COMPREHENSIVE AURA COLOR DEBUGGING
-  Logger.debug(`AURA_DEBUG: [BUILD ${EXTENSION_BUILD}] === AURA COLOR ANALYSIS ===`, null, 'general');
-  Logger.debug(`AURA_DEBUG: [BUILD ${EXTENSION_BUILD}] Context: ${context}`, null, 'general');
-  Logger.debug(`AURA_DEBUG: [BUILD ${EXTENSION_BUILD}] user.auraColor: ${user.auraColor}`, null, 'general');
-  Logger.debug(`AURA_DEBUG: [BUILD ${EXTENSION_BUILD}] user.auraColor type: ${typeof user.auraColor}`, null, 'general');
-  Logger.debug(`AURA_DEBUG: [BUILD ${EXTENSION_BUILD}] user.auraColor === null: ${user.auraColor === null}`, null, 'general');
-  Logger.debug(`AURA_DEBUG: [BUILD ${EXTENSION_BUILD}] user.auraColor === 'null': ${user.auraColor === 'null'}`, null, 'general');
-  Logger.debug(`AURA_DEBUG: [BUILD ${EXTENSION_BUILD}] user.auraColor === undefined: ${user.auraColor === undefined}`, null, 'general');
-  Logger.debug(`AURA_DEBUG: [BUILD ${EXTENSION_BUILD}] Full user object:`, JSON.stringify(user, null, 2), 'general');
-  
-  // Ensure consistent aura color for the same user across all contexts
-  let auraColor;
-  if (user.auraColor && user.auraColor !== null && user.auraColor !== 'null') {
-    auraColor = user.auraColor;
-    Logger.debug(`UNIFIED_AVATAR: Using provided aura color: ${auraColor}`, null, 'general');
-  } else {
-    // Use a consistent color based on user ID or email for the same user
-    const userIdentifier = user.id || user.userId || user.email || name;
-    auraColor = getAvatarColor(userIdentifier);
-    Logger.debug(`UNIFIED_AVATAR: [BUILD ${EXTENSION_BUILD}] Generated aura color for ${userIdentifier}: ${auraColor}`, null, 'general');
-  }
-  
-  // Determine status dot color - use provided statusColor or default to green
-  const dotColor = statusColor || '#22c55e'; // Default to green if no status color provided
-  Logger.debug(`UNIFIED_AVATAR: [BUILD ${EXTENSION_BUILD}] Status dot color: ${dotColor}`, null, 'general');
-  
-  // UNIFIED VISUAL IMPLEMENTATION - SAME FOR ALL CONTEXTS
-  // Always use the same structure: aura background + img with border + status dot
-  if (avatarUrl && avatarUrl !== 'null' && avatarUrl !== '' && avatarUrl.startsWith('http')) {
-    const avatarHTML = `<div style="position: relative; width: ${size}px; height: ${size}px;">
-      ${showAura ? `<div style="position: absolute; top: -2px; left: -2px; width: ${size + 4}px; height: ${size + 4}px; border-radius: 50%; background-color: ${auraColor}; z-index: 1;"></div>` : ''}
-      <img src="${avatarUrl}" alt="${name}" style="position: relative; z-index: 2; width: ${size}px; height: ${size}px; border-radius: 50%; object-fit: cover; border: 2px solid ${auraColor};" data-avatar-fallback="true">
-      ${showStatus ? `<div style="position: absolute; bottom: -2px; right: -2px; width: 8px; height: 8px; border-radius: 50%; background-color: ${dotColor}; border: 2px solid white; z-index: 3;"></div>` : ''}
-    </div>`;
-    Logger.debug(`UNIFIED_AVATAR: [BUILD ${EXTENSION_BUILD}] Generated UNIFIED avatar with image - auraColor: ${auraColor}, showAura: ${showAura}`, null, 'general');
-    return avatarHTML;
-  }
-  
-  // UNIFIED FALLBACK - SAME structure for all contexts
-  const initial = name.charAt(0).toUpperCase();
-  const fontSize = Math.max(10, size * 0.4);
-  
-  const avatarHTML = `<div style="position: relative; width: ${size}px; height: ${size}px;">
-    ${showAura ? `<div style="position: absolute; top: -2px; left: -2px; width: ${size + 4}px; height: ${size + 4}px; border-radius: 50%; background-color: ${auraColor}; z-index: 1;"></div>` : ''}
-    <div style="position: relative; z-index: 2; width: ${size}px; height: ${size}px; border-radius: 50%; background-color: ${auraColor}; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: ${fontSize}px; border: 2px solid ${auraColor};">${initial}</div>
-    ${showStatus ? `<div style="position: absolute; bottom: -2px; right: -2px; width: 8px; height: 8px; border-radius: 50%; background-color: ${dotColor}; border: 2px solid white; z-index: 3;"></div>` : ''}
-  </div>`;
-  Logger.debug(`UNIFIED_AVATAR: [BUILD ${EXTENSION_BUILD}] Generated UNIFIED avatar with initial - auraColor: ${auraColor}, showAura: ${showAura}`, null, 'general');
-  return avatarHTML;
+  Logger.warn('DEPRECATED: createUnifiedAvatar() is deprecated. Use AvatarUtils.createUnifiedAvatar() instead.', null, 'general');
+  return AvatarUtils.createUnifiedAvatar(user, options);
 }
 
 // Global function to set custom avatar color for the current user
@@ -3676,7 +3576,7 @@ function getSenderAvatar(author) {
   }
   
   // Use unified avatar system for consistency
-  const avatarHTML = createUnifiedAvatar(author, {
+  const avatarHTML = AvatarUtils.createUnifiedAvatar(author, {
     size: 32,
     showStatus: true,
     showAura: true,
@@ -6357,7 +6257,7 @@ async function updateUI(user) {
       
       // ✅ CREATE UNIFIED AVATAR HTML - SAME AS MESSAGE/VISIBILITY AVATARS
       // CRITICAL: USE SAME SIZE AS VISIBILITY/MESSAGE AVATARS (32px) FOR CONSISTENCY
-      const avatarHTML = createUnifiedAvatar(userData, {
+      const avatarHTML = AvatarUtils.createUnifiedAvatar(userData, {
         size: 32,  // MUST MATCH visibility (32px) and message (32px)
         showStatus: false,  // No status dot on profile avatar
         showAura: true,     // Show aura color

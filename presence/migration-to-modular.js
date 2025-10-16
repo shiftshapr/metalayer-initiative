@@ -211,3 +211,4 @@ if (typeof window !== 'undefined') {
 }
 
 console.log('✅ Migration script loaded');
+
