@@ -3,3 +3,61 @@ node_modules
 .env
 
 /generated/prisma
+
+# Logs and temporary files
+*.log
+*.pid
+*.tmp
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Test and debug files (but keep production diagnostic tools)
+test-*.js
+!presence/test-realtime-events.js
+debug-*.js
+!presence/debug-config.js
+*-test.js
+*-debug.js
+test-*.html
+*-test.html
+
+# Temporary scripts
+migrate-*.js
+setup-*.js
+cleanup-*.js
+validate-*.js
+analyze-*.js
+optimize-*.js
+performance-*.js
+integrate-*.js
+update-*.js
+remove-*.js
+complete-*.js
+apply-*.js
+delete-*.js
+query-*.js
+check-*.js
+
+# Backup files
+*.backup
+*-backup.*
+*-working.*
+*-fixed.*
+*-old.*
+
+# Build artifacts
+client/build/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Diagnostic/temporary files
+comprehensive-test-results.json
+diagnostic-*.json
+*.diagnostic.*

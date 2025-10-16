@@ -173,3 +173,5 @@ SHOW wal_level;
 
 **Status:** ⏳ **Awaiting user to run diagnostic and check WAL level**
 
+
+

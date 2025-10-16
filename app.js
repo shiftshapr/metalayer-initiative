@@ -265,6 +265,107 @@ app.get('/', (req, res) => {
   res.send('API is live!');
 });
 
+// Agent API endpoint (exact copy from main branch)
+app.post('/api/agent', async (req, res) => {
+  try {
+    const { message, context, pageContent, type, videoData } = req.body;
+    
+    if (!process.env.DEEPSEEK_API_KEY || process.env.DEEPSEEK_API_KEY === 'your_deepseek_api_key_here') {
+      return res.status(500).json({ 
+        error: 'DeepSeek API key not configured. Please set DEEPSEEK_API_KEY in your .env file.' 
+      });
+    }
+    
+    // Build enhanced system prompt with RAG context
+    let systemPrompt = 'You are a helpful AI assistant that can analyze web page content and answer questions about it. You have access to the current page content and should provide clear, accurate, and helpful responses based on that content.';
+    
+    // Handle YouTube video context
+    if (type === 'youtube_analysis' && context && context.transcript) {
+      systemPrompt = `You are a helpful AI assistant that can analyze YouTube videos. You have access to the full video transcript and metadata. Provide detailed, accurate responses based on the video content.
+
+VIDEO INFORMATION:
+- Title: ${context.videoTitle || 'Unknown'}
+- Channel: ${context.channelName || 'Unknown'}
+- Duration: ${context.duration || 'Unknown'}
+- Views: ${context.views || 'Unknown'}
+
+FULL VIDEO TRANSCRIPT:
+${context.transcript}
+
+VIDEO SUMMARY:
+${context.summary || 'Not available'}
+
+KEY POINTS:
+${context.keyPoints || 'Not available'}
+
+GENERATED QUESTIONS:
+${context.questions || 'Not available'}
+
+IMPORTANT: You have access to the complete video transcript above. Use this information to answer the user's question about the video. Do not say you cannot see the video content - you have the full transcript right here.`;
+    }
+    // Handle regular page content
+    else {
+      if (context && context.relevantContent && context.relevantContent.length > 0) {
+        systemPrompt += `\n\nRELEVANT PAGE CONTENT:\n${context.relevantContent.join('\n\n')}`;
+      }
+      
+      if (pageContent && pageContent.title) {
+        systemPrompt += `\n\nPAGE TITLE: ${pageContent.title}`;
+      }
+      
+      if (pageContent && pageContent.metadata && pageContent.metadata.description) {
+        systemPrompt += `\n\nPAGE DESCRIPTION: ${pageContent.metadata.description}`;
+      }
+    }
+
+    // Call DeepSeek API
+    const deepseekResponse = await fetch('https://api.deepseek.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.DEEPSEEK_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'deepseek-chat',
+        messages: [
+          {
+            role: 'system',
+            content: systemPrompt
+          },
+          {
+            role: 'user',
+            content: message
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: 2000
+      })
+    });
+
+    if (!deepseekResponse.ok) {
+      throw new Error(`DeepSeek API error: ${deepseekResponse.status}`);
+    }
+
+    const data = await deepseekResponse.json();
+    const aiResponse = data.choices[0]?.message?.content || 'No response generated.';
+
+    res.json({
+      response: aiResponse,
+      context: {
+        pageTitle: context?.pageTitle || 'Current Page',
+        hasContext: !!(context && context.relevantContent && context.relevantContent.length > 0)
+      }
+    });
+
+  } catch (error) {
+    console.error('Agent API error:', error);
+    res.status(500).json({
+      error: 'Failed to get AI response',
+      details: error.message
+    });
+  }
+});
+
 const PORT = process.env.PORT || 3002;
 const HOST = process.env.HOST || '0.0.0.0';
 

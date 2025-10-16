@@ -1,11 +1,33 @@
+// ===== ORIGINAL FUNCTIONALITY RESTORED =====
+
 // Meta-Layer Initiative API Configuration - MODERNIZED
 // Use environment-based configuration instead of hardcoded URLs
 // MODERN CONFIGURATION: Use environment-based configuration
 // MODERN CONFIGURATION: Fully environment-based, no hardcoded fallbacks
 
+console.log("🚀 SIDEPANEL.JS LOADING STARTED");
+
+// Immediate debug function - should be available right away
+window.testScript = function() {
+  console.log("✅ Script is loading! This function works.");
+  console.log("Agent tab button:", document.querySelector('[data-tab="agent-tab"]'));
+  console.log("Agent tab content:", document.getElementById('agent-tab'));
+  
+  // Try to click agent tab
+  const agentBtn = document.querySelector('[data-tab="agent-tab"]');
+  if (agentBtn) {
+    console.log("🎯 Clicking agent tab...");
+    agentBtn.click();
+  }
+};
+
 // Real Google auth will be loaded via script tag in HTML
 const METALAYER_API_URL = window.METALAYER_API_URL || (window.configManager ? window.configManager.get('apiUrl') : null);
 const METALAYER_WS_URL = window.METALAYER_WS_URL || (window.configManager ? window.configManager.get('wsUrl') : null);
+
+// Agent API constants (from main branch)
+const AGENT_API_URL = 'http://216.238.91.120:3002/api/agent';
+const PEOPLE_API_URL = 'http://216.238.91.120:3002/people';
 
 // Initialize comprehensive real-time logging
 let realtimeLogger = null;
@@ -681,18 +703,266 @@ function updateUserAuraInUI(userEmail, auraColor) {
 }
 
 async function refreshVisibilityAvatars() {
-  if (supabaseRealtimeClient && currentPageId) {
-    const users = await supabaseRealtimeClient.getPageUsers(currentPageId);
-    console.log('👁️ SUPABASE: Refreshing visibility with real-time users:', users.length);
+  // CRITICAL FIX: Use window variables for global access
+  const client = window.supabaseRealtimeClient || supabaseRealtimeClient;
+  const pageId = window.currentUrlData?.pageId || currentPageId;
+  
+  // CRITICAL FIX: State synchronization check
+  console.log('🔄 REFRESH_VISIBILITY: === STATE SYNCHRONIZATION CHECK ===');
+  console.log(`🔄 REFRESH_VISIBILITY: window.currentUrlData?.pageId: ${window.currentUrlData?.pageId}`);
+  console.log(`🔄 REFRESH_VISIBILITY: currentPageId: ${currentPageId}`);
+  console.log(`🔄 REFRESH_VISIBILITY: client.currentPage?.pageId: ${client?.currentPage?.pageId}`);
+  
+  // CRITICAL FIX: Synchronize state if inconsistent
+  if (client && window.currentUrlData?.pageId && client.currentPage?.pageId !== window.currentUrlData.pageId) {
+    console.log('🔄 REFRESH_VISIBILITY: 🔧 SYNCHRONIZING STATE - Updating client.currentPage');
+    client.currentPage = {
+      pageId: window.currentUrlData.pageId,
+      pageUrl: window.currentUrlData.normalizedUrl
+    };
+    console.log(`🔄 REFRESH_VISIBILITY: ✅ State synchronized: ${client.currentPage.pageId}`);
+  }
+  
+  if (client && pageId) {
+    console.log('🔄 REFRESH_VISIBILITY: === STARTING ENHANCED VISIBILITY REFRESH ===');
+    console.log(`🔄 REFRESH_VISIBILITY: Page ID: ${pageId}`);
+    console.log(`🔄 REFRESH_VISIBILITY: Client: ${client ? 'Available' : 'Missing'}`);
+    console.log(`🔄 REFRESH_VISIBILITY: PageId: ${pageId ? 'Available' : 'Missing'}`);
     
-    // Update combined avatars with real-time data
-    const activeCommunities = await chrome.storage.local.get(['activeCommunities']);
-    const communities = activeCommunities.activeCommunities || ['comm-001'];
-    await loadCombinedAvatars(communities);
+    const users = await client.getPageUsers(pageId);
+    console.log('👁️ REFRESH_VISIBILITY: Enhanced query returned users:', users.length);
+    console.log('👁️ REFRESH_VISIBILITY: Users:', users.map(u => `${u.user_email} (${u.is_active ? 'ACTIVE' : 'INACTIVE'})`));
+    
+    if (users && users.length > 0) {
+      // CRITICAL FIX: Use the enhanced query results directly instead of calling loadCombinedAvatars
+      console.log('🔄 REFRESH_VISIBILITY: Processing enhanced query results...');
+      
+            // SD1 CRITICAL FIX: Use the EXACT same avatar system that works for profile avatars
+            console.log('🔄 REFRESH_VISIBILITY: === USING PROFILE AVATAR SYSTEM ===');
+            console.log('🔄 REFRESH_VISIBILITY: Using the SAME system that works for profile avatars...');
+            
+            const usersWithAvatars = await Promise.all(users.map(async (user) => {
+              let avatarUrl = null;
+              let userName = user.user_email.split('@')[0];
+              let userHandle = user.user_email.split('@')[0];
+              let avatarSource = 'none';
+              
+              console.log(`🔍 SD1 AVATAR: Processing user ${user.user_email} using PROFILE AVATAR SYSTEM`);
+              
+              try {
+                // SD1 CRITICAL FIX: Use the EXACT same system that works for profile avatars
+                // The profile avatar system gets real avatars from currentUser.user_metadata.avatar_url
+                // and from window.currentVisibilityDataUnfiltered.active
+                
+                // First, check if this user is the current user and use their stored avatar
+                const currentUser = window.currentUser || {};
+                if (user.user_email === currentUser.email && currentUser.user_metadata?.avatar_url) {
+                  avatarUrl = currentUser.user_metadata.avatar_url;
+                  userName = currentUser.user_metadata.full_name || userName;
+                  avatarSource = 'current_user_metadata';
+                  console.log(`✅ SD1 AVATAR: Using current user metadata for ${user.user_email} - avatarUrl: ${avatarUrl}`);
+                } else {
+                  // For other users, use the SAME system that profile avatars use
+                  // Check if we have unfiltered visibility data with real avatars
+                  if (window.currentVisibilityDataUnfiltered && window.currentVisibilityDataUnfiltered.active) {
+                    const userInVisibility = window.currentVisibilityDataUnfiltered.active.find(
+                      u => u.email === user.user_email || u.userId === user.user_email || u.id === user.user_email
+                    );
+                    if (userInVisibility && userInVisibility.avatarUrl) {
+                      avatarUrl = userInVisibility.avatarUrl;
+                      userName = userInVisibility.name || userName;
+                      avatarSource = 'visibility_data';
+                      console.log(`✅ SD1 AVATAR: Found REAL avatar in visibility data for ${user.user_email} - avatarUrl: ${avatarUrl}`);
+                    } else {
+                      console.log(`ℹ️ SD1 AVATAR: User ${user.user_email} not found in visibility data`);
+                    }
+                  } else {
+                    console.log(`ℹ️ SD1 AVATAR: No unfiltered visibility data available`);
+                  }
+                }
+                
+              } catch (error) {
+                console.error(`❌ SD1 AVATAR: Exception processing ${user.user_email}:`, error);
+              }
+              
+              // SD1 FALLBACK: Only use generic avatar if we absolutely can't find a real one
+              if (!avatarUrl) {
+                try {
+                  console.log(`🔍 SD1 FALLBACK: No real avatar found, using generic for ${user.user_email}`);
+                  avatarUrl = `https://lh3.googleusercontent.com/a/default-user=s96-c`;
+                  avatarSource = 'generic-fallback';
+                  console.log(`⚠️ SD1 FALLBACK: Using generic avatar for ${user.user_email}: ${avatarUrl}`);
+                } catch (fallbackError) {
+                  console.log(`❌ SD1 FALLBACK: Generic avatar generation failed for ${user.user_email}:`, fallbackError.message);
+                }
+              }
+              
+              console.log(`🔄 SD1 AVATAR RESULT: ${user.user_email} - avatarUrl: ${avatarUrl}, source: ${avatarSource}, name: ${userName}`);
+              
+              return {
+                id: user.user_email,
+                userId: user.user_email,
+                email: user.user_email,
+                name: userName,
+                handle: userHandle,
+                avatarUrl: avatarUrl,
+                auraColor: user.aura_color || '#aaaaaa',
+                communityId: 'comm-001',
+                communityName: 'Community comm-001',
+                lastSeen: user.last_seen,
+                availability: null,
+                customLabel: null,
+                enterTime: user.enter_time,
+                isActive: user.is_active,
+                status: user.is_active ? 'online' : 'offline',
+                avatarSource: avatarSource
+              };
+            }));
+      
+      console.log('🔄 REFRESH_VISIBILITY: Users with avatars fetched:', usersWithAvatars.length);
+      const formattedUsers = usersWithAvatars;
+      
+      console.log('🔄 REFRESH_VISIBILITY: Formatted users for UI:', formattedUsers.length);
+      
+      // Store globally for profile avatar lookup
+      window.currentVisibilityDataUnfiltered = formattedUsers;
+      
+      // Update the UI with enhanced query results
+      if (typeof updateVisibleTab === 'function') {
+        console.log('🔄 REFRESH_VISIBILITY: Calling updateVisibleTab with enhanced data...');
+        updateVisibleTab(formattedUsers);
+        console.log('✅ REFRESH_VISIBILITY: UI updated with enhanced query results');
+      } else {
+        console.error('❌ REFRESH_VISIBILITY: updateVisibleTab function not available');
+      }
+    } else {
+      console.log('⚠️ REFRESH_VISIBILITY: No users found, clearing visibility');
+      if (typeof updateVisibleTab === 'function') {
+        updateVisibleTab([]);
+      }
+    }
+    
+    console.log('✅ REFRESH_VISIBILITY: Enhanced visibility refresh complete');
+  } else {
+    console.error('❌ REFRESH_VISIBILITY: Missing supabaseRealtimeClient or currentPageId');
+    console.error(`❌ REFRESH_VISIBILITY: Client available: ${!!client}`);
+    console.error(`❌ REFRESH_VISIBILITY: PageId available: ${!!pageId}`);
+    console.error(`❌ REFRESH_VISIBILITY: window.supabaseRealtimeClient: ${!!window.supabaseRealtimeClient}`);
+    console.error(`❌ REFRESH_VISIBILITY: window.currentUrlData: ${!!window.currentUrlData}`);
+    console.error(`❌ REFRESH_VISIBILITY: window.currentUrlData?.pageId: ${window.currentUrlData?.pageId}`);
   }
 }
 
+// CRITICAL FIX: Expose refreshVisibilityAvatars globally for real-time handler
+window.refreshVisibilityAvatars = refreshVisibilityAvatars;
+
+// ===== USER SETTINGS FOR THRESHOLD CONFIGURATION =====
+
+// Set Last Seen threshold (user-configurable)
+window.setLastSeenThreshold = function(days) {
+  try {
+    if (window.configManager) {
+      window.configManager.setLastSeenThreshold(days);
+      console.log(`🔧 USER SETTINGS: Last seen threshold set to ${days} days`);
+      
+      // Refresh visibility to apply new threshold
+      if (typeof window.refreshVisibilityAvatars === 'function') {
+        window.refreshVisibilityAvatars();
+        console.log('🔧 USER SETTINGS: Visibility refreshed with new threshold');
+      }
+    } else {
+      console.error('❌ USER SETTINGS: ConfigManager not available');
+    }
+  } catch (error) {
+    console.error('❌ USER SETTINGS: Error setting threshold:', error);
+  }
+};
+
+// Get current Last Seen threshold
+window.getLastSeenThreshold = function() {
+  try {
+    if (window.configManager) {
+      const thresholdMs = window.configManager.getLastSeenThreshold();
+      const days = Math.floor(thresholdMs / (24 * 60 * 60 * 1000));
+      
+      console.log(`🔧 USER SETTINGS: Current threshold: ${days} days`);
+      return { days, totalMs: thresholdMs };
+    } else {
+      console.error('❌ USER SETTINGS: ConfigManager not available');
+      return null;
+    }
+  } catch (error) {
+    console.error('❌ USER SETTINGS: Error getting threshold:', error);
+    return null;
+  }
+};
+
+// Load user settings on startup
+window.loadUserSettings = async function() {
+  try {
+    if (window.configManager) {
+      await window.configManager.loadUserSettings();
+      console.log('🔧 USER SETTINGS: User settings loaded');
+    }
+  } catch (error) {
+    console.error('❌ USER SETTINGS: Error loading user settings:', error);
+  }
+};
+
 // ===== END SUPABASE INTEGRATION =====
+
+// ===== ERROR DIAGNOSTIC FUNCTIONS =====
+
+// Diagnostic function to check for JavaScript errors
+window.diagnoseJavaScriptErrors = function() {
+  console.log('\n🔍 === JAVASCRIPT ERROR DIAGNOSTIC ===');
+  
+  // Check for common error sources
+  const errorSources = [
+    'websocket-diagnostic.js',
+    'test-realtime-events.js', 
+    'comprehensive-realtime-diagnostics.js',
+    'sidepanel.js'
+  ];
+  
+  console.log('🔍 Checking for error sources:', errorSources);
+  
+  // Check if critical functions are available
+  const criticalFunctions = [
+    'window.configManager',
+    'window.refreshVisibilityAvatars',
+    'window.setLastSeenThreshold',
+    'window.getLastSeenThreshold'
+  ];
+  
+  console.log('\n🔍 Checking critical functions:');
+  criticalFunctions.forEach(func => {
+    const available = eval(`typeof ${func} !== 'undefined'`);
+    console.log(`   ${func}: ${available ? '✅ Available' : '❌ Missing'}`);
+  });
+  
+  // Check for uncaught errors in console
+  console.log('\n🔍 Checking console for errors...');
+  console.log('   Look for "Uncaught" errors in the console above');
+  console.log('   Check for missing dependencies or syntax errors');
+  
+  return {
+    status: 'COMPLETE',
+    errorSources: errorSources,
+    criticalFunctions: criticalFunctions
+  };
+};
+
+// Safe wrapper for all diagnostic functions
+window.safeDiagnostic = function(diagnosticFunction, ...args) {
+  try {
+    console.log(`🔍 Running diagnostic: ${diagnosticFunction.name}`);
+    return diagnosticFunction(...args);
+  } catch (error) {
+    console.error(`❌ Diagnostic failed: ${diagnosticFunction.name}`, error);
+    return { status: 'FAILED', error: error.message };
+  }
+};
 
 // ===== DEBUGGING FUNCTIONS =====
 // Test function to debug visibility issues
@@ -750,7 +1020,7 @@ window.refreshVisibility = async function() {
 };
 
 // ===== EXTENSION RELOAD & BUILD TRACKING =====
-const EXTENSION_BUILD = '2025-10-12-ghost-fix'; // Updated: Fixed ghost presence on tab moves + EXIT events
+const EXTENSION_BUILD = '2025-10-14-enhanced-logging'; // Updated: Enhanced logging for inactive user visibility debugging + avatar filter fix
 const BACKEND_EXPECTED_VERSION = '1.2.4-urlnorm-fix';
 const RELOAD_TIMESTAMP = new Date().toISOString();
 console.log('🚀 EXTENSION RELOADED:', {
@@ -999,6 +1269,11 @@ class MetaLayerAPI {
 // Initialize API client
 const api = new MetaLayerAPI(METALAYER_API_URL);
 
+// Initialize YouTube Transcription Service (from main branch)
+const youtubeService = new YouTubeTranscriptionService();
+// Make API globally available for debugging
+window.api = api;
+
 // Initialize Loosely Coupled Auth Manager
 const authManager = new AuthManager(); 
 
@@ -1234,41 +1509,64 @@ async function loadCommunities() {
 // Load avatars from multiple communities and combine them
 async function loadCombinedAvatars(communityIds) {
   try {
-    console.log('🔍 VISIBILITY: Starting loadCombinedAvatars with communities:', communityIds);
+    console.log('');
+    console.log('═══════════════════════════════════════════════════════════');
+    console.log('👥 LOAD_VISIBILITY: === LOADING COMBINED AVATARS ===');
+    console.log('═══════════════════════════════════════════════════════════');
+    console.log('👥 LOAD_VISIBILITY: Communities:', communityIds);
+    console.log('👥 LOAD_VISIBILITY: Timestamp:', new Date().toISOString());
     debug(`Loading combined avatars from communities: ${communityIds.join(', ')}`);
     
     // Get normalized URL for visibility - SAME AS MESSAGES
+    console.log('');
+    console.log('📊 LOAD_VISIBILITY: Step 1 - Normalizing URL');
+    console.log('───────────────────────────────────────────────────────────');
     const urlData = await normalizeCurrentUrl();
     const currentUri = urlData.normalizedUrl; // Use normalized URL for consistency
-    console.log('🔍 VISIBILITY: Current normalized URI:', currentUri, '(from raw:', urlData.rawUrl, ')');
+    console.log('✅ LOAD_VISIBILITY: Normalized URL:', currentUri);
+    console.log('✅ LOAD_VISIBILITY: Raw URL:', urlData.rawUrl);
+    console.log('✅ LOAD_VISIBILITY: Page ID:', urlData.pageId);
     
     // Try URL-based presence first (more accurate)
     let avatarResponses = [];
     try {
-      console.log('🔍 VISIBILITY: Trying URL-based presence API for URL:', currentUri);
+      console.log('');
+      console.log('📊 LOAD_VISIBILITY: Step 2 - Fetching active users from backend');
+      console.log('───────────────────────────────────────────────────────────');
+      console.log('🌐 LOAD_VISIBILITY: Calling API with URL:', currentUri);
+      const apiStartTime = Date.now();
       const urlResponse = await api.getPresenceByUrl(currentUri, communityIds);
-      console.log('🔍 VISIBILITY: URL-based presence response:', JSON.stringify(urlResponse, null, 2));
+      const apiEndTime = Date.now();
+      console.log(`✅ LOAD_VISIBILITY: API responded in ${apiEndTime - apiStartTime}ms`);
+      console.log('🔍 LOAD_VISIBILITY: Response structure:', {
+        hasActive: !!urlResponse?.active,
+        activeCount: urlResponse?.active?.length || 0,
+        pageId: urlResponse?.pageId,
+        url: urlResponse?.url
+      });
       
       if (urlResponse && urlResponse.active && urlResponse.active.length > 0) {
         avatarResponses = [urlResponse];
-        console.log('🔍 VISIBILITY: Using URL-based presence data - found', urlResponse.active.length, 'active users');
+        console.log('');
+        console.log('✅✅✅ LOAD_VISIBILITY: Found active users ✅✅✅');
+        console.log('✅ LOAD_VISIBILITY: Count:', urlResponse.active.length);
         
         // Enhanced logging for each active user
         urlResponse.active.forEach((user, index) => {
-          console.log(`🔍 VISIBILITY: Active user ${index + 1}:`, {
-            id: user.id,
-            userId: user.userId,
-            name: user.name,
-            handle: user.handle,
+          console.log(`👤 LOAD_VISIBILITY: User ${index + 1}/${urlResponse.active.length}:`, {
             email: user.email,
-            avatarUrl: user.avatarUrl,
-            auraColor: user.auraColor,
+            name: user.name,
             isActive: user.isActive,
-            status: user.status
+            status: user.status,
+            lastSeen: user.lastSeen,
+            enterTime: user.enterTime
           });
         });
       } else {
-        console.log('🔍 VISIBILITY: No active users found via URL-based presence');
+        console.log('');
+        console.log('⚠️⚠️⚠️ LOAD_VISIBILITY: No active users on this page ⚠️⚠️⚠️');
+        console.log('⚠️ LOAD_VISIBILITY: This page has no currently active users');
+        console.log('⚠️ LOAD_VISIBILITY: Response:', JSON.stringify(urlResponse, null, 2));
         throw new Error('No active users found via URL-based presence');
       }
     } catch (urlError) {
@@ -1550,31 +1848,50 @@ async function updateVisibleTab(avatars) {
   window.currentVisibilityDataUnfiltered = { active: avatars };
   console.log(`🔍 VISIBILITY_UNFILTERED: Stored ${avatars.length} avatars (including current user) for profile avatar lookup`);
   
-  // Filter out users without avatars and current user - only show users with real avatar images
+  // Filter out ONLY the current user - show all other users regardless of avatar status
+  // CRITICAL FIX: Don't filter based on avatarUrl - users should be visible even if avatar hasn't loaded yet
+  console.log('');
+  console.log('📊 VISIBILITY: Enhanced Current User Detection Logging');
+  console.log('───────────────────────────────────────────────────────────');
+  console.log(`🔍 VISIBILITY: Current user email: ${currentUserEmail}`);
+  console.log(`🔍 VISIBILITY: Total avatars to check: ${avatars.length}`);
+  
   const usersWithAvatars = avatars.filter(avatar => {
     console.log(`🔍 VISIBILITY: Checking avatar: ${avatar.name} (${avatar.userId})`);
+    console.log(`🔍 VISIBILITY: Avatar details:`, {
+      userId: avatar.userId,
+      handle: avatar.handle,
+      name: avatar.name,
+      email: avatar.email,
+      avatarUrl: avatar.avatarUrl || 'null'
+    });
     
-    // Filter out users without valid avatars
-    if (!avatar.avatarUrl || 
-        avatar.avatarUrl === 'null' || 
-        avatar.avatarUrl === '' ||
-        !avatar.avatarUrl.startsWith('http')) {
-      console.log(`🔍 VISIBILITY: Filtering out ${avatar.name} - invalid avatar URL: ${avatar.avatarUrl}`);
-      return false;
-    }
+    // Enhanced current user detection with detailed logging
+    const userIdMatch = avatar.userId === currentUserEmail;
+    const handleMatch = avatar.handle === currentUserEmail.split('@')[0];
+    const nameMatch = avatar.name === currentUserEmail.split('@')[0];
+    const emailMatch = avatar.email === currentUserEmail;
     
-    // Check if this is the current user
-    const isCurrentUser = avatar.userId === currentUserEmail || 
-                         avatar.handle === currentUserEmail.split('@')[0] ||
-                         avatar.name === currentUserEmail.split('@')[0] ||
-                         avatar.email === currentUserEmail;
+    console.log(`🔍 VISIBILITY: Current user detection:`, {
+      userIdMatch,
+      handleMatch,
+      nameMatch,
+      emailMatch
+    });
+    
+    const isCurrentUser = userIdMatch || handleMatch || nameMatch || emailMatch;
     
     if (isCurrentUser) {
-      console.log(`🔍 VISIBILITY: Filtering out current user ${avatar.name} (${avatar.userId})`);
+      console.log(`🔍 VISIBILITY: ✅ CONFIRMED CURRENT USER - ${avatar.name} (${avatar.userId})`);
+      console.log(`🔍 VISIBILITY: Match reason: ${userIdMatch ? 'userId' : handleMatch ? 'handle' : nameMatch ? 'name' : 'email'}`);
+      
+      // CRITICAL FIX: Always filter out current user from their own visibility list
+      // The current user should not see themselves in the "Visible" list
+      console.log(`🔍 VISIBILITY: 🚫 FILTERING OUT current user from their own visibility list`);
       return false;
     }
     
-    console.log(`🔍 VISIBILITY: Keeping avatar: ${avatar.name} (${avatar.userId})`);
+    console.log(`🔍 VISIBILITY: ✅ NOT CURRENT USER - Keeping avatar: ${avatar.name} (${avatar.userId}) [avatarUrl: ${avatar.avatarUrl || 'null - will use placeholder'}]`);
     return true;
   });
   
@@ -1593,26 +1910,31 @@ async function updateVisibleTab(avatars) {
       </div>
       <ul class="item-list">
         ${usersWithAvatars.map((avatar, index) => {
-          // CRITICAL FIX: Use 30-second threshold for real-time accuracy, not 5 minutes!
-          // User is "active" if they have a heartbeat within the last 30 seconds
+          // CRITICAL FIX: Use avatar.isActive from database (set by real-time events)
+          // Don't calculate based on lastSeen timestamp - trust the database status
           const now = Date.now();
           const lastSeenTime = avatar.lastSeen ? new Date(avatar.lastSeen).getTime() : 0;
           const timeSinceLastSeen = now - lastSeenTime;
-          const isActive = timeSinceLastSeen < (30 * 1000); // 30 seconds threshold
           
-          // Check if user has explicitly left (EXIT event) or is inactive
-          const hasLeft = avatar.status === 'left' || !isActive;
+          // Use database isActive status - this is set by real-time presence events
+          const isActive = avatar.isActive === true;
+          
+          // Check if user has explicitly left or is marked inactive in database
+          const hasLeft = avatar.status === 'offline' || !isActive;
           
           // COMPREHENSIVE DIAGNOSTIC LOGGING
-          console.log(`🔍 VISIBILITY_TIMING_FIX: === User ${avatar.name} ===`);
-          console.log(`🔍 VISIBILITY_TIMING_FIX:   enterTime: ${avatar.enterTime}`);
-          console.log(`🔍 VISIBILITY_TIMING_FIX:   lastSeen: ${avatar.lastSeen}`);
-          console.log(`🔍 VISIBILITY_TIMING_FIX:   timeSinceLastSeen: ${Math.floor(timeSinceLastSeen / 1000)}s`);
-          console.log(`🔍 VISIBILITY_TIMING_FIX:   isActive: ${isActive} (threshold: 30s)`);
-          console.log(`🔍 VISIBILITY_TIMING_FIX:   hasLeft: ${hasLeft}`);
-          console.log(`🔍 VISIBILITY_TIMING_FIX:   avatar.status: ${avatar.status}`);
-          console.log(`🔍 VISIBILITY_TIMING_FIX:   avatar.isActive: ${avatar.isActive}`);
-          console.log(`🔍 VISIBILITY_TIMING_FIX:   avatar.availability: ${avatar.availability}`);
+          console.log('');
+          console.log(`🔍 VISIBILITY_STATUS: ═══ User ${avatar.name} (${avatar.userId}) ═══`);
+          console.log(`🔍 VISIBILITY_STATUS:   Build: ${EXTENSION_BUILD}`);
+          console.log(`🔍 VISIBILITY_STATUS:   avatarUrl: ${avatar.avatarUrl || 'null (will use placeholder)'}`);
+          console.log(`🔍 VISIBILITY_STATUS:   enterTime: ${avatar.enterTime}`);
+          console.log(`🔍 VISIBILITY_STATUS:   lastSeen: ${avatar.lastSeen}`);
+          console.log(`🔍 VISIBILITY_STATUS:   timeSinceLastSeen: ${Math.floor(timeSinceLastSeen / 1000)}s`);
+          console.log(`🔍 VISIBILITY_STATUS:   isActive (from DB): ${isActive}`);
+          console.log(`🔍 VISIBILITY_STATUS:   hasLeft: ${hasLeft}`);
+          console.log(`🔍 VISIBILITY_STATUS:   avatar.status: ${avatar.status}`);
+          console.log(`🔍 VISIBILITY_STATUS:   avatar.isActive: ${avatar.isActive}`);
+          console.log(`🔍 VISIBILITY_STATUS:   avatar.availability: ${avatar.availability}`);
           
           // Use the user's availability setting for status dot color
           let statusDotColor = '#6b7280'; // Default gray (offline)
@@ -1622,7 +1944,8 @@ async function updateVisibleTab(avatars) {
             // User has left - show "last seen" status
             statusDotColor = '#6b7280'; // Gray for inactive users
             statusText = formatLastSeenDisplay(avatar.lastSeen);
-            console.log(`🔍 VISIBILITY_TIMING_FIX:   DECISION: User has LEFT → "${statusText}"`);
+            console.log(`🔍 VISIBILITY_STATUS:   DECISION: User has LEFT → Status: "${statusText}"`);
+            console.log(`🔍 VISIBILITY_STATUS:   DECISION: Showing INACTIVE user with "Last seen" status`);
           } else if (isActive) {
             // User is active - use their availability setting for status dot
             if (avatar.availability === 'AVAILABLE') {
@@ -1639,10 +1962,12 @@ async function updateVisibleTab(avatars) {
               statusDotColor = '#22c55e'; // Green (Available)
               statusText = formatTimeDisplay(avatar.enterTime);
             }
-            console.log(`🔍 VISIBILITY_TIMING_FIX:   DECISION: User is ACTIVE → "${statusText}"`);
+            console.log(`🔍 VISIBILITY_STATUS:   DECISION: User is ACTIVE → Status: "${statusText}"`);
+            console.log(`🔍 VISIBILITY_STATUS:   DECISION: Showing ACTIVE user with time display`);
           }
           
-          console.log(`🔍 VISIBILITY_TIMING_FIX:   FINAL: statusText="${statusText}", dotColor=${statusDotColor}`);
+          console.log(`🔍 VISIBILITY_STATUS:   FINAL: statusText="${statusText}", dotColor=${statusDotColor}`);
+          console.log(`🔍 VISIBILITY_STATUS:   ═══════════════════════════════════════`);
           
           // Aura color is now handled by createUnifiedAvatar()
           console.log(`🔍 AURA_DEBUG: User ${avatar.name} - auraColor: ${avatar.auraColor}`);
@@ -3220,30 +3545,41 @@ function updateProfileAvatarWithRealTimeAura() {
       console.log(`🔍 PROFILE_AVATAR_UPDATE: Found real-time aura color for profile: ${realTimeAuraColor}`);
       
       // Update the profile avatar with the real-time aura color
-      const profileAvatar = document.querySelector('#user-avatar');
+      const profileAvatar = document.querySelector('#user-avatar-container');
       if (profileAvatar) {
         console.log(`🔍 PROFILE_AVATAR_UPDATE: Found profile avatar element:`, profileAvatar);
+        console.log(`🔍 PROFILE_AVATAR_UPDATE: Container innerHTML:`, profileAvatar.innerHTML);
+        console.log(`🔍 PROFILE_AVATAR_UPDATE: Container has children:`, profileAvatar.children.length);
         
-        // Check if the profile avatar has been replaced with unified avatar structure
+        // Check if the container has any avatar element
+        let avatarElement = profileAvatar.querySelector('img') || profileAvatar.querySelector('[style*="border-radius"]');
+        
+        // If no avatar element exists, check if there's a unified avatar structure
         const hasUnifiedStructure = profileAvatar.querySelector('div[style*="position: relative"]');
         
         if (hasUnifiedStructure) {
-          // If it's been replaced with unified avatar, restore the original structure
-          console.log('🔍 PROFILE_AVATAR_UPDATE: Restoring original profile avatar structure');
-          
-          // Get the original image source
-          const img = profileAvatar.querySelector('img');
-          const originalSrc = img ? img.src : 'https://lh3.googleusercontent.com/a/ACg8ocLF_0TdjZoB2Bx_dBmaVxeuLl5fqbsJrYWi7zFYSTycnLXT57s=s96-c';
-          
-          // Restore the original structure
-          profileAvatar.innerHTML = `<img src="${originalSrc}" alt="Profile Avatar" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover;">`;
+          console.log('🔍 PROFILE_AVATAR_UPDATE: Found unified avatar structure');
+          // Update the aura on the unified avatar structure
+          const auraRing = hasUnifiedStructure.querySelector('div[style*="border-radius: 50%"]');
+          if (auraRing) {
+            // Update the aura ring color
+            auraRing.style.border = `2px solid ${realTimeAuraColor}`;
+            console.log(`🔍 PROFILE_AVATAR_UPDATE: Updated unified avatar aura to: ${realTimeAuraColor}`);
+          }
+        } else if (avatarElement) {
+          console.log('🔍 PROFILE_AVATAR_UPDATE: Found simple avatar element');
+          // Update the border on the simple avatar
+          avatarElement.style.border = `2px solid ${realTimeAuraColor}`;
+          console.log(`🔍 PROFILE_AVATAR_UPDATE: Updated avatar border color to: ${realTimeAuraColor}`);
+        } else {
+          console.log('🔍 PROFILE_AVATAR_UPDATE: No avatar element found in container, applying border to container');
+          // Apply border directly to container as fallback
+          profileAvatar.style.borderColor = realTimeAuraColor;
+          profileAvatar.style.borderWidth = '2px';
+          profileAvatar.style.borderStyle = 'solid';
+          profileAvatar.style.borderRadius = '50%';
+          console.log(`🔍 PROFILE_AVATAR_UPDATE: Updated container border color to: ${realTimeAuraColor}`);
         }
-        
-        // Update the border color
-        profileAvatar.style.borderColor = realTimeAuraColor;
-        profileAvatar.style.borderWidth = '2px';
-        profileAvatar.style.borderStyle = 'solid';
-        console.log(`🔍 PROFILE_AVATAR_UPDATE: Updated profile avatar border color to: ${realTimeAuraColor}`);
       } else {
         console.log('🔍 PROFILE_AVATAR_UPDATE: Profile avatar element not found');
       }
@@ -4904,9 +5240,9 @@ async function initializeSupabaseRealtimeClient() {
     if (typeof SupabaseRealtimeClient !== 'undefined') {
       window.supabaseRealtimeClient = new SupabaseRealtimeClient();
       
-      // Initialize with Supabase credentials
-      const supabaseUrl = 'https://zwxomzkmncwzwryvudwu.supabase.co';
-      const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp3eG9temttbmN3endyeXZ1ZHd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk2Njg2ODQsImV4cCI6MjA3NTI0NDY4NH0.CoceGOzumiF6aYVGQSWily93snNYh9N9C4p8lrjrTyM';
+        // Initialize with Supabase credentials
+        const supabaseUrl = 'https://zwxomzkmncwzwryvudwu.supabase.co';
+        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp3eG9temttbmN3endyeXZ1ZHd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk2Njg2ODQsImV4cCI6MjA3NTI0NDY4NH0.CoceGOzumiF6aYVGQSWily93snNYh9N9C4p8lrjrTyM';
       
       const success = await window.supabaseRealtimeClient.initialize(supabaseUrl, supabaseKey);
       
@@ -6445,6 +6781,21 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (targetTabContent) {
         targetTabContent.classList.add('active');
         console.log(`Activated content: #${targetTabId}`);
+        
+        // Initialize specific tab functionality
+        if (targetTabId === 'agent-tab') {
+          console.log('🎯 Agent tab activated! Initializing agent...');
+          try {
+            initializeAgentTab();
+            console.log('✅ Agent tab initialization completed successfully');
+          } catch (error) {
+            console.error('❌ Error initializing agent tab:', error);
+            console.error('Error stack:', error.stack);
+          }
+        } else if (targetTabId === 'people-tab') {
+          console.log('People tab activated! Loading people data...');
+          initializePeopleTab();
+        }
       } else {
         console.error(`Content for main tab #${targetTabId} not found!`);
       }
@@ -7040,6 +7391,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
   
+  if (message.type === 'TAB_CLOSED') {
+    console.log('Tab closed:', message.tabId);
+    handleTabClosed(message.tabId);
+    return true;
+  }
+  
   return false;
 });
 
@@ -7057,15 +7414,17 @@ async function handleTabChange(tabId) {
       console.log('✅ TAB_CHANGE: Left current page successfully');
     }
     
-    // Get the current tab URL
+    // Get the SPECIFIC tab URL (not active tab, but the tab that changed)
     const tab = await chrome.tabs.get(tabId);
     if (tab && tab.url) {
       console.log('🔄 TAB_CHANGE: New tab URL:', tab.url);
       debug(`New tab URL: ${tab.url}`);
       
-      // Normalize the new URL ONCE at the top
-      await normalizeCurrentUrl();
-      console.log('🔄 TAB_CHANGE: URL normalized for new tab');
+      // CRITICAL FIX: Normalize the SPECIFIC tab URL, not the active tab
+      console.log('🔄 TAB_CHANGE: Normalizing SPECIFIC tab URL:', tab.url);
+      const newUrlData = await window.normalizeUrl(tab.url);
+      window.currentUrlData = newUrlData; // Update global state
+      console.log('🔄 TAB_CHANGE: Updated currentUrlData to:', newUrlData.pageId);
       
       // Reload chat history for the new page (uses normalized URL)
       await loadChatHistory();
@@ -7076,7 +7435,7 @@ async function handleTabChange(tabId) {
       // Start presence tracking for the new URL (uses normalized URL)
       await startPresenceTracking();
       console.log('✅ TAB_CHANGE: Tab change complete');
-  } else {
+    } else {
       console.log('⚠️ TAB_CHANGE: No tab or URL found for tab:', tabId);
       debug(`No tab or URL found for tab: ${tabId}`);
     }
@@ -7086,35 +7445,182 @@ async function handleTabChange(tabId) {
   }
 }
 
-// Handle tab updates (URL changes)
-async function handleTabUpdate(tabId, url) {
-  console.log('🔄 TAB_UPDATE: === HANDLING TAB UPDATE ===');
-  console.log('🔄 TAB_UPDATE: Tab ID:', tabId, 'URL:', url);
-  debug(`Handling tab update for tab: ${tabId}, URL: ${url}`);
+// Handle tab closed
+async function handleTabClosed(tabId) {
+  console.log('🔄 TAB_CLOSED: === HANDLING TAB CLOSURE ===');
+  console.log('🔄 TAB_CLOSED: Tab ID:', tabId);
+  debug(`Handling tab closure for tab: ${tabId}`);
   try {
-    // CRITICAL FIX: Leave current page BEFORE switching to new URL
-    // This prevents "ghost presence" where user appears on old URL for 30 seconds
+    // CRITICAL FIX: Leave current page when tab is closed
+    // This immediately marks user as inactive on the closed page
     if (window.supabaseRealtimeClient) {
-      console.log('🚪 TAB_UPDATE: Leaving current page before URL change...');
+      console.log('🚪 TAB_CLOSED: Leaving page from closed tab...');
       await window.supabaseRealtimeClient.leaveCurrentPage();
-      console.log('✅ TAB_UPDATE: Left current page successfully');
+      console.log('✅ TAB_CLOSED: Left page successfully');
     }
     
-    // Normalize the new URL ONCE at the top
-    await normalizeCurrentUrl();
-    console.log('🔄 TAB_UPDATE: URL normalized for updated tab');
+    console.log('✅ TAB_CLOSED: Tab closure handled successfully');
+  } catch (error) {
+    console.error('❌ TAB_CLOSED: Error handling tab closure:', error);
+    debug(`Error handling tab closure: ${error.message}`);
+  }
+}
+
+// Handle tab updates (URL changes)
+async function handleTabUpdate(tabId, url) {
+  console.log('');
+  console.log('═══════════════════════════════════════════════════════════');
+  console.log('🔄 TAB_UPDATE: === HANDLING TAB UPDATE ===');
+  console.log('═══════════════════════════════════════════════════════════');
+  console.log('🔄 TAB_UPDATE: Tab ID:', tabId);
+  console.log('🔄 TAB_UPDATE: New URL:', url);
+  console.log('🔄 TAB_UPDATE: Timestamp:', new Date().toISOString());
+  debug(`Handling tab update for tab: ${tabId}, URL: ${url}`);
+  
+  try {
+    // === STEP 1: LOG CURRENT STATE ===
+    console.log('');
+    console.log('📊 TAB_UPDATE: STEP 1 - Current State Before Leaving');
+    console.log('───────────────────────────────────────────────────────────');
+    console.log('🔍 TAB_UPDATE: window.currentUrlData:', JSON.stringify(window.currentUrlData, null, 2));
+    console.log('🔍 TAB_UPDATE: supabaseRealtimeClient exists:', !!window.supabaseRealtimeClient);
+    console.log('🔍 TAB_UPDATE: supabaseRealtimeClient.currentPage:', JSON.stringify(window.supabaseRealtimeClient?.currentPage, null, 2));
+    console.log('🔍 TAB_UPDATE: supabaseRealtimeClient.currentUser:', window.supabaseRealtimeClient?.currentUser?.userEmail);
+    console.log('🔍 TAB_UPDATE: supabaseRealtimeClient.isLeavingPage:', window.supabaseRealtimeClient?.isLeavingPage);
     
-    // Reload chat history for the new URL (uses normalized URL)
+    // Store old page ID BEFORE leaving (leaveCurrentPage clears it)
+    const oldPageId = window.supabaseRealtimeClient?.currentPage?.pageId;
+    const oldPageUrl = window.supabaseRealtimeClient?.currentPage?.pageUrl;
+    console.log('🔍 TAB_UPDATE: Stored old page ID:', oldPageId);
+    console.log('🔍 TAB_UPDATE: Stored old page URL:', oldPageUrl);
+    
+    // CRITICAL FIX: If currentPage is undefined, try to restore it from window.currentUrlData
+    if (!oldPageId && window.currentUrlData) {
+      console.log('🔧 TAB_UPDATE: currentPage is undefined, attempting to restore from window.currentUrlData');
+      console.log('🔧 TAB_UPDATE: window.currentUrlData:', JSON.stringify(window.currentUrlData, null, 2));
+      
+      // Try to restore currentPage state
+      if (window.supabaseRealtimeClient && window.currentUrlData.pageId) {
+        window.supabaseRealtimeClient.currentPage = {
+          pageId: window.currentUrlData.pageId,
+          pageUrl: window.currentUrlData.normalizedUrl
+        };
+        console.log('🔧 TAB_UPDATE: Restored currentPage:', JSON.stringify(window.supabaseRealtimeClient.currentPage, null, 2));
+      }
+    }
+    
+    // === STEP 2: LEAVE CURRENT PAGE ===
+    console.log('');
+    console.log('📊 TAB_UPDATE: STEP 2 - Leaving Current Page');
+    console.log('───────────────────────────────────────────────────────────');
+    if (window.supabaseRealtimeClient) {
+      if (oldPageId) {
+        console.log('🚪 TAB_UPDATE: Calling leaveCurrentPage() for:', oldPageId);
+        const leaveStartTime = Date.now();
+        await window.supabaseRealtimeClient.leaveCurrentPage();
+        const leaveEndTime = Date.now();
+        console.log(`✅ TAB_UPDATE: leaveCurrentPage() completed in ${leaveEndTime - leaveStartTime}ms`);
+        console.log('✅ TAB_UPDATE: currentPage after leaving:', window.supabaseRealtimeClient.currentPage);
+      } else {
+        console.log('⚠️ TAB_UPDATE: No old page to leave (oldPageId is null)');
+      }
+    } else {
+      console.error('❌ TAB_UPDATE: supabaseRealtimeClient not available!');
+    }
+    
+    // === STEP 3: NORMALIZE NEW URL ===
+    console.log('');
+    console.log('📊 TAB_UPDATE: STEP 3 - Normalizing New URL');
+    console.log('───────────────────────────────────────────────────────────');
+    console.log('🔄 TAB_UPDATE: Input URL from event:', url);
+    console.log('🔄 TAB_UPDATE: Calling normalizeUrl()...');
+    const normalizeStartTime = Date.now();
+    const newUrlData = await window.normalizeUrl(url);
+    const normalizeEndTime = Date.now();
+    console.log(`✅ TAB_UPDATE: normalizeUrl() completed in ${normalizeEndTime - normalizeStartTime}ms`);
+    console.log('🔍 TAB_UPDATE: Normalized result:', JSON.stringify(newUrlData, null, 2));
+    
+    // === STEP 4: COMPARE PAGE IDs ===
+    console.log('');
+    console.log('📊 TAB_UPDATE: STEP 4 - Comparing Page IDs');
+    console.log('───────────────────────────────────────────────────────────');
+    console.log('🔍 TAB_UPDATE: Old page ID:', oldPageId);
+    console.log('🔍 TAB_UPDATE: New page ID:', newUrlData.pageId);
+    console.log('🔍 TAB_UPDATE: Are they equal?', oldPageId === newUrlData.pageId);
+    console.log('🔍 TAB_UPDATE: Old page ID type:', typeof oldPageId);
+    console.log('🔍 TAB_UPDATE: New page ID type:', typeof newUrlData.pageId);
+    
+    if (oldPageId === newUrlData.pageId) {
+      console.log('');
+      console.log('⚠️⚠️⚠️ TAB_UPDATE: SAME PAGE DETECTED ⚠️⚠️⚠️');
+      console.log('⚠️ TAB_UPDATE: Skipping presence re-join to avoid reactivation');
+      console.log('⚠️ TAB_UPDATE: This prevents marking inactive then immediately active again');
+      console.log('✅ TAB_UPDATE: Tab update complete (same page, no action needed)');
+      console.log('═══════════════════════════════════════════════════════════');
+      console.log('');
+      return;
+    }
+    
+    // === STEP 5: UPDATE GLOBAL STATE ===
+    console.log('');
+    console.log('📊 TAB_UPDATE: STEP 5 - Updating Global State');
+    console.log('───────────────────────────────────────────────────────────');
+    console.log('🔄 TAB_UPDATE: Setting window.currentUrlData to new page:', newUrlData.pageId);
+    window.currentUrlData = newUrlData;
+    console.log('✅ TAB_UPDATE: Global state updated');
+    
+    // === STEP 6: RELOAD CHAT HISTORY ===
+    console.log('');
+    console.log('📊 TAB_UPDATE: STEP 6 - Reloading Chat History');
+    console.log('───────────────────────────────────────────────────────────');
+    const chatStartTime = Date.now();
     await loadChatHistory();
-    // Update visibility list for the new URL (uses normalized URL)
+    const chatEndTime = Date.now();
+    console.log(`✅ TAB_UPDATE: Chat history loaded in ${chatEndTime - chatStartTime}ms`);
+    
+    // === STEP 7: UPDATE VISIBILITY LIST ===
+    console.log('');
+    console.log('📊 TAB_UPDATE: STEP 7 - Updating Visibility List');
+    console.log('───────────────────────────────────────────────────────────');
     const result = await chrome.storage.local.get(['activeCommunities']);
     const activeCommunities = result.activeCommunities || ['comm-001'];
+    console.log('🔍 TAB_UPDATE: Active communities:', activeCommunities);
+    const visibilityStartTime = Date.now();
     await loadCombinedAvatars(activeCommunities);
-    // Start presence tracking for the new URL (uses normalized URL)
+    const visibilityEndTime = Date.now();
+    console.log(`✅ TAB_UPDATE: Visibility list updated in ${visibilityEndTime - visibilityStartTime}ms`);
+    
+    // === STEP 8: START PRESENCE TRACKING ===
+    console.log('');
+    console.log('📊 TAB_UPDATE: STEP 8 - Starting Presence Tracking');
+    console.log('───────────────────────────────────────────────────────────');
+    console.log('🔄 TAB_UPDATE: Calling startPresenceTracking() for new page:', newUrlData.pageId);
+    const presenceStartTime = Date.now();
     await startPresenceTracking();
-    console.log('✅ TAB_UPDATE: Tab update complete');
+    const presenceEndTime = Date.now();
+    console.log(`✅ TAB_UPDATE: Presence tracking started in ${presenceEndTime - presenceStartTime}ms`);
+    
+    // === FINAL STATE ===
+    console.log('');
+    console.log('📊 TAB_UPDATE: FINAL STATE');
+    console.log('───────────────────────────────────────────────────────────');
+    console.log('🔍 TAB_UPDATE: window.currentUrlData:', JSON.stringify(window.currentUrlData, null, 2));
+    console.log('🔍 TAB_UPDATE: supabaseRealtimeClient.currentPage:', JSON.stringify(window.supabaseRealtimeClient?.currentPage, null, 2));
+    console.log('🔍 TAB_UPDATE: supabaseRealtimeClient.isLeavingPage:', window.supabaseRealtimeClient?.isLeavingPage);
+    
+    console.log('');
+    console.log('✅✅✅ TAB_UPDATE: COMPLETE ✅✅✅');
+    console.log('═══════════════════════════════════════════════════════════');
+    console.log('');
   } catch (error) {
-    console.error('❌ TAB_UPDATE: Error handling tab update:', error);
+    console.log('');
+    console.log('❌❌❌ TAB_UPDATE: ERROR ❌❌❌');
+    console.log('═══════════════════════════════════════════════════════════');
+    console.error('❌ TAB_UPDATE: Error details:', error);
+    console.error('❌ TAB_UPDATE: Error message:', error.message);
+    console.error('❌ TAB_UPDATE: Error stack:', error.stack);
+    console.log('═══════════════════════════════════════════════════════════');
+    console.log('');
     debug(`Error handling tab update: ${error.message}`);
   }
 }
@@ -7382,6 +7888,20 @@ async function normalizeCurrentUrl() {
   }
 }
 
+// Expose normalizeCurrentUrl globally for diagnostic tools
+window.normalizeUrl = async function(url) {
+  // Temporarily store the URL to normalize
+  const originalGetter = getCurrentPageUri;
+  getCurrentPageUri = async () => url;
+  
+  try {
+    const result = await normalizeCurrentUrl();
+    return result;
+  } finally {
+    getCurrentPageUri = originalGetter;
+  }
+};
+
 // Legacy function for backward compatibility - now uses centralized normalization
 async function generatePageId(uri) {
   const urlData = await normalizeCurrentUrl();
@@ -7631,6 +8151,689 @@ function formatLastSeenDisplay(lastSeen) {
     return `Last seen ${diffDays} day${diffDays === 1 ? '' : 's'} ago`;
   }
 }
+
+// ===== AGENT FUNCTIONALITY =====
+// Agent tab functionality for AI-powered page analysis
+
+
+let pageContentCache = null;
+let contentHash = null;
+let cachedChunks = [];
+
+// --- Agent Functions ---
+async function testAgent(message) {
+  console.log("🤖 testAgent called with message:", message);
+  if (!message.trim()) return;
+  
+  // Add user message to output
+  addMessageToAgentOutput('You', message, true);
+  
+  // Show loading
+  const loadingId = addMessageToAgentOutput('Agent', 'Thinking...', false, true);
+  console.log("🤖 Loading message added with ID:", loadingId);
+  
+  try {
+    // Check if we have page content, if not try to load it
+    if (!pageContentCache) {
+      await loadPageContent();
+      
+      // Wait a bit for content to load
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+    
+    // Debug: Log page content cache
+    console.log('🔍 Page content cache:', pageContentCache);
+    console.log('🔍 Is YouTube:', pageContentCache?.isYouTube);
+    console.log('🔍 Video data:', pageContentCache?.videoData);
+    console.log('🔍 Current URL:', window.location.href);
+    console.log('🔍 Page title:', document.title);
+    
+    // Check if this is a YouTube video and handle accordingly
+    if (pageContentCache && pageContentCache.isYouTube && pageContentCache.videoData) {
+      console.log('🎥 Processing YouTube video request...');
+      const response = await handleYouTubeVideoRequest(message, pageContentCache.videoData);
+      removeLoadingMessage(loadingId);
+      addMessageToAgentOutput('Agent', response, false);
+    } else {
+      // Fallback: Check if we're on a YouTube page even if content script didn't detect it
+      const isYouTubeFallback = window.location.hostname.includes('youtube.com') && window.location.pathname.includes('/watch');
+      if (isYouTubeFallback) {
+        console.log('🎥 YouTube fallback detection - processing as YouTube video...');
+        const videoId = new URLSearchParams(window.location.search).get('v');
+        if (videoId) {
+          const fallbackVideoData = {
+            videoId: videoId,
+            title: document.title.replace(' - YouTube', ''),
+            description: 'YouTube video',
+            channel: { name: 'YouTube' },
+            duration: 'Unknown',
+            views: 'Unknown',
+            likes: 'Unknown',
+            publishedDate: 'Unknown',
+            tags: []
+          };
+          const response = await handleYouTubeVideoRequest(message, fallbackVideoData);
+          removeLoadingMessage(loadingId);
+          addMessageToAgentOutput('Agent', response, false);
+          return;
+        }
+      }
+      
+      console.log('📄 Processing regular page content...');
+      // Regular page content processing
+      const response = await callDeepSeekAPI(message);
+      removeLoadingMessage(loadingId);
+      addMessageToAgentOutput('Agent', response, false);
+    }
+  } catch (error) {
+    removeLoadingMessage(loadingId);
+    addMessageToAgentOutput('Agent', `Error: ${error.message}`, false);
+  }
+}
+
+// Handle YouTube video requests
+async function handleYouTubeVideoRequest(message, videoData) {
+  try {
+    console.log('🎥 Processing YouTube video:', videoData.title);
+    
+    // First, try to get transcript and process the video
+    const processedVideo = await youtubeService.processYouTubeVideo(videoData);
+    
+    // Create context for AI with video information
+    const context = {
+      videoTitle: videoData.title,
+      videoDescription: videoData.description,
+      channelName: videoData.channel?.name,
+      duration: videoData.duration,
+      views: videoData.views,
+      transcript: processedVideo.transcript,
+      summary: processedVideo.summary,
+      keyPoints: processedVideo.keyPoints,
+      questions: processedVideo.questions,
+      userQuestion: message,
+      timestamp: new Date().toISOString()
+    };
+
+    // Debug: Log what we're sending to the AI
+    console.log('🤖 Sending to AI agent:', {
+      message: message,
+      context: context,
+      type: 'youtube_analysis',
+      hasTranscript: !!context.transcript,
+      transcriptLength: context.transcript?.length || 0
+    });
+    
+    // Send to AI agent with YouTube context
+    const response = await fetch(AGENT_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        message: message,
+        context: context,
+        type: 'youtube_analysis',
+        videoData: videoData
+      })
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `API error: ${response.status} ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    return data.response;
+  } catch (error) {
+    console.error('❌ Error processing YouTube video:', error);
+    
+    // Fallback response if transcription fails
+    return `I detected this is a YouTube video: "${videoData.title}" by ${videoData.channel?.name || 'Unknown Channel'}.
+
+However, I'm having trouble accessing the video transcript at the moment. This could be because:
+- The video doesn't have captions available
+- The transcription service is temporarily unavailable
+- The video is private or restricted
+
+You can still ask me general questions about the video based on the title and description, or try refreshing the page and asking again.`;
+  }
+}
+
+async function callDeepSeekAPI(userMessage) {
+  console.log("🤖 callDeepSeekAPI called with message:", userMessage);
+  // Find relevant content chunks using RAG
+  const relevantChunks = findRelevantChunks(userMessage);
+  console.log("🤖 Found relevant chunks:", relevantChunks.length);
+  
+  // Prepare context for the AI
+  const context = {
+    pageTitle: pageContentCache?.title || 'Current Page',
+    pageUrl: pageContentCache?.url || '',
+    relevantContent: relevantChunks,
+    userQuestion: userMessage,
+    timestamp: new Date().toISOString()
+  };
+  
+  // If no page content is available, provide a helpful message
+  if (!pageContentCache) {
+    return `I'm unable to access the current page content to determine what it's about. The system indicates that no page content is available for me to analyze.
+
+You might want to:
+- Refresh the page to see if content loads
+- Check if there are any loading errors
+- Navigate to a different page
+- Or you could tell me what page you're viewing and I can try to help based on that information
+
+Is there a specific topic or question I can assist you with directly?`;
+  }
+  
+  // Create a limited version of page content to avoid payload size issues
+  const limitedPageContent = {
+    title: pageContentCache.title,
+    url: pageContentCache.url,
+    content: {
+      full: limitContentSize(pageContentCache.content.full, 2000),
+      chunks: pageContentCache.content.chunks.slice(0, 3) // Only send top 3 chunks
+    },
+    metadata: pageContentCache.metadata
+  };
+
+  console.log("🤖 Making fetch request to:", AGENT_API_URL);
+  console.log("🤖 Request payload:", {
+    message: userMessage,
+    context: context,
+    pageContent: limitedPageContent
+  });
+  
+  const response = await fetch(AGENT_API_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      message: userMessage,
+      context: context,
+      pageContent: limitedPageContent
+    })
+  });
+  
+  console.log("🤖 API response status:", response.status, response.statusText);
+  
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || `API error: ${response.status} ${response.statusText}`);
+  }
+  
+  const data = await response.json();
+  return data.response;
+}
+
+function findRelevantChunks(userMessage) {
+  if (!cachedChunks || cachedChunks.length === 0) {
+    return [];
+  }
+  
+  // Simple keyword-based relevance scoring
+  const messageWords = userMessage.toLowerCase().split(/\s+/);
+  const relevantChunks = [];
+  
+  cachedChunks.forEach((chunk, index) => {
+    const chunkText = chunk.toLowerCase();
+    let relevanceScore = 0;
+    
+    // Count keyword matches
+    messageWords.forEach(word => {
+      if (word.length > 2) { // Ignore short words
+        const matches = (chunkText.match(new RegExp(word, 'g')) || []).length;
+        relevanceScore += matches;
+      }
+    });
+    
+    // Boost score for chunks with question words
+    const questionWords = ['what', 'how', 'why', 'when', 'where', 'who'];
+    questionWords.forEach(qWord => {
+      if (chunkText.includes(qWord) && messageWords.includes(qWord)) {
+        relevanceScore += 2;
+      }
+    });
+    
+    if (relevanceScore > 0) {
+      relevantChunks.push({
+        chunk: chunk,
+        score: relevanceScore,
+        index: index
+      });
+    }
+  });
+  
+  // Sort by relevance score and return top 3-5 chunks
+  return relevantChunks
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 5)
+    .map(item => item.chunk);
+}
+
+// Helper function to limit content size for API calls
+function limitContentSize(content, maxLength = 2000) {
+  if (!content) return '';
+  if (content.length <= maxLength) return content;
+  return content.substring(0, maxLength) + '...';
+}
+
+function addMessageToAgentOutput(sender, message, isUser = false, isLoading = false) {
+  const agentOutput = document.getElementById('agent-output');
+  if (!agentOutput) return null;
+  
+  const messageDiv = document.createElement('div');
+  messageDiv.className = `agent-message ${isUser ? 'user-message' : ''}`;
+  
+  if (isLoading) {
+    messageDiv.className += ' agent-loading';
+    messageDiv.id = 'loading-' + Date.now();
+  }
+  
+  const timestamp = new Date().toLocaleTimeString();
+  
+  messageDiv.innerHTML = `
+    <div class="message-header">
+      <span class="sender">${sender}</span>
+      <span class="timestamp">${timestamp}</span>
+      </div>
+    <div class="message-content">${formatMarkdown(message)}</div>
+  `;
+  
+  agentOutput.appendChild(messageDiv);
+  agentOutput.scrollTop = agentOutput.scrollHeight;
+  
+  return messageDiv.id;
+}
+
+function removeLoadingMessage(loadingId) {
+  if (loadingId) {
+    const loadingElement = document.getElementById(loadingId);
+    if (loadingElement) {
+      loadingElement.remove();
+    }
+  }
+}
+
+function formatMarkdown(text) {
+  return text
+    .replace(/### (.*$)/gim, '<h3>$1</h3>')
+    .replace(/## (.*$)/gim, '<h2>$1</h2>')
+    .replace(/# (.*$)/gim, '<h1>$1</h1>')
+    .replace(/\*\*(.*)\*\*/gim, '<strong>$1</strong>')
+    .replace(/\*(.*)\*/gim, '<em>$1</em>')
+    .replace(/\n/gim, '<br>');
+}
+
+async function loadPageContent() {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    console.log('Loading page content for tab:', tab?.url);
+    
+    if (tab && tab.url && !tab.url.startsWith('chrome://') && !tab.url.startsWith('chrome-extension://')) {
+      // Try to inject content script if it's not already loaded
+      try {
+        await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          files: ['content.js']
+        });
+        console.log('Content script injected successfully');
+      } catch (injectError) {
+        console.log('Content script injection failed (may already be loaded):', injectError.message);
+      }
+      
+      // Wait a bit for content script to load
+      setTimeout(() => {
+        chrome.tabs.sendMessage(tab.id, { action: 'extractPageContent' }, (response) => {
+          if (chrome.runtime.lastError) {
+            console.log('Error getting page content:', chrome.runtime.lastError);
+            // Set a fallback page content for pages where content script can't run
+            setFallbackPageContent(tab);
+            return;
+          }
+          
+          if (response && response.content) {
+            console.log('Page content loaded successfully:', response.content.title);
+            // Check if content has changed (different hash)
+            const newHash = response.content.contentHash;
+            if (contentHash !== newHash) {
+              contentHash = newHash;
+              pageContentCache = response.content;
+              cachedChunks = response.content.content.chunks || [];
+              
+              // Update agent welcome message with page info
+              updateAgentWelcomeWithPageInfo(response.content);
+            }
+          } else {
+            console.log('No content received, using fallback');
+            setFallbackPageContent(tab);
+          }
+        });
+      }, 500);
+    } else {
+      // For chrome:// pages or extension pages, set fallback content
+      console.log('Using fallback content for:', tab?.url);
+      setFallbackPageContent(tab);
+    }
+  } catch (error) {
+    console.log('Error loading page content:', error);
+    setFallbackPageContent(null);
+  }
+}
+
+function setFallbackPageContent(tab) {
+  const fallbackContent = {
+    title: tab ? tab.title : 'Current Page',
+    url: tab ? tab.url : 'unknown',
+    content: {
+      full: tab ? `This page is titled "${tab.title}" and is located at ${tab.url}. The page content is not available for detailed analysis, but I can still help you with general questions about the page or assist with other topics.` : 'Page content is not available for analysis.',
+      chunks: tab ? [`Page title: ${tab.title}`, `Page URL: ${tab.url}`, 'Content analysis limited'] : ['Page content not available']
+    },
+    metadata: {
+      description: 'Page content analysis is limited'
+    },
+    contentHash: 'fallback-' + Date.now()
+  };
+  
+  pageContentCache = fallbackContent;
+  cachedChunks = fallbackContent.content.chunks;
+  
+  // Update agent welcome message
+  updateAgentWelcomeWithPageInfo(fallbackContent);
+}
+
+function updateAgentWelcomeWithPageInfo(pageData) {
+  const agentOutput = document.getElementById('agent-output');
+  if (!agentOutput) return;
+  
+  // Update welcome message with page-specific info
+  const welcomeElement = agentOutput.querySelector('.agent-welcome');
+  if (welcomeElement) {
+    const isFallback = pageData.contentHash && pageData.contentHash.startsWith('fallback-');
+    const isYouTube = pageData.isYouTube && pageData.videoData;
+    
+    if (isYouTube) {
+      // YouTube-specific welcome message
+      welcomeElement.innerHTML = `
+        <h4>🎥 YouTube Video Detected!</h4>
+        <p>I can analyze this YouTube video and provide summaries, key points, and answer questions about its content.</p>
+        <div class="youtube-info">
+          <strong>📺 ${pageData.videoData.title}</strong>
+          <p><strong>Channel:</strong> ${pageData.videoData.channel?.name || 'Unknown'}</p>
+          <p><strong>Duration:</strong> ${pageData.videoData.duration || 'Unknown'}</p>
+          <p><strong>Views:</strong> ${pageData.videoData.views || 'Unknown'}</p>
+        </div>
+        <div class="agent-suggestions">
+          <button class="suggestion-btn youtube-btn" data-question="Summarize this video">📝 Summarize this video</button>
+          <button class="suggestion-btn youtube-btn" data-question="What are the key points in this video?">🔑 Key points</button>
+          <button class="suggestion-btn youtube-btn" data-question="What questions should I ask about this video?">❓ Generate questions</button>
+          <button class="suggestion-btn youtube-btn" data-question="Explain the main concepts in this video">💡 Main concepts</button>
+          <button class="suggestion-btn youtube-btn" data-question="What is this video about?">🎯 What's this about?</button>
+        </div>
+      `;
+    } else {
+      // Regular page welcome message
+      welcomeElement.innerHTML = `
+        <h4>🤖 AI Agent Ready</h4>
+        <p>I can help you understand and discuss the content on this page. Ask me anything!</p>
+        <div class="page-info">
+          <strong>📄 ${pageData.title}</strong>
+          <p>${pageData.content.full.substring(0, 200)}...</p>
+          ${isFallback ? '<p style="color: #ffc107; font-size: 0.9em;">⚠️ Page content analysis is limited on this page.</p>' : ''}
+        </div>
+        <div class="agent-suggestions">
+          <button class="suggestion-btn" data-question="What is this page about?">What is this page about?</button>
+          <button class="suggestion-btn" data-question="Summarize the main points">Summarize the main points</button>
+          <button class="suggestion-btn" data-question="What are the key takeaways?">What are the key takeaways?</button>
+          <button class="suggestion-btn" data-question="Explain this in simple terms">Explain this in simple terms</button>
+          <button class="suggestion-btn" data-question="What questions should I ask about this?">What questions should I ask?</button>
+        </div>
+      `;
+    }
+    
+    // Re-add event listeners to suggestion buttons
+    const suggestionButtons = agentOutput.querySelectorAll('.suggestion-btn');
+    suggestionButtons.forEach(button => {
+      button.addEventListener('click', () => {
+        const question = button.getAttribute('data-question');
+        console.log("Suggestion button clicked:", question);
+        testAgent(question);
+      });
+    });
+  }
+}
+
+function initializeAgentTab() {
+  console.log("=== INITIALIZING AGENT TAB ===");
+  console.log("🔍 Current URL:", window.location.href);
+  console.log("🔍 Document ready state:", document.readyState);
+  
+  // Load page content for the agent
+  console.log("📄 Loading page content...");
+  loadPageContent();
+  
+  // Get agent element references
+  console.log("🔍 Getting agent element references...");
+  const agentInput = document.getElementById('agent-input');
+  const agentSendButton = document.getElementById('agent-send-btn');
+  const agentOutput = document.getElementById('agent-output');
+  const agentClearButton = document.getElementById('agent-clear-btn');
+  const agentRefreshButton = document.getElementById('agent-refresh-btn');
+  
+  console.log("🔍 Agent elements found:", {
+    agentInput: !!agentInput,
+    agentSendButton: !!agentSendButton,
+    agentOutput: !!agentOutput,
+    agentClearButton: !!agentClearButton,
+    agentRefreshButton: !!agentRefreshButton
+  });
+  
+  // Check if elements exist
+  if (!agentInput) console.error("❌ agent-input element not found!");
+  if (!agentSendButton) console.error("❌ agent-send-btn element not found!");
+  if (!agentOutput) console.error("❌ agent-output element not found!");
+  if (!agentClearButton) console.error("❌ agent-clear-btn element not found!");
+  if (!agentRefreshButton) console.error("❌ agent-refresh-btn element not found!");
+  
+  // Initialize agent output if not already done
+  if (agentOutput && !agentOutput.querySelector('.agent-welcome')) {
+    console.log("Setting up agent output...");
+    agentOutput.innerHTML = `
+      <div class="agent-welcome">
+        <h4>🤖 AI Agent Ready</h4>
+        <p>I can help you understand and discuss the content on this page. Ask me anything!</p>
+        <div class="agent-suggestions">
+          <button class="suggestion-btn" data-question="What is this page about?">What is this page about?</button>
+          <button class="suggestion-btn" data-question="Summarize the main points">Summarize the main points</button>
+          <button class="suggestion-btn" data-question="What are the key takeaways?">What are the key takeaways?</button>
+          <button class="suggestion-btn" data-question="Explain this in simple terms">Explain this in simple terms</button>
+          <button class="suggestion-btn" data-question="What questions should I ask about this?">What questions should I ask?</button>
+              </div>
+    </div>
+  `;
+  
+    // Add event listeners to suggestion buttons
+    const suggestionButtons = agentOutput.querySelectorAll('.suggestion-btn');
+    suggestionButtons.forEach(button => {
+      button.addEventListener('click', () => {
+        const question = button.getAttribute('data-question');
+        console.log("Suggestion button clicked:", question);
+        testAgent(question);
+    });
+  });
+    console.log("Agent welcome message set up!");
+  }
+  
+  // Set up send button if not already done
+  if (agentSendButton && !agentSendButton.hasAttribute('data-initialized')) {
+    console.log("🔘 Setting up send button...");
+    agentSendButton.addEventListener('click', () => {
+      console.log('🔘 Send button clicked!');
+      const message = agentInput.value.trim();
+      if (message) {
+        console.log('📤 Sending message:', message);
+        testAgent(message);
+        agentInput.value = '';
+      } else {
+        console.log('⚠️ No message to send');
+      }
+    });
+    agentSendButton.setAttribute('data-initialized', 'true');
+    console.log("✅ Send button event listener attached");
+  } else if (agentSendButton) {
+    console.log("ℹ️ Send button already initialized");
+  }
+  
+  // Set up input field if not already done
+  if (agentInput && !agentInput.hasAttribute('data-initialized')) {
+    agentInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        const message = agentInput.value.trim();
+        if (message) {
+          testAgent(message);
+          agentInput.value = '';
+        }
+      }
+    });
+    agentInput.setAttribute('data-initialized', 'true');
+  }
+  
+  // Set up Clear button
+  if (agentClearButton && !agentClearButton.hasAttribute('data-initialized')) {
+    agentClearButton.addEventListener('click', () => {
+      console.log('Clear button clicked!');
+      if (agentOutput) {
+        agentOutput.innerHTML = `
+          <div class="agent-welcome">
+            <h4>🤖 AI Agent Ready</h4>
+            <p>I can help you understand and discuss the content on this page. Ask me anything!</p>
+            <div class="agent-suggestions">
+              <button class="suggestion-btn" data-question="What is this page about?">What is this page about?</button>
+              <button class="suggestion-btn" data-question="Summarize the main points">Summarize the main points</button>
+              <button class="suggestion-btn" data-question="What are the key takeaways?">What are the key takeaways?</button>
+              <button class="suggestion-btn" data-question="Explain this in simple terms">Explain this in simple terms</button>
+              <button class="suggestion-btn" data-question="What questions should I ask about this?">What questions should I ask?</button>
+              </div>
+    </div>
+  `;
+  
+        // Re-add event listeners to suggestion buttons
+        const suggestionButtons = agentOutput.querySelectorAll('.suggestion-btn');
+        suggestionButtons.forEach(button => {
+          button.addEventListener('click', () => {
+            const question = button.getAttribute('data-question');
+            testAgent(question);
+    });
+    });
+    agentClearButton.setAttribute('data-initialized', 'true');
+  }
+  
+  // Set up Refresh button
+  if (agentRefreshButton && !agentRefreshButton.hasAttribute('data-initialized')) {
+    agentRefreshButton.addEventListener('click', () => {
+      console.log('Refresh button clicked!');
+      // Reload page content
+      loadPageContent();
+      // Show a brief message
+      if (agentOutput) {
+        const refreshMessage = document.createElement('div');
+        refreshMessage.className = 'agent-message';
+        refreshMessage.innerHTML = `
+          <div class="message-header">
+            <span class="sender">Agent</span>
+            <span class="timestamp">${new Date().toLocaleTimeString()}</span>
+          </div>
+          <div class="message-content">Page content refreshed! I now have the latest information from this page.</div>
+        `;
+        agentOutput.appendChild(refreshMessage);
+        agentOutput.scrollTop = agentOutput.scrollHeight;
+      }
+    });
+    agentRefreshButton.setAttribute('data-initialized', 'true');
+  }
+  
+  // Load page content
+  loadPageContent();
+  
+  console.log('=== AGENT TAB INITIALIZATION COMPLETE ===');
+  })
+}
+}
+
+// Debug function for testing agent functionality
+function debugAgentTab() {
+  console.log("🔍 DEBUG: Agent Tab Status");
+  console.log("🔍 Current tab:", document.querySelector('.main-nav-tab.active')?.getAttribute('data-tab'));
+  console.log("🔍 Agent tab element:", document.getElementById('agent-tab'));
+  console.log("🔍 Agent tab visible:", document.getElementById('agent-tab')?.classList.contains('active'));
+  console.log("🔍 Agent input:", document.getElementById('agent-input'));
+  console.log("🔍 Agent output:", document.getElementById('agent-output'));
+  console.log("🔍 Agent send button:", document.getElementById('agent-send-btn'));
+  console.log("🔍 YouTube service:", typeof youtubeService);
+  console.log("🔍 AGENT_API_URL:", AGENT_API_URL);
+  
+  // Test if we can manually initialize
+  try {
+    console.log("🧪 Testing manual initialization...");
+    initializeAgentTab();
+    console.log("✅ Manual initialization successful");
+  } catch (error) {
+    console.error("❌ Manual initialization failed:", error);
+  }
+}
+
+// Make debug function globally available
+window.debugAgentTab = debugAgentTab;
+
+// Alternative simple debug function
+window.debugAgent = function() {
+  console.log("🔍 Simple Agent Debug:");
+  console.log("Agent tab element:", document.getElementById('agent-tab'));
+  console.log("Agent input:", document.getElementById('agent-input'));
+  console.log("Agent output:", document.getElementById('agent-output'));
+  console.log("Current active tab:", document.querySelector('.main-nav-tab.active')?.getAttribute('data-tab'));
+  console.log("Agent tab visible:", document.getElementById('agent-tab')?.classList.contains('active'));
+  
+  // Try to manually switch to agent tab
+  const agentTab = document.querySelector('[data-tab="agent-tab"]');
+  if (agentTab) {
+    console.log("🎯 Found agent tab button, clicking...");
+    agentTab.click();
+  } else {
+    console.error("❌ Agent tab button not found!");
+  }
+};
+
+console.log("🔧 Debug functions loaded: debugAgentTab(), debugAgent()");
+
+// Immediate debug function that works even if script isn't fully loaded
+window.quickDebug = function() {
+  console.log("🚀 Quick Debug - Agent Tab Status:");
+  console.log("Document ready:", document.readyState);
+  console.log("Agent tab button:", document.querySelector('[data-tab="agent-tab"]'));
+  console.log("Agent tab content:", document.getElementById('agent-tab'));
+  console.log("Active tab:", document.querySelector('.main-nav-tab.active')?.textContent);
+  
+  // Check if we can find the agent tab button and click it
+  const agentButton = document.querySelector('[data-tab="agent-tab"]');
+  if (agentButton) {
+    console.log("✅ Agent button found, attempting click...");
+    agentButton.click();
+  } else {
+    console.error("❌ Agent button not found!");
+  }
+};
+
+// Auto-run quick debug when script loads
+setTimeout(() => {
+  console.log("🔧 Auto-running quick debug...");
+  if (typeof window.quickDebug === 'function') {
+    window.quickDebug();
+  }
+}, 1000);
 
 // ===== MOCK DATA FOR TESTING MULTI-USER SCENARIOS =====
 // Use these functions in the browser console to test different user perspectives

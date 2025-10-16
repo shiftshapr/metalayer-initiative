@@ -11,28 +11,34 @@
         development: {
           apiUrl: 'https://api.themetalayer.org',
           wsUrl: 'wss://api.themetalayer.org/ws',
-          supabaseUrl: 'https://zwxomzkmncwzwryvudwu.supabase.co',
+          supabaseUrl: 'https://bvshfzikwwjasluumfkr.supabase.co',
           supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp3eG9temttbmN3endyeXZ1ZHd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk2Njg2ODQsImV4cCI6MjA3NTI0NDY4NH0.CoceGOzumiF6aYVGQSWily93snNYh9N9C4p8lrjrTyM',
           debugMode: true,
-          logLevel: 'debug'
+          logLevel: 'debug',
+          // User-configurable settings
+          lastSeenThresholdDays: 30 // Default: 1 month (30 days)
         },
         // Production
         production: {
           apiUrl: 'https://api.themetalayer.org',
           wsUrl: 'wss://api.themetalayer.org/ws',
-          supabaseUrl: 'https://zwxomzkmncwzwryvudwu.supabase.co',
+          supabaseUrl: 'https://bvshfzikwwjasluumfkr.supabase.co',
           supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp3eG9temttbmN3endyeXZ1ZHd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk2Njg2ODQsImV4cCI6MjA3NTI0NDY4NH0.CoceGOzumiF6aYVGQSWily93snNYh9N9C4p8lrjrTyM',
           debugMode: false,
-          logLevel: 'error'
+          logLevel: 'error',
+          // User-configurable settings
+          lastSeenThresholdDays: 30 // Default: 1 month (30 days)
         },
         // Staging
         staging: {
           apiUrl: 'https://api.themetalayer.org/staging',
           wsUrl: 'wss://api.themetalayer.org/staging/ws',
-          supabaseUrl: 'https://zwxomzkmncwzwryvudwu.supabase.co',
+          supabaseUrl: 'https://bvshfzikwwjasluumfkr.supabase.co',
           supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp3eG9temttbmN3endyeXZ1ZHd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk2Njg2ODQsImV4cCI6MjA3NTI0NDY4NH0.CoceGOzumiF6aYVGQSWily93snNYh9N9C4p8lrjrTyM',
           debugMode: true,
-          logLevel: 'info'
+          logLevel: 'info',
+          // User-configurable settings
+          lastSeenThresholdDays: 30 // Default: 1 month (30 days)
         }
       };
       
@@ -101,6 +107,50 @@
     updateConfig(updates) {
       this.activeConfig = { ...this.activeConfig, ...updates };
       console.log('🔧 CONFIG: Configuration updated:', updates);
+    }
+
+    // Get configurable threshold settings
+    getLastSeenThreshold() {
+      const days = this.activeConfig.lastSeenThresholdDays || 30;
+      
+      // Convert to milliseconds
+      const totalMs = days * 24 * 60 * 60 * 1000;
+      
+      console.log(`🔧 CONFIG: Last seen threshold: ${days} days (${totalMs}ms)`);
+      return totalMs;
+    }
+
+    // Set configurable threshold settings
+    setLastSeenThreshold(days) {
+      this.activeConfig.lastSeenThresholdDays = days;
+      
+      console.log(`🔧 CONFIG: Last seen threshold updated: ${days} days`);
+      
+      // Store in Chrome storage for persistence
+      if (typeof chrome !== 'undefined' && chrome.storage) {
+        chrome.storage.local.set({
+          lastSeenThresholdDays: days
+        });
+      }
+    }
+
+    // Load user settings from Chrome storage
+    async loadUserSettings() {
+      if (typeof chrome !== 'undefined' && chrome.storage) {
+        try {
+          const result = await chrome.storage.local.get(['lastSeenThresholdDays']);
+          
+          if (result.lastSeenThresholdDays !== undefined) {
+            this.activeConfig.lastSeenThresholdDays = result.lastSeenThresholdDays;
+            
+            console.log('🔧 CONFIG: User settings loaded from storage:', {
+              days: result.lastSeenThresholdDays
+            });
+          }
+        } catch (error) {
+          console.error('🔧 CONFIG: Failed to load user settings:', error);
+        }
+      }
     }
 
     // Environment-specific feature flags

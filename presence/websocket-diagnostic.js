@@ -23,7 +23,7 @@ window.websocketDiagnostic = {
     // Check Supabase client
     console.log('✅ DIAGNOSTIC: supabaseRealtimeClient found');
     console.log('📊 DIAGNOSTIC: Supabase URL:', client.supabase?.supabaseUrl);
-    console.log('📊 DIAGNOSTIC: Realtime URL:', client.supabase?.realtime Url);
+    console.log('📊 DIAGNOSTIC: Realtime URL:', client.supabase?.realtimeUrl);
     
     // Check channels
     if (!client.channels || client.channels.size === 0) {
@@ -300,4 +300,6 @@ setTimeout(() => {
   console.log('\n🤖 AUTO-DIAGNOSTIC: Running automatic check...');
   window.websocketDiagnostic.checkConnection();
 }, 3000);
+
+
 

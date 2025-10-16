@@ -254,3 +254,5 @@ console.log('✅ Real-time diagnostics loaded!');
 console.log('💡 Run: window.realtimeDiagnostics.fullReport()');
 console.log('💡 Or: window.realtimeDiagnostics.checkSubscriptions()');
 
+
+

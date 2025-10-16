@@ -383,3 +383,5 @@ This confirms that real-time events are NOT firing. If they were, the frontend w
 **Confidence Level:** High (85%)  
 **Recommended Action:** Check WAL level first, then RLS policies second
 
+
+

@@ -54,7 +54,7 @@ window.runFullDiagnostics = async function() {
   console.log('📋 TEST 2: Database Read Access (RLS Test)');
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   
-  const rls Test = {
+  const rlsTest = {
     name: 'RLS Read Access',
     passed: false,
     details: {}
@@ -383,4 +383,6 @@ console.log('Available functions:');
 console.log('  - runFullDiagnostics()     // Complete diagnostic suite');
 console.log('  - quickRealtimeTest()      // Fast event test');
 console.log('  - checkCurrentPagePresence() // Check who is on current page');
+
+
 

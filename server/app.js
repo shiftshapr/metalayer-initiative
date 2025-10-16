@@ -6,6 +6,7 @@ const session = require('express-session');
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 
+
 const authRoutes = require('../routes/auth');
 const chatRoutes = require('../routes/chat');
 const communitiesRoutes = require('../routes/communities');
@@ -170,6 +171,101 @@ app.get('/auth/debug', (req, res) => {
     callbackUrl: process.env.GOOGLE_CALLBACK_URL,
     timestamp: new Date().toISOString()
   });
+});
+
+// Enhanced Agent API endpoint with RAG support
+app.post('/api/agent', async (req, res) => {
+  try {
+    const { message, context, pageContent, type, videoData } = req.body;
+    
+    if (!process.env.DEEPSEEK_API_KEY || process.env.DEEPSEEK_API_KEY === 'your_deepseek_api_key_here') {
+      return res.status(500).json({ 
+        error: 'DeepSeek API key not configured. Please set DEEPSEEK_API_KEY in your .env file.' 
+      });
+    }
+    
+    // Build enhanced system prompt with RAG context
+    let systemPrompt = 'You are a helpful AI assistant that can analyze web page content and answer questions about it. You have access to the current page content and should provide clear, accurate, and helpful responses based on that content.';
+    
+    // Handle YouTube video context
+    if (type === 'youtube_analysis' && context && context.transcript) {
+      systemPrompt = `You are a helpful AI assistant that can analyze YouTube videos. You have access to the full video transcript and metadata. Provide detailed, accurate responses based on the video content.
+
+VIDEO INFORMATION:
+- Title: ${context.videoTitle || 'Unknown'}
+- Channel: ${context.channelName || 'Unknown'}
+- Duration: ${context.duration || 'Unknown'}
+- Views: ${context.views || 'Unknown'}
+
+FULL VIDEO TRANSCRIPT:
+${context.transcript}
+
+VIDEO SUMMARY:
+${context.summary || 'Not available'}
+
+KEY POINTS:
+${context.keyPoints || 'Not available'}
+
+Please provide helpful, accurate responses based on this video content.`;
+    } else if (context && context.relevantContent && context.relevantContent.length > 0) {
+      // Handle RAG context
+      const relevantText = context.relevantContent.map(chunk => chunk.text).join('\n\n');
+      systemPrompt = `You are a helpful AI assistant analyzing web page content. Here is the relevant content from the page:
+
+${relevantText}
+
+Page Title: ${context.pageTitle || 'Current Page'}
+Page URL: ${context.pageUrl || 'Unknown'}
+
+Please provide helpful, accurate responses based on this content.`;
+    }
+    
+    // Call DeepSeek API
+    const deepseekResponse = await fetch('https://api.deepseek.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.DEEPSEEK_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'deepseek-chat',
+        messages: [
+          {
+            role: 'system',
+            content: systemPrompt
+          },
+          {
+            role: 'user',
+            content: message
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: 2000
+      })
+    });
+    
+    if (!deepseekResponse.ok) {
+      throw new Error(`DeepSeek API error: ${deepseekResponse.status}`);
+    }
+    
+    const data = await deepseekResponse.json();
+    const aiResponse = data.choices[0]?.message?.content || 'No response generated.';
+    
+    res.json({
+      response: aiResponse,
+      context: {
+        pageTitle: context?.pageTitle || 'Current Page',
+        hasContext: !!(context && context.relevantContent && context.relevantContent.length > 0)
+      }
+    });
+    
+  } catch (error) {
+    console.error('Agent API error:', error);
+    res.status(500).json({ 
+      error: 'Failed to get AI response',
+      details: error.message 
+    });
+  }
 });
 
 // TODO: Add blockchain, TEE, agent orchestration endpoints

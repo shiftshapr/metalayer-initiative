@@ -28,3 +28,5 @@ WHERE table_name = 'user_presence'
 ORDER BY ordinal_position;
 
 
+
+

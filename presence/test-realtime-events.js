@@ -86,7 +86,7 @@ window.testRealtimeEvents = async function testRealtimeEvents() {
     console.log('   1. Table replication not enabled (check Supabase Dashboard)');
     console.log('   2. RLS policies blocking real-time (even though SELECT works)');
     console.log('   3. WAL (Write-Ahead Logging) not enabled');
-    console.log('   4. Supabase plan doesn't include realtime');
+    console.log('   4. Supabase plan does not include realtime');
   }
   
   // Cleanup

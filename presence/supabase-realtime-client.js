@@ -11,6 +11,10 @@ class SupabaseRealtimeClient {
     this.reconnectAttempts = 0;
     this.maxReconnectAttempts = 5;
     
+    // CRITICAL FIX: Mutex to prevent race condition between heartbeat and leaveCurrentPage()
+    this.isLeavingPage = false;
+    this.isUpdatingPresence = false;
+    
     console.log('🚀 Supabase Real-time Client initialized');
   }
 
@@ -61,37 +65,74 @@ class SupabaseRealtimeClient {
   }
 
   async joinPage(pageId, pageUrl) {
+    console.log('');
+    console.log('═══════════════════════════════════════════════════════════');
     console.log('🌐 JOIN_PAGE: === STARTING JOIN PAGE ===');
+    console.log('═══════════════════════════════════════════════════════════');
     console.log('🌐 JOIN_PAGE: Page ID:', pageId);
     console.log('🌐 JOIN_PAGE: Page URL:', pageUrl);
     console.log('🌐 JOIN_PAGE: Current user:', this.currentUser?.userEmail);
+    console.log('🌐 JOIN_PAGE: Current user ID:', this.currentUser?.userId);
+    console.log('🌐 JOIN_PAGE: Timestamp:', new Date().toISOString());
     
     if (!this.currentUser) {
       console.error('❌ JOIN_PAGE: No current user set - cannot join page');
+      console.log('═══════════════════════════════════════════════════════════');
+      console.log('');
       return;
     }
 
+    console.log('');
+    console.log('📊 JOIN_PAGE: Setting currentPage');
+    console.log('───────────────────────────────────────────────────────────');
     this.currentPage = { pageId, pageUrl };
-    console.log('🌐 JOIN_PAGE: Set currentPage:', this.currentPage);
+    console.log('✅ JOIN_PAGE: currentPage set:', JSON.stringify(this.currentPage, null, 2));
     
     // Update user presence (sends INSERT/UPDATE to database)
-    console.log('🌐 JOIN_PAGE: Step 1 - Updating presence in database...');
+    console.log('');
+    console.log('📊 JOIN_PAGE: Step 1 - Updating presence in database');
+    console.log('───────────────────────────────────────────────────────────');
+    const presenceStartTime = Date.now();
     await this.updatePresence(pageId, pageUrl);
-    console.log('🌐 JOIN_PAGE: Step 1 - Presence updated ✅');
+    const presenceEndTime = Date.now();
+    console.log(`✅ JOIN_PAGE: Presence updated in ${presenceEndTime - presenceStartTime}ms`);
     
     // Subscribe to real-time updates for this page (WebSocket subscription)
-    console.log('🌐 JOIN_PAGE: Step 2 - Subscribing to real-time updates...');
+    console.log('');
+    console.log('📊 JOIN_PAGE: Step 2 - Subscribing to real-time updates');
+    console.log('───────────────────────────────────────────────────────────');
+    const subscribeStartTime = Date.now();
     await this.subscribeToPageUpdates(pageId);
-    console.log('🌐 JOIN_PAGE: Step 2 - Subscribed to updates ✅');
+    const subscribeEndTime = Date.now();
+    console.log(`✅ JOIN_PAGE: Subscribed in ${subscribeEndTime - subscribeStartTime}ms`);
     
-    console.log('✅ JOIN_PAGE: === COMPLETED JOIN PAGE ===');
+    console.log('');
+    console.log('✅✅✅ JOIN_PAGE: COMPLETE ✅✅✅');
     console.log('✅ JOIN_PAGE: Joined page:', pageUrl);
     console.log('✅ JOIN_PAGE: Now listening for presence/message changes on page:', pageId);
+    console.log('✅ JOIN_PAGE: Active channels:', Array.from(this.channels.keys()));
+    console.log('═══════════════════════════════════════════════════════════');
+    console.log('');
   }
 
   async updatePresence(pageId, pageUrl, auraColor = null) {
+    // CRITICAL FIX: Skip if we're in the process of leaving a page (prevents race condition)
+    if (this.isLeavingPage) {
+      console.log('⏭️ PRESENCE_UPDATE: SKIPPED - User is currently leaving a page (mutex active)');
+      return;
+    }
+    
+    // Set mutex to prevent concurrent updates
+    if (this.isUpdatingPresence) {
+      console.log('⏭️ PRESENCE_UPDATE: SKIPPED - Another update is already in progress');
+      return;
+    }
+    
+    this.isUpdatingPresence = true;
+    
     if (!this.currentUser) {
       console.log('❌ PRESENCE_UPDATE: No current user, skipping presence update');
+      this.isUpdatingPresence = false;
       return;
     }
 
@@ -99,6 +140,7 @@ class SupabaseRealtimeClient {
     if (!this.supabase) {
       console.error('❌ PRESENCE_UPDATE: Supabase client not initialized. Call initialize() first.');
       console.error('❌ PRESENCE_UPDATE: this.supabase:', this.supabase);
+      this.isUpdatingPresence = false;
       return;
     }
 
@@ -180,6 +222,9 @@ class SupabaseRealtimeClient {
     } catch (error) {
       console.error('❌ Error updating presence:', error);
       console.error('❌ Error stack:', error.stack);
+    } finally {
+      // CRITICAL FIX: Always clear the mutex, even if an error occurred
+      this.isUpdatingPresence = false;
     }
   }
 
@@ -190,17 +235,46 @@ class SupabaseRealtimeClient {
     console.log('🚪 LEAVE_PAGE: Current user:', this.currentUser?.userEmail);
     console.log('🚪 LEAVE_PAGE: Current page:', this.currentPage?.pageId);
     
-    if (!this.currentUser || !this.currentPage) {
-      console.log('🔍 LEAVE_PAGE: No current user or page, skipping EXIT');
+    // CRITICAL FIX: Set mutex to prevent heartbeat from updating presence while we're leaving
+    this.isLeavingPage = true;
+    console.log('🔒 LEAVE_PAGE: Mutex set - heartbeat updates will be blocked');
+    
+    // ENHANCED LOGGING: Check why currentPage might be undefined
+    if (!this.currentUser) {
+      console.log('❌ LEAVE_PAGE: No current user found');
+      this.isLeavingPage = false;
+      return;
+    }
+    
+    if (!this.currentPage) {
+      console.log('❌ LEAVE_PAGE: No current page found - this indicates a state management issue');
+      console.log('🔍 LEAVE_PAGE: Debug info - supabaseRealtimeClient state:', {
+        hasCurrentUser: !!this.currentUser,
+        hasCurrentPage: !!this.currentPage,
+        isLeavingPage: this.isLeavingPage,
+        isConnected: this.isConnected
+      });
+      this.isLeavingPage = false;
       return;
     }
 
     if (!this.supabase) {
       console.error('❌ LEAVE_PAGE: Supabase client not initialized');
+      this.isLeavingPage = false;
       return;
     }
 
+    // CRITICAL FIX: Store page info BEFORE clearing currentPage
+    // We need these values for the database update
     const { pageId, pageUrl } = this.currentPage;
+    
+    // CRITICAL FIX: Clear currentPage IMMEDIATELY to stop heartbeat from running
+    // This MUST happen BEFORE the database update to prevent race condition
+    // The heartbeat checks `if (this.currentPage)` before updating
+    const oldPage = this.currentPage;
+    this.currentPage = null;
+    console.log('🔒 LEAVE_PAGE: currentPage cleared - heartbeat will NOT run for old page');
+    console.log('🔒 LEAVE_PAGE: Stored old page info:', { pageId, pageUrl });
 
     console.log(`🚪 LEAVE_PAGE: Leaving page: ${pageId}`);
     console.log(`🚪 LEAVE_PAGE: User: ${this.currentUser.userEmail}`);
@@ -221,9 +295,29 @@ class SupabaseRealtimeClient {
       if (error) {
         console.error('❌ LEAVE_PAGE: Failed to mark as inactive:', error);
         console.error('❌ LEAVE_PAGE: Error details:', JSON.stringify(error, null, 2));
+        console.error('❌ LEAVE_PAGE: UPDATE FAILED - other users will NOT see you leave!');
       } else {
         console.log(`✅ LEAVE_PAGE: Marked ${this.currentUser.userEmail} as inactive on ${pageId}`);
         console.log('✅ LEAVE_PAGE: Database UPDATE sent - other users will receive postgres_changes event');
+        
+        // CRITICAL: Verify the update worked by querying back
+        const { data: verifyData, error: verifyError } = await this.supabase
+          .from('user_presence')
+          .select('is_active, last_seen')
+          .eq('user_email', this.currentUser.userEmail)
+          .eq('page_id', pageId)
+          .limit(1);
+        
+        if (verifyError) {
+          console.error('❌ LEAVE_PAGE: Failed to verify inactive status:', verifyError);
+        } else if (verifyData && verifyData.length > 0) {
+          console.log(`🔍 LEAVE_PAGE: Verified status - is_active: ${verifyData[0].is_active}, last_seen: ${verifyData[0].last_seen}`);
+          if (verifyData[0].is_active === false) {
+            console.log('✅ LEAVE_PAGE: CONFIRMED - User is marked as inactive in database');
+          } else {
+            console.error('❌ LEAVE_PAGE: VERIFICATION FAILED - User is STILL marked as active!');
+          }
+        }
       }
     } catch (error) {
       console.error('❌ LEAVE_PAGE: Error leaving page:', error);
@@ -243,8 +337,13 @@ class SupabaseRealtimeClient {
     
     console.log('🚪 LEAVE_PAGE: Active channels after leaving:', Array.from(this.channels.keys()));
 
-    // Clear current page reference
-    this.currentPage = null;
+    // NOTE: currentPage was already cleared at the start of this function (line 240)
+    // to prevent heartbeat race conditions
+    
+    // CRITICAL FIX: Clear mutex to allow new page's presence updates
+    this.isLeavingPage = false;
+    console.log('🔓 LEAVE_PAGE: Mutex cleared - heartbeat can resume on new page');
+    
     console.log('✅ LEAVE_PAGE: === COMPLETED LEAVE PAGE ===');
   }
 
@@ -279,11 +378,22 @@ class SupabaseRealtimeClient {
             filter: `page_id=eq.${pageId}`
           },
           (payload) => {
-            console.log('👁️ REALTIME_EVENT: Presence update received');
-            console.log('👁️ REALTIME_EVENT: Event type:', payload.eventType);
-            console.log('👁️ REALTIME_EVENT: User:', payload.new?.user_email || payload.old?.user_email);
-            console.log('👁️ REALTIME_EVENT: Full payload:', JSON.stringify(payload, null, 2));
+            console.log('');
+            console.log('🔔🔔🔔═══════════════════════════════════════════════════════');
+            console.log('🔔🔔🔔 REALTIME_EVENT_ARRIVED: Presence event received!');
+            console.log('🔔🔔🔔═══════════════════════════════════════════════════════');
+            console.log('🔔 Event type:', payload.eventType);
+            console.log('🔔 User:', payload.new?.user_email || payload.old?.user_email);
+            console.log('🔔 Page ID:', payload.new?.page_id || payload.old?.page_id);
+            console.log('🔔 is_active changed:', payload.old?.is_active, '→', payload.new?.is_active);
+            console.log('🔔 Timestamp:', new Date().toISOString());
+            console.log('🔔 Callback registered:', typeof this.onUserUpdated);
+            console.log('🔔 Full payload:', JSON.stringify(payload, null, 2));
+            console.log('🔔 Now calling handlePresenceUpdate()...');
             this.handlePresenceUpdate(payload);
+            console.log('🔔 handlePresenceUpdate() completed');
+            console.log('🔔🔔🔔═══════════════════════════════════════════════════════');
+            console.log('');
           }
         )
         .on('postgres_changes',
@@ -316,18 +426,34 @@ class SupabaseRealtimeClient {
           }
         )
         .subscribe((status) => {
-          console.log('📡 SUBSCRIBE_STATUS: Subscription status changed:', status);
+          console.log('');
+          console.log('📡📡📡═══════════════════════════════════════════════════════');
+          console.log('📡📡📡 SUBSCRIBE_STATUS: Subscription status changed!');
+          console.log('📡📡📡═══════════════════════════════════════════════════════');
+          console.log('📡 Status:', status);
+          console.log('📡 Page ID:', pageId);
+          console.log('📡 Channel name:', `page-${pageId}`);
+          console.log('📡 Timestamp:', new Date().toISOString());
+          console.log('📡 Current user:', this.currentUser?.userEmail);
           
           if (status === 'SUBSCRIBED') {
-            console.log('✅ SUBSCRIBE_STATUS: Successfully subscribed to real-time updates');
-            console.log('✅ SUBSCRIBE_STATUS: Now listening for:');
+            console.log('');
+            console.log('✅✅✅ SUBSCRIBE_STATUS: Successfully subscribed to real-time updates!');
+            console.log('✅ Now listening for:');
             console.log('   - Presence changes (user_presence table)');
             console.log('   - New messages (messages table)');
             console.log('   - Visibility updates (user_visibility table)');
             console.log('   - Filter: page_id=' + pageId);
+            console.log('✅ Real-time events will now trigger callbacks');
+            console.log('✅ Watch for 🔔🔔🔔 REALTIME_EVENT_ARRIVED logs');
+            console.log('');
             this.isConnected = true;
           } else if (status === 'CHANNEL_ERROR') {
-            console.error('❌ SUBSCRIBE_STATUS: Channel error - subscription failed');
+            console.error('');
+            console.error('❌❌❌ SUBSCRIBE_STATUS: Channel error - subscription FAILED!');
+            console.error('❌ Real-time events will NOT be received');
+            console.error('❌ Check Supabase real-time configuration');
+            console.error('');
             this.isConnected = false;
           } else if (status === 'TIMED_OUT') {
             console.error('❌ SUBSCRIBE_STATUS: Subscription timed out');
@@ -352,22 +478,79 @@ class SupabaseRealtimeClient {
   }
 
   handlePresenceUpdate(payload) {
+    console.log('');
+    console.log('═══════════════════════════════════════════════════════════');
+    console.log('🔔 HANDLE_PRESENCE_UPDATE: === PROCESSING REAL-TIME EVENT ===');
+    console.log('═══════════════════════════════════════════════════════════');
+    
     const { eventType, new: newRecord, old: oldRecord } = payload;
+    const record = newRecord || oldRecord;
+    
+    console.log('🔔 HANDLE_PRESENCE_UPDATE: Event type:', eventType);
+    console.log('🔔 HANDLE_PRESENCE_UPDATE: User:', record?.user_email);
+    console.log('🔔 HANDLE_PRESENCE_UPDATE: Page ID:', record?.page_id);
+    console.log('🔔 HANDLE_PRESENCE_UPDATE: Is active:', record?.is_active);
+    console.log('🔔 HANDLE_PRESENCE_UPDATE: Last seen:', record?.last_seen);
+    console.log('🔔 HANDLE_PRESENCE_UPDATE: Enter time:', record?.enter_time);
+    console.log('🔔 HANDLE_PRESENCE_UPDATE: Timestamp:', new Date().toISOString());
     
     switch (eventType) {
       case 'INSERT':
+        console.log('');
+        console.log('📊 HANDLE_PRESENCE_UPDATE: Processing INSERT event');
+        console.log('───────────────────────────────────────────────────────────');
         console.log('👋 User joined page:', newRecord.user_email);
+        console.log('🔍 New record details:', JSON.stringify(newRecord, null, 2));
+        console.log('🔍 Calling onUserJoined callback...');
         this.onUserJoined?.(newRecord);
+        console.log('✅ onUserJoined callback completed');
         break;
+        
       case 'UPDATE':
+        console.log('');
+        console.log('📊 HANDLE_PRESENCE_UPDATE: Processing UPDATE event');
+        console.log('───────────────────────────────────────────────────────────');
         console.log('🔄 User presence updated:', newRecord.user_email);
+        console.log('🔍 Old record:', JSON.stringify(oldRecord, null, 2));
+        console.log('🔍 New record:', JSON.stringify(newRecord, null, 2));
+        console.log('🔍 Changes:');
+        if (oldRecord && newRecord) {
+          if (oldRecord.is_active !== newRecord.is_active) {
+            console.log(`   - is_active: ${oldRecord.is_active} → ${newRecord.is_active}`);
+          }
+          if (oldRecord.last_seen !== newRecord.last_seen) {
+            console.log(`   - last_seen: ${oldRecord.last_seen} → ${newRecord.last_seen}`);
+          }
+          if (oldRecord.aura_color !== newRecord.aura_color) {
+            console.log(`   - aura_color: ${oldRecord.aura_color} → ${newRecord.aura_color}`);
+          }
+        }
+        console.log('🔍 Calling onUserUpdated callback...');
         this.onUserUpdated?.(newRecord);
+        console.log('✅ onUserUpdated callback completed');
         break;
+        
       case 'DELETE':
+        console.log('');
+        console.log('📊 HANDLE_PRESENCE_UPDATE: Processing DELETE event');
+        console.log('───────────────────────────────────────────────────────────');
         console.log('👋 User left page:', oldRecord.user_email);
+        console.log('🔍 Old record details:', JSON.stringify(oldRecord, null, 2));
+        console.log('🔍 Calling onUserLeft callback...');
         this.onUserLeft?.(oldRecord);
+        console.log('✅ onUserLeft callback completed');
+        break;
+        
+      default:
+        console.log('');
+        console.log('⚠️ HANDLE_PRESENCE_UPDATE: Unknown event type:', eventType);
         break;
     }
+    
+    console.log('');
+    console.log('✅ HANDLE_PRESENCE_UPDATE: Event processing complete');
+    console.log('═══════════════════════════════════════════════════════════');
+    console.log('');
   }
 
   handleNewMessage(payload) {
@@ -429,20 +612,45 @@ class SupabaseRealtimeClient {
 
   async getPageUsers(pageId) {
     try {
+      console.log('🔍 GET_PAGE_USERS: === STARTING PAGE USERS QUERY ===');
+      console.log(`🔍 GET_PAGE_USERS: Page ID: ${pageId}`);
+      
+      // CRITICAL FIX: Query for BOTH active users AND recently inactive users
+      // This enables "Last seen" functionality for users who have left the page
+      // CONFIGURABLE THRESHOLD: Use user-configurable threshold (default: 1 month)
+      const thresholdMs = window.configManager?.getLastSeenThreshold() || (30 * 24 * 60 * 60 * 1000); // Default: 30 days
+      const recentThreshold = new Date(Date.now() - thresholdMs);
+      console.log(`🔍 GET_PAGE_USERS: Recent threshold: ${recentThreshold.toISOString()}`);
+      console.log(`🔍 GET_PAGE_USERS: Threshold duration: ${thresholdMs / (24 * 60 * 60 * 1000)} days`);
+      
       const { data, error } = await this.supabase
         .from('user_presence')
         .select('*')
         .eq('page_id', pageId)
-        .eq('is_active', true);
+        .or(`is_active.eq.true,and(is_active.eq.false,last_seen.gte.${recentThreshold.toISOString()})`)
+        .order('last_seen', { ascending: false });
 
       if (error) {
-        console.error('❌ Failed to get page users:', error);
+        console.error('❌ GET_PAGE_USERS: Failed to get page users:', error);
+        console.error('❌ GET_PAGE_USERS: Error details:', JSON.stringify(error, null, 2));
         return [];
+      }
+
+      console.log(`✅ GET_PAGE_USERS: Found ${data?.length || 0} users (active + recently inactive)`);
+      
+      if (data && data.length > 0) {
+        data.forEach((user, index) => {
+          const minutesAgo = (Date.now() - new Date(user.last_seen).getTime()) / 1000 / 60;
+          console.log(`🔍 GET_PAGE_USERS: User ${index + 1}: ${user.user_email}`);
+          console.log(`   is_active: ${user.is_active}`);
+          console.log(`   last_seen: ${minutesAgo.toFixed(1)} minutes ago`);
+          console.log(`   status: ${user.is_active ? 'ACTIVE' : 'LAST SEEN'}`);
+        });
       }
 
       return data || [];
     } catch (error) {
-      console.error('❌ Error getting page users:', error);
+      console.error('❌ GET_PAGE_USERS: Error getting page users:', error);
       return [];
     }
   }

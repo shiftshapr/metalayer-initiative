@@ -2116,31 +2116,286 @@ div.message.message-reply.visible div.message-content-wrapper div.message-header
 }
 
 /* --- Agent Tab --- */
-#agent h3 {
+#agent-tab {
+    flex-direction: column;
+    height: 100%;
+}
+
+.agent-header {
     padding: 15px;
-    margin: 0;
     border-bottom: 1px solid var(--border-color);
+    background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
 }
-#agent label,
-#agent select {
-    margin: 10px 15px;
+
+.agent-header h3 {
+    margin: 0 0 8px 0;
+    color: var(--text-primary);
+    font-size: 1.2em;
 }
-#agent select {
-    display: block;
-    width: calc(100% - 30px);
-    padding: 8px;
-    border-radius: 4px;
+
+.agent-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.agent-actions button {
+    padding: 6px 12px;
     border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: var(--background-secondary);
+    color: var(--text-primary);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
 }
-.agent-output {
-    min-height: 150px; /* Example height */
+
+.agent-actions button:hover {
+    background: var(--primary-accent);
+    color: white;
+    border-color: var(--primary-accent);
+}
+
+.agent-input-area {
+    display: flex;
     padding: 15px;
-    margin: 0 15px 15px 15px;
+    border-bottom: 1px solid var(--border-color);
+    background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+    gap: 10px;
+    align-items: center;
+}
+
+.agent-input-area input {
+    flex: 1;
+    padding: 12px 16px;
+    border: 2px solid var(--border-color);
+    border-radius: 25px;
+    font-size: 14px;
+    outline: none;
+    background-color: var(--background-secondary);
+    color: #212529;
+    transition: all 0.2s ease;
+}
+
+.agent-input-area input:focus {
+    border-color: var(--primary-accent);
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+    transform: translateY(-1px);
+}
+
+.agent-input-area input::placeholder {
+    color: #6c757d;
+    opacity: 1;
+}
+
+.agent-input-area button {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--primary-accent) 0%, #0056b3 100%);
+    color: white;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 8px rgba(0, 123, 255, 0.3);
+}
+
+.agent-input-area button:hover {
+    background: linear-gradient(135deg, #0056b3 0%, #004085 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 123, 255, 0.4);
+}
+
+.agent-output {
+    flex: 1;
+    overflow-y: auto;
+    padding: 15px;
+    background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+}
+
+.agent-welcome {
+    text-align: center;
+    padding: 20px;
+    background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);
+    border-radius: 12px;
+    margin-bottom: 20px;
     border: 1px solid var(--border-color);
-    border-radius: 4px;
-    background-color: var(--background-primary);
-    font-size: 0.9em;
+}
+
+.agent-welcome h4 {
+    margin: 0 0 10px 0;
+    color: var(--text-primary);
+    font-size: 1.1em;
+}
+
+.agent-welcome p {
+    margin: 0 0 15px 0;
     color: var(--text-secondary);
+    font-size: 14px;
+}
+
+.agent-suggestions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.suggestion-btn {
+    padding: 10px 16px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--background-secondary);
+    color: var(--text-primary);
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: left;
+}
+
+.suggestion-btn:hover {
+    background: var(--primary-accent);
+    color: white;
+    border-color: var(--primary-accent);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 123, 255, 0.3);
+}
+
+.agent-message {
+    margin-bottom: 15px;
+    padding: 12px 16px;
+    border-radius: 12px;
+    background: var(--background-secondary);
+    border: 1px solid var(--border-color);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    transition: all 0.2s ease;
+}
+
+.agent-message:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.agent-message.user-message {
+    background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%) !important;
+    color: #1976d2 !important;
+    border-color: rgba(25, 118, 210, 0.3);
+}
+
+.agent-message .message-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.agent-message .sender {
+    font-weight: 600;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.agent-message.user-message .sender {
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.agent-message .timestamp {
+    font-size: 11px;
+    color: var(--text-secondary);
+    opacity: 0.7;
+}
+
+.agent-message.user-message .timestamp {
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.agent-message .message-content {
+    font-size: 14px;
+    line-height: 1.5;
+    word-wrap: break-word;
+}
+
+.agent-message.user-message .message-content {
+    color: #1976d2 !important;
+    font-weight: 600;
+}
+
+.agent-loading {
+    opacity: 0.7;
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 0.7; }
+    50% { opacity: 1; }
+}
+
+/* Markdown formatting in agent messages */
+.agent-message .message-content h1, 
+.agent-message .message-content h2, 
+.agent-message .message-content h3 {
+    margin: 10px 0 8px 0;
+    color: var(--text-primary);
+}
+
+.agent-message.user-message .message-content h1,
+.agent-message.user-message .message-content h2,
+.agent-message.user-message .message-content h3 {
+    color: white;
+}
+
+.agent-message .message-content strong {
+    font-weight: 600;
+}
+
+.agent-message .message-content em {
+    font-style: italic;
+}
+
+.agent-message .message-content ul, 
+.agent-message .message-content ol {
+    margin: 8px 0;
+    padding-left: 20px;
+}
+
+.agent-message .message-content li {
+    margin: 4px 0;
+}
+
+.agent-message .message-content hr {
+    border: none;
+    border-top: 1px solid var(--border-color);
+    margin: 15px 0;
+}
+
+.agent-message.user-message .message-content hr {
+    border-top-color: rgba(255, 255, 255, 0.3);
+}
+
+/* Page info display in agent welcome */
+.page-info {
+    background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 12px;
+    margin: 15px 0;
+    font-size: 0.9em;
+}
+
+.page-info strong {
+    display: block;
+    color: var(--primary-accent);
+    margin-bottom: 8px;
+    font-size: 1em;
+}
+
+.page-info p {
+    margin: 0;
+    color: var(--text-secondary);
+    line-height: 1.4;
 }
 
 /* --- Floating Action Button (FAB) --- */

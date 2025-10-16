@@ -4,6 +4,8 @@
   <title>Presence</title>
   <meta charset="utf-8">
   <link rel="stylesheet" href="sidepanel.css">
+  
+  <!-- ===== ERROR HANDLING REMOVED - RESTORING ORIGINAL FUNCTIONALITY ===== -->
   <!-- Load Debug Configuration -->
   <script src="debug-config.js"></script>
   <!-- Load Performance Monitor -->
@@ -12,9 +14,28 @@
   <script src="realtime-logger.js"></script>
   <!-- Load LOCAL Supabase JS Library (CDN blocked by CSP) -->
   <script src="lib/supabase.min.js"></script>
+  
+  <!-- ===== NEW MODULAR ARCHITECTURE ===== -->
+  <!-- Load Logger System -->
+  <script src="utils/Logger.js"></script>
+  <!-- Load Supabase Service -->
+  <script src="services/SupabaseService.js"></script>
+  <!-- Load Visibility Manager -->
+  <script src="features/VisibilityManager.js"></script>
+  <!-- Load Sidepanel Core -->
+  <script src="core/SidepanelCore.js"></script>
+  <!-- Load Migration Script -->
+  <script src="migration-to-modular.js"></script>
+  
+  <!-- Legacy Supabase Client (for backward compatibility) -->
   <script src="supabase-realtime-client.js"></script>
   <!-- Load Loosely Coupled Auth Manager -->
   <script src="auth-manager.js"></script>
+  <!-- Load YouTube Transcription Service -->
+  <script src="youtube-transcription.js"></script>
+  
+  <!-- Test Script for Debugging -->
+  <script src="test-script.js"></script>
   <!-- Load Real Google Auth for Actual Profile Pictures -->
   <script src="real-google-auth.js"></script>
   <!-- Load Notification Manager -->
@@ -25,6 +46,24 @@
   <script src="realtime-diagnostics.js"></script>
   <!-- Load Real-time Presence Handler (NO POLLING!) -->
   <script src="realtime-presence-handler.js"></script>
+  <!-- Diagnostic Tool: Visibility Issue Analyzer -->
+  <script src="diagnose-visibility-issue.js"></script>
+  <!-- Diagnostic Tool: Page Navigation Checker -->
+  <script src="check-page-navigation.js"></script>
+  <!-- Diagnostic Tool: Active Tab Checker -->
+  <script src="diagnose-active-tab.js"></script>
+  <!-- Diagnostic Tool: Page Tracking Analyzer (SD1) -->
+  <script src="diagnose-page-tracking.js"></script>
+  <!-- Test Suite: Comprehensive Presence System Tests (TE2) -->
+  <script src="test-presence-system.js"></script>
+  <!-- Test Suite: Modular Architecture Tests (TE2) -->
+  <script src="test-modular-architecture.js"></script>
+  <!-- Debug: Avatar Issue Analysis (SD1) -->
+  <script src="debug-avatar-issue.js"></script>
+  <!-- SD1 Critical Fix: Create user_profiles table -->
+  <script src="create-user-profiles-table.js"></script>
+  <!-- TE2 Test Suite: Avatar Fix Verification -->
+  <script src="test-avatar-fix.js"></script>
   <!-- Test Suite: Verify Polling Removal -->
   <script src="test-polling-removal.js"></script>
   <!-- Test Suite: Aura Changes -->
@@ -35,13 +74,28 @@
   <script src="test-realtime-comprehensive.js"></script>
   <!-- Enhanced Diagnostic: Real-time Event Monitor -->
   <script src="realtime-event-monitor.js"></script>
-  <!-- WebSocket Diagnostic Tool (TE2) -->
-  <script src="websocket-diagnostic.js"></script>
-  <!-- Realtime Events Test (SD1 + TE2) -->
-  <script src="test-realtime-events.js"></script>
+  <!-- WebSocket Diagnostic Tool (TE2) - WRAPPED WITH ERROR HANDLING -->
+  <script src="websocket-diagnostic.js" onerror="console.error('🚨 websocket-diagnostic.js failed to load')"></script>
+  <!-- Realtime Events Test (SD1 + TE2) - WRAPPED WITH ERROR HANDLING -->
+  <script src="test-realtime-events.js" onerror="console.error('🚨 test-realtime-events.js failed to load')"></script>
+  <!-- Real-Time Event Diagnostics (SD1 + TE2) -->
+  <script src="diagnose-realtime-events.js"></script>
+  <script src="diagnose-realtime-subscription.js"></script>
+  <script src="diagnose-realtime-broadcast.js"></script>
+  <script src="trace-websocket-events.js"></script>
+  <script src="check-realtime-config.js"></script>
   
-  <!-- TE2 Comprehensive Diagnostics -->
-  <script src="comprehensive-realtime-diagnostics.js"></script>
+  <!-- TE2 Comprehensive Diagnostics - WRAPPED WITH ERROR HANDLING -->
+  <script src="comprehensive-realtime-diagnostics.js" onerror="console.error('🚨 comprehensive-realtime-diagnostics.js failed to load')"></script>
+  
+  <!-- Last Seen Diagnostic Tool (Oct 14, 2025) -->
+  <script src="diagnose-last-seen-issue.js"></script>
+  
+  <!-- TE2 Visibility Test Suite (Oct 14, 2025) -->
+  <script src="te2-visibility-tests.js"></script>
+  
+  <!-- TE2 Avatar Fix Testing Suite (Oct 16, 2025) -->
+  <script src="test-avatar-fix-comprehensive.js"></script>
 </head>
 <body>
   <!-- Main Sidebar Container -->
@@ -164,13 +218,19 @@
       
       <!-- Agent Tab Content -->
       <div id="agent-tab" class="main-tab-content">
-        <h3>AI Agent</h3>
+        <div class="agent-header">
+          <h3>AI Agent</h3>
+          <div class="agent-actions">
+            <button id="agent-clear-btn">Clear</button>
+            <button id="agent-refresh-btn">Refresh</button>
+          </div>
+        </div>
         <div class="agent-input-area">
           <input type="text" placeholder="Ask the agent something..." id="agent-input">
-          <button id="agent-send-btn">➤</button>
+          <button id="agent-send-btn">✈</button>
         </div>
         <div class="agent-output" id="agent-output">
-          <p>Agent responses will appear here...</p>
+          <!-- Agent responses will appear here -->
         </div>
       </div>
       
@@ -259,8 +319,8 @@
 <!-- WebSocket Client for Real-time Communication -->
 <!-- CHROME EXTENSION WEBSOCKET FIX: WebSocket client removed - now handled by background service worker -->
 <!-- <script src="websocket-client.js"></script> -->
-<!-- Include the main sidebar JavaScript -->
-<script src="sidepanel.js"></script>
+<!-- Include the main sidebar JavaScript - WRAPPED WITH ERROR HANDLING -->
+<script src="sidepanel.js" onerror="console.error('🚨 sidepanel.js failed to load')"></script>
 
   <!-- Context Bar for Reply/Edit - Separate row above input -->
   <div id="context-bar" style="display: none; position: fixed; bottom: 60px; left: 0; right: 0; background: #e8f4fd; padding: 2px 8px; border-bottom: 1px solid #b3d9ff; font-size: 10px; color: #0066cc; line-height: 1.2; height: 18px; overflow: hidden; z-index: 1001;">
@@ -425,7 +485,13 @@
     <!-- SD1: Comprehensive Diagnostic Script -->
     <script src="diagnostic-comprehensive-sd1.js"></script>
     
-    <!-- TE2: Comprehensive Test Infrastructure -->
-    <script src="test-infrastructure-te2.js"></script>
+  <!-- TE2: Comprehensive Test Infrastructure -->
+  <script src="test-infrastructure-te2.js"></script>
+  
+  <!-- TE2: Last Seen Display Debug Tool (Oct 14, 2025) -->
+  <script src="debug-last-seen-display.js"></script>
+  
+  <!-- TE2: Last Seen Proper Debug Tool (Oct 14, 2025) -->
+  <script src="debug-last-seen-proper.js"></script>
         </body>
         </html>

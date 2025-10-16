@@ -11,14 +11,13 @@
     "scripting",
     "identity",
     "identity.email",
-    "notifications"
+    "notifications",
+    "webRequest"
   ],
   "host_permissions": [
-    "https://zwxomzkmncwzwryvudwu.supabase.co/*",
-    "http://216.238.91.120:3003/*",
-    "ws://216.238.91.120:3004/*",
     "https://app.themetalayer.org/*",
-    "https://api.themetalayer.org/*"
+    "https://www.youtube.com/*",
+    "https://youtube.com/*"
   ],
   "oauth2": {
     "client_id": "240745106929-q6hc1b06mochkuu4gf6uo3d2mopvg337.apps.googleusercontent.com",
@@ -53,6 +52,6 @@
     }
   ],
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' https://zwxomzkmncwzwryvudwu.supabase.co wss://zwxomzkmncwzwryvudwu.supabase.co http://216.238.91.120:3003 ws://216.238.91.120:3004 https://app.themetalayer.org wss://app.themetalayer.org https://api.themetalayer.org wss://api.themetalayer.org https://www.googleapis.com;"
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' https://zwxomzkmncwzwryvudwu.supabase.co wss://zwxomzkmncwzwryvudwu.supabase.co http://localhost:3001 ws://localhost:3001 http://216.238.91.120:3002 ws://216.238.91.120:3002 https://app.themetalayer.org https://api.themetalayer.org https://www.googleapis.com wss://echo.websocket.org https://www.youtube.com;"
   }
 } 

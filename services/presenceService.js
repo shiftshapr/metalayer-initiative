@@ -158,6 +158,7 @@ class PresenceService {
   }
 
   // Get active users on a specific page (users with recent HEARTBEAT or ENTER events)
+  // ENHANCED: Now also returns recently inactive users for "Last seen" display
   async getActiveUsers(pageId, communityId = null, minutesThreshold = 5, currentUserId = null) {
     try {
       // Use Supabase to query presence data instead of Prisma
@@ -166,10 +167,13 @@ class PresenceService {
         return [];
       }
 
-      const thresholdTime = new Date(Date.now() - minutesThreshold * 60 * 1000);
+      const activeThreshold = new Date(Date.now() - minutesThreshold * 60 * 1000);
+      const recentThreshold = new Date(Date.now() - 30 * 60 * 1000); // Last 30 minutes for "recently seen"
       
       // Query Supabase user_presence table for active users on this page
-      console.log(`🔍 DEBUG: Querying Supabase for pageId: ${pageId}, thresholdTime: ${thresholdTime.toISOString()}`);
+      console.log(`🔍 DEBUG: Querying Supabase for pageId: ${pageId}`);
+      console.log(`🔍 DEBUG: Active threshold: ${activeThreshold.toISOString()}`);
+      console.log(`🔍 DEBUG: Recent threshold: ${recentThreshold.toISOString()}`);
       
       // CRITICAL DIAGNOSTIC: Check if pageId has triple underscores (bug indicator)
       if (pageId.includes('___')) {
@@ -178,49 +182,102 @@ class PresenceService {
         console.error(`❌ PAGE_ID_BUG_DETECTED: User must hard refresh Chrome extension to fix!`);
       }
       
-      const { data: presenceData, error } = await this.supabase
+      // DIAGNOSTIC: First, check ALL users in the database for this page (ignore filters)
+      const { data: allUsersOnPage, error: allError } = await this.supabase
+        .from('user_presence')
+        .select('*')
+        .eq('page_id', pageId)
+        .order('last_seen', { ascending: false });
+      
+      console.log('');
+      console.log('🔍🔍🔍 DIAGNOSTIC: ALL USERS ON THIS PAGE (no filters)');
+      console.log('═══════════════════════════════════════════════════════');
+      console.log(`🔍 Page ID: ${pageId}`);
+      console.log(`🔍 Total records: ${allUsersOnPage?.length || 0}`);
+      if (allUsersOnPage && allUsersOnPage.length > 0) {
+        allUsersOnPage.forEach((record, index) => {
+          console.log(`🔍 User ${index + 1}:`, {
+            email: record.user_email,
+            is_active: record.is_active,
+            last_seen: record.last_seen,
+            enter_time: record.enter_time,
+            page_url: record.page_url
+          });
+        });
+      } else {
+        console.log('🔍 NO USERS FOUND ON THIS PAGE AT ALL!');
+      }
+      console.log('═══════════════════════════════════════════════════════');
+      console.log('');
+      
+      // Query 1: Get currently active users (is_active = true)
+      const { data: activeData, error: activeError } = await this.supabase
         .from('user_presence')
         .select('*')
         .eq('page_id', pageId)
         .eq('is_active', true)
-        .gte('last_seen', thresholdTime.toISOString())
+        .gte('last_seen', activeThreshold.toISOString())
         .order('last_seen', { ascending: false });
 
-      if (error) {
-        console.error('❌ Error querying Supabase presence data:', error);
-        return [];
+      if (activeError) {
+        console.error('❌ Error querying active users:', activeError);
       }
 
-      console.log(`🔍 DEBUG: Raw Supabase query result: ${presenceData ? presenceData.length : 0} records`);
-      if (presenceData && presenceData.length > 0) {
-        presenceData.forEach((record, index) => {
-          console.log(`🔍 DEBUG: Record ${index + 1}: ${record.user_email} - last_seen: ${record.last_seen} (active: ${record.is_active})`);
+      // Query 2: Get recently inactive users (is_active = false, but seen recently)
+      // CRITICAL FIX OCT 14: Show users who LEFT this page, even if they're now active elsewhere
+      // This is the WHOLE POINT of "Last seen X ago" - to show where users WERE before they moved
+      
+      console.log(`🔍 BACKEND: Querying for recently inactive users on THIS page (${pageId})`);
+      console.log(`🔍 BACKEND: These are users who LEFT this page within the last 30 minutes`);
+      console.log(`🔍 BACKEND: We WANT to show them even if they're now active on a different page!`);
+      
+      // Get recently inactive users on THIS page
+      const { data: recentData, error: recentError } = await this.supabase
+        .from('user_presence')
+        .select('*')
+        .eq('page_id', pageId)
+        .eq('is_active', false)
+        .gte('last_seen', recentThreshold.toISOString())
+        .order('last_seen', { ascending: false });
+
+      if (recentError) {
+        console.error('❌ Error querying recent users:', recentError);
+      }
+
+      const activeUsers = activeData || [];
+      const recentUsers = recentData || [];
+      
+      // NO FILTERING! We want to show ALL recently inactive users, even if they're now active elsewhere
+      // This allows "Last seen X ago on this page" to work correctly
+      
+      console.log(`🔍 DEBUG: Active users on THIS page: ${activeUsers.length} records`);
+      console.log(`🔍 DEBUG: Recently inactive users on THIS page: ${recentUsers.length} records`);
+      console.log(`🔍 DEBUG: Total users to return: ${activeUsers.length + recentUsers.length} records`);
+      
+      if (activeUsers.length > 0) {
+        activeUsers.forEach((record, index) => {
+          console.log(`🔍 DEBUG: Active ${index + 1}: ${record.user_email} - last_seen: ${record.last_seen}`);
+        });
+      }
+      
+      if (recentUsers.length > 0) {
+        recentUsers.forEach((record, index) => {
+          console.log(`🔍 DEBUG: Recent ${index + 1}: ${record.user_email} - last_seen: ${record.last_seen}`);
         });
       }
 
-      if (!presenceData || presenceData.length === 0) {
-        console.log('🔍 No active users found in Supabase for page:', pageId);
-        // Let's also check what records exist for this page regardless of time/active status
-        const { data: allRecords, error: allError } = await this.supabase
-          .from('user_presence')
-          .select('*')
-          .eq('page_id', pageId);
-        
-        if (!allError && allRecords) {
-          console.log(`🔍 DEBUG: All records for page ${pageId}: ${allRecords.length} found`);
-          allRecords.forEach((record, index) => {
-            const lastSeen = new Date(record.last_seen);
-            const isRecent = lastSeen > thresholdTime;
-            console.log(`🔍 DEBUG: All record ${index + 1}: ${record.user_email} - last_seen: ${record.last_seen} (active: ${record.is_active}, recent: ${isRecent})`);
-          });
-        }
+      // Combine both lists (active users first, then recent)
+      const allPresenceData = [...activeUsers, ...recentUsers];
+      
+      if (allPresenceData.length === 0) {
+        console.log('🔍 No active or recent users found in Supabase for page:', pageId);
         return [];
       }
 
-      console.log('🔍 Found', presenceData.length, 'active users in Supabase for page:', pageId);
+      console.log('🔍 Found', activeUsers.length, 'active +', recentUsers.length, 'recent users for page:', pageId);
 
       // CRITICAL FIX: Query real user data from appUser table to get REAL Google avatars
-      const emailList = presenceData.map(p => p.user_email);
+      const emailList = allPresenceData.map(p => p.user_email);
       console.log('🔍 AVATAR_FIX: Querying appUser table for real avatars for emails:', emailList);
       
       const users = await this.prisma.appUser.findMany({
@@ -267,7 +324,8 @@ class PresenceService {
       const userMap = new Map(users.map(u => [u.email, u]));
 
       // Convert Supabase presence data to the expected format
-      const activeUsers = presenceData.map(presence => {
+      // ENHANCED: Now includes both active and recently inactive users
+      const formattedUsers = allPresenceData.map(presence => {
         const email = presence.user_email;
         const dbUser = userMap.get(email);
         
@@ -282,6 +340,7 @@ class PresenceService {
         console.log(`   avatarUrl: ${avatarUrl}`);
         console.log(`   isReal: ${isRealAvatar}`);
         console.log(`   dbUser exists: ${!!dbUser}`);
+        console.log(`   presence.is_active: ${presence.is_active}`);
         console.log(`   presence.enter_time: ${presence.enter_time}`);
         console.log(`   presence.last_seen: ${presence.last_seen}`);
         console.log(`   enterTime will be: ${presence.enter_time || presence.last_seen}`);
@@ -312,16 +371,21 @@ class PresenceService {
         };
       });
 
-      // Sort by time on page (longest first) - users who entered earliest appear first
-      activeUsers.sort((a, b) => {
+      // Sort by activity status first (active first), then by time on page
+      formattedUsers.sort((a, b) => {
+        // Active users come before inactive users
+        if (a.isActive && !b.isActive) return -1;
+        if (!a.isActive && b.isActive) return 1;
+        
+        // Within same activity status, sort by enter time (longest first)
         const aEnterTime = new Date(a.enterTime);
         const bEnterTime = new Date(b.enterTime);
         return aEnterTime - bEnterTime; // Earlier enter time = longer on page = appears first
       });
       
-      console.log(`🔍 PRESENCE: Returning ${activeUsers.length} active users from Supabase`);
+      console.log(`🔍 PRESENCE: Returning ${formattedUsers.length} users from Supabase (${activeUsers.length} active, ${recentUsers.length} recent)`);
       
-      return activeUsers;
+      return formattedUsers;
     } catch (error) {
       console.error('Error getting active users:', error);
       throw new Error('Failed to get active users');
