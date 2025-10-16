@@ -5,18 +5,18 @@
 // MODERN CONFIGURATION: Use environment-based configuration
 // MODERN CONFIGURATION: Fully environment-based, no hardcoded fallbacks
 
-console.log("🚀 SIDEPANEL.JS LOADING STARTED");
+Logger.info("SIDEPANEL.JS LOADING STARTED", null, 'general');
 
 // Immediate debug function - should be available right away
 window.testScript = function() {
-  console.log("✅ Script is loading! This function works.");
-  console.log("Agent tab button:", document.querySelector('[data-tab="agent-tab"]'));
-  console.log("Agent tab content:", document.getElementById('agent-tab'));
+  Logger.success("Script is loading! This function works.", null, 'general');
+  Logger.debug("Agent tab button found", { button: document.querySelector('[data-tab="agent-tab"]') }, 'general');
+  Logger.debug("Agent tab content found", { content: document.getElementById('agent-tab') }, 'general');
   
   // Try to click agent tab
   const agentBtn = document.querySelector('[data-tab="agent-tab"]');
   if (agentBtn) {
-    console.log("🎯 Clicking agent tab...");
+    Logger.debug("Clicking agent tab", null, 'general');
     agentBtn.click();
   }
 };
@@ -699,7 +699,7 @@ function updateUserAuraInUI(userEmail, auraColor) {
     }
   }
   
-  console.log(`🎨 Aura color update complete: ${messageAvatarsUpdated} message avatars updated`);
+  Logger.debug(`Aura color update complete: ${messageAvatarsUpdated} message avatars updated`, null, 'avatar');
 }
 
 async function refreshVisibilityAvatars() {
@@ -709,9 +709,9 @@ async function refreshVisibilityAvatars() {
   
   // CRITICAL FIX: State synchronization check
   console.log('🔄 REFRESH_VISIBILITY: === STATE SYNCHRONIZATION CHECK ===');
-  console.log(`🔄 REFRESH_VISIBILITY: window.currentUrlData?.pageId: ${window.currentUrlData?.pageId}`);
-  console.log(`🔄 REFRESH_VISIBILITY: currentPageId: ${currentPageId}`);
-  console.log(`🔄 REFRESH_VISIBILITY: client.currentPage?.pageId: ${client?.currentPage?.pageId}`);
+  Logger.debug(`REFRESH_VISIBILITY: window.currentUrlData?.pageId: ${window.currentUrlData?.pageId}`, null, 'general');
+  Logger.debug(`REFRESH_VISIBILITY: currentPageId: ${currentPageId}`, null, 'general');
+  Logger.debug(`REFRESH_VISIBILITY: client.currentPage?.pageId: ${client?.currentPage?.pageId}`, null, 'general');
   
   // CRITICAL FIX: Synchronize state if inconsistent
   if (client && window.currentUrlData?.pageId && client.currentPage?.pageId !== window.currentUrlData.pageId) {
@@ -720,14 +720,14 @@ async function refreshVisibilityAvatars() {
       pageId: window.currentUrlData.pageId,
       pageUrl: window.currentUrlData.normalizedUrl
     };
-    console.log(`🔄 REFRESH_VISIBILITY: ✅ State synchronized: ${client.currentPage.pageId}`);
+    Logger.success(`🔄 REFRESH_VISIBILITY: State synchronized: ${client.currentPage.pageId}`, null, 'general');
   }
   
   if (client && pageId) {
     console.log('🔄 REFRESH_VISIBILITY: === STARTING ENHANCED VISIBILITY REFRESH ===');
-    console.log(`🔄 REFRESH_VISIBILITY: Page ID: ${pageId}`);
-    console.log(`🔄 REFRESH_VISIBILITY: Client: ${client ? 'Available' : 'Missing'}`);
-    console.log(`🔄 REFRESH_VISIBILITY: PageId: ${pageId ? 'Available' : 'Missing'}`);
+    Logger.debug(`REFRESH_VISIBILITY: Page ID: ${pageId}`, null, 'general');
+    Logger.debug(`REFRESH_VISIBILITY: Client: ${client ? 'Available' : 'Missing'}`, null, 'general');
+    Logger.debug(`REFRESH_VISIBILITY: PageId: ${pageId ? 'Available' : 'Missing'}`, null, 'general');
     
     const users = await client.getPageUsers(pageId);
     console.log('👁️ REFRESH_VISIBILITY: Enhanced query returned users:', users.length);
@@ -747,7 +747,7 @@ async function refreshVisibilityAvatars() {
               let userHandle = user.user_email.split('@')[0];
               let avatarSource = 'none';
               
-              console.log(`🔍 SD1 AVATAR: Processing user ${user.user_email} using PROFILE AVATAR SYSTEM`);
+              Logger.debug(`SD1 AVATAR: Processing user ${user.user_email} using PROFILE AVATAR SYSTEM`, null, 'general');
               
               try {
                 // SD1 CRITICAL FIX: Use the EXACT same system that works for profile avatars
@@ -760,7 +760,7 @@ async function refreshVisibilityAvatars() {
                   avatarUrl = currentUser.user_metadata.avatar_url;
                   userName = currentUser.user_metadata.full_name || userName;
                   avatarSource = 'current_user_metadata';
-                  console.log(`✅ SD1 AVATAR: Using current user metadata for ${user.user_email} - avatarUrl: ${avatarUrl}`);
+                  Logger.success(`SD1 AVATAR: Using current user metadata for ${user.user_email} - avatarUrl: ${avatarUrl}`, null, 'general');
                 } else {
                   // For other users, use the SAME system that profile avatars use
                   // Check if we have unfiltered visibility data with real avatars
@@ -772,12 +772,12 @@ async function refreshVisibilityAvatars() {
                       avatarUrl = userInVisibility.avatarUrl;
                       userName = userInVisibility.name || userName;
                       avatarSource = 'visibility_data';
-                      console.log(`✅ SD1 AVATAR: Found REAL avatar in visibility data for ${user.user_email} - avatarUrl: ${avatarUrl}`);
+                      Logger.success(`SD1 AVATAR: Found REAL avatar in visibility data for ${user.user_email} - avatarUrl: ${avatarUrl}`, null, 'general');
                     } else {
-                      console.log(`ℹ️ SD1 AVATAR: User ${user.user_email} not found in visibility data`);
+                      Logger.info(`ℹ️ SD1 AVATAR: User ${user.user_email} not found in visibility data`, null, 'general');
                     }
                   } else {
-                    console.log(`ℹ️ SD1 AVATAR: No unfiltered visibility data available`);
+                    Logger.info(`ℹ️ SD1 AVATAR: No unfiltered visibility data available`, null, 'general');
                   }
                 }
                 
@@ -788,16 +788,16 @@ async function refreshVisibilityAvatars() {
               // SD1 FALLBACK: Only use generic avatar if we absolutely can't find a real one
               if (!avatarUrl) {
                 try {
-                  console.log(`🔍 SD1 FALLBACK: No real avatar found, using generic for ${user.user_email}`);
+                  Logger.debug(`SD1 FALLBACK: No real avatar found, using generic for ${user.user_email}`, null, 'general');
                   avatarUrl = `https://lh3.googleusercontent.com/a/default-user=s96-c`;
                   avatarSource = 'generic-fallback';
-                  console.log(`⚠️ SD1 FALLBACK: Using generic avatar for ${user.user_email}: ${avatarUrl}`);
+                  Logger.warn(`SD1 FALLBACK: Using generic avatar for ${user.user_email}: ${avatarUrl}`, null, 'general');
                 } catch (fallbackError) {
-                  console.log(`❌ SD1 FALLBACK: Generic avatar generation failed for ${user.user_email}:`, fallbackError.message);
+                  Logger.error(`SD1 FALLBACK: Generic avatar generation failed for ${user.user_email}:`, fallbackError.message, 'general');
                 }
               }
               
-              console.log(`🔄 SD1 AVATAR RESULT: ${user.user_email} - avatarUrl: ${avatarUrl}, source: ${avatarSource}, name: ${userName}`);
+              Logger.debug(`SD1 AVATAR RESULT: ${user.user_email} - avatarUrl: ${avatarUrl}, source: ${avatarSource}, name: ${userName}`, null, 'general');
               
               return {
                 id: user.user_email,
@@ -863,7 +863,7 @@ window.setLastSeenThreshold = function(days) {
   try {
     if (window.configManager) {
       window.configManager.setLastSeenThreshold(days);
-      console.log(`🔧 USER SETTINGS: Last seen threshold set to ${days} days`);
+      Logger.info(`🔧 USER SETTINGS: Last seen threshold set to ${days} days`, null, 'general');
       
       // Refresh visibility to apply new threshold
       if (typeof window.refreshVisibilityAvatars === 'function') {
@@ -885,7 +885,7 @@ window.getLastSeenThreshold = function() {
       const thresholdMs = window.configManager.getLastSeenThreshold();
       const days = Math.floor(thresholdMs / (24 * 60 * 60 * 1000));
       
-      console.log(`🔧 USER SETTINGS: Current threshold: ${days} days`);
+      Logger.info(`🔧 USER SETTINGS: Current threshold: ${days} days`, null, 'general');
       return { days, totalMs: thresholdMs };
     } else {
       console.error('❌ USER SETTINGS: ConfigManager not available');
@@ -938,7 +938,7 @@ window.diagnoseJavaScriptErrors = function() {
   console.log('\n🔍 Checking critical functions:');
   criticalFunctions.forEach(func => {
     const available = eval(`typeof ${func} !== 'undefined'`);
-    console.log(`   ${func}: ${available ? '✅ Available' : '❌ Missing'}`);
+    Logger.success(`   ${func}: ${available ? 'Available' : '❌ Missing'}`, null, 'general');
   });
   
   // Check for uncaught errors in console
@@ -956,7 +956,7 @@ window.diagnoseJavaScriptErrors = function() {
 // Safe wrapper for all diagnostic functions
 window.safeDiagnostic = function(diagnosticFunction, ...args) {
   try {
-    console.log(`🔍 Running diagnostic: ${diagnosticFunction.name}`);
+    Logger.debug(`Running diagnostic: ${diagnosticFunction.name}`, null, 'general');
     return diagnosticFunction(...args);
   } catch (error) {
     console.error(`❌ Diagnostic failed: ${diagnosticFunction.name}`, error);
@@ -986,14 +986,14 @@ window.testVisibilitySystem = async function() {
     if (presenceData && presenceData.active) {
       console.log('🔍 DEBUG: Found', presenceData.active.length, 'active users');
       presenceData.active.forEach((user, index) => {
-        console.log(`🔍 DEBUG: User ${index + 1}:`, {
+        Logger.debug(`DEBUG: User ${index + 1}:`, {
           id: user.id,
           userId: user.userId,
           name: user.name,
           email: user.email,
           avatarUrl: user.avatarUrl,
           isCurrentUser: user.userId === currentUser || user.email === currentUser
-        });
+        }, 'general');
       });
     }
     
@@ -1175,8 +1175,8 @@ class MetaLayerAPI {
 
   async getChatHistory(communityId, threadId = null, uri = null) {
     // Use the existing chat API
-    console.log(`🔍 CHAT_API: getChatHistory called with communityId=${communityId}, threadId=${threadId}, uri=${uri}`);
-    console.log(`🔍 CHAT_API: uri type: ${typeof uri}, value: ${JSON.stringify(uri)}`);
+    Logger.debug(`CHAT_API: getChatHistory called with communityId=${communityId}, threadId=${threadId}, uri=${uri}`, null, 'general');
+    Logger.debug(`CHAT_API: uri type: ${typeof uri}, value: ${JSON.stringify(uri)}`, null, 'general');
     
     if (!communityId) {
       console.error('❌ CHAT_API: communityId is required');
@@ -1194,11 +1194,11 @@ class MetaLayerAPI {
     }
     
     const url = `/chat/history?${params.toString()}`;
-    console.log(`🔍 CHAT_API: Requesting ${url}`);
+    Logger.debug(`CHAT_API: Requesting ${url}`, null, 'general');
     
     try {
       const response = await this.request(url);
-      console.log(`✅ CHAT_API: Response:`, response);
+      Logger.success(`CHAT_API: Response:`, response, 'general');
       
       // The backend now returns conversations directly
       if (response.conversations) {
@@ -1478,7 +1478,7 @@ async function loadCommunities() {
             break;
           }
         } catch (error) {
-          console.log(`🔍 INIT: Authentication not ready, attempt ${authAttempts + 1}/${maxAuthAttempts}... (${error.message})`);
+          Logger.debug(`INIT: Authentication not ready, attempt ${authAttempts + 1}/${maxAuthAttempts}... (${error.message})`, null, 'general');
         }
         await new Promise(resolve => setTimeout(resolve, 500)); // Wait 500ms
         authAttempts++;
@@ -1537,7 +1537,7 @@ async function loadCombinedAvatars(communityIds) {
       const apiStartTime = Date.now();
       const urlResponse = await api.getPresenceByUrl(currentUri, communityIds);
       const apiEndTime = Date.now();
-      console.log(`✅ LOAD_VISIBILITY: API responded in ${apiEndTime - apiStartTime}ms`);
+      Logger.success(`LOAD_VISIBILITY: API responded in ${apiEndTime - apiStartTime}ms`, null, 'general');
       console.log('🔍 LOAD_VISIBILITY: Response structure:', {
         hasActive: !!urlResponse?.active,
         activeCount: urlResponse?.active?.length || 0,
@@ -1553,14 +1553,14 @@ async function loadCombinedAvatars(communityIds) {
         
         // Enhanced logging for each active user
         urlResponse.active.forEach((user, index) => {
-          console.log(`👤 LOAD_VISIBILITY: User ${index + 1}/${urlResponse.active.length}:`, {
+          Logger.info(`👤 LOAD_VISIBILITY: User ${index + 1}/${urlResponse.active.length}:`, {
             email: user.email,
             name: user.name,
             isActive: user.isActive,
             status: user.status,
             lastSeen: user.lastSeen,
             enterTime: user.enterTime
-          });
+          }, 'general');
         });
       } else {
         console.log('');
@@ -1621,39 +1621,39 @@ async function loadCombinedAvatars(communityIds) {
       const communityId = communityIds[index];
       let avatars;
       
-      console.log(`🔍 VISIBILITY: Processing response for community ${communityId}:`, response);
-      console.log(`🔍 VISIBILITY: Response keys:`, response ? Object.keys(response) : 'null');
-      console.log(`🔍 VISIBILITY: Response type:`, typeof response);
-      console.log(`🔍 VISIBILITY: Is array:`, Array.isArray(response));
+      Logger.debug(`VISIBILITY: Processing response for community ${communityId}:`, response, 'general');
+      Logger.debug(`VISIBILITY: Response keys:`, response ? Object.keys(response) : 'null', 'general');
+      Logger.debug(`VISIBILITY: Response type:`, typeof response, 'general');
+      Logger.debug(`VISIBILITY: Is array:`, Array.isArray(response), 'general');
       
       // Handle different response formats
       if (response && response.avatars && Array.isArray(response.avatars)) {
         avatars = response.avatars;
-        console.log(`🔍 VISIBILITY: Found ${avatars.length} avatars in response.avatars for ${communityId}`);
+        Logger.debug(`VISIBILITY: Found ${avatars.length} avatars in response.avatars for ${communityId}`, null, 'general');
       } else if (response && response.active && Array.isArray(response.active)) {
         avatars = response.active;
-        console.log(`🔍 VISIBILITY: Found ${avatars.length} avatars in response.active for ${communityId}`);
+        Logger.debug(`VISIBILITY: Found ${avatars.length} avatars in response.active for ${communityId}`, null, 'general');
       } else if (Array.isArray(response)) {
         avatars = response;
-        console.log(`🔍 VISIBILITY: Found ${avatars.length} avatars in direct array for ${communityId}`);
+        Logger.debug(`VISIBILITY: Found ${avatars.length} avatars in direct array for ${communityId}`, null, 'general');
       } else if (response && typeof response === 'object') {
         // Check for other possible structures
-        console.log(`🔍 VISIBILITY: Checking other object structures for ${communityId}`);
+        Logger.debug(`VISIBILITY: Checking other object structures for ${communityId}`, null, 'general');
         if (response.users && Array.isArray(response.users)) {
           avatars = response.users;
-          console.log(`🔍 VISIBILITY: Found ${avatars.length} avatars in response.users for ${communityId}`);
+          Logger.debug(`VISIBILITY: Found ${avatars.length} avatars in response.users for ${communityId}`, null, 'general');
         } else {
           avatars = [];
-          console.log(`🔍 VISIBILITY: No avatars found in object for ${communityId}, available keys:`, Object.keys(response));
+          Logger.debug(`VISIBILITY: No avatars found in object for ${communityId}, available keys:`, Object.keys(response), 'general');
         }
       } else {
         avatars = [];
-        console.log(`🔍 VISIBILITY: No avatars found for ${communityId}, response format:`, typeof response);
+        Logger.debug(`VISIBILITY: No avatars found for ${communityId}, response format:`, typeof response, 'general');
       }
       
       // Add community info to each avatar and deduplicate
       avatars.forEach((avatar, avatarIndex) => {
-        console.log(`🔍 VISIBILITY: Processing avatar ${avatarIndex + 1} from ${communityId}:`, {
+        Logger.debug(`VISIBILITY: Processing avatar ${avatarIndex + 1} from ${communityId}:`, {
           id: avatar.id,
           userId: avatar.userId,
           name: avatar.name,
@@ -1661,7 +1661,7 @@ async function loadCombinedAvatars(communityIds) {
           email: avatar.email || avatar.userId || avatar.id,
           avatarUrl: avatar.avatarUrl,
           auraColor: avatar.auraColor
-        });
+        }, 'general');
         
         const userKey = `${avatar.userId || avatar.id}`;
         if (!seenUsers.has(userKey)) {
@@ -1671,22 +1671,22 @@ async function loadCombinedAvatars(communityIds) {
             communityId: communityId,
             communityName: avatar.communityName || `Community ${communityId}`
           });
-          console.log(`✅ VISIBILITY: Added unique avatar: ${avatar.name || avatar.handle || 'Unknown'} (${userKey}) from ${communityId}`);
+          Logger.success(`VISIBILITY: Added unique avatar: ${avatar.name || avatar.handle || 'Unknown'} (${userKey}) from ${communityId}`, null, 'general');
         } else {
-          console.log(`⏭️ VISIBILITY: Skipped duplicate avatar: ${avatar.name || avatar.handle || 'Unknown'} (${userKey}) from ${communityId}`);
+          Logger.info(`⏭️ VISIBILITY: Skipped duplicate avatar: ${avatar.name || avatar.handle || 'Unknown'} (${userKey}) from ${communityId}`, null, 'general');
         }
       });
     });
     
-    console.log(`🔍 VISIBILITY: Final combined avatars:`, allAvatars);
-    console.log(`🔍 VISIBILITY: Total unique avatars: ${allAvatars.length}`);
+    Logger.debug(`VISIBILITY: Final combined avatars:`, allAvatars, 'general');
+    Logger.debug(`VISIBILITY: Total unique avatars: ${allAvatars.length}`, null, 'general');
     debug(`Combined avatars from ${communityIds.length} communities:`, allAvatars);
     debug(`Total unique avatars: ${allAvatars.length}`);
     
     // Enhanced logging for final avatars before passing to updateVisibleTab
     console.log('🔍 VISIBILITY: Final avatars to be processed by updateVisibleTab:');
     allAvatars.forEach((avatar, index) => {
-      console.log(`🔍 VISIBILITY: Final avatar ${index + 1}:`, {
+      Logger.debug(`VISIBILITY: Final avatar ${index + 1}:`, {
         id: avatar.id,
         userId: avatar.userId,
         name: avatar.name,
@@ -1695,7 +1695,7 @@ async function loadCombinedAvatars(communityIds) {
         avatarUrl: avatar.avatarUrl,
         auraColor: avatar.auraColor,
         communityId: avatar.communityId
-      });
+      }, 'general');
     });
     
     // Update the visible tab with combined avatar data
@@ -1787,13 +1787,13 @@ async function updateVisibleTab(avatars) {
     );
     const isFake = avatar.avatarUrl && avatar.avatarUrl.includes('ui-avatars.com');
     
-    console.log(`🔍 AVATAR_URL_DIAGNOSTIC: User ${index + 1} (${avatar.name || avatar.email}):`, {
+    Logger.debug(`AVATAR_URL_DIAGNOSTIC: User ${index + 1} (${avatar.name || avatar.email}):`, {
       avatarUrl: avatar.avatarUrl,
       isRealGoogle: isRealGoogle,
       isFake: isFake,
       auraColor: avatar.auraColor,
       enterTime: avatar.enterTime
-    });
+    }, 'general');
   });
   
   // Store visibility data globally for real-time aura color access
@@ -1825,46 +1825,46 @@ async function updateVisibleTab(avatars) {
     return;
   }
   
-  console.log(`🔍 VISIBILITY: Updating visible tab with ${avatars.length} avatars`);
+  Logger.debug(`VISIBILITY: Updating visible tab with ${avatars.length} avatars`, null, 'general');
   
   // Get current user email for filtering
   const currentUserEmail = await getCurrentUserEmail();
-  console.log(`🔍 VISIBILITY: Current user email: ${currentUserEmail}`);
+  Logger.debug(`VISIBILITY: Current user email: ${currentUserEmail}`, null, 'general');
   
   // Enhanced logging for each avatar
   console.log('🔍 VISIBILITY: Processing avatars:');
   avatars.forEach((avatar, index) => {
-    console.log(`🔍 VISIBILITY: Avatar ${index + 1}:`, {
+    Logger.debug(`VISIBILITY: Avatar ${index + 1}:`, {
       userId: avatar.userId,
       name: avatar.name,
       handle: avatar.handle,
       avatarUrl: avatar.avatarUrl,
       email: avatar.email || 'no email field'
-    });
+    }, 'general');
   });
   
   // CRITICAL FIX: Store ALL avatars (including current user) for profile avatar lookup
   // Store the UNFILTERED data globally BEFORE filtering out current user
   window.currentVisibilityDataUnfiltered = { active: avatars };
-  console.log(`🔍 VISIBILITY_UNFILTERED: Stored ${avatars.length} avatars (including current user) for profile avatar lookup`);
+  Logger.debug(`VISIBILITY_UNFILTERED: Stored ${avatars.length} avatars (including current user) for profile avatar lookup`, null, 'general');
   
   // Filter out ONLY the current user - show all other users regardless of avatar status
   // CRITICAL FIX: Don't filter based on avatarUrl - users should be visible even if avatar hasn't loaded yet
   console.log('');
   console.log('📊 VISIBILITY: Enhanced Current User Detection Logging');
   console.log('───────────────────────────────────────────────────────────');
-  console.log(`🔍 VISIBILITY: Current user email: ${currentUserEmail}`);
-  console.log(`🔍 VISIBILITY: Total avatars to check: ${avatars.length}`);
+  Logger.debug(`VISIBILITY: Current user email: ${currentUserEmail}`, null, 'general');
+  Logger.debug(`VISIBILITY: Total avatars to check: ${avatars.length}`, null, 'general');
   
   const usersWithAvatars = avatars.filter(avatar => {
-    console.log(`🔍 VISIBILITY: Checking avatar: ${avatar.name} (${avatar.userId})`);
-    console.log(`🔍 VISIBILITY: Avatar details:`, {
+    Logger.debug(`VISIBILITY: Checking avatar: ${avatar.name} (${avatar.userId})`, null, 'general');
+    Logger.debug(`VISIBILITY: Avatar details:`, {
       userId: avatar.userId,
       handle: avatar.handle,
       name: avatar.name,
       email: avatar.email,
       avatarUrl: avatar.avatarUrl || 'null'
-    });
+    }, 'general');
     
     // Enhanced current user detection with detailed logging
     const userIdMatch = avatar.userId === currentUserEmail;
@@ -1872,30 +1872,30 @@ async function updateVisibleTab(avatars) {
     const nameMatch = avatar.name === currentUserEmail.split('@')[0];
     const emailMatch = avatar.email === currentUserEmail;
     
-    console.log(`🔍 VISIBILITY: Current user detection:`, {
+    Logger.debug(`VISIBILITY: Current user detection:`, {
       userIdMatch,
       handleMatch,
       nameMatch,
       emailMatch
-    });
+    }, 'general');
     
     const isCurrentUser = userIdMatch || handleMatch || nameMatch || emailMatch;
     
     if (isCurrentUser) {
-      console.log(`🔍 VISIBILITY: ✅ CONFIRMED CURRENT USER - ${avatar.name} (${avatar.userId})`);
-      console.log(`🔍 VISIBILITY: Match reason: ${userIdMatch ? 'userId' : handleMatch ? 'handle' : nameMatch ? 'name' : 'email'}`);
+      Logger.success(`🔍 VISIBILITY: CONFIRMED CURRENT USER - ${avatar.name} (${avatar.userId})`, null, 'general');
+      Logger.debug(`VISIBILITY: Match reason: ${userIdMatch ? 'userId' : handleMatch ? 'handle' : nameMatch ? 'name' : 'email'}`, null, 'general');
       
       // CRITICAL FIX: Always filter out current user from their own visibility list
       // The current user should not see themselves in the "Visible" list
-      console.log(`🔍 VISIBILITY: 🚫 FILTERING OUT current user from their own visibility list`);
+      Logger.debug(`VISIBILITY: 🚫 FILTERING OUT current user from their own visibility list`, null, 'general');
       return false;
     }
     
-    console.log(`🔍 VISIBILITY: ✅ NOT CURRENT USER - Keeping avatar: ${avatar.name} (${avatar.userId}) [avatarUrl: ${avatar.avatarUrl || 'null - will use placeholder'}]`);
+    Logger.success(`🔍 VISIBILITY: NOT CURRENT USER - Keeping avatar: ${avatar.name} (${avatar.userId}) [avatarUrl: ${avatar.avatarUrl || 'null - will use placeholder'}]`, null, 'general');
     return true;
   });
   
-  console.log(`🔍 VISIBILITY: Showing ${usersWithAvatars.length} users with real avatars (filtered from ${avatars.length} total)`);
+  Logger.debug(`VISIBILITY: Showing ${usersWithAvatars.length} users with real avatars (filtered from ${avatars.length} total)`, null, 'general');
   console.log('🔍 VISIBILITY: Final users to display:', usersWithAvatars.map(u => `${u.name} (${u.userId})`));
   
   // Create a compact header with search, count, and go invisible button
@@ -1924,17 +1924,17 @@ async function updateVisibleTab(avatars) {
           
           // COMPREHENSIVE DIAGNOSTIC LOGGING
           console.log('');
-          console.log(`🔍 VISIBILITY_STATUS: ═══ User ${avatar.name} (${avatar.userId}) ═══`);
-          console.log(`🔍 VISIBILITY_STATUS:   Build: ${EXTENSION_BUILD}`);
-          console.log(`🔍 VISIBILITY_STATUS:   avatarUrl: ${avatar.avatarUrl || 'null (will use placeholder)'}`);
-          console.log(`🔍 VISIBILITY_STATUS:   enterTime: ${avatar.enterTime}`);
-          console.log(`🔍 VISIBILITY_STATUS:   lastSeen: ${avatar.lastSeen}`);
-          console.log(`🔍 VISIBILITY_STATUS:   timeSinceLastSeen: ${Math.floor(timeSinceLastSeen / 1000)}s`);
-          console.log(`🔍 VISIBILITY_STATUS:   isActive (from DB): ${isActive}`);
-          console.log(`🔍 VISIBILITY_STATUS:   hasLeft: ${hasLeft}`);
-          console.log(`🔍 VISIBILITY_STATUS:   avatar.status: ${avatar.status}`);
-          console.log(`🔍 VISIBILITY_STATUS:   avatar.isActive: ${avatar.isActive}`);
-          console.log(`🔍 VISIBILITY_STATUS:   avatar.availability: ${avatar.availability}`);
+          Logger.debug(`VISIBILITY_STATUS: ═══ User ${avatar.name} (${avatar.userId}) ═══`, null, 'general');
+          Logger.debug(`VISIBILITY_STATUS:   Build: ${EXTENSION_BUILD}`, null, 'general');
+          Logger.debug(`VISIBILITY_STATUS:   avatarUrl: ${avatar.avatarUrl || 'null (will use placeholder)'}`, null, 'general');
+          Logger.debug(`VISIBILITY_STATUS:   enterTime: ${avatar.enterTime}`, null, 'general');
+          Logger.debug(`VISIBILITY_STATUS:   lastSeen: ${avatar.lastSeen}`, null, 'general');
+          Logger.debug(`VISIBILITY_STATUS:   timeSinceLastSeen: ${Math.floor(timeSinceLastSeen / 1000)}s`, null, 'general');
+          Logger.debug(`VISIBILITY_STATUS:   isActive (from DB): ${isActive}`, null, 'general');
+          Logger.debug(`VISIBILITY_STATUS:   hasLeft: ${hasLeft}`, null, 'general');
+          Logger.debug(`VISIBILITY_STATUS:   avatar.status: ${avatar.status}`, null, 'general');
+          Logger.debug(`VISIBILITY_STATUS:   avatar.isActive: ${avatar.isActive}`, null, 'general');
+          Logger.debug(`VISIBILITY_STATUS:   avatar.availability: ${avatar.availability}`, null, 'general');
           
           // Use the user's availability setting for status dot color
           let statusDotColor = '#6b7280'; // Default gray (offline)
@@ -1944,8 +1944,8 @@ async function updateVisibleTab(avatars) {
             // User has left - show "last seen" status
             statusDotColor = '#6b7280'; // Gray for inactive users
             statusText = formatLastSeenDisplay(avatar.lastSeen);
-            console.log(`🔍 VISIBILITY_STATUS:   DECISION: User has LEFT → Status: "${statusText}"`);
-            console.log(`🔍 VISIBILITY_STATUS:   DECISION: Showing INACTIVE user with "Last seen" status`);
+            Logger.debug(`VISIBILITY_STATUS:   DECISION: User has LEFT → Status: "${statusText}"`, null, 'general');
+            Logger.debug(`VISIBILITY_STATUS:   DECISION: Showing INACTIVE user with "Last seen" status`, null, 'general');
           } else if (isActive) {
             // User is active - use their availability setting for status dot
             if (avatar.availability === 'AVAILABLE') {
@@ -1962,15 +1962,15 @@ async function updateVisibleTab(avatars) {
               statusDotColor = '#22c55e'; // Green (Available)
               statusText = formatTimeDisplay(avatar.enterTime);
             }
-            console.log(`🔍 VISIBILITY_STATUS:   DECISION: User is ACTIVE → Status: "${statusText}"`);
-            console.log(`🔍 VISIBILITY_STATUS:   DECISION: Showing ACTIVE user with time display`);
+            Logger.debug(`VISIBILITY_STATUS:   DECISION: User is ACTIVE → Status: "${statusText}"`, null, 'general');
+            Logger.debug(`VISIBILITY_STATUS:   DECISION: Showing ACTIVE user with time display`, null, 'general');
           }
           
-          console.log(`🔍 VISIBILITY_STATUS:   FINAL: statusText="${statusText}", dotColor=${statusDotColor}`);
-          console.log(`🔍 VISIBILITY_STATUS:   ═══════════════════════════════════════`);
+          Logger.debug(`VISIBILITY_STATUS:   FINAL: statusText="${statusText}", dotColor=${statusDotColor}`, null, 'general');
+          Logger.debug(`VISIBILITY_STATUS:   ═══════════════════════════════════════`, null, 'general');
           
           // Aura color is now handled by createUnifiedAvatar()
-          console.log(`🔍 AURA_DEBUG: User ${avatar.name} - auraColor: ${avatar.auraColor}`);
+          Logger.debug(`AURA_DEBUG: User ${avatar.name} - auraColor: ${avatar.auraColor}`, null, 'general');
           
           return `
             <li class="user-item" data-user-id="${avatar.userId}" data-user-name="${avatar.name}" data-index="${index}">
@@ -2544,40 +2544,40 @@ function createUnifiedAvatar(user, options = {}) {
   const avatarUrl = user.avatarUrl;
   
   // Debug logging
-  console.log(`🔍 UNIFIED_AVATAR: [BUILD ${EXTENSION_BUILD}] Creating avatar for user:`, {
+  Logger.debug(`UNIFIED_AVATAR: [BUILD ${EXTENSION_BUILD}] Creating avatar for user:`, {
     name: name,
     email: user.email,
     id: user.id,
     userId: user.userId,
     auraColor: user.auraColor,
     context: context
-  });
+  }, 'general');
   
   // COMPREHENSIVE AURA COLOR DEBUGGING
-  console.log(`🔍 AURA_DEBUG: [BUILD ${EXTENSION_BUILD}] === AURA COLOR ANALYSIS ===`);
-  console.log(`🔍 AURA_DEBUG: [BUILD ${EXTENSION_BUILD}] Context: ${context}`);
-  console.log(`🔍 AURA_DEBUG: [BUILD ${EXTENSION_BUILD}] user.auraColor: ${user.auraColor}`);
-  console.log(`🔍 AURA_DEBUG: [BUILD ${EXTENSION_BUILD}] user.auraColor type: ${typeof user.auraColor}`);
-  console.log(`🔍 AURA_DEBUG: [BUILD ${EXTENSION_BUILD}] user.auraColor === null: ${user.auraColor === null}`);
-  console.log(`🔍 AURA_DEBUG: [BUILD ${EXTENSION_BUILD}] user.auraColor === 'null': ${user.auraColor === 'null'}`);
-  console.log(`🔍 AURA_DEBUG: [BUILD ${EXTENSION_BUILD}] user.auraColor === undefined: ${user.auraColor === undefined}`);
-  console.log(`🔍 AURA_DEBUG: [BUILD ${EXTENSION_BUILD}] Full user object:`, JSON.stringify(user, null, 2));
+  Logger.debug(`AURA_DEBUG: [BUILD ${EXTENSION_BUILD}] === AURA COLOR ANALYSIS ===`, null, 'general');
+  Logger.debug(`AURA_DEBUG: [BUILD ${EXTENSION_BUILD}] Context: ${context}`, null, 'general');
+  Logger.debug(`AURA_DEBUG: [BUILD ${EXTENSION_BUILD}] user.auraColor: ${user.auraColor}`, null, 'general');
+  Logger.debug(`AURA_DEBUG: [BUILD ${EXTENSION_BUILD}] user.auraColor type: ${typeof user.auraColor}`, null, 'general');
+  Logger.debug(`AURA_DEBUG: [BUILD ${EXTENSION_BUILD}] user.auraColor === null: ${user.auraColor === null}`, null, 'general');
+  Logger.debug(`AURA_DEBUG: [BUILD ${EXTENSION_BUILD}] user.auraColor === 'null': ${user.auraColor === 'null'}`, null, 'general');
+  Logger.debug(`AURA_DEBUG: [BUILD ${EXTENSION_BUILD}] user.auraColor === undefined: ${user.auraColor === undefined}`, null, 'general');
+  Logger.debug(`AURA_DEBUG: [BUILD ${EXTENSION_BUILD}] Full user object:`, JSON.stringify(user, null, 2), 'general');
   
   // Ensure consistent aura color for the same user across all contexts
   let auraColor;
   if (user.auraColor && user.auraColor !== null && user.auraColor !== 'null') {
     auraColor = user.auraColor;
-    console.log(`🔍 UNIFIED_AVATAR: Using provided aura color: ${auraColor}`);
+    Logger.debug(`UNIFIED_AVATAR: Using provided aura color: ${auraColor}`, null, 'general');
   } else {
     // Use a consistent color based on user ID or email for the same user
     const userIdentifier = user.id || user.userId || user.email || name;
     auraColor = getAvatarColor(userIdentifier);
-    console.log(`🔍 UNIFIED_AVATAR: [BUILD ${EXTENSION_BUILD}] Generated aura color for ${userIdentifier}: ${auraColor}`);
+    Logger.debug(`UNIFIED_AVATAR: [BUILD ${EXTENSION_BUILD}] Generated aura color for ${userIdentifier}: ${auraColor}`, null, 'general');
   }
   
   // Determine status dot color - use provided statusColor or default to green
   const dotColor = statusColor || '#22c55e'; // Default to green if no status color provided
-  console.log(`🔍 UNIFIED_AVATAR: [BUILD ${EXTENSION_BUILD}] Status dot color: ${dotColor}`);
+  Logger.debug(`UNIFIED_AVATAR: [BUILD ${EXTENSION_BUILD}] Status dot color: ${dotColor}`, null, 'general');
   
   // UNIFIED VISUAL IMPLEMENTATION - SAME FOR ALL CONTEXTS
   // Always use the same structure: aura background + img with border + status dot
@@ -2587,7 +2587,7 @@ function createUnifiedAvatar(user, options = {}) {
       <img src="${avatarUrl}" alt="${name}" style="position: relative; z-index: 2; width: ${size}px; height: ${size}px; border-radius: 50%; object-fit: cover; border: 2px solid ${auraColor};" data-avatar-fallback="true">
       ${showStatus ? `<div style="position: absolute; bottom: -2px; right: -2px; width: 8px; height: 8px; border-radius: 50%; background-color: ${dotColor}; border: 2px solid white; z-index: 3;"></div>` : ''}
     </div>`;
-    console.log(`🔍 UNIFIED_AVATAR: [BUILD ${EXTENSION_BUILD}] Generated UNIFIED avatar with image - auraColor: ${auraColor}, showAura: ${showAura}`);
+    Logger.debug(`UNIFIED_AVATAR: [BUILD ${EXTENSION_BUILD}] Generated UNIFIED avatar with image - auraColor: ${auraColor}, showAura: ${showAura}`, null, 'general');
     return avatarHTML;
   }
   
@@ -2600,7 +2600,7 @@ function createUnifiedAvatar(user, options = {}) {
     <div style="position: relative; z-index: 2; width: ${size}px; height: ${size}px; border-radius: 50%; background-color: ${auraColor}; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: ${fontSize}px; border: 2px solid ${auraColor};">${initial}</div>
     ${showStatus ? `<div style="position: absolute; bottom: -2px; right: -2px; width: 8px; height: 8px; border-radius: 50%; background-color: ${dotColor}; border: 2px solid white; z-index: 3;"></div>` : ''}
   </div>`;
-  console.log(`🔍 UNIFIED_AVATAR: [BUILD ${EXTENSION_BUILD}] Generated UNIFIED avatar with initial - auraColor: ${auraColor}, showAura: ${showAura}`);
+  Logger.debug(`UNIFIED_AVATAR: [BUILD ${EXTENSION_BUILD}] Generated UNIFIED avatar with initial - auraColor: ${auraColor}, showAura: ${showAura}`, null, 'general');
   return avatarHTML;
 }
 
@@ -2702,8 +2702,8 @@ function getUserAvatarBgColor() {
   //     // First, get the database user ID by email
   //     const userEmail = result.googleUser.email;
   //     const userLookupUrl = `${METALAYER_API_URL}/v1/users/me`;
-  //     console.log(`🔍 AURA_COLOR_SAVE: [BUILD ${EXTENSION_BUILD}] Looking up user by email: ${userEmail}`);
-  //     console.log(`🔍 AURA_COLOR_SAVE: [BUILD ${EXTENSION_BUILD}] API URL: ${userLookupUrl}`);
+  //     Logger.debug(`AURA_COLOR_SAVE: [BUILD ${EXTENSION_BUILD}] Looking up user by email: ${userEmail}`, null, 'general');
+  //     Logger.debug(`AURA_COLOR_SAVE: [BUILD ${EXTENSION_BUILD}] API URL: ${userLookupUrl}`, null, 'general');
   //     
   //     const userResponse = await fetch(userLookupUrl, {
   //       headers: {
@@ -2786,13 +2786,13 @@ async function refreshMessageAvatarsWithCurrentPresence() {
         const userEmail = user.email || user.userId || user.id;
         if (userEmail && user.auraColor) {
           auraColorMap[userEmail] = user.auraColor;
-          console.log(`🔄 MESSAGE_AVATAR: Updated aura for ${userEmail}: ${user.auraColor}`);
+          Logger.debug(`MESSAGE_AVATAR: Updated aura for ${userEmail}: ${user.auraColor}`, null, 'general');
         }
       });
       
       // Find all message containers and re-render their avatars with updated aura colors
       const messageContainers = document.querySelectorAll('.message');
-      console.log(`🔄 MESSAGE_AVATAR: Found ${messageContainers.length} message containers to update`);
+      Logger.debug(`MESSAGE_AVATAR: Found ${messageContainers.length} message containers to update`, null, 'general');
       
       messageContainers.forEach(messageContainer => {
         const avatarContainer = messageContainer.querySelector('.avatar-container');
@@ -2807,7 +2807,7 @@ async function refreshMessageAvatarsWithCurrentPresence() {
               const userEmail = author.email;
               
               if (userEmail && auraColorMap[userEmail]) {
-                console.log(`🔄 MESSAGE_AVATAR: Re-rendering avatar for ${userEmail} with aura ${auraColorMap[userEmail]}`);
+                Logger.debug(`MESSAGE_AVATAR: Re-rendering avatar for ${userEmail} with aura ${auraColorMap[userEmail]}`, null, 'general');
                 
                 // Update the author's aura color
                 author.auraColor = auraColorMap[userEmail];
@@ -2816,7 +2816,7 @@ async function refreshMessageAvatarsWithCurrentPresence() {
                 const newAvatarHTML = getSenderAvatar(author);
                 avatarContainer.innerHTML = newAvatarHTML;
                 
-                console.log(`🔄 MESSAGE_AVATAR: Re-rendered avatar for ${userEmail}`);
+                Logger.debug(`MESSAGE_AVATAR: Re-rendered avatar for ${userEmail}`, null, 'general');
               }
             }
           }
@@ -3320,20 +3320,20 @@ async function addMessageToChat(message) {
   
   // Check if message is deleted
   if (message.deletedAt) {
-    console.log(`🔍 DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] === DELETED MESSAGE ANALYSIS ===`);
-    console.log(`🔍 DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] Message ID: ${message.id}`);
-    console.log(`🔍 DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] Message deletedAt: ${message.deletedAt}`);
-    console.log(`🔍 DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] Message hasReplies: ${message.hasReplies}`);
-    console.log(`🔍 DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] Message replyCount: ${message.replyCount}`);
-    console.log(`🔍 DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] Full message object:`, JSON.stringify(message, null, 2));
+    Logger.debug(`DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] === DELETED MESSAGE ANALYSIS ===`, null, 'general');
+    Logger.debug(`DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] Message ID: ${message.id}`, null, 'general');
+    Logger.debug(`DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] Message deletedAt: ${message.deletedAt}`, null, 'general');
+    Logger.debug(`DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] Message hasReplies: ${message.hasReplies}`, null, 'general');
+    Logger.debug(`DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] Message replyCount: ${message.replyCount}`, null, 'general');
+    Logger.debug(`DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] Full message object:`, JSON.stringify(message, null, 2), 'general');
     
     // Only show deleted messages if they have replies
     if (!message.hasReplies) {
-      console.log(`🔍 DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] SKIPPING deleted message without replies: ${message.id}`);
+      Logger.debug(`DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] SKIPPING deleted message without replies: ${message.id}`, null, 'general');
       return;
     }
     
-    console.log(`🔍 DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] SHOWING deleted message WITH replies: ${message.id}`);
+    Logger.debug(`DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] SHOWING deleted message WITH replies: ${message.id}`, null, 'general');
     
     // For deleted messages, use the same structure as regular messages
     // but with "This message was deleted" as content
@@ -3542,14 +3542,14 @@ function updateProfileAvatarWithRealTimeAura() {
     const realTimeAuraColor = getLatestAuraColorFromPresence(userEmail);
     
     if (realTimeAuraColor) {
-      console.log(`🔍 PROFILE_AVATAR_UPDATE: Found real-time aura color for profile: ${realTimeAuraColor}`);
+      Logger.debug(`PROFILE_AVATAR_UPDATE: Found real-time aura color for profile: ${realTimeAuraColor}`, null, 'general');
       
       // Update the profile avatar with the real-time aura color
       const profileAvatar = document.querySelector('#user-avatar-container');
       if (profileAvatar) {
-        console.log(`🔍 PROFILE_AVATAR_UPDATE: Found profile avatar element:`, profileAvatar);
-        console.log(`🔍 PROFILE_AVATAR_UPDATE: Container innerHTML:`, profileAvatar.innerHTML);
-        console.log(`🔍 PROFILE_AVATAR_UPDATE: Container has children:`, profileAvatar.children.length);
+        Logger.debug(`PROFILE_AVATAR_UPDATE: Found profile avatar element:`, profileAvatar, 'general');
+        Logger.debug(`PROFILE_AVATAR_UPDATE: Container innerHTML:`, profileAvatar.innerHTML, 'general');
+        Logger.debug(`PROFILE_AVATAR_UPDATE: Container has children:`, profileAvatar.children.length, 'general');
         
         // Check if the container has any avatar element
         let avatarElement = profileAvatar.querySelector('img') || profileAvatar.querySelector('[style*="border-radius"]');
@@ -3564,13 +3564,13 @@ function updateProfileAvatarWithRealTimeAura() {
           if (auraRing) {
             // Update the aura ring color
             auraRing.style.border = `2px solid ${realTimeAuraColor}`;
-            console.log(`🔍 PROFILE_AVATAR_UPDATE: Updated unified avatar aura to: ${realTimeAuraColor}`);
+            Logger.debug(`PROFILE_AVATAR_UPDATE: Updated unified avatar aura to: ${realTimeAuraColor}`, null, 'general');
           }
         } else if (avatarElement) {
           console.log('🔍 PROFILE_AVATAR_UPDATE: Found simple avatar element');
           // Update the border on the simple avatar
           avatarElement.style.border = `2px solid ${realTimeAuraColor}`;
-          console.log(`🔍 PROFILE_AVATAR_UPDATE: Updated avatar border color to: ${realTimeAuraColor}`);
+          Logger.debug(`PROFILE_AVATAR_UPDATE: Updated avatar border color to: ${realTimeAuraColor}`, null, 'general');
         } else {
           console.log('🔍 PROFILE_AVATAR_UPDATE: No avatar element found in container, applying border to container');
           // Apply border directly to container as fallback
@@ -3578,7 +3578,7 @@ function updateProfileAvatarWithRealTimeAura() {
           profileAvatar.style.borderWidth = '2px';
           profileAvatar.style.borderStyle = 'solid';
           profileAvatar.style.borderRadius = '50%';
-          console.log(`🔍 PROFILE_AVATAR_UPDATE: Updated container border color to: ${realTimeAuraColor}`);
+          Logger.debug(`PROFILE_AVATAR_UPDATE: Updated container border color to: ${realTimeAuraColor}`, null, 'general');
         }
       } else {
         console.log('🔍 PROFILE_AVATAR_UPDATE: Profile avatar element not found');
@@ -3599,7 +3599,7 @@ function getLatestAuraColorFromPresence(userEmail) {
     if (presenceData && presenceData.active) {
       const user = presenceData.active.find(u => u.email === userEmail || u.id === userEmail || u.userId === userEmail);
       if (user && user.auraColor) {
-        console.log(`🔍 GET_LATEST_AURA: Found real-time aura color for ${userEmail}: ${user.auraColor}`);
+        Logger.debug(`GET_LATEST_AURA: Found real-time aura color for ${userEmail}: ${user.auraColor}`, null, 'general');
         return user.auraColor;
       }
     }
@@ -3609,7 +3609,7 @@ function getLatestAuraColorFromPresence(userEmail) {
     if (visibilityData && visibilityData.active) {
       const user = visibilityData.active.find(u => u.email === userEmail || u.id === userEmail || u.userId === userEmail);
       if (user && user.auraColor) {
-        console.log(`🔍 GET_LATEST_AURA: Found visibility aura color for ${userEmail}: ${user.auraColor}`);
+        Logger.debug(`GET_LATEST_AURA: Found visibility aura color for ${userEmail}: ${user.auraColor}`, null, 'general');
         return user.auraColor;
       }
     }
@@ -3618,12 +3618,12 @@ function getLatestAuraColorFromPresence(userEmail) {
     if (window.currentUser && window.currentUser.email === userEmail) {
       const storedAuraColor = window.currentUser.auraColor;
       if (storedAuraColor && storedAuraColor !== null && storedAuraColor !== 'null') {
-        console.log(`🔍 GET_LATEST_AURA: Found stored aura color for current user ${userEmail}: ${storedAuraColor}`);
+        Logger.debug(`GET_LATEST_AURA: Found stored aura color for current user ${userEmail}: ${storedAuraColor}`, null, 'general');
         return storedAuraColor;
       }
     }
     
-    console.log(`🔍 GET_LATEST_AURA: No real-time aura color found for ${userEmail}`);
+    Logger.debug(`GET_LATEST_AURA: No real-time aura color found for ${userEmail}`, null, 'general');
     return null;
   } catch (error) {
     console.error(`❌ GET_LATEST_AURA: Error getting latest aura color for ${userEmail}:`, error);
@@ -3634,11 +3634,11 @@ function getLatestAuraColorFromPresence(userEmail) {
 function getSenderAvatar(author) {
   if (!author) return getSenderInitial('Unknown');
   
-  console.log(`🔍 GET_SENDER_AVATAR: [BUILD ${EXTENSION_BUILD}] Creating message avatar for:`, {
+  Logger.debug(`GET_SENDER_AVATAR: [BUILD ${EXTENSION_BUILD}] Creating message avatar for:`, {
     name: author.name,
     email: author.email,
     auraColor: author.auraColor
-  });
+  }, 'general');
   
   // Always try to get the latest aura color from presence data
   // This ensures cross-profile updates work correctly for ALL users
@@ -3648,7 +3648,7 @@ function getSenderAvatar(author) {
     const currentAuraColor = getCurrentUserAvatarBgColor();
     if (currentAuraColor) {
       author.auraColor = currentAuraColor;
-      console.log(`🔍 GET_SENDER_AVATAR: [BUILD ${EXTENSION_BUILD}] Using current aura color for current user:`, currentAuraColor);
+      Logger.debug(`GET_SENDER_AVATAR: [BUILD ${EXTENSION_BUILD}] Using current aura color for current user:`, currentAuraColor, 'general');
     }
   } else {
     // For other users' messages, try to get the latest aura color from presence data
@@ -3656,9 +3656,9 @@ function getSenderAvatar(author) {
     const latestAuraColor = getLatestAuraColorFromPresence(author.email);
     if (latestAuraColor) {
       author.auraColor = latestAuraColor;
-      console.log(`🔍 GET_SENDER_AVATAR: [BUILD ${EXTENSION_BUILD}] Using real-time aura color for other user:`, latestAuraColor);
+      Logger.debug(`GET_SENDER_AVATAR: [BUILD ${EXTENSION_BUILD}] Using real-time aura color for other user:`, latestAuraColor, 'general');
     } else {
-      console.log(`🔍 GET_SENDER_AVATAR: [BUILD ${EXTENSION_BUILD}] Using stored aura color for other user:`, author.auraColor);
+      Logger.debug(`GET_SENDER_AVATAR: [BUILD ${EXTENSION_BUILD}] Using stored aura color for other user:`, author.auraColor, 'general');
     }
   }
   
@@ -3671,7 +3671,7 @@ function getSenderAvatar(author) {
     statusColor: '#22c55e' // Default green for message avatars
   });
   
-  console.log(`🔍 GET_SENDER_AVATAR: [BUILD ${EXTENSION_BUILD}] Generated message avatar HTML:`, avatarHTML);
+  Logger.debug(`GET_SENDER_AVATAR: [BUILD ${EXTENSION_BUILD}] Generated message avatar HTML:`, avatarHTML, 'general');
   return avatarHTML;
 }
 
@@ -3705,9 +3705,9 @@ function formatMessageTime(createdAt) {
 }
 
 async function getMessageActionMenu(message) {
-  console.log(`🔍 MESSAGE_OPTIONS_DEBUG: Getting action menu for message ${message.id}`);
-  console.log(`🔍 MESSAGE_OPTIONS_DEBUG: Message author: ${message.authorId}, createdAt: ${message.createdAt}`);
-  console.log(`🔍 MESSAGE_OPTIONS_DEBUG: Message author object:`, message.author);
+  Logger.debug(`MESSAGE_OPTIONS_DEBUG: Getting action menu for message ${message.id}`, null, 'general');
+  Logger.debug(`MESSAGE_OPTIONS_DEBUG: Message author: ${message.authorId}, createdAt: ${message.createdAt}`, null, 'general');
+  Logger.debug(`MESSAGE_OPTIONS_DEBUG: Message author object:`, message.author, 'general');
   
   const now = new Date();
   const messageDate = new Date(message.createdAt);
@@ -3715,13 +3715,13 @@ async function getMessageActionMenu(message) {
   const diffMinutes = Math.floor(diffMs / (1000 * 60));
   const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
   
-  console.log(`🔍 MESSAGE_OPTIONS_DEBUG: Time diff - minutes: ${diffMinutes}, hours: ${diffHours}`);
+  Logger.debug(`MESSAGE_OPTIONS_DEBUG: Time diff - minutes: ${diffMinutes}, hours: ${diffHours}`, null, 'general');
   
   // Get current user to check ownership - use window.currentUser from direct auth
   const currentUser = window.currentUser;
   
-  console.log(`🔍 MESSAGE_OPTIONS_DEBUG: Current user from window.currentUser:`, currentUser);
-  console.log(`🔍 MESSAGE_OPTIONS_DEBUG: Current user email: ${currentUser ? currentUser.email : 'none'}`);
+  Logger.debug(`MESSAGE_OPTIONS_DEBUG: Current user from window.currentUser:`, currentUser, 'general');
+  Logger.debug(`MESSAGE_OPTIONS_DEBUG: Current user email: ${currentUser ? currentUser.email : 'none'}`, null, 'general');
   
   // Use email for user identification - NO UUIDs
   let isOwner = false;
@@ -3729,14 +3729,14 @@ async function getMessageActionMenu(message) {
     // Compare by email - the message should have author email
     const authorEmail = message.authorEmail || (message.author && message.author.email);
     isOwner = (authorEmail === currentUser.email);
-    console.log(`🔍 MESSAGE_OPTIONS_DEBUG: Is owner check - author email: ${authorEmail}, current user email: ${currentUser.email}, isOwner: ${isOwner}`);
+    Logger.debug(`MESSAGE_OPTIONS_DEBUG: Is owner check - author email: ${authorEmail}, current user email: ${currentUser.email}, isOwner: ${isOwner}`, null, 'general');
   }
   
   // Check if user can edit/delete (only if they own the message)
   const canEdit = isOwner && diffHours < 1; // Can edit within 1 hour
   const canDelete = isOwner; // User can only delete their own messages
   
-  console.log(`🔍 MESSAGE_OPTIONS_DEBUG: Permissions - canEdit: ${canEdit}, canDelete: ${canDelete}`);
+  Logger.debug(`MESSAGE_OPTIONS_DEBUG: Permissions - canEdit: ${canEdit}, canDelete: ${canDelete}`, null, 'general');
   const silentEdit = diffMinutes <= 5; // Silent edit within 5 minutes
   
   return `
@@ -4527,48 +4527,48 @@ async function loadMessageReactions(messageId, reactionBtn) {
     // Find the parent message div (not the button itself)
     const messageDiv = reactionBtn.closest('.message');
     if (messageDiv) {
-      console.log(`🔍 Message div found:`, messageDiv);
-      console.log(`🔍 Message div dataset:`, messageDiv.dataset);
+      Logger.debug(`Message div found:`, messageDiv, 'general');
+      Logger.debug(`Message div dataset:`, messageDiv.dataset, 'general');
       const reactionsData = messageDiv.dataset.reactions;
-      console.log(`📊 Stored reactions data:`, reactionsData);
+      Logger.info(`📊 Stored reactions data:`, reactionsData, 'general');
       if (reactionsData) {
         reactions = JSON.parse(reactionsData);
       }
     } else {
-      console.log(`❌ No message div found for reaction button`);
+      Logger.error(`No message div found for reaction button`, null, 'general');
     }
     
     // Fallback to API call if no conversation data
     if (reactions.length === 0) {
-      console.log(`🔄 No stored reactions, calling API for message ${messageId}`);
+      Logger.debug(`No stored reactions, calling API for message ${messageId}`, null, 'general');
       reactions = await api.getReactions(messageId);
-      console.log(`📡 API returned reactions:`, reactions);
+      Logger.debug(`API returned reactions:`, reactions, 'realtime');
     }
     
     const countSpan = reactionBtn.querySelector('.icon-count');
     
     if (reactions && reactions.length > 0) {
-      console.log(`📊 Found ${reactions.length} reactions`);
+      Logger.info(`📊 Found ${reactions.length} reactions`, null, 'general');
       
       // Update count
       if (countSpan) {
         countSpan.textContent = reactions.length;
         countSpan.style.display = 'inline';
-        console.log(`📊 Updated count to: ${reactions.length}`);
+        Logger.info(`📊 Updated count to: ${reactions.length}`, null, 'general');
       }
       
       // Check if current user has reacted - use window.currentUser
       const currentUser = window.currentUser;
-      console.log(`👤 Current user:`, currentUser);
+      Logger.info(`👤 Current user:`, currentUser, 'general');
       
       if (currentUser) {
         // Generate the same UUID that the server uses
         const serverUserId = currentUser.id; // Use the user ID from the database
-        console.log(`🆔 Generated server user ID: ${serverUserId}`);
+        Logger.info(`🆔 Generated server user ID: ${serverUserId}`, null, 'general');
         
         // Find user reaction by ID or email (fallback for existing data)
-        console.log(`   Current user email: ${currentUser.email}`);
-        console.log(`   All reaction user IDs:`, reactions.map(r => r.userId));
+        Logger.info(`   Current user email: ${currentUser.email}`, null, 'general');
+        Logger.info(`   All reaction user IDs:`, reactions.map(r => r.userId), 'general');
         
         const userReaction = reactions.find(r => 
           r.userId === serverUserId || 
@@ -4576,8 +4576,8 @@ async function loadMessageReactions(messageId, reactionBtn) {
           r.user.email === currentUser.email
         );
         
-        console.log(`🔍 Looking for user reaction. Found:`, userReaction);
-        console.log(`🔍 All reactions:`, reactions.map(r => ({ userId: r.userId, emoji: r.emoji, kind: r.kind })));
+        Logger.debug(`Looking for user reaction. Found:`, userReaction, 'general');
+        Logger.debug(`All reactions:`, reactions.map(r => ({ userId: r.userId, emoji: r.emoji, kind: r.kind })), 'general');
         
         if (userReaction) {
           // Show the actual emoji from the database
@@ -4588,13 +4588,13 @@ async function loadMessageReactions(messageId, reactionBtn) {
           reactionBtn.innerHTML = `${emoji}${countText ? `<span class="icon-count">${countText}</span>` : ''}`;
           reactionBtn.dataset.reaction = emoji;
         } else {
-          console.log(`❌ No user reaction found`);
+          Logger.error(`No user reaction found`, null, 'general');
         }
       } else {
-        console.log(`❌ No current user found`);
+        Logger.error(`No current user found`, null, 'general');
       }
     } else {
-      console.log(`📊 No reactions found, setting default state`);
+      Logger.info(`📊 No reactions found, setting default state`, null, 'general');
       // No reactions, hide count and set default state
       if (countSpan) {
         countSpan.textContent = '';
@@ -4940,7 +4940,7 @@ async function loadChatHistory(communityId = null) {
       communities: activeCommunities,
       count: activeCommunities.length 
     });
-    console.log(`🔍 CHAT_LOAD: Loading chat history for active communities: ${activeCommunities.join(', ')}`);
+    Logger.debug(`CHAT_LOAD: Loading chat history for active communities: ${activeCommunities.join(', ')}`, null, 'general');
     debug(`Loading chat history for active communities: ${activeCommunities.join(', ')}`);
     
     // Get normalized URL for page-specific messages - SAME AS VISIBILITY
@@ -4952,23 +4952,23 @@ async function loadChatHistory(communityId = null) {
       rawUrl: urlData.rawUrl,
       communities: activeCommunities
     });
-    console.log(`🔍 CHAT_LOAD: Loading chat history for normalized URI: ${currentUri} (from raw: ${urlData.rawUrl})`);
-    console.log(`🔍 CHAT_LOAD: urlData object:`, JSON.stringify(urlData));
-    console.log(`🔍 CHAT_LOAD: currentUri before loop: ${currentUri}`);
-    console.log(`🔍 CHAT_LOAD: currentUri type: ${typeof currentUri}, value: ${JSON.stringify(currentUri)}`);
+    Logger.debug(`CHAT_LOAD: Loading chat history for normalized URI: ${currentUri} (from raw: ${urlData.rawUrl})`, null, 'general');
+    Logger.debug(`CHAT_LOAD: urlData object:`, JSON.stringify(urlData), 'general');
+    Logger.debug(`CHAT_LOAD: currentUri before loop: ${currentUri}`, null, 'general');
+    Logger.debug(`CHAT_LOAD: currentUri type: ${typeof currentUri}, value: ${JSON.stringify(currentUri)}`, null, 'general');
     debug(`Loading chat history for normalized URI: ${currentUri} (from raw: ${urlData.rawUrl})`);
     
     // Check if we're reloading the same URI unnecessarily
     if (lastLoadedUri === currentUri) {
-      console.log(`🔍 CHAT_LOAD: Skipping reload - same URI as last load: ${currentUri}`);
-      console.log(`🔍 CHAT_LOAD: Last loaded URI: ${lastLoadedUri}, Current URI: ${currentUri}`);
+      Logger.debug(`CHAT_LOAD: Skipping reload - same URI as last load: ${currentUri}`, null, 'general');
+      Logger.debug(`CHAT_LOAD: Last loaded URI: ${lastLoadedUri}, Current URI: ${currentUri}`, null, 'general');
       return;
     }
     
     // NOTE: No polling needed - messages arrive via Supabase real-time
     
-    console.log(`🔍 CHAT_LOAD: URI changed - reloading chat history`);
-    console.log(`🔍 CHAT_LOAD: Last loaded URI: ${lastLoadedUri}, Current URI: ${currentUri}`);
+    Logger.debug(`CHAT_LOAD: URI changed - reloading chat history`, null, 'general');
+    Logger.debug(`CHAT_LOAD: Last loaded URI: ${lastLoadedUri}, Current URI: ${currentUri}`, null, 'general');
     
     // Add a longer delay to ensure server has processed any recent messages
     await new Promise(resolve => setTimeout(resolve, 500));
@@ -4983,27 +4983,27 @@ async function loadChatHistory(communityId = null) {
     
     for (const communityId of activeCommunities) {
       try {
-        console.log(`🔍 CHAT_LOAD: === LOADING MESSAGES FOR COMMUNITY ${communityId} ===`);
-        console.log(`🔍 CHAT_LOAD: Requesting chat history for community ${communityId} with URI: ${currentUri}`);
-        console.log(`🔍 CHAT_LOAD: currentUri type: ${typeof currentUri}, value: ${JSON.stringify(currentUri)}`);
-        console.log(`🔍 CHAT_LOAD: About to call api.getChatHistory with communityId=${communityId}, threadId=null, uri=${currentUri}`);
-        console.log(`🔍 CHAT_LOAD: currentUri in loop: ${currentUri}`);
+        Logger.debug(`CHAT_LOAD: === LOADING MESSAGES FOR COMMUNITY ${communityId} ===`, null, 'general');
+        Logger.debug(`CHAT_LOAD: Requesting chat history for community ${communityId} with URI: ${currentUri}`, null, 'general');
+        Logger.debug(`CHAT_LOAD: currentUri type: ${typeof currentUri}, value: ${JSON.stringify(currentUri)}`, null, 'general');
+        Logger.debug(`CHAT_LOAD: About to call api.getChatHistory with communityId=${communityId}, threadId=null, uri=${currentUri}`, null, 'general');
+        Logger.debug(`CHAT_LOAD: currentUri in loop: ${currentUri}`, null, 'general');
         
         const response = await api.getChatHistory(communityId, null, currentUri); // Use current URI for URL-specific messages
         
-        console.log(`🔍 CHAT_LOAD: === API RESPONSE FOR COMMUNITY ${communityId} ===`);
-        console.log(`🔍 CHAT_LOAD: Response object:`, JSON.stringify(response, null, 2));
-        console.log(`🔍 CHAT_LOAD: Has conversations: ${!!response.conversations}`);
-        console.log(`🔍 CHAT_LOAD: Conversations count: ${response.conversations ? response.conversations.length : 0}`);
+        Logger.debug(`CHAT_LOAD: === API RESPONSE FOR COMMUNITY ${communityId} ===`, null, 'general');
+        Logger.debug(`CHAT_LOAD: Response object:`, JSON.stringify(response, null, 2), 'general');
+        Logger.debug(`CHAT_LOAD: Has conversations: ${!!response.conversations}`, null, 'general');
+        Logger.debug(`CHAT_LOAD: Conversations count: ${response.conversations ? response.conversations.length : 0}`, null, 'general');
         
         if (response.conversations && response.conversations.length > 0) {
-          console.log(`✅ CHAT_LOAD: Found ${response.conversations.length} conversations for community ${communityId}`);
+          Logger.success(`CHAT_LOAD: Found ${response.conversations.length} conversations for community ${communityId}`, null, 'general');
           response.conversations.forEach((conv, index) => {
-            console.log(`🔍 CHAT_LOAD: Conversation ${index + 1}:`, {
+            Logger.debug(`CHAT_LOAD: Conversation ${index + 1}:`, {
               id: conv.id,
               messageCount: conv.messages ? conv.messages.length : 0,
               firstMessage: conv.messages && conv.messages.length > 0 ? conv.messages[0].body.substring(0, 50) : 'N/A'
-            });
+            }, 'general');
           });
           
           // Find community name
@@ -5017,7 +5017,7 @@ async function loadChatHistory(communityId = null) {
             communityName: communityName
           }));
           allConversations.push(...conversationsWithCommunity);
-          console.log(`✅ CHAT_LOAD: Added ${conversationsWithCommunity.length} conversations from ${communityName}`);
+          Logger.success(`CHAT_LOAD: Added ${conversationsWithCommunity.length} conversations from ${communityName}`, null, 'general');
         } else {
           console.warn(`⚠️ CHAT_LOAD: No conversations found for community ${communityId} - Empty or no messages on this page`);
         }
@@ -5032,7 +5032,7 @@ async function loadChatHistory(communityId = null) {
     }
     
     console.log('🔍 CHAT_LOAD: === FINAL COMBINED RESULTS ===');
-    console.log(`🔍 CHAT_LOAD: Total conversations from all communities: ${allConversations.length}`);
+    Logger.debug(`CHAT_LOAD: Total conversations from all communities: ${allConversations.length}`, null, 'general');
     console.log('🔍 CHAT_LOAD: Combined chat history from all communities:', allConversations);
     debug(`Combined chat history from all communities: ${JSON.stringify(allConversations)}`);
     
@@ -5045,7 +5045,7 @@ async function loadChatHistory(communityId = null) {
     
     // Log current messages before clearing
     const currentMessages = chatMessages.querySelectorAll('.message');
-    console.log(`🔍 CHAT_LOAD: Current messages before clearing: ${currentMessages.length}`);
+    Logger.debug(`CHAT_LOAD: Current messages before clearing: ${currentMessages.length}`, null, 'general');
     console.log('🔍 CHAT_LOAD: Current message IDs:', Array.from(currentMessages).map(m => m.getAttribute('data-message-id')));
     
     // Clear existing messages
@@ -5062,7 +5062,7 @@ async function loadChatHistory(communityId = null) {
       return;
     }
     
-    console.log(`🔍 CHAT_LOAD: Processing ${allConversations.length} conversations for display`);
+    Logger.debug(`CHAT_LOAD: Processing ${allConversations.length} conversations for display`, null, 'general');
     
     // Handle combined conversations from all communities
     if (allConversations.length > 0) {
@@ -5101,23 +5101,23 @@ async function loadChatHistory(communityId = null) {
             mainThreadPost.replyCount = nonDeletedReplies.length; // Count only non-deleted replies for display
             
             // COMPREHENSIVE DELETED MESSAGE DEBUGGING
-            console.log(`🔍 DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] === MAIN THREAD MESSAGE ANALYSIS ===`);
-            console.log(`🔍 DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] Message ID: ${mainThreadPost.id}`);
-            console.log(`🔍 DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] Message deletedAt: ${mainThreadPost.deletedAt}`);
-            console.log(`🔍 DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] Total direct replies: ${directReplies.length}`);
-            console.log(`🔍 DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] Non-deleted replies: ${nonDeletedReplies.length}`);
-            console.log(`🔍 DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] hasReplies: ${mainThreadPost.hasReplies}`);
-            console.log(`🔍 DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] replyCount: ${mainThreadPost.replyCount}`);
+            Logger.debug(`DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] === MAIN THREAD MESSAGE ANALYSIS ===`, null, 'general');
+            Logger.debug(`DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] Message ID: ${mainThreadPost.id}`, null, 'general');
+            Logger.debug(`DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] Message deletedAt: ${mainThreadPost.deletedAt}`, null, 'general');
+            Logger.debug(`DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] Total direct replies: ${directReplies.length}`, null, 'general');
+            Logger.debug(`DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] Non-deleted replies: ${nonDeletedReplies.length}`, null, 'general');
+            Logger.debug(`DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] hasReplies: ${mainThreadPost.hasReplies}`, null, 'general');
+            Logger.debug(`DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] replyCount: ${mainThreadPost.replyCount}`, null, 'general');
             if (directReplies.length > 0) {
-              console.log(`🔍 DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] Direct replies details:`, directReplies.map(r => ({ id: r.id, deletedAt: r.deletedAt, body: r.body })));
+              Logger.debug(`DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] Direct replies details:`, directReplies.map(r => ({ id: r.id, deletedAt: r.deletedAt, body: r.body })), 'general');
             }
             
             // Check if this message should be skipped
             if (mainThreadPost.deletedAt && !mainThreadPost.hasReplies) {
-              console.log(`🔍 DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] SKIPPING deleted main thread without replies: ${mainThreadPost.id}`);
+              Logger.debug(`DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] SKIPPING deleted main thread without replies: ${mainThreadPost.id}`, null, 'general');
               continue;
             } else if (mainThreadPost.deletedAt && mainThreadPost.hasReplies) {
-              console.log(`🔍 DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] SHOWING deleted main thread WITH replies: ${mainThreadPost.id}`);
+              Logger.debug(`DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] SHOWING deleted main thread WITH replies: ${mainThreadPost.id}`, null, 'general');
             }
             // Calculate reaction count for this specific message
             const messageReactions = conversation.reactions ? conversation.reactions.filter(r => r.postId === mainThreadPost.id) : [];
@@ -5216,7 +5216,7 @@ async function initializeSupabaseRealtimeClient() {
             resolve(false);
           } else {
             if (attempts % 10 === 0) {
-              console.log(`⏳ SUPABASE LIBRARY: Waiting... (attempt ${attempts}/${maxAttempts})`);
+              Logger.info(`⏳ SUPABASE LIBRARY: Waiting... (attempt ${attempts}/${maxAttempts})`, null, 'general');
             }
             setTimeout(checkSupabase, 100);
           }
@@ -5480,7 +5480,7 @@ async function initializeNotificationSettings() {
         const notificationType = e.target.dataset.notificationType;
         const enabled = e.target.checked;
         
-        console.log(`🔔 SETTINGS: ${notificationType} ${enabled ? 'enabled' : 'disabled'}`);
+        Logger.info(`🔔 SETTINGS: ${notificationType} ${enabled ? 'enabled' : 'disabled'}`, null, 'general');
         
         await window.notificationManager.setEnabled(notificationType, enabled);
       });
@@ -6281,14 +6281,14 @@ async function updateUI(user) {
       // First try to get from stored aura color (same as message avatars)
       if (user.auraColor && user.auraColor !== null && user.auraColor !== 'null') {
         userAuraColor = user.auraColor;
-        console.log(`🔍 PROFILE_AVATAR: [BUILD ${EXTENSION_BUILD}] Using stored aura color: ${userAuraColor}`);
+        Logger.debug(`PROFILE_AVATAR: [BUILD ${EXTENSION_BUILD}] Using stored aura color: ${userAuraColor}`, null, 'general');
       } else {
         // Try to get from real-time presence data (same as message avatars)
         userAuraColor = getLatestAuraColorFromPresence(user.email);
         if (userAuraColor) {
-          console.log(`🔍 PROFILE_AVATAR: [BUILD ${EXTENSION_BUILD}] Using real-time aura color: ${userAuraColor}`);
+          Logger.debug(`PROFILE_AVATAR: [BUILD ${EXTENSION_BUILD}] Using real-time aura color: ${userAuraColor}`, null, 'general');
         } else {
-          console.log(`🔍 PROFILE_AVATAR: [BUILD ${EXTENSION_BUILD}] No real-time aura color found, will use generated color`);
+          Logger.debug(`PROFILE_AVATAR: [BUILD ${EXTENSION_BUILD}] No real-time aura color found, will use generated color`, null, 'general');
         }
       }
       
@@ -6304,25 +6304,25 @@ async function updateUI(user) {
           u => u.email === user.email || u.userId === user.email || u.id === user.email
         );
         if (currentUserInVisibility && currentUserInVisibility.avatarUrl) {
-          console.log(`🔍 PROFILE_AVATAR_FIX: Found REAL avatar in UNFILTERED visibility data: ${currentUserInVisibility.avatarUrl}`);
-          console.log(`🔍 PROFILE_AVATAR_FIX: Replacing fake avatar: ${realAvatarUrl}`);
-          console.log(`🔍 PROFILE_AVATAR_FIX: User found in unfiltered data:`, {
+          Logger.debug(`PROFILE_AVATAR_FIX: Found REAL avatar in UNFILTERED visibility data: ${currentUserInVisibility.avatarUrl}`, null, 'general');
+          Logger.debug(`PROFILE_AVATAR_FIX: Replacing fake avatar: ${realAvatarUrl}`, null, 'general');
+          Logger.debug(`PROFILE_AVATAR_FIX: User found in unfiltered data:`, {
             email: currentUserInVisibility.email,
             userId: currentUserInVisibility.userId,
             avatarUrl: currentUserInVisibility.avatarUrl
-          });
+          }, 'general');
           realAvatarUrl = currentUserInVisibility.avatarUrl;
         } else {
-          console.log(`🔍 PROFILE_AVATAR_FIX: Current user NOT found in UNFILTERED visibility data`);
-          console.log(`🔍 PROFILE_AVATAR_FIX: Looking for: ${user.email}`);
-          console.log(`🔍 PROFILE_AVATAR_FIX: Available users:`, window.currentVisibilityDataUnfiltered.active.map(u => ({
+          Logger.debug(`PROFILE_AVATAR_FIX: Current user NOT found in UNFILTERED visibility data`, null, 'general');
+          Logger.debug(`PROFILE_AVATAR_FIX: Looking for: ${user.email}`, null, 'general');
+          Logger.debug(`PROFILE_AVATAR_FIX: Available users:`, window.currentVisibilityDataUnfiltered.active.map(u => ({
             email: u.email,
             userId: u.userId,
             id: u.id
-          })));
+          })), 'general');
         }
       } else {
-        console.log(`🔍 PROFILE_AVATAR_FIX: No UNFILTERED visibility data available, using auth avatar`);
+        Logger.debug(`PROFILE_AVATAR_FIX: No UNFILTERED visibility data available, using auth avatar`, null, 'general');
       }
       
       const userData = {
@@ -6334,13 +6334,13 @@ async function updateUI(user) {
         auraColor: userAuraColor // Use aura color from presence API
       };
       
-      console.log(`🔍 PROFILE_AVATAR: [BUILD ${EXTENSION_BUILD}] Creating UNIFIED avatar for profile:`, {
+      Logger.debug(`PROFILE_AVATAR: [BUILD ${EXTENSION_BUILD}] Creating UNIFIED avatar for profile:`, {
         name: userData.name,
         email: userData.email,
         avatarUrl: userData.avatarUrl,
         auraColor: userData.auraColor,
         source: realAvatarUrl === (user.user_metadata?.avatar_url || user.picture) ? 'auth' : 'visibility-data'
-      });
+      }, 'general');
       
       // ✅ CREATE UNIFIED AVATAR HTML - SAME AS MESSAGE/VISIBILITY AVATARS
       // CRITICAL: USE SAME SIZE AS VISIBILITY/MESSAGE AVATARS (32px) FOR CONSISTENCY
@@ -6551,7 +6551,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   
   debug("DOMContentLoaded event fired.");
-  console.log("DOMContentLoaded event fired.");
+  Logger.info("DOMContentLoaded event fired.", null, 'general');
 
   try {
     // === Initialize Complete Modern Architecture ===
@@ -6736,7 +6736,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // --- Now proceed with the rest of the setup ---
   debug("Document loaded (from JS)");
-  console.log("Sidebar JS Loaded");
+  Logger.info("Sidebar JS Loaded", null, 'general');
 
   // Add debug listeners (moved from HTML)
   document.querySelectorAll('.main-nav-tab').forEach(tab => {
@@ -6769,7 +6769,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   mainTabs.forEach(tab => {
     tab.addEventListener('click', () => {
       const targetTabId = tab.getAttribute('data-tab');
-      console.log(`Switching to main tab: ${targetTabId}`);
+      Logger.info(`Switching to main tab: ${targetTabId}`, null, 'general');
 
       // Deactivate all main tabs and content
       mainTabs.forEach(t => t.classList.remove('active'));
@@ -6780,7 +6780,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const targetTabContent = document.getElementById(targetTabId);
       if (targetTabContent) {
         targetTabContent.classList.add('active');
-        console.log(`Activated content: #${targetTabId}`);
+        Logger.info(`Activated content: #${targetTabId}`, null, 'general');
         
         // Initialize specific tab functionality
         if (targetTabId === 'agent-tab') {
@@ -6807,7 +6807,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.querySelectorAll('.sub-nav-tab').forEach(subTab => {
     subTab.addEventListener('click', () => {
       const targetSubTabId = subTab.getAttribute('data-subtab');
-      console.log(`Switching to sub-tab: ${targetSubTabId}`);
+      Logger.info(`Switching to sub-tab: ${targetSubTabId}`, null, 'general');
 
       // Find the parent tab content
       const parentMainContent = subTab.closest('.main-tab-content');
@@ -6832,7 +6832,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const targetSubContent = document.getElementById(targetSubTabId);
       if (targetSubContent) {
         targetSubContent.classList.add('active');
-        console.log(`Activated sub-content: #${targetSubTabId}`);
+        Logger.info(`Activated sub-content: #${targetSubTabId}`, null, 'general');
       } else {
         console.error(`Sub-content #${targetSubTabId} not found!`);
       }
@@ -6852,10 +6852,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Toggle visibility
         if (communityDropdownPanel.style.display === 'block') {
           communityDropdownPanel.style.display = 'none';
-          console.log("Community dropdown hidden");
+          Logger.info("Community dropdown hidden", null, 'general');
         } else {
           communityDropdownPanel.style.display = 'block';
-          console.log("Community dropdown shown");
+          Logger.info("Community dropdown shown", null, 'general');
         }
         }
       })) {
@@ -6868,7 +6868,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (closeCommunityDropdownButton && communityDropdownPanel) {
     closeCommunityDropdownButton.addEventListener('click', () => {
       communityDropdownPanel.style.display = 'none';
-      console.log("Community dropdown closed via button");
+      Logger.info("Community dropdown closed via button", null, 'general');
     });
   }
 
@@ -6878,7 +6878,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (!communityDropdownPanel.contains(event.target) && 
           !communityDropdownTrigger.contains(event.target)) {
         communityDropdownPanel.style.display = 'none';
-        console.log("Community dropdown closed via outside click");
+        Logger.info("Community dropdown closed via outside click", null, 'general');
       }
     }
   });
@@ -6886,7 +6886,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // --- Sidebar Close Button ---
   if (closeSidebarButton) {
     closeSidebarButton.addEventListener('click', () => {
-      console.log("Close sidebar button clicked");
+      Logger.info("Close sidebar button clicked", null, 'general');
       // For Chrome side panel, we can't close it from within the panel itself
       // You would need to send a message to background.js
     });
@@ -6901,13 +6901,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (modalName) modalName.textContent = name || 'N/A';
       if (modalStatus) modalStatus.textContent = status || 'Unknown';
       modal.style.display = 'flex';
-      console.log(`Modal opened for ${name}`);
+      Logger.info(`Modal opened for ${name}`, null, 'general');
     }
 
     // Function to close the modal
     function closeModal() {
       modal.style.display = 'none';
-      console.log("Modal closed");
+      Logger.info("Modal closed", null, 'general');
     }
 
     closeModalButton.addEventListener('click', closeModal);
@@ -7119,10 +7119,10 @@ document.addEventListener('DOMContentLoaded', async () => {
               
               // Use email for user identification (consistent with presence API)
               const userEmail = await getCurrentUserEmail();
-              console.log(`🔍 CHAT_SEND: Sending message for user ${userEmail} in community ${communityId} on URI ${currentUri}`);
-              console.log(`🔍 CHAT_SEND: Message content: "${message}"`);
+              Logger.debug(`CHAT_SEND: Sending message for user ${userEmail} in community ${communityId} on URI ${currentUri}`, null, 'general');
+              Logger.debug(`CHAT_SEND: Message content: "${message}"`, null, 'general');
               const response = await api.sendMessage(userEmail, communityId, message, currentUri, parentId, threadId, optionalContent);
-              console.log(`✅ CHAT_SEND: Message sent successfully: ${response?.msg?.id || response?.id}`);
+              Logger.success(`CHAT_SEND: Message sent successfully: ${response?.msg?.id || response?.id}`, null, 'general');
               debug(`Message sent successfully: ${response?.msg?.id || response?.id}`);
               console.log('Message sent:', response);
               
@@ -7177,29 +7177,29 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
                 
                 // Reset last loaded URI to force reload on next loadChatHistory call
-                console.log(`🔍 CHAT_SEND: Resetting lastLoadedUri from ${lastLoadedUri} to null`);
+                Logger.debug(`CHAT_SEND: Resetting lastLoadedUri from ${lastLoadedUri} to null`, null, 'general');
                 lastLoadedUri = null;
                 
                 // Update last message count for polling
                 lastMessageCount = document.querySelectorAll('.message').length;
-                console.log(`🔍 CHAT_SEND: Updated last message count to ${lastMessageCount}`);
+                Logger.debug(`CHAT_SEND: Updated last message count to ${lastMessageCount}`, null, 'general');
                 
                 // Force a reload to ensure other users see the new message
-                console.log(`🔍 CHAT_SEND: Forcing chat history reload for real-time sync`);
+                Logger.debug(`CHAT_SEND: Forcing chat history reload for real-time sync`, null, 'general');
                 await loadChatHistory();
                 
                 // Verify the message is in the database by checking the server response
-                console.log(`🔍 CHAT_SEND: Verifying message exists in database...`);
+                Logger.debug(`CHAT_SEND: Verifying message exists in database...`, null, 'general');
                 try {
                   const verifyResponse = await api.getChatHistory('comm-001', null, currentUri);
                   const messageExists = verifyResponse.conversations?.[0]?.posts?.some(post => post.id === newPost.id);
-                  console.log(`🔍 CHAT_SEND: Message verification result:`, messageExists ? 'FOUND' : 'NOT FOUND');
+                  Logger.debug(`CHAT_SEND: Message verification result:`, messageExists ? 'FOUND' : 'NOT FOUND', 'general');
                   if (!messageExists) {
-                    console.log(`⚠️ CHAT_SEND: Message not found in database, adding additional delay...`);
+                    Logger.warn(`CHAT_SEND: Message not found in database, adding additional delay...`, null, 'general');
                     await new Promise(resolve => setTimeout(resolve, 1000));
                   }
                 } catch (error) {
-                  console.log(`⚠️ CHAT_SEND: Error verifying message in database:`, error);
+                  Logger.warn(`CHAT_SEND: Error verifying message in database:`, error, 'general');
                 }
                 
                 // If this was a reply, expand the thread after adding the message
@@ -7253,10 +7253,10 @@ document.addEventListener('DOMContentLoaded', async () => {
               }
               
               // Clear input and reset height
-              console.log(`🔍 CHAT_CLEAR: [BUILD ${EXTENSION_BUILD}] Clearing input field and resetting styling`);
-              console.log(`🔍 CHAT_CLEAR: [BUILD ${EXTENSION_BUILD}] Input field current height:`, chatInput.style.height);
-              console.log(`🔍 CHAT_CLEAR: [BUILD ${EXTENSION_BUILD}] Input field computed height:`, window.getComputedStyle(chatInput).height);
-              console.log(`🔍 CHAT_CLEAR: [BUILD ${EXTENSION_BUILD}] Input field value before clear:`, chatInput.value);
+              Logger.debug(`CHAT_CLEAR: [BUILD ${EXTENSION_BUILD}] Clearing input field and resetting styling`, null, 'general');
+              Logger.debug(`CHAT_CLEAR: [BUILD ${EXTENSION_BUILD}] Input field current height:`, chatInput.style.height, 'general');
+              Logger.debug(`CHAT_CLEAR: [BUILD ${EXTENSION_BUILD}] Input field computed height:`, window.getComputedStyle(chatInput).height, 'general');
+              Logger.debug(`CHAT_CLEAR: [BUILD ${EXTENSION_BUILD}] Input field value before clear:`, chatInput.value, 'general');
               
               // Clear the input value
               chatInput.value = '';
@@ -7265,7 +7265,7 @@ document.addEventListener('DOMContentLoaded', async () => {
               const contextBar = document.getElementById('context-bar');
               if (contextBar) {
                 contextBar.style.display = 'none';
-                console.log(`🔍 CHAT_CLEAR: Context bar hidden`);
+                Logger.debug(`CHAT_CLEAR: Context bar hidden`, null, 'general');
               }
               chatInput.placeholder = 'Start thread in Public Square';
               chatInput.style.borderColor = '';
@@ -7276,18 +7276,18 @@ document.addEventListener('DOMContentLoaded', async () => {
               chatInput.style.maxHeight = 'none';
               chatInput.style.minHeight = 'auto';
               chatInput.style.overflowY = 'hidden';
-              console.log(`🔍 CHAT_CLEAR: Input field height set to auto`);
+              Logger.debug(`CHAT_CLEAR: Input field height set to auto`, null, 'general');
               
               // Force a reflow and then set to natural height
               chatInput.offsetHeight; // Force reflow
               chatInput.style.height = 'auto';
               chatInput.style.maxHeight = '120px'; // Allow expansion up to 120px
               chatInput.style.minHeight = '40px'; // Minimum reasonable height
-              console.log(`🔍 CHAT_CLEAR: [BUILD ${EXTENSION_BUILD}] Input field cleared and styling reset`);
-              console.log(`🔍 CHAT_CLEAR: [BUILD ${EXTENSION_BUILD}] Final input field height:`, chatInput.style.height);
-              console.log(`🔍 CHAT_CLEAR: [BUILD ${EXTENSION_BUILD}] Final computed height:`, window.getComputedStyle(chatInput).height);
-              console.log(`🔍 CHAT_CLEAR: [BUILD ${EXTENSION_BUILD}] Input field value after clear:`, chatInput.value);
-              console.log(`🔍 CHAT_CLEAR: [BUILD ${EXTENSION_BUILD}] Message field reset completed successfully`);
+              Logger.debug(`CHAT_CLEAR: [BUILD ${EXTENSION_BUILD}] Input field cleared and styling reset`, null, 'general');
+              Logger.debug(`CHAT_CLEAR: [BUILD ${EXTENSION_BUILD}] Final input field height:`, chatInput.style.height, 'general');
+              Logger.debug(`CHAT_CLEAR: [BUILD ${EXTENSION_BUILD}] Final computed height:`, window.getComputedStyle(chatInput).height, 'general');
+              Logger.debug(`CHAT_CLEAR: [BUILD ${EXTENSION_BUILD}] Input field value after clear:`, chatInput.value, 'general');
+              Logger.debug(`CHAT_CLEAR: [BUILD ${EXTENSION_BUILD}] Message field reset completed successfully`, null, 'general');
             } catch (error) {
               debug(`Failed to send message: ${error.message}`);
               console.error('Failed to send message:', error);
@@ -7373,7 +7373,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   window.openUserProfile = openUserProfile;
 
   // Direct authentication already happened above - no need to repeat
-  console.log("Sidebar setup complete");
+  Logger.info("Sidebar setup complete", null, 'general');
   debug("Sidebar setup complete (from JS)");
 });
 
@@ -7519,7 +7519,7 @@ async function handleTabUpdate(tabId, url) {
         const leaveStartTime = Date.now();
         await window.supabaseRealtimeClient.leaveCurrentPage();
         const leaveEndTime = Date.now();
-        console.log(`✅ TAB_UPDATE: leaveCurrentPage() completed in ${leaveEndTime - leaveStartTime}ms`);
+        Logger.success(`TAB_UPDATE: leaveCurrentPage() completed in ${leaveEndTime - leaveStartTime}ms`, null, 'general');
         console.log('✅ TAB_UPDATE: currentPage after leaving:', window.supabaseRealtimeClient.currentPage);
       } else {
         console.log('⚠️ TAB_UPDATE: No old page to leave (oldPageId is null)');
@@ -7537,7 +7537,7 @@ async function handleTabUpdate(tabId, url) {
     const normalizeStartTime = Date.now();
     const newUrlData = await window.normalizeUrl(url);
     const normalizeEndTime = Date.now();
-    console.log(`✅ TAB_UPDATE: normalizeUrl() completed in ${normalizeEndTime - normalizeStartTime}ms`);
+    Logger.success(`TAB_UPDATE: normalizeUrl() completed in ${normalizeEndTime - normalizeStartTime}ms`, null, 'general');
     console.log('🔍 TAB_UPDATE: Normalized result:', JSON.stringify(newUrlData, null, 2));
     
     // === STEP 4: COMPARE PAGE IDs ===
@@ -7576,7 +7576,7 @@ async function handleTabUpdate(tabId, url) {
     const chatStartTime = Date.now();
     await loadChatHistory();
     const chatEndTime = Date.now();
-    console.log(`✅ TAB_UPDATE: Chat history loaded in ${chatEndTime - chatStartTime}ms`);
+    Logger.success(`TAB_UPDATE: Chat history loaded in ${chatEndTime - chatStartTime}ms`, null, 'general');
     
     // === STEP 7: UPDATE VISIBILITY LIST ===
     console.log('');
@@ -7588,7 +7588,7 @@ async function handleTabUpdate(tabId, url) {
     const visibilityStartTime = Date.now();
     await loadCombinedAvatars(activeCommunities);
     const visibilityEndTime = Date.now();
-    console.log(`✅ TAB_UPDATE: Visibility list updated in ${visibilityEndTime - visibilityStartTime}ms`);
+    Logger.success(`TAB_UPDATE: Visibility list updated in ${visibilityEndTime - visibilityStartTime}ms`, null, 'general');
     
     // === STEP 8: START PRESENCE TRACKING ===
     console.log('');
@@ -7598,7 +7598,7 @@ async function handleTabUpdate(tabId, url) {
     const presenceStartTime = Date.now();
     await startPresenceTracking();
     const presenceEndTime = Date.now();
-    console.log(`✅ TAB_UPDATE: Presence tracking started in ${presenceEndTime - presenceStartTime}ms`);
+    Logger.success(`TAB_UPDATE: Presence tracking started in ${presenceEndTime - presenceStartTime}ms`, null, 'general');
     
     // === FINAL STATE ===
     console.log('');
@@ -7741,7 +7741,7 @@ async function sendPresenceEvent(kind, availability = null, customLabel = null) 
     });
     
     if (response.ok) {
-      console.log(`✅ PRESENCE: ${kind} event sent successfully`);
+      Logger.success(`PRESENCE: ${kind} event sent successfully`, null, 'general');
       
            // CHROME EXTENSION WEBSOCKET FIX: Send via background service worker
            await sendSupabaseMessage({
@@ -7753,7 +7753,7 @@ async function sendPresenceEvent(kind, availability = null, customLabel = null) 
              userEmail: userEmail,
              timestamp: Date.now()
            });
-           console.log(`👥 WEBSOCKET: ${kind} event broadcast via background service worker`);
+           Logger.info(`👥 WEBSOCKET: ${kind} event broadcast via background service worker`, null, 'general');
     } else {
       console.warn(`❌ PRESENCE: Failed to send ${kind} event:`, response.status);
     }
@@ -7797,7 +7797,7 @@ window.currentChatData = [];
 async function normalizeCurrentUrl() {
   try {
     const rawUri = await getCurrentPageUri();
-    console.log(`🔍 URL_NORMALIZE: Normalizing current URL: ${rawUri}`);
+    Logger.debug(`URL_NORMALIZE: Normalizing current URL: ${rawUri}`, null, 'general');
     
     // CRITICAL FIX: Cache busting - detect if pageId uses triple underscores (old bug)
     // If it does, invalidate the cache and force re-normalization from backend
@@ -7813,8 +7813,8 @@ async function normalizeCurrentUrl() {
     
     // Check if URL has changed
     if (currentRawUrl === rawUri && currentNormalizedUrl && currentPageId && !hasBadCache) {
-      console.log(`🔍 URL_NORMALIZE: URL unchanged, using cached values`);
-      console.log(`🔍 URL_NORMALIZE: Cached urlData:`, JSON.stringify({ rawUrl: currentRawUrl, normalizedUrl: currentNormalizedUrl, pageId: currentPageId }));
+      Logger.debug(`URL_NORMALIZE: URL unchanged, using cached values`, null, 'general');
+      Logger.debug(`URL_NORMALIZE: Cached urlData:`, JSON.stringify({ rawUrl: currentRawUrl, normalizedUrl: currentNormalizedUrl, pageId: currentPageId }), 'general');
       return { rawUrl: currentRawUrl, normalizedUrl: currentNormalizedUrl, pageId: currentPageId };
     }
     
@@ -7829,16 +7829,16 @@ async function normalizeCurrentUrl() {
         urlNormalizationCache.delete(rawUri);
         // Fall through to backend API call
       } else {
-        console.log(`🔍 URL_CACHE: Using cached result for ${rawUri}: ${cached.pageId}`);
+        Logger.debug(`URL_CACHE: Using cached result for ${rawUri}: ${cached.pageId}`, null, 'general');
         currentRawUrl = rawUri;
         currentNormalizedUrl = cached.normalizedUrl;
         currentPageId = cached.pageId;
-        console.log(`🔍 URL_CACHE: Cache urlData:`, JSON.stringify({ rawUrl: currentRawUrl, normalizedUrl: currentNormalizedUrl, pageId: currentPageId }));
+        Logger.debug(`URL_CACHE: Cache urlData:`, JSON.stringify({ rawUrl: currentRawUrl, normalizedUrl: currentNormalizedUrl, pageId: currentPageId }), 'general');
         return { rawUrl: currentRawUrl, normalizedUrl: currentNormalizedUrl, pageId: currentPageId };
       }
     }
     
-    console.log(`🔍 URL_NORMALIZE: Calling backend API for ${rawUri}`);
+    Logger.debug(`URL_NORMALIZE: Calling backend API for ${rawUri}`, null, 'general');
     
     // Call backend normalization API
     const response = await fetch(`${METALAYER_API_URL}/v1/presence/normalize-url`, {
@@ -7863,8 +7863,8 @@ async function normalizeCurrentUrl() {
     currentNormalizedUrl = result.normalizedUrl;
     currentPageId = result.pageId;
     
-    console.log(`✅ URL_NORMALIZE: Backend API result - Raw: ${rawUri}, Normalized: ${currentNormalizedUrl}, PageId: ${currentPageId}`);
-    console.log(`🔍 URL_NORMALIZE: Returning urlData:`, JSON.stringify({ rawUrl: currentRawUrl, normalizedUrl: currentNormalizedUrl, pageId: currentPageId }));
+    Logger.success(`URL_NORMALIZE: Backend API result - Raw: ${rawUri}, Normalized: ${currentNormalizedUrl}, PageId: ${currentPageId}`, null, 'general');
+    Logger.debug(`URL_NORMALIZE: Returning urlData:`, JSON.stringify({ rawUrl: currentRawUrl, normalizedUrl: currentNormalizedUrl, pageId: currentPageId }), 'general');
     return { rawUrl: currentRawUrl, normalizedUrl: currentNormalizedUrl, pageId: currentPageId };
   } catch (error) {
     console.error('❌ URL_NORMALIZE: Error calling backend API:', error);
@@ -7882,8 +7882,8 @@ async function normalizeCurrentUrl() {
     currentNormalizedUrl = rawUri; // Use raw URL as normalized in fallback
     currentPageId = fallbackPageId;
     
-    console.log(`🔄 URL_NORMALIZE: Using fallback for ${rawUri}: ${fallbackPageId}`);
-    console.log(`🔍 URL_NORMALIZE: Fallback urlData:`, JSON.stringify({ rawUrl: currentRawUrl, normalizedUrl: currentNormalizedUrl, pageId: currentPageId }));
+    Logger.debug(`URL_NORMALIZE: Using fallback for ${rawUri}: ${fallbackPageId}`, null, 'general');
+    Logger.debug(`URL_NORMALIZE: Fallback urlData:`, JSON.stringify({ rawUrl: currentRawUrl, normalizedUrl: currentNormalizedUrl, pageId: currentPageId }), 'general');
     return { rawUrl: currentRawUrl, normalizedUrl: currentNormalizedUrl, pageId: currentPageId };
   }
 }
@@ -7970,47 +7970,47 @@ async function getCurrentUserEmail() {
 
 // DIAGNOSTIC FUNCTIONS - Run in browser console for debugging
 window.debugAvatar = function() {
-  console.log("=== AVATAR DIAGNOSTIC ===");
-  console.log("Current user:", window.currentUser);
-  console.log("User avatar_url:", window.currentUser?.user_metadata?.avatar_url);
-  console.log("Profile avatar container:", document.getElementById("user-avatar-container"));
-  console.log("Profile avatar HTML:", document.getElementById("user-avatar-container")?.innerHTML);
-  console.log("AuthManager user:", authManager.getCurrentUser());
+  Logger.info("=== AVATAR DIAGNOSTIC ===", null, 'general');
+  Logger.info("Current user:", window.currentUser, 'general');
+  Logger.info("User avatar_url:", window.currentUser?.user_metadata?.avatar_url, 'general');
+  Logger.info("Profile avatar container:", document.getElementById("user-avatar-container"), 'general');
+  Logger.info("Profile avatar HTML:", document.getElementById("user-avatar-container")?.innerHTML, 'general');
+  Logger.info("AuthManager user:", authManager.getCurrentUser(), 'general');
 };
 
 window.debugVisibility = function() {
-  console.log("=== VISIBILITY DIAGNOSTIC ===");
-  console.log("Current visibility data:", window.currentVisibilityData);
-  console.log("Visibility timer:", window.visibilityUpdateTimer);
-  console.log("User elements:", document.querySelectorAll(".user-item"));
-  console.log("Status elements:", document.querySelectorAll(".user-status"));
-  console.log("Status texts:", Array.from(document.querySelectorAll(".user-status")).map(el => el.textContent));
+  Logger.info("=== VISIBILITY DIAGNOSTIC ===", null, 'general');
+  Logger.info("Current visibility data:", window.currentVisibilityData, 'general');
+  Logger.info("Visibility timer:", window.visibilityUpdateTimer, 'general');
+  Logger.info("User elements:", document.querySelectorAll(".user-item"), 'general');
+  Logger.info("Status elements:", document.querySelectorAll(".user-status"), 'general');
+  Logger.info("Status texts:", Array.from(document.querySelectorAll(".user-status")).map(el => el.textContent), 'general');
 };
 
 window.testTimeUpdate = function() {
-  console.log("=== MANUAL TIME UPDATE TEST ===");
+  Logger.info("=== MANUAL TIME UPDATE TEST ===", null, 'general');
   updateVisibilityTimes();
-  console.log("Time update triggered manually");
+  Logger.info("Time update triggered manually", null, 'general');
 };
 
 window.forceAvatarRefresh = function() {
-  console.log("=== FORCE AVATAR REFRESH ===");
+  Logger.info("=== FORCE AVATAR REFRESH ===", null, 'general');
   const user = window.currentUser;
   if (user) {
     updateUI(user);
-    console.log("Avatar refresh triggered");
+    Logger.info("Avatar refresh triggered", null, 'general');
   } else {
-    console.log("No current user found");
+    Logger.info("No current user found", null, 'general');
   }
 };
 
 window.restartVisibilityTimer = function() {
-  console.log("=== RESTART VISIBILITY TIMER ===");
+  Logger.info("=== RESTART VISIBILITY TIMER ===", null, 'general');
   if (window.visibilityUpdateTimer) {
     clearInterval(window.visibilityUpdateTimer);
   }
   window.visibilityUpdateTimer = setInterval(updateVisibilityTimes, 10000);
-  console.log("Timer restarted");
+  Logger.info("Timer restarted", null, 'general');
 };
 
 // Update visibility times for all visible users
@@ -8024,7 +8024,7 @@ function updateVisibilityTimes() {
   }
   
   const visibleUsers = window.currentVisibilityData.active;
-  console.log(`🔄 VISIBILITY: Updating times for ${visibleUsers.length} users`);
+  Logger.debug(`VISIBILITY: Updating times for ${visibleUsers.length} users`, null, 'general');
   console.log('🔄 VISIBILITY: Visible users:', visibleUsers.map(u => ({ name: u.name, enterTime: u.enterTime })));
   
   // Find all user status elements in the DOM and update their times
@@ -8032,36 +8032,36 @@ function updateVisibilityTimes() {
   console.log('🔄 VISIBILITY: Found', userElements.length, 'user elements in DOM');
   
   userElements.forEach((element, index) => {
-    console.log(`🔄 VISIBILITY: Processing element ${index}:`, element);
+    Logger.debug(`VISIBILITY: Processing element ${index}:`, element, 'general');
     
     // CRITICAL FIX: Use data-user-id to find the correct user, NOT array index!
     // Array index doesn't work because window.currentVisibilityData.active includes ALL users
     // but the DOM only shows FILTERED users (excluding current user)
     const userId = element.getAttribute('data-user-id');
     const userName = element.getAttribute('data-user-name');
-    console.log(`🔄 VISIBILITY: Element ${index} - userId: ${userId}, userName: ${userName}`);
+    Logger.debug(`VISIBILITY: Element ${index} - userId: ${userId}, userName: ${userName}`, null, 'general');
     
     // Find the matching user in the visibility data by userId
     const user = visibleUsers.find(u => u.userId === userId || u.email === userId || u.id === userId);
     
     if (!user) {
-      console.log(`🔄 VISIBILITY: ⚠️ Could not find user data for userId: ${userId}`);
+      Logger.warn(`🔄 VISIBILITY: Could not find user data for userId: ${userId}`, null, 'general');
       return;
     }
     
-    console.log(`🔄 VISIBILITY: Found matching user:`, { name: user.name, enterTime: user.enterTime, userId: user.userId });
+    Logger.debug(`VISIBILITY: Found matching user:`, { name: user.name, enterTime: user.enterTime, userId: user.userId }, 'general');
     
     // FIX: Visibility avatars use .item-status NOT .user-status!
     const statusElement = element.querySelector('.item-status');
-    console.log(`🔄 VISIBILITY: Status element for ${userName}:`, statusElement);
+    Logger.debug(`VISIBILITY: Status element for ${userName}:`, statusElement, 'general');
     
     if (statusElement && user.enterTime) {
       const oldText = statusElement.textContent;
       const newStatusText = formatTimeDisplay(user.enterTime);
       statusElement.textContent = newStatusText;
-      console.log(`🔄 VISIBILITY: ✅ Updated time for ${user.name}: "${oldText}" → "${newStatusText}"`);
+      Logger.success(`🔄 VISIBILITY: Updated time for ${user.name}: "${oldText}" → "${newStatusText}"`, null, 'general');
     } else {
-      console.log(`🔄 VISIBILITY: ⚠️ Skipping user ${user.name} - no status element (${!!statusElement}) or enterTime (${!!user.enterTime})`);
+      Logger.warn(`🔄 VISIBILITY: Skipping user ${user.name} - no status element (${!!statusElement}) or enterTime (${!!user.enterTime})`, null, 'general');
     }
   });
   
@@ -8162,7 +8162,7 @@ let cachedChunks = [];
 
 // --- Agent Functions ---
 async function testAgent(message) {
-  console.log("🤖 testAgent called with message:", message);
+  Logger.info("🤖 testAgent called with message:", message, 'general');
   if (!message.trim()) return;
   
   // Add user message to output
@@ -8170,7 +8170,7 @@ async function testAgent(message) {
   
   // Show loading
   const loadingId = addMessageToAgentOutput('Agent', 'Thinking...', false, true);
-  console.log("🤖 Loading message added with ID:", loadingId);
+  Logger.info("🤖 Loading message added with ID:", loadingId, 'general');
   
   try {
     // Check if we have page content, if not try to load it
@@ -8300,10 +8300,10 @@ You can still ask me general questions about the video based on the title and de
 }
 
 async function callDeepSeekAPI(userMessage) {
-  console.log("🤖 callDeepSeekAPI called with message:", userMessage);
+  Logger.info("🤖 callDeepSeekAPI called with message:", userMessage, 'general');
   // Find relevant content chunks using RAG
   const relevantChunks = findRelevantChunks(userMessage);
-  console.log("🤖 Found relevant chunks:", relevantChunks.length);
+  Logger.info("🤖 Found relevant chunks:", relevantChunks.length, 'general');
   
   // Prepare context for the AI
   const context = {
@@ -8338,12 +8338,12 @@ Is there a specific topic or question I can assist you with directly?`;
     metadata: pageContentCache.metadata
   };
 
-  console.log("🤖 Making fetch request to:", AGENT_API_URL);
-  console.log("🤖 Request payload:", {
+  Logger.info("🤖 Making fetch request to:", AGENT_API_URL, 'general');
+  Logger.info("🤖 Request payload:", {
     message: userMessage,
     context: context,
     pageContent: limitedPageContent
-  });
+  }, 'general');
   
   const response = await fetch(AGENT_API_URL, {
     method: 'POST',
@@ -8357,7 +8357,7 @@ Is there a specific topic or question I can assist you with directly?`;
     })
   });
   
-  console.log("🤖 API response status:", response.status, response.statusText);
+  Logger.info("🤖 API response status:", response.status, response.statusText, 'general');
   
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
@@ -8598,7 +8598,7 @@ function updateAgentWelcomeWithPageInfo(pageData) {
     suggestionButtons.forEach(button => {
       button.addEventListener('click', () => {
         const question = button.getAttribute('data-question');
-        console.log("Suggestion button clicked:", question);
+        Logger.info("Suggestion button clicked:", question, 'general');
         testAgent(question);
       });
     });
@@ -8606,29 +8606,29 @@ function updateAgentWelcomeWithPageInfo(pageData) {
 }
 
 function initializeAgentTab() {
-  console.log("=== INITIALIZING AGENT TAB ===");
-  console.log("🔍 Current URL:", window.location.href);
-  console.log("🔍 Document ready state:", document.readyState);
+  Logger.info("=== INITIALIZING AGENT TAB ===", null, 'general');
+  Logger.debug("Current URL:", window.location.href, 'general');
+  Logger.debug("Document ready state:", document.readyState, 'general');
   
   // Load page content for the agent
-  console.log("📄 Loading page content...");
+  Logger.info("📄 Loading page content...", null, 'general');
   loadPageContent();
   
   // Get agent element references
-  console.log("🔍 Getting agent element references...");
+  Logger.debug("Getting agent element references...", null, 'general');
   const agentInput = document.getElementById('agent-input');
   const agentSendButton = document.getElementById('agent-send-btn');
   const agentOutput = document.getElementById('agent-output');
   const agentClearButton = document.getElementById('agent-clear-btn');
   const agentRefreshButton = document.getElementById('agent-refresh-btn');
   
-  console.log("🔍 Agent elements found:", {
+  Logger.debug("Agent elements found:", {
     agentInput: !!agentInput,
     agentSendButton: !!agentSendButton,
     agentOutput: !!agentOutput,
     agentClearButton: !!agentClearButton,
     agentRefreshButton: !!agentRefreshButton
-  });
+  }, 'general');
   
   // Check if elements exist
   if (!agentInput) console.error("❌ agent-input element not found!");
@@ -8639,7 +8639,7 @@ function initializeAgentTab() {
   
   // Initialize agent output if not already done
   if (agentOutput && !agentOutput.querySelector('.agent-welcome')) {
-    console.log("Setting up agent output...");
+    Logger.info("Setting up agent output...", null, 'general');
     agentOutput.innerHTML = `
       <div class="agent-welcome">
         <h4>🤖 AI Agent Ready</h4>
@@ -8659,16 +8659,16 @@ function initializeAgentTab() {
     suggestionButtons.forEach(button => {
       button.addEventListener('click', () => {
         const question = button.getAttribute('data-question');
-        console.log("Suggestion button clicked:", question);
+        Logger.info("Suggestion button clicked:", question, 'general');
         testAgent(question);
     });
   });
-    console.log("Agent welcome message set up!");
+    Logger.info("Agent welcome message set up!", null, 'general');
   }
   
   // Set up send button if not already done
   if (agentSendButton && !agentSendButton.hasAttribute('data-initialized')) {
-    console.log("🔘 Setting up send button...");
+    Logger.info("🔘 Setting up send button...", null, 'general');
     agentSendButton.addEventListener('click', () => {
       console.log('🔘 Send button clicked!');
       const message = agentInput.value.trim();
@@ -8681,9 +8681,9 @@ function initializeAgentTab() {
       }
     });
     agentSendButton.setAttribute('data-initialized', 'true');
-    console.log("✅ Send button event listener attached");
+    Logger.success("Send button event listener attached", null, 'general');
   } else if (agentSendButton) {
-    console.log("ℹ️ Send button already initialized");
+    Logger.info("ℹ️ Send button already initialized", null, 'general');
   }
   
   // Set up input field if not already done
@@ -8765,21 +8765,21 @@ function initializeAgentTab() {
 
 // Debug function for testing agent functionality
 function debugAgentTab() {
-  console.log("🔍 DEBUG: Agent Tab Status");
-  console.log("🔍 Current tab:", document.querySelector('.main-nav-tab.active')?.getAttribute('data-tab'));
-  console.log("🔍 Agent tab element:", document.getElementById('agent-tab'));
-  console.log("🔍 Agent tab visible:", document.getElementById('agent-tab')?.classList.contains('active'));
-  console.log("🔍 Agent input:", document.getElementById('agent-input'));
-  console.log("🔍 Agent output:", document.getElementById('agent-output'));
-  console.log("🔍 Agent send button:", document.getElementById('agent-send-btn'));
-  console.log("🔍 YouTube service:", typeof youtubeService);
-  console.log("🔍 AGENT_API_URL:", AGENT_API_URL);
+  Logger.debug("DEBUG: Agent Tab Status", null, 'general');
+  Logger.debug("Current tab:", document.querySelector('.main-nav-tab.active')?.getAttribute('data-tab'), 'general');
+  Logger.debug("Agent tab element:", document.getElementById('agent-tab'), 'general');
+  Logger.debug("Agent tab visible:", document.getElementById('agent-tab')?.classList.contains('active'), 'general');
+  Logger.debug("Agent input:", document.getElementById('agent-input'), 'general');
+  Logger.debug("Agent output:", document.getElementById('agent-output'), 'general');
+  Logger.debug("Agent send button:", document.getElementById('agent-send-btn'), 'general');
+  Logger.debug("YouTube service:", typeof youtubeService, 'general');
+  Logger.debug("AGENT_API_URL:", AGENT_API_URL, 'general');
   
   // Test if we can manually initialize
   try {
-    console.log("🧪 Testing manual initialization...");
+    Logger.info("🧪 Testing manual initialization...", null, 'general');
     initializeAgentTab();
-    console.log("✅ Manual initialization successful");
+    Logger.success("Manual initialization successful", null, 'general');
   } catch (error) {
     console.error("❌ Manual initialization failed:", error);
   }
@@ -8790,37 +8790,37 @@ window.debugAgentTab = debugAgentTab;
 
 // Alternative simple debug function
 window.debugAgent = function() {
-  console.log("🔍 Simple Agent Debug:");
-  console.log("Agent tab element:", document.getElementById('agent-tab'));
-  console.log("Agent input:", document.getElementById('agent-input'));
-  console.log("Agent output:", document.getElementById('agent-output'));
-  console.log("Current active tab:", document.querySelector('.main-nav-tab.active')?.getAttribute('data-tab'));
-  console.log("Agent tab visible:", document.getElementById('agent-tab')?.classList.contains('active'));
+  Logger.debug("Simple Agent Debug:", null, 'general');
+  Logger.info("Agent tab element:", document.getElementById('agent-tab'), 'general');
+  Logger.info("Agent input:", document.getElementById('agent-input'), 'general');
+  Logger.info("Agent output:", document.getElementById('agent-output'), 'general');
+  Logger.info("Current active tab:", document.querySelector('.main-nav-tab.active')?.getAttribute('data-tab'), 'general');
+  Logger.info("Agent tab visible:", document.getElementById('agent-tab')?.classList.contains('active'), 'general');
   
   // Try to manually switch to agent tab
   const agentTab = document.querySelector('[data-tab="agent-tab"]');
   if (agentTab) {
-    console.log("🎯 Found agent tab button, clicking...");
+    Logger.debug("Found agent tab button, clicking...", null, 'general');
     agentTab.click();
   } else {
     console.error("❌ Agent tab button not found!");
   }
 };
 
-console.log("🔧 Debug functions loaded: debugAgentTab(), debugAgent()");
+Logger.info("🔧 Debug functions loaded: debugAgentTab(), debugAgent()", null, 'general');
 
 // Immediate debug function that works even if script isn't fully loaded
 window.quickDebug = function() {
-  console.log("🚀 Quick Debug - Agent Tab Status:");
-  console.log("Document ready:", document.readyState);
-  console.log("Agent tab button:", document.querySelector('[data-tab="agent-tab"]'));
-  console.log("Agent tab content:", document.getElementById('agent-tab'));
-  console.log("Active tab:", document.querySelector('.main-nav-tab.active')?.textContent);
+  Logger.info("Quick Debug - Agent Tab Status:", null, 'general');
+  Logger.info("Document ready:", document.readyState, 'general');
+  Logger.info("Agent tab button:", document.querySelector('[data-tab="agent-tab"]'), 'general');
+  Logger.info("Agent tab content:", document.getElementById('agent-tab'), 'general');
+  Logger.info("Active tab:", document.querySelector('.main-nav-tab.active')?.textContent, 'general');
   
   // Check if we can find the agent tab button and click it
   const agentButton = document.querySelector('[data-tab="agent-tab"]');
   if (agentButton) {
-    console.log("✅ Agent button found, attempting click...");
+    Logger.success("Agent button found, attempting click...", null, 'general');
     agentButton.click();
   } else {
     console.error("❌ Agent button not found!");
@@ -8829,7 +8829,7 @@ window.quickDebug = function() {
 
 // Auto-run quick debug when script loads
 setTimeout(() => {
-  console.log("🔧 Auto-running quick debug...");
+  Logger.info("🔧 Auto-running quick debug...", null, 'general');
   if (typeof window.quickDebug === 'function') {
     window.quickDebug();
   }
