@@ -202,6 +202,61 @@ class SupabaseRealtimeClient {
       presenceData.aura_color = auraColor;
     }
 
+    // SD1 FIX: Include avatar_url in presence data for "Last seen" users
+    // Check multiple sources for the real avatar URL
+    let avatarUrl = null;
+    
+    // 1. Try currentUser object (from auth)
+    if (this.currentUser.avatarUrl) {
+      avatarUrl = this.currentUser.avatarUrl;
+      console.log(`🔍 SD1 AVATAR_SOURCE: Found avatar in currentUser: ${avatarUrl}`);
+    }
+    
+    // 2. Try localStorage (from auth)
+    if (!avatarUrl) {
+      const storedUserKey = `metalayer_user_${this.currentUser.userEmail}`;
+      const storedUser = localStorage.getItem(storedUserKey);
+      if (storedUser) {
+        try {
+          const parsed = JSON.parse(storedUser);
+          if (parsed.user_metadata?.avatar_url) {
+            avatarUrl = parsed.user_metadata.avatar_url;
+            console.log(`🔍 SD1 AVATAR_SOURCE: Found avatar in localStorage: ${avatarUrl}`);
+          }
+        } catch (e) {
+          console.warn(`⚠️ SD1 AVATAR_SOURCE: Failed to parse stored user:`, e);
+        }
+      }
+    }
+    
+    // 3. Try window.currentUser (from sidepanel.js)
+    if (!avatarUrl && typeof window !== 'undefined' && window.currentUser?.avatarUrl) {
+      avatarUrl = window.currentUser.avatarUrl;
+      console.log(`🔍 SD1 AVATAR_SOURCE: Found avatar in window.currentUser: ${avatarUrl}`);
+    }
+    
+    // 4. Try unfiltered visibility data (might have avatar from previous session)
+    if (!avatarUrl && typeof window !== 'undefined' && window.currentVisibilityDataUnfiltered) {
+      const userInVisibility = window.currentVisibilityDataUnfiltered.find(u => 
+        u.email === this.currentUser.userEmail || 
+        u.userId === this.currentUser.userEmail
+      );
+      if (userInVisibility?.avatarUrl) {
+        avatarUrl = userInVisibility.avatarUrl;
+        console.log(`🔍 SD1 AVATAR_SOURCE: Found avatar in visibility data: ${avatarUrl}`);
+      }
+    }
+    
+    // Only add avatar_url if we found a REAL one (not fallback/default)
+    if (avatarUrl && !avatarUrl.includes('default-user')) {
+      presenceData.avatar_url = avatarUrl;
+      console.log(`✅ SD1 AVATAR_FIX: Including REAL avatar URL in presence: ${avatarUrl}`);
+    } else if (avatarUrl) {
+      console.log(`⚠️ SD1 AVATAR_FIX: Skipping fallback avatar URL: ${avatarUrl}`);
+    } else {
+      console.log(`⚠️ SD1 AVATAR_FIX: No avatar URL found - will need to fetch from auth later`);
+    }
+
     console.log(`🔍 PRESENCE_UPDATE: Data being sent:`, JSON.stringify(presenceData, null, 2));
 
     try {

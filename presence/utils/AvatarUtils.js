@@ -21,15 +21,26 @@ class AvatarUtils {
     let avatarSource = 'none';
 
     try {
-      // For current user, use user_metadata (same as profile avatar system)
-      const currentUser = window.currentUser || {};
-      if ((user.user_email || user.email) === currentUser.email && currentUser.user_metadata?.avatar_url) {
-        avatarUrl = currentUser.user_metadata.avatar_url;
-        userName = currentUser.user_metadata.full_name || userName;
-        avatarSource = 'current_user_metadata';
-        Logger.avatar(`✅ Using current user metadata for ${user.user_email || user.email} - avatarUrl: ${avatarUrl}`);
-      } else {
-        // For other users, use visibility data (same as profile avatar system)
+      // SD1 FIX: PRIORITY 1 - Check if user object already has avatar_url (from user_presence table)
+      if (user.avatar_url && !user.avatar_url.includes('default-user')) {
+        avatarUrl = user.avatar_url;
+        avatarSource = 'user_presence_table';
+        Logger.avatar(`✅ SD1 FIX: Using avatar_url from user object (user_presence): ${avatarUrl}`);
+      }
+      
+      // PRIORITY 2: For current user, use user_metadata (same as profile avatar system)
+      if (!avatarUrl) {
+        const currentUser = window.currentUser || {};
+        if ((user.user_email || user.email) === currentUser.email && currentUser.user_metadata?.avatar_url) {
+          avatarUrl = currentUser.user_metadata.avatar_url;
+          userName = currentUser.user_metadata.full_name || userName;
+          avatarSource = 'current_user_metadata';
+          Logger.avatar(`✅ Using current user metadata for ${user.user_email || user.email} - avatarUrl: ${avatarUrl}`);
+        }
+      }
+      
+      // PRIORITY 3: For other users, use visibility data (same as profile avatar system)
+      if (!avatarUrl) {
         if (window.currentVisibilityDataUnfiltered && window.currentVisibilityDataUnfiltered.active) {
           const userInVisibility = window.currentVisibilityDataUnfiltered.active.find(
             u => u.email === (user.user_email || user.email) || 

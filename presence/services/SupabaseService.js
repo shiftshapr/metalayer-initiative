@@ -163,7 +163,7 @@ class SupabaseService {
   /**
    * Update user presence
    */
-  async updatePresence(userEmail, pageId, pageUrl, isActive, auraColor = '#aaaaaa') {
+  async updatePresence(userEmail, pageId, pageUrl, isActive, auraColor = '#aaaaaa', avatarUrl = null) {
     try {
       this.logger.startPerformance(`updatePresence:${userEmail}`);
       
@@ -175,6 +175,17 @@ class SupabaseService {
         last_seen: new Date().toISOString(),
         aura_color: auraColor
       };
+
+      // SD1 FIX: Add avatar_url to presence data if provided
+      // This ensures avatar URLs are available when querying user_presence
+      if (avatarUrl) {
+        presenceData.avatar_url = avatarUrl;
+        this.logger.debug('SUPABASE', 'Including avatar URL in presence update', { 
+          userEmail, 
+          avatarUrl,
+          source: 'presence_update'
+        });
+      }
 
       const { data, error } = await this.client
         .from('user_presence')
