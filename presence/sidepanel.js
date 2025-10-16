@@ -5,6 +5,19 @@
 // MODERN CONFIGURATION: Use environment-based configuration
 // MODERN CONFIGURATION: Fully environment-based, no hardcoded fallbacks
 
+// CRITICAL FIX: Ensure Logger is available before using it
+if (typeof Logger === 'undefined') {
+  console.error('🚨 CRITICAL: Logger utility not loaded! Falling back to console.log');
+  // Create fallback Logger object
+  window.Logger = {
+    debug: (msg, data, context) => console.log(`🔍 ${msg}`, data),
+    info: (msg, data, context) => console.log(`ℹ️ ${msg}`, data),
+    warn: (msg, data, context) => console.warn(`⚠️ ${msg}`, data),
+    error: (msg, data, context) => console.error(`❌ ${msg}`, data),
+    success: (msg, data, context) => console.log(`✅ ${msg}`, data)
+  };
+}
+
 Logger.info("SIDEPANEL.JS LOADING STARTED", null, 'general');
 
 // Immediate debug function - should be available right away
