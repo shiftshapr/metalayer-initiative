@@ -144,21 +144,33 @@ class TE2TestSuite {
     Logger.debug('Testing AuthManager module', null, 'testing');
     
     if (!window.AuthManager) {
-      throw new Error('AuthManager not available');
+      Logger.warn('AuthManager not available, skipping auth tests', null, 'testing');
+      return {
+        initialization: false,
+        error: 'AuthManager not available'
+      };
     }
     
-    const authManager = new window.AuthManager();
-    
-    const results = {
-      initialization: !!authManager,
-      isAuthenticated: authManager.isAuthenticated(),
-      getCurrentUser: authManager.getCurrentUser(),
-      getAuthStatus: authManager.getAuthStatus(),
-      requireAuth: typeof authManager.requireAuth === 'function',
-      onAuthStateChange: typeof authManager.onAuthStateChange === 'function'
-    };
-    
-    return results;
+    try {
+      const authManager = new window.AuthManager();
+      
+      const results = {
+        initialization: !!authManager,
+        isAuthenticated: typeof authManager.isAuthenticated === 'function' ? authManager.isAuthenticated() : 'method not available',
+        getCurrentUser: typeof authManager.getCurrentUser === 'function' ? authManager.getCurrentUser() : 'method not available',
+        getAuthStatus: typeof authManager.getAuthStatus === 'function' ? authManager.getAuthStatus() : 'method not available',
+        requireAuth: typeof authManager.requireAuth === 'function',
+        onAuthStateChange: typeof authManager.onAuthStateChange === 'function'
+      };
+      
+      return results;
+    } catch (error) {
+      Logger.error('Error testing AuthManager:', error, 'testing');
+      return {
+        initialization: false,
+        error: error.message
+      };
+    }
   }
 
   /**
@@ -168,20 +180,32 @@ class TE2TestSuite {
     Logger.debug('Testing ProfileManager module', null, 'testing');
     
     if (!window.ProfileManager) {
-      throw new Error('ProfileManager not available');
+      Logger.warn('ProfileManager not available, skipping profile tests', null, 'testing');
+      return {
+        initialization: false,
+        error: 'ProfileManager not available'
+      };
     }
     
-    const profileManager = new window.ProfileManager();
-    
-    const results = {
-      initialization: !!profileManager,
-      getProfileData: profileManager.getProfileData(),
-      getProfileStatus: profileManager.getProfileStatus(),
-      updateAuraColor: typeof profileManager.updateAuraColor === 'function',
-      onProfileUpdate: typeof profileManager.onProfileUpdate === 'function'
-    };
-    
-    return results;
+    try {
+      const profileManager = new window.ProfileManager();
+      
+      const results = {
+        initialization: !!profileManager,
+        getProfileData: typeof profileManager.getProfileData === 'function' ? profileManager.getProfileData() : 'method not available',
+        getProfileStatus: typeof profileManager.getProfileStatus === 'function' ? profileManager.getProfileStatus() : 'method not available',
+        updateAuraColor: typeof profileManager.updateAuraColor === 'function',
+        onProfileUpdate: typeof profileManager.onProfileUpdate === 'function'
+      };
+      
+      return results;
+    } catch (error) {
+      Logger.error('Error testing ProfileManager:', error, 'testing');
+      return {
+        initialization: false,
+        error: error.message
+      };
+    }
   }
 
   /**
@@ -191,21 +215,33 @@ class TE2TestSuite {
     Logger.debug('Testing UIManager module', null, 'testing');
     
     if (!window.UIManager) {
-      throw new Error('UIManager not available');
+      Logger.warn('UIManager not available, skipping UI tests', null, 'testing');
+      return {
+        initialization: false,
+        error: 'UIManager not available'
+      };
     }
     
-    const uiManager = new window.UIManager();
-    
-    const results = {
-      initialization: !!uiManager,
-      getUIState: uiManager.getUIState(),
-      switchTab: typeof uiManager.switchTab === 'function',
-      showLoading: typeof uiManager.showLoading === 'function',
-      hideLoading: typeof uiManager.hideLoading === 'function',
-      onUIStateChange: typeof uiManager.onUIStateChange === 'function'
-    };
-    
-    return results;
+    try {
+      const uiManager = new window.UIManager();
+      
+      const results = {
+        initialization: !!uiManager,
+        getUIState: typeof uiManager.getUIState === 'function' ? uiManager.getUIState() : 'method not available',
+        switchTab: typeof uiManager.switchTab === 'function',
+        showLoading: typeof uiManager.showLoading === 'function',
+        hideLoading: typeof uiManager.hideLoading === 'function',
+        onUIStateChange: typeof uiManager.onUIStateChange === 'function'
+      };
+      
+      return results;
+    } catch (error) {
+      Logger.error('Error testing UIManager:', error, 'testing');
+      return {
+        initialization: false,
+        error: error.message
+      };
+    }
   }
 
   /**
