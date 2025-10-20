@@ -3241,6 +3241,14 @@ function showColorPickerModal() {
           window.currentUser.auraColor = auraColor;
           updateUI(window.currentUser);
           
+          // Update all message avatars with new aura color
+          console.log('🔍 AURA DEBUG: Updating all message avatars with new aura color');
+          updateAllMessageAvatars(window.currentUser.email, auraColor);
+          
+          // Update all visibility avatars with new aura color
+          console.log('🔍 AURA DEBUG: Updating all visibility avatars with new aura color');
+          updateAllVisibilityAvatars(window.currentUser.email, auraColor);
+          
           // Send aura change via real-time system
           if (window.aurasIntegration && window.aurasIntegration.isInitialized) {
             window.aurasIntegration.setAura(window.currentUser.email, auraColor);
@@ -6031,19 +6039,43 @@ async function convertSupabaseMessageToAPIFormat(supabaseMessage) {
   
   try {
     console.log('🔄 CONVERT_MESSAGE: Fetching author data from user_presence...');
+    console.log('🔍 REMOTE AVATAR DEBUG: User email:', userEmail);
+    console.log('🔍 REMOTE AVATAR DEBUG: Page ID:', supabaseMessage.page_id);
+    
     const { data: presenceData, error } = await window.supabase
       .from('user_presence')
-      .select('avatar_url, aura_color')
+      .select('avatar_url, aura_color, user_name')
       .eq('user_email', userEmail)
       .eq('page_id', supabaseMessage.page_id)
       .limit(1);
     
+    console.log('🔍 REMOTE AVATAR DEBUG: Presence query result:', { presenceData, error });
+    
     if (error) {
       console.warn('⚠️ CONVERT_MESSAGE: Could not fetch author data:', error);
+      console.log('🔍 REMOTE AVATAR DEBUG: Trying fallback query without page_id filter...');
+      
+      // Try fallback query without page_id filter
+      const { data: fallbackData, error: fallbackError } = await window.supabase
+        .from('user_presence')
+        .select('avatar_url, aura_color, user_name')
+        .eq('user_email', userEmail)
+        .order('updated_at', { ascending: false })
+        .limit(1);
+      
+      console.log('🔍 REMOTE AVATAR DEBUG: Fallback query result:', { fallbackData, fallbackError });
+      
+      if (fallbackData && fallbackData.length > 0) {
+        console.log('✅ CONVERT_MESSAGE: Found author data via fallback:', fallbackData[0]);
+        authorData.avatarUrl = fallbackData[0].avatar_url;
+        authorData.auraColor = fallbackData[0].aura_color || window.currentUser?.auraColor || '#aa00aa';
+        authorData.name = fallbackData[0].user_name || authorData.name;
+      }
     } else if (presenceData && presenceData.length > 0) {
       console.log('✅ CONVERT_MESSAGE: Found author data:', presenceData[0]);
       authorData.avatarUrl = presenceData[0].avatar_url;
       authorData.auraColor = presenceData[0].aura_color || window.currentUser?.auraColor || '#aa00aa';
+      authorData.name = presenceData[0].user_name || authorData.name;
     } else {
       console.log('⚠️ CONVERT_MESSAGE: No presence data found for user');
     }
@@ -7356,6 +7388,29 @@ async function updateUI(user) {
       avatarUrl: user.avatarUrl || user.user_metadata?.avatar_url,
       communityId: 'comm-001'
     };
+    
+    // Fetch user's aura color from database
+    console.log('🔍 AURA DEBUG: Fetching user aura color from database...');
+    try {
+      const { data: userData, error } = await window.supabase
+        .from('app_users')
+        .select('aura_color')
+        .eq('email', user.email)
+        .single();
+      
+      if (error) {
+        console.log('🔍 AURA DEBUG: Error fetching user aura color:', error);
+        console.log('🔍 AURA DEBUG: Using fallback aura color');
+      } else if (userData && userData.aura_color) {
+        console.log('🔍 AURA DEBUG: Found user aura color in database:', userData.aura_color);
+        window.currentUser.auraColor = userData.aura_color;
+        console.log('🔍 AURA DEBUG: Updated window.currentUser.auraColor to:', window.currentUser.auraColor);
+      } else {
+        console.log('🔍 AURA DEBUG: No aura color found in database, using fallback');
+      }
+    } catch (error) {
+      console.log('🔍 AURA DEBUG: Exception fetching user aura color:', error);
+    }
     
     // Old WebSocket code removed - now using Supabase real-time for all real-time features
     
@@ -9281,11 +9336,16 @@ async function startPresenceTracking() {
 
     // Send initial presence event to backend
     console.log('🔧 PRESENCE: Sending initial presence event to backend...');
+    console.log('🔍 PRESENCE DEBUG: Current user:', await getCurrentUserEmail());
+    console.log('🔍 PRESENCE DEBUG: Current page ID:', currentPageId);
+    console.log('🔍 PRESENCE DEBUG: URL data:', urlData);
     try {
-      await sendPresenceEvent('ENTER');
+      const presenceResult = await sendPresenceEvent('ENTER');
       console.log('✅ PRESENCE: Initial presence event sent successfully');
+      console.log('🔍 PRESENCE DEBUG: Presence event result:', presenceResult);
     } catch (error) {
       console.error('❌ PRESENCE: Failed to send initial presence event:', error);
+      console.error('🔍 PRESENCE DEBUG: Error details:', error.message, error.stack);
     }
     
     // Set up single comprehensive Supabase real-time subscription for this page
@@ -10016,16 +10076,40 @@ async function stopPresenceTracking() {
 
 // Send a presence event to the server
 async function sendPresenceEvent(kind, availability = null, customLabel = null) {
+  console.log('🔍 PRESENCE EVENT DEBUG: Starting sendPresenceEvent');
+  console.log('🔍 PRESENCE EVENT DEBUG: Kind:', kind);
+  console.log('🔍 PRESENCE EVENT DEBUG: Availability:', availability);
+  console.log('🔍 PRESENCE EVENT DEBUG: Custom label:', customLabel);
+  
   try {
     if (!currentPageId) {
-      console.warn('No current pageId for presence event');
+      console.warn('❌ PRESENCE EVENT: No current pageId for presence event');
+      console.log('🔍 PRESENCE EVENT DEBUG: currentPageId is null/undefined');
       return;
     }
     
+    console.log('🔍 PRESENCE EVENT DEBUG: Current page ID:', currentPageId);
+    
     // Get normalized URL data - SAME AS MESSAGES AND VISIBILITY
     const urlData = await normalizeCurrentUrl();
+    console.log('🔍 PRESENCE EVENT DEBUG: URL data:', urlData);
+    
     const userEmail = await getCurrentUserEmail();
+    console.log('🔍 PRESENCE EVENT DEBUG: User email:', userEmail);
+    
     const userId = await getCurrentUserId();
+    console.log('🔍 PRESENCE EVENT DEBUG: User ID:', userId);
+    
+    const requestBody = {
+      pageId: currentPageId,
+      kind,
+      availability,
+      customLabel,
+      pageUrl: urlData.rawUrl // Use the raw URL from urlData
+    };
+    
+    console.log('🔍 PRESENCE EVENT DEBUG: Request body:', requestBody);
+    console.log('🔍 PRESENCE EVENT DEBUG: API URL:', `${METALAYER_API_URL}/v1/presence/event`);
     
     const response = await fetch(`${METALAYER_API_URL}/v1/presence/event`, {
       method: 'POST',
@@ -10034,16 +10118,15 @@ async function sendPresenceEvent(kind, availability = null, customLabel = null) 
         'x-user-email': userEmail,
         'x-user-id': userId
       },
-      body: JSON.stringify({
-        pageId: currentPageId,
-        kind,
-        availability,
-        customLabel,
-        pageUrl: urlData.rawUrl // Use the raw URL from urlData
-      })
+      body: JSON.stringify(requestBody)
     });
     
+    console.log('🔍 PRESENCE EVENT DEBUG: Response status:', response.status);
+    console.log('🔍 PRESENCE EVENT DEBUG: Response ok:', response.ok);
+    
     if (response.ok) {
+      const responseData = await response.json();
+      console.log('🔍 PRESENCE EVENT DEBUG: Response data:', responseData);
       Logger.success(`PRESENCE: ${kind} event sent successfully`, null, 'general');
       
            // CHROME EXTENSION WEBSOCKET FIX: Send via background service worker
@@ -10059,8 +10142,22 @@ async function sendPresenceEvent(kind, availability = null, customLabel = null) 
            Logger.info(`👥 WEBSOCKET: ${kind} event broadcast via background service worker`, null, 'general');
     } else {
       console.warn(`❌ PRESENCE: Failed to send ${kind} event:`, response.status);
+      const errorText = await response.text();
+      console.error('❌ PRESENCE: Error response:', errorText);
+      console.log('🔍 PRESENCE EVENT DEBUG: Full error details:', {
+        status: response.status,
+        statusText: response.statusText,
+        errorText: errorText,
+        requestBody: requestBody
+      });
     }
   } catch (error) {
+    console.log('🔍 PRESENCE EVENT DEBUG: Exception details:', {
+      message: error.message,
+      stack: error.stack,
+      requestBody: requestBody
+    });
+    
     if (error.message.includes('Failed to fetch') || error.message.includes('ERR_CONNECTION_REFUSED')) {
       console.warn(`⚠️ PRESENCE: Connection refused for ${kind} event - server may be overloaded`);
     } else {
@@ -10073,6 +10170,82 @@ async function sendPresenceEvent(kind, availability = null, customLabel = null) 
 const urlNormalizationCache = new Map();
 let currentNormalizedUrl = null;
 let currentRawUrl = null;
+
+// Function to update all message avatars with new aura color
+function updateAllMessageAvatars(userEmail, auraColor) {
+  console.log('🔍 AURA DEBUG: Updating message avatars for user:', userEmail, 'with color:', auraColor);
+  
+  // Find all message avatars for this user
+  const messageAvatars = document.querySelectorAll(`.message-avatar[data-user-email="${userEmail}"]`);
+  console.log('🔍 AURA DEBUG: Found message avatars:', messageAvatars.length);
+  
+  messageAvatars.forEach(avatar => {
+    console.log('🔍 AURA DEBUG: Updating message avatar:', avatar);
+    // Update the aura color in the avatar's data attribute
+    avatar.setAttribute('data-aura-color', auraColor);
+    
+    // Update the avatar's aura visual effect
+    const auraElement = avatar.querySelector('.aura-effect');
+    if (auraElement) {
+      auraElement.style.boxShadow = `0 0 10px 3px ${auraColor}`;
+    } else {
+      // Create aura effect if it doesn't exist
+      const aura = document.createElement('div');
+      aura.className = 'aura-effect';
+      aura.style.cssText = `
+        position: absolute;
+        top: -3px;
+        left: -3px;
+        right: -3px;
+        bottom: -3px;
+        border-radius: 50%;
+        box-shadow: 0 0 10px 3px ${auraColor};
+        pointer-events: none;
+        z-index: -1;
+      `;
+      avatar.style.position = 'relative';
+      avatar.appendChild(aura);
+    }
+  });
+}
+
+// Function to update all visibility avatars with new aura color
+function updateAllVisibilityAvatars(userEmail, auraColor) {
+  console.log('🔍 AURA DEBUG: Updating visibility avatars for user:', userEmail, 'with color:', auraColor);
+  
+  // Find all visibility avatars for this user
+  const visibilityAvatars = document.querySelectorAll(`.avatar[data-user-email="${userEmail}"], .user-avatar[data-user-email="${userEmail}"]`);
+  console.log('🔍 AURA DEBUG: Found visibility avatars:', visibilityAvatars.length);
+  
+  visibilityAvatars.forEach(avatar => {
+    console.log('🔍 AURA DEBUG: Updating visibility avatar:', avatar);
+    // Update the aura color in the avatar's data attribute
+    avatar.setAttribute('data-aura-color', auraColor);
+    
+    // Update the avatar's aura visual effect
+    const auraElement = avatar.querySelector('.aura-effect');
+    if (auraElement) {
+      auraElement.style.boxShadow = `0 0 10px 3px ${auraColor}`;
+    } else {
+      // Create aura effect if it doesn't exist
+      const aura = document.createElement('div');
+      aura.className = 'aura-effect';
+      aura.style.cssText = `
+        position: absolute;
+        top: -3px;
+        left: -3px;
+        right: -3px;
+        bottom: -3px;
+        border-radius: 50%;
+        box-shadow: 0 0 10px 3px ${auraColor};
+        pointer-events: none;
+        z-index: -1;
+      `;
+      avatar.style.position = 'relative';
+      avatar.appendChild(aura);
+    }
+  });
+}
 
 // Add cache invalidation function to prevent stale data
 function clearUrlNormalizationCache() {
