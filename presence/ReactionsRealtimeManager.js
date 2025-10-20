@@ -104,7 +104,7 @@ class ReactionsRealtimeManager {
         .on('postgres_changes', {
           event: '*',
           schema: 'public',
-          table: 'message_reactions',
+          table: 'messages',
           filter: `page_id=eq.${pageId}`
         }, (payload) => {
           this._handleReactionChange(payload);

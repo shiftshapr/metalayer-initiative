@@ -104,7 +104,7 @@ class AurasRealtimeManager {
         .on('postgres_changes', {
           event: '*',
           schema: 'public',
-          table: 'user_auras',
+          table: 'user_presence',
           filter: `page_id=eq.${pageId}`
         }, (payload) => {
           this._handleAuraChange(payload);
