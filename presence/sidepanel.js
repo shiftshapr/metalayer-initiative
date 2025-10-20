@@ -9395,6 +9395,9 @@ async function startPresenceTracking() {
             // Update visibility UI with active users
             updateVisibleTab(event.detail.activeUsers);
           });
+          
+          // Store the unified presence manager globally for cleanup
+          window.unifiedPresenceManager = unifiedPresence;
         } else {
           console.error('❌ PRESENCE: UnifiedPresenceManager initialization failed');
         }
