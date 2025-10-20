@@ -113,55 +113,33 @@
     }
 
     function getOrCreateBodyElement(wrapper, clearContent = false) {
-      console.log('🔍🔍🔍 GETORCREATE DEBUG: Starting getOrCreateBodyElement');
-      console.log('🔍🔍🔍 GETORCREATE DEBUG: wrapper:', wrapper);
-      console.log('🔍🔍🔍 GETORCREATE DEBUG: clearContent:', clearContent);
-      
-      if (!wrapper) {
-        console.log('🔍🔍🔍 GETORCREATE DEBUG: No wrapper, returning null');
-        return null;
-      }
+      if (!wrapper) return null;
       
       // Try common selectors
       let el = wrapper.querySelector('.message-body, [data-role="message-body"], [data-role="message-text"], .message-text');
-      console.log('🔍🔍🔍 GETORCREATE DEBUG: el found:', !!el);
-      console.log('🔍🔍🔍 GETORCREATE DEBUG: el element:', el);
       
       if (el) {
-        console.log('🔍🔍🔍 GETORCREATE DEBUG: el.innerHTML before clear:', el.innerHTML);
-        console.log('🔍🔍🔍 GETORCREATE DEBUG: el.textContent before clear:', el.textContent);
-        
-        // ROOT CAUSE FIX: Clear content if requested (for edits)
+        // Clear content if requested (for edits)
         if (clearContent) {
-          console.log('🧹 UI REALTIME: Clearing existing content in element:', el);
           el.innerHTML = '';
           el.textContent = '';
           // Also clear any child elements that might contain text
           const children = el.querySelectorAll('*');
-          console.log('🔍🔍🔍 GETORCREATE DEBUG: Found children to clear:', children.length);
           children.forEach(child => {
             if (child.textContent) {
               child.textContent = '';
             }
           });
-          console.log('🧹 UI REALTIME: Content cleared, element is now empty:', el.textContent);
         }
-        
-        console.log('🔍🔍🔍 GETORCREATE DEBUG: el.innerHTML after clear:', el.innerHTML);
-        console.log('🔍🔍🔍 GETORCREATE DEBUG: el.textContent after clear:', el.textContent);
-        console.log('🔍🔍🔍 GETORCREATE DEBUG: Returning existing element');
         return el;
       }
       
       // Create a minimal, safe body container
-      console.log('🔍🔍🔍 GETORCREATE DEBUG: No existing element, creating new one');
       const created = document.createElement('div');
       created.setAttribute('data-role', 'message-body');
       // Prefer an existing content container if present
       const container = wrapper.querySelector('[data-role="message-content"], .message-content') || wrapper;
-      console.log('🔍🔍🔍 GETORCREATE DEBUG: container:', container);
       container.appendChild(created);
-      console.log('🔍🔍🔍 GETORCREATE DEBUG: Created and appended new element:', created);
       return created;
     }
 
@@ -223,12 +201,7 @@
     }
 
     function editMessageInUIFromPayload(payload) {
-      console.log('🔍🔍🔍 EDIT DEBUG: Starting editMessageInUIFromPayload');
-      console.log('🔍🔍🔍 EDIT DEBUG: payload:', payload);
-      
       const record = extractRecord(payload, 'new');
-      console.log('🔍🔍🔍 EDIT DEBUG: record:', record);
-      
       const messageId =
         (record && (record.id || record.messageId))
         || payload?.id
@@ -242,9 +215,6 @@
         || payload?.payload?.message?.content
         || payload?.message?.content
         || '';
-      
-      console.log('🔍🔍🔍 EDIT DEBUG: messageId:', messageId);
-      console.log('🔍🔍🔍 EDIT DEBUG: newBody:', newBody);
       
       if (!messageId || !newBody) {
         console.log('⚠️ UI REALTIME: insufficient data to edit', {
@@ -266,44 +236,23 @@
       
       // Fallback: mutate DOM safely
       const wrapper = document.querySelector(`.message[data-message-id="${messageId}"]`);
-      console.log('🔍🔍🔍 EDIT DEBUG: wrapper found:', !!wrapper);
-      console.log('🔍🔍🔍 EDIT DEBUG: wrapper element:', wrapper);
       
-      if (wrapper) {
-        console.log('🔍🔍🔍 EDIT DEBUG: wrapper.innerHTML before changes:', wrapper.innerHTML);
-        console.log('🔍🔍🔍 EDIT DEBUG: wrapper.textContent before changes:', wrapper.textContent);
-      }
-      
-      // Try multiple selectors to find the message body element
-      // The actual content is in .message-content, not .message-body
+      // CRITICAL FIX: The actual content is in .message-content, not .message-body
       const el = document.querySelector(`.message[data-message-id="${messageId}"] .message-content`);
-      console.log('🔍🔍🔍 EDIT DEBUG: el found:', !!el);
-      console.log('🔍🔍🔍 EDIT DEBUG: el element:', el);
       
       if (el) {
-        console.log('🔍🔍🔍 EDIT DEBUG: el.innerHTML before changes:', el.innerHTML);
-        console.log('🔍🔍🔍 EDIT DEBUG: el.textContent before changes:', el.textContent);
-        
         console.log('🔗 UI REALTIME: DOM edit for', messageId);
-        // ROOT CAUSE FIX: Clear existing content completely before setting new content
+        // Clear existing content completely before setting new content
         el.innerHTML = '';
         el.textContent = newBody;
-        
-        console.log('🔍🔍🔍 EDIT DEBUG: el.innerHTML after changes:', el.innerHTML);
-        console.log('🔍🔍🔍 EDIT DEBUG: el.textContent after changes:', el.textContent);
         console.log('✅ UI REALTIME: Content replaced (not appended) for', messageId);
       } else if (wrapper) {
         // Create a missing body node and update in-place
-        console.log('🔍🔍🔍 EDIT DEBUG: No el found, creating new one');
         const created = getOrCreateBodyElement(wrapper, true); // clearContent = true for edits
-        console.log('🔍🔍🔍 EDIT DEBUG: created element:', created);
-        
         if (created) {
           console.log('🧩 UI REALTIME: created body node and updated', messageId);
-          console.log('🧩 UI REALTIME: Element before setting content:', created.textContent);
           // Content already cleared by getOrCreateBodyElement
           created.textContent = newBody;
-          console.log('🧩 UI REALTIME: Element after setting content:', created.textContent);
           console.log('✅ UI REALTIME: Content replaced (not appended) for', messageId);
         } else {
           console.log('⚠️ UI REALTIME: could not create body node; refreshing', messageId);
@@ -311,16 +260,8 @@
         }
       } else {
         // Not in DOM yet: add
-        console.log('🔍🔍🔍 EDIT DEBUG: wrapper not found, adding message');
         addMessageToUIFromPayload(record);
       }
-      
-      // Final check - log the wrapper content after all changes
-      if (wrapper) {
-        console.log('🔍🔍🔍 EDIT DEBUG: wrapper.innerHTML after all changes:', wrapper.innerHTML);
-        console.log('🔍🔍🔍 EDIT DEBUG: wrapper.textContent after all changes:', wrapper.textContent);
-      }
-      console.log('🔍🔍🔍 EDIT DEBUG: End of editMessageInUIFromPayload');
     }
 
     function deleteMessageInUIFromPayload(payload) {
