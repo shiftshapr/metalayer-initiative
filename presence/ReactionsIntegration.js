@@ -113,29 +113,46 @@ class ReactionsIntegration {
    * Add a reaction to a message
    */
   async addReaction(messageId, reactionType) {
+    console.log('🔍 REACTIONS DEBUG: Starting addReaction');
+    console.log('🔍 REACTIONS DEBUG: Message ID:', messageId);
+    console.log('🔍 REACTIONS DEBUG: Reaction type:', reactionType);
+    console.log('🔍 REACTIONS DEBUG: Is initialized:', this.isInitialized);
+    console.log('🔍 REACTIONS DEBUG: Reactions manager available:', !!this.reactionsRealtimeManager);
+    console.log('🔍 REACTIONS DEBUG: this.reactionsManager available:', !!this.reactionsManager);
+    console.log('🔍 REACTIONS DEBUG: window.realtimeFoundation available:', !!window.realtimeFoundation);
+    
     if (!this.isInitialized) {
       this.logger.warn('Reactions integration not initialized, attempting late initialization...');
+      console.log('🔍 REACTIONS DEBUG: Attempting late initialization...');
       const initSuccess = await this.initialize();
       if (!initSuccess) {
         this.logger.error('Late initialization failed');
+        console.log('🔍 REACTIONS DEBUG: Late initialization failed');
         return false;
       }
+      console.log('🔍 REACTIONS DEBUG: Late initialization successful');
     }
     
     try {
       this.logger.info(`Adding reaction: ${reactionType} to message: ${messageId}`);
+      console.log('🔍 REACTIONS DEBUG: About to call reactionsManager.addReaction');
       
       const success = await this.reactionsManager.addReaction(messageId, reactionType);
+      console.log('🔍 REACTIONS DEBUG: addReaction result:', success);
+      
       if (success) {
         this.logger.info('Reaction added successfully');
+        console.log('🔍 REACTIONS DEBUG: Reaction added successfully');
       } else {
         this.logger.warn('Failed to add reaction');
+        console.log('🔍 REACTIONS DEBUG: Failed to add reaction');
       }
       
       return success;
       
     } catch (error) {
       this.logger.error('Failed to add reaction:', error);
+      console.log('🔍 REACTIONS DEBUG: Error adding reaction:', error.message, error.stack);
       return false;
     }
   }

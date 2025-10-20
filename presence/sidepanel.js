@@ -1791,6 +1791,12 @@ async function loadCombinedAvatars(communityIds) {
         console.log('⚠️⚠️⚠️ LOAD_VISIBILITY: No active users on this page ⚠️⚠️⚠️');
         console.log('⚠️ LOAD_VISIBILITY: This page has no currently active users');
         console.log('⚠️ LOAD_VISIBILITY: Response:', JSON.stringify(urlResponse, null, 2));
+        console.log('🔍 LOAD_VISIBILITY DEBUG: Current user email:', window.currentUser?.email);
+        console.log('🔍 LOAD_VISIBILITY DEBUG: Current page ID:', currentPageId);
+        console.log('🔍 LOAD_VISIBILITY DEBUG: API URL called:', `https://api.themetalayer.org/presence/by-url?url=${encodeURIComponent(currentUri)}`);
+        console.log('🔍 LOAD_VISIBILITY DEBUG: Community IDs:', communityIds);
+        console.log('🔍 LOAD_VISIBILITY DEBUG: This suggests the presence tracking is not working properly');
+        console.log('🔍 LOAD_VISIBILITY DEBUG: Current user should be present on this page');
         throw new Error('No active users found via URL-based presence');
       }
     } catch (urlError) {
@@ -9376,35 +9382,50 @@ async function startPresenceTracking() {
       }
     }
 
-    // Use UnifiedPresenceManager if available, otherwise fallback to existing system
-    if (window.UnifiedPresenceManager) {
-      console.log('🔧 PRESENCE: Using UnifiedPresenceManager...');
-      try {
-        const unifiedPresence = new window.UnifiedPresenceManager(window.supabase);
-        const initSuccess = await unifiedPresence.initialize(
-          { email: await getCurrentUserEmail() }, 
-          currentPageId
-        );
-        
-        if (initSuccess) {
-          console.log('✅ PRESENCE: UnifiedPresenceManager initialized successfully');
+        // Use UnifiedPresenceManager if available, otherwise fallback to existing system
+        if (window.UnifiedPresenceManager) {
+          console.log('🔧 PRESENCE: Using UnifiedPresenceManager...');
+          console.log('🔍 PRESENCE DEBUG: UnifiedPresenceManager available:', !!window.UnifiedPresenceManager);
+          console.log('🔍 PRESENCE DEBUG: window.supabase available:', !!window.supabase);
+          console.log('🔍 PRESENCE DEBUG: Current user email:', await getCurrentUserEmail());
+          console.log('🔍 PRESENCE DEBUG: Current page ID:', currentPageId);
           
-          // Listen for presence updates
-          window.addEventListener('presenceUpdate', (event) => {
-            console.log('🔍 PRESENCE: Received presence update:', event.detail);
-            // Update visibility UI with active users
-            updateVisibleTab(event.detail.activeUsers);
-          });
-          
-          // Store the unified presence manager globally for cleanup
-          window.unifiedPresenceManager = unifiedPresence;
+          try {
+            const unifiedPresence = new window.UnifiedPresenceManager(window.supabase);
+            console.log('🔍 PRESENCE DEBUG: UnifiedPresenceManager instance created:', !!unifiedPresence);
+            
+            const initSuccess = await unifiedPresence.initialize(
+              { email: await getCurrentUserEmail() }, 
+              currentPageId
+            );
+            
+            console.log('🔍 PRESENCE DEBUG: Initialization result:', initSuccess);
+            
+            if (initSuccess) {
+              console.log('✅ PRESENCE: UnifiedPresenceManager initialized successfully');
+              
+              // Listen for presence updates
+              window.addEventListener('presenceUpdate', (event) => {
+                console.log('🔍 PRESENCE: Received presence update:', event.detail);
+                console.log('🔍 PRESENCE DEBUG: Event detail type:', typeof event.detail);
+                console.log('🔍 PRESENCE DEBUG: Event detail activeUsers:', event.detail?.activeUsers);
+                console.log('🔍 PRESENCE DEBUG: Active users count:', event.detail?.activeUsers?.length || 0);
+                // Update visibility UI with active users
+                updateVisibleTab(event.detail.activeUsers);
+              });
+              
+              // Store the unified presence manager globally for cleanup
+              window.unifiedPresenceManager = unifiedPresence;
+              console.log('🔍 PRESENCE DEBUG: UnifiedPresenceManager stored globally:', !!window.unifiedPresenceManager);
+            } else {
+              console.error('❌ PRESENCE: UnifiedPresenceManager initialization failed');
+              console.log('🔍 PRESENCE DEBUG: Initialization failed, falling back to existing system');
+            }
+          } catch (error) {
+            console.error('❌ PRESENCE: Error with UnifiedPresenceManager:', error);
+            console.log('🔍 PRESENCE DEBUG: Error details:', error.message, error.stack);
+          }
         } else {
-          console.error('❌ PRESENCE: UnifiedPresenceManager initialization failed');
-        }
-      } catch (error) {
-        console.error('❌ PRESENCE: Error with UnifiedPresenceManager:', error);
-      }
-    } else {
       // Fallback to existing system
       console.log('🔧 PRESENCE: Using existing presence system...');
       try {
@@ -9415,11 +9436,18 @@ async function startPresenceTracking() {
         // Wait a moment for the presence to be processed, then refresh visibility
         setTimeout(async () => {
           console.log('🔍 PRESENCE DEBUG: Refreshing visibility after presence event...');
+          console.log('🔍 PRESENCE DEBUG: About to call refreshVisibilityAvatars()');
+          console.log('🔍 PRESENCE DEBUG: window.supabaseRealtimeClient available:', !!window.supabaseRealtimeClient);
+          console.log('🔍 PRESENCE DEBUG: window.currentUrlData available:', !!window.currentUrlData);
+          console.log('🔍 PRESENCE DEBUG: window.currentUrlData.pageId:', window.currentUrlData?.pageId);
+          console.log('🔍 PRESENCE DEBUG: window.supabase available:', !!window.supabase);
+          
           try {
             await refreshVisibilityAvatars();
             console.log('✅ PRESENCE DEBUG: Visibility refreshed after presence event');
           } catch (error) {
             console.error('❌ PRESENCE DEBUG: Failed to refresh visibility:', error);
+            console.log('🔍 PRESENCE DEBUG: Error details:', error.message, error.stack);
           }
         }, 2000);
       } catch (error) {

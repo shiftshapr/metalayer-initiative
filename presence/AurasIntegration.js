@@ -112,37 +112,108 @@ class AurasIntegration {
   /**
    * Set user aura color
    */
-  async setAura(userId, auraColor) {
-    if (!this.isInitialized) {
-      this.logger.warn('Auras integration not initialized, attempting late initialization...');
-      const initSuccess = await this.initialize();
-      if (!initSuccess) {
-        this.logger.error('Late initialization failed');
-        return false;
+      async setAura(userId, auraColor) {
+        console.log('🔍 AURAS DEBUG: Starting setAura');
+        console.log('🔍 AURAS DEBUG: User ID:', userId);
+        console.log('🔍 AURAS DEBUG: Aura color:', auraColor);
+        console.log('🔍 AURAS DEBUG: Is initialized:', this.isInitialized);
+        console.log('🔍 AURAS DEBUG: Auras manager available:', !!this.aurasManager);
+        console.log('🔍 AURAS DEBUG: Realtime foundation available:', !!(this.aurasManager && this.aurasManager.realtimeFoundation));
+        console.log('🔍 AURAS DEBUG: window.realtimeFoundation available:', !!window.realtimeFoundation);
+        console.log('🔍 AURAS DEBUG: this.realtimeFoundation available:', !!this.realtimeFoundation);
+        console.log('🔍 AURAS DEBUG: this.aurasRealtimeManager available:', !!this.aurasRealtimeManager);
+        
+        if (!this.isInitialized) {
+          this.logger.warn('Auras integration not initialized, attempting late initialization...');
+          console.log('🔍 AURAS DEBUG: Attempting late initialization...');
+          const initSuccess = await this.initialize();
+          if (!initSuccess) {
+            this.logger.error('Late initialization failed');
+            console.log('🔍 AURAS DEBUG: Late initialization failed');
+            return false;
+          }
+          console.log('🔍 AURAS DEBUG: Late initialization successful');
+        }
+        
+        try {
+          this.logger.info(`Setting aura for user ${userId} to ${auraColor}`);
+          console.log('🔍 AURAS DEBUG: Setting aura for user');
+          
+          // Try multiple ways to emit the event
+          let eventEmitted = false;
+          
+          // Method 1: Try this.realtimeFoundation
+          if (this.realtimeFoundation) {
+            console.log('🔍 AURAS DEBUG: Using this.realtimeFoundation');
+            const eventData = {
+              type: 'UPDATE',
+              data: { user_id: userId, aura_color: auraColor, updated_at: new Date().toISOString() },
+              pageId: this.aurasRealtimeManager?.currentPageId || 'unknown',
+              timestamp: Date.now()
+            };
+            
+            console.log('🔍 AURAS DEBUG: Emitting aura-realtime-update event via this.realtimeFoundation');
+            console.log('🔍 AURAS DEBUG: Event data:', eventData);
+            
+            this.realtimeFoundation.emit('aura-realtime-update', eventData);
+            eventEmitted = true;
+            console.log('🔍 AURAS DEBUG: Event emitted successfully via this.realtimeFoundation');
+          }
+          
+          // Method 2: Try window.realtimeFoundation
+          if (!eventEmitted && window.realtimeFoundation) {
+            console.log('🔍 AURAS DEBUG: Using window.realtimeFoundation');
+            const eventData = {
+              type: 'UPDATE',
+              data: { user_id: userId, aura_color: auraColor, updated_at: new Date().toISOString() },
+              pageId: this.aurasRealtimeManager?.currentPageId || 'unknown',
+              timestamp: Date.now()
+            };
+            
+            console.log('🔍 AURAS DEBUG: Emitting aura-realtime-update event via window.realtimeFoundation');
+            console.log('🔍 AURAS DEBUG: Event data:', eventData);
+            
+            window.realtimeFoundation.emit('aura-realtime-update', eventData);
+            eventEmitted = true;
+            console.log('🔍 AURAS DEBUG: Event emitted successfully via window.realtimeFoundation');
+          }
+          
+          // Method 3: Try aurasManager.realtimeFoundation
+          if (!eventEmitted && this.aurasManager && this.aurasManager.realtimeFoundation) {
+            console.log('🔍 AURAS DEBUG: Using aurasManager.realtimeFoundation');
+            const eventData = {
+              type: 'UPDATE',
+              data: { user_id: userId, aura_color: auraColor, updated_at: new Date().toISOString() },
+              pageId: this.aurasManager.currentPageId,
+              timestamp: Date.now()
+            };
+            
+            console.log('🔍 AURAS DEBUG: Emitting aura-realtime-update event via aurasManager.realtimeFoundation');
+            console.log('🔍 AURAS DEBUG: Event data:', eventData);
+            
+            this.aurasManager.realtimeFoundation.emit('aura-realtime-update', eventData);
+            eventEmitted = true;
+            console.log('🔍 AURAS DEBUG: Event emitted successfully via aurasManager.realtimeFoundation');
+          }
+          
+          if (!eventEmitted) {
+            console.log('🔍 AURAS DEBUG: Cannot emit event - no realtime foundation available');
+            console.log('🔍 AURAS DEBUG: this.realtimeFoundation:', !!this.realtimeFoundation);
+            console.log('🔍 AURAS DEBUG: window.realtimeFoundation:', !!window.realtimeFoundation);
+            console.log('🔍 AURAS DEBUG: this.aurasManager:', !!this.aurasManager);
+            console.log('🔍 AURAS DEBUG: this.aurasManager.realtimeFoundation:', !!(this.aurasManager && this.aurasManager.realtimeFoundation));
+          }
+          
+          this.logger.info('Aura set successfully');
+          console.log('🔍 AURAS DEBUG: Aura set successfully');
+          return true;
+          
+        } catch (error) {
+          this.logger.error('Failed to set aura:', error);
+          console.log('🔍 AURAS DEBUG: Error setting aura:', error.message, error.stack);
+          return false;
+        }
       }
-    }
-    
-    try {
-      this.logger.info(`Setting aura for user ${userId} to ${auraColor}`);
-      
-      // For now, just emit an event to simulate real-time aura change
-      if (this.aurasManager && this.aurasManager.realtimeFoundation) {
-        this.aurasManager.realtimeFoundation.emit('aura-realtime-update', {
-          type: 'UPDATE',
-          data: { user_id: userId, aura_color: auraColor, updated_at: new Date().toISOString() },
-          pageId: this.aurasManager.currentPageId,
-          timestamp: Date.now()
-        });
-      }
-      
-      this.logger.info('Aura set successfully');
-      return true;
-      
-    } catch (error) {
-      this.logger.error('Failed to set aura:', error);
-      return false;
-    }
-  }
 
   /**
    * Update user aura
