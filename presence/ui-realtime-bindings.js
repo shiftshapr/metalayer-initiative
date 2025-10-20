@@ -119,7 +119,17 @@
       if (el) {
         // ROOT CAUSE FIX: Clear content if requested (for edits)
         if (clearContent) {
+          console.log('🧹 UI REALTIME: Clearing existing content in element:', el);
           el.innerHTML = '';
+          el.textContent = '';
+          // Also clear any child elements that might contain text
+          const children = el.querySelectorAll('*');
+          children.forEach(child => {
+            if (child.textContent) {
+              child.textContent = '';
+            }
+          });
+          console.log('🧹 UI REALTIME: Content cleared, element is now empty:', el.textContent);
         }
         return el;
       }
@@ -234,8 +244,10 @@
         const created = getOrCreateBodyElement(wrapper, true); // clearContent = true for edits
         if (created) {
           console.log('🧩 UI REALTIME: created body node and updated', messageId);
+          console.log('🧩 UI REALTIME: Element before setting content:', created.textContent);
           // Content already cleared by getOrCreateBodyElement
           created.textContent = newBody;
+          console.log('🧩 UI REALTIME: Element after setting content:', created.textContent);
           console.log('✅ UI REALTIME: Content replaced (not appended) for', messageId);
         } else {
           console.log('⚠️ UI REALTIME: could not create body node; refreshing', messageId);
