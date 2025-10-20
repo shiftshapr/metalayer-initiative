@@ -16,6 +16,7 @@ class RobustIntegration {
     this.authManager = null;
     this.currentUser = null;
     this.currentPage = null;
+    this.realtimeExtensions = null;
     
     // Logging configuration
     this.logLevel = 'INFO';
@@ -102,16 +103,19 @@ class RobustIntegration {
       await this.realtimeManager.initialize(window.supabase);
       this.log('DEBUG', 'Realtime manager initialized');
       
-      // Step 4: Set user in realtime manager
-      this.realtimeManager.setUser(
-        this.currentUser.email,
-        this.currentUser.email,
-        'comm-001'
-      );
-      
-      this.isInitialized = true;
-      this.log('INFO', 'Robust integration system initialized successfully');
-      return true;
+          // Step 4: Set user in realtime manager
+          this.realtimeManager.setUser(
+            this.currentUser.email,
+            this.currentUser.email,
+            'comm-001'
+          );
+          
+          // Step 5: Initialize real-time extensions (visibility, reactions, auras)
+          await this._initializeRealtimeExtensions();
+          
+          this.isInitialized = true;
+          this.log('INFO', 'Robust integration system initialized successfully');
+          return true;
       
     } catch (error) {
       this.log('ERROR', 'Failed to initialize robust integration system', error);
@@ -288,6 +292,38 @@ class RobustIntegration {
   }
 
   /**
+   * Initialize real-time extensions (visibility, reactions, auras)
+   */
+  async _initializeRealtimeExtensions() {
+    try {
+      this.log('INFO', 'Initializing real-time extensions...');
+      
+      // Check if RealtimeExtensions is available
+      if (typeof window.RealtimeExtensions === 'undefined') {
+        this.log('WARN', 'RealtimeExtensions not available - skipping extensions');
+        return true;
+      }
+      
+      // Create and initialize extensions
+      this.realtimeExtensions = new window.RealtimeExtensions();
+      await this.realtimeExtensions.initialize(
+        window.supabase,
+        this.currentUser,
+        this.currentPage
+      );
+      
+      // Setup all real-time subscriptions
+      await this.realtimeExtensions.setupAllRealtime();
+      
+      this.log('INFO', 'Real-time extensions initialized successfully');
+      return true;
+    } catch (error) {
+      this.log('ERROR', 'Failed to initialize real-time extensions:', error);
+      return false;
+    }
+  }
+
+  /**
    * Cleanup method
    */
   async cleanup() {
@@ -295,6 +331,10 @@ class RobustIntegration {
     
     if (this.realtimeManager) {
       await this.realtimeManager.cleanup();
+    }
+    
+    if (this.realtimeExtensions) {
+      await this.realtimeExtensions.cleanup();
     }
     
     this.isInitialized = false;
