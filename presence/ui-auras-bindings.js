@@ -210,9 +210,18 @@
       container.className = 'aura-controls';
       container.innerHTML = '<h3>Aura Settings</h3>';
       
-      // Add to sidebar
+      // Add to sidebar in a more appropriate location
       const sidebar = document.querySelector('.sidebar-content') || document.body;
-      sidebar.appendChild(container);
+      const settingsTab = document.querySelector('#settings-tab') || document.querySelector('.settings-section');
+      
+      if (settingsTab) {
+        // Add to settings section if it exists
+        settingsTab.appendChild(container);
+      } else {
+        // Fallback to sidebar but hide by default
+        sidebar.appendChild(container);
+        container.style.display = 'none'; // Hide by default
+      }
       
       console.log('✅ UI AURAS: Aura controls container created');
     }

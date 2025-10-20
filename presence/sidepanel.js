@@ -5168,6 +5168,39 @@ async function handleReaction(message) {
   const reactionBtn = document.querySelector(`[data-message-id="${message.id}"].reaction-btn`);
   if (!reactionBtn) return;
   
+  // Check if user is clicking on an existing reaction to remove it
+  const currentReaction = reactionBtn.dataset.reaction;
+  if (currentReaction && currentReaction !== '') {
+    console.log('🔄 REACTION: User clicked existing reaction, removing it...');
+    
+    // Remove the reaction
+    reactionBtn.textContent = '👍';
+    reactionBtn.dataset.reaction = '';
+    
+    // Send remove reaction event
+    try {
+      const userEmail = await getCurrentUserEmail();
+      const reactionData = {
+        message_id: message.id,
+        user_email: userEmail,
+        reaction_type: 'REMOVE',
+        emoji: '',
+        timestamp: new Date().toISOString()
+      };
+      
+      console.log('Reaction removed:', reactionData);
+      
+      // Emit real-time event for reaction removal
+      if (window.reactionsIntegration && window.reactionsIntegration.isInitialized) {
+        window.reactionsIntegration.removeReaction(message.id, currentReaction, userEmail);
+      }
+      
+      return;
+    } catch (error) {
+      console.error('❌ REACTION: Failed to remove reaction:', error);
+    }
+  }
+  
   // Create reaction modal
   const modal = document.createElement('div');
   modal.className = 'reaction-modal';
@@ -9244,6 +9277,15 @@ async function startPresenceTracking() {
       } else {
         console.warn('⚠️ PRESENCE: Auras integration failed');
       }
+    }
+
+    // Send initial presence event to backend
+    console.log('🔧 PRESENCE: Sending initial presence event to backend...');
+    try {
+      await sendPresenceEvent('ENTER');
+      console.log('✅ PRESENCE: Initial presence event sent successfully');
+    } catch (error) {
+      console.error('❌ PRESENCE: Failed to send initial presence event:', error);
     }
     
     // Set up single comprehensive Supabase real-time subscription for this page
