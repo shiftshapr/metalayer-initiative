@@ -1201,7 +1201,9 @@ const AVATAR_BG_CONFIG = {
     }
     
     // Fallback to default aura color
-    return '#aa00aa'; // Default aura color
+    // Use user's actual aura color from database, fallback to default
+    const userAuraColor = window.currentUser?.auraColor || '#aa00aa';
+    return userAuraColor;
   },
   
   // Set custom background color
@@ -1384,7 +1386,7 @@ class MetaLayerAPI {
           handle: msg.user_email.split('@')[0],
           avatarUrl: null,
           email: msg.user_email,
-          auraColor: '#aa00aa'
+          auraColor: window.currentUser?.auraColor || '#aa00aa'
         },
         conversation: {
           id: `conv-${communityId}-${pageId}`,
@@ -3257,6 +3259,20 @@ function showColorPickerModal() {
         closeColorPickerModal();
       } else {
         alert('Please enter a valid 6-digit hex color (e.g., 45B7D1)');
+      }
+    });
+    
+    // Add click outside to close modal
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        closeColorPickerModal();
+      }
+    });
+    
+    // Add escape key to close modal
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && modal.style.display === 'flex') {
+        closeColorPickerModal();
       }
     });
     
@@ -5977,7 +5993,7 @@ async function convertSupabaseMessageToAPIFormat(supabaseMessage) {
     handle: userHandle,
     email: userEmail,
     avatarUrl: null,
-    auraColor: '#aa00aa' // Default aura color
+    auraColor: window.currentUser?.auraColor || '#aa00aa' // Use user's actual aura color
   };
   
   try {
@@ -5994,7 +6010,7 @@ async function convertSupabaseMessageToAPIFormat(supabaseMessage) {
     } else if (presenceData && presenceData.length > 0) {
       console.log('✅ CONVERT_MESSAGE: Found author data:', presenceData[0]);
       authorData.avatarUrl = presenceData[0].avatar_url;
-      authorData.auraColor = presenceData[0].aura_color || '#aa00aa';
+      authorData.auraColor = presenceData[0].aura_color || window.currentUser?.auraColor || '#aa00aa';
     } else {
       console.log('⚠️ CONVERT_MESSAGE: No presence data found for user');
     }
@@ -8639,7 +8655,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                   name: currentUserData?.name || currentUserData?.displayName || 'You',
                   handle: currentUserData?.handle || currentUserData?.name?.toLowerCase().replace(/\s+/g, '') || 'user',
                   avatarUrl: currentUserData?.avatarUrl || currentUserData?.photoURL || currentUserData?.avatar_url || currentUserData?.user_metadata?.avatar_url,
-                  auraColor: currentUserData?.auraColor || '#aa00aa'
+                  auraColor: currentUserData?.auraColor || window.currentUser?.auraColor || '#aa00aa'
                 }
               };
               

@@ -110,6 +110,41 @@ class AurasIntegration {
   }
 
   /**
+   * Set user aura color
+   */
+  async setAura(userId, auraColor) {
+    if (!this.isInitialized) {
+      this.logger.warn('Auras integration not initialized, attempting late initialization...');
+      const initSuccess = await this.initialize();
+      if (!initSuccess) {
+        this.logger.error('Late initialization failed');
+        return false;
+      }
+    }
+    
+    try {
+      this.logger.info(`Setting aura for user ${userId} to ${auraColor}`);
+      
+      // For now, just emit an event to simulate real-time aura change
+      if (this.aurasManager && this.aurasManager.realtimeFoundation) {
+        this.aurasManager.realtimeFoundation.emit('aura-realtime-update', {
+          type: 'UPDATE',
+          data: { user_id: userId, aura_color: auraColor, updated_at: new Date().toISOString() },
+          pageId: this.aurasManager.currentPageId,
+          timestamp: Date.now()
+        });
+      }
+      
+      this.logger.info('Aura set successfully');
+      return true;
+      
+    } catch (error) {
+      this.logger.error('Failed to set aura:', error);
+      return false;
+    }
+  }
+
+  /**
    * Update user aura
    */
   async updateAura(auraColor, auraIntensity = 1.0) {

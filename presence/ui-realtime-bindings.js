@@ -103,7 +103,7 @@
           handle: userEmail.split('@')[0],
           avatarUrl: (window.currentUser && window.currentUser.avatarUrl) || null,
           email: userEmail,
-          auraColor: (window.currentUser && window.currentUser.auraColor) || '#aa00aa'
+          auraColor: window.currentUser?.auraColor || '#aa00aa'
         },
         conversation: {
           id: `conv-${communityId}-${pageId}`,
