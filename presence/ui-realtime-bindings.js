@@ -274,7 +274,9 @@
         console.log('🔍🔍🔍 EDIT DEBUG: wrapper.textContent before changes:', wrapper.textContent);
       }
       
-      const el = document.querySelector(`.message[data-message-id="${messageId}"] .message-body, .message[data-message-id="${messageId}"] [data-role="message-body"], .message[data-message-id="${messageId}"] [data-role="message-text"], .message[data-message-id="${messageId}"] .message-text`);
+      // Try multiple selectors to find the message body element
+      // The actual content is in .message-content, not .message-body
+      const el = document.querySelector(`.message[data-message-id="${messageId}"] .message-content`);
       console.log('🔍🔍🔍 EDIT DEBUG: el found:', !!el);
       console.log('🔍🔍🔍 EDIT DEBUG: el element:', el);
       
