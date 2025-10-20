@@ -9404,6 +9404,15 @@ async function startPresenceTracking() {
             if (initSuccess) {
               console.log('✅ PRESENCE: UnifiedPresenceManager initialized successfully');
               
+              // CRITICAL FIX: Send initial presence event to backend
+              console.log('🔍 PRESENCE DEBUG: Sending initial presence event to backend...');
+              try {
+                const presenceResult = await sendPresenceEvent('ENTER');
+                console.log('✅ PRESENCE DEBUG: Initial presence event sent successfully:', presenceResult);
+              } catch (error) {
+                console.error('❌ PRESENCE DEBUG: Failed to send initial presence event:', error);
+              }
+              
               // Listen for presence updates
               window.addEventListener('presenceUpdate', (event) => {
                 console.log('🔍 PRESENCE: Received presence update:', event.detail);

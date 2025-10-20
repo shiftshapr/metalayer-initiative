@@ -46,12 +46,13 @@ class AurasIntegration {
       this.logger.info(`User authenticated: ${this.currentUser.email}`);
       
       // Step 3: Initialize auras manager
-      if (typeof window.AurasRealtimeManager === 'undefined') {
-        this.logger.error('AurasRealtimeManager not available');
+      if (!this.aurasRealtimeManager) {
+        this.logger.error('AurasRealtimeManager not provided in constructor');
         return false;
       }
 
-      this.aurasManager = new window.AurasRealtimeManager();
+      // Use the provided auras manager instead of creating new one
+      this.aurasManager = this.aurasRealtimeManager;
       
       // Initialize with Supabase
       if (window.supabase) {
