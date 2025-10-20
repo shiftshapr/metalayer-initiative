@@ -195,6 +195,42 @@ if (typeof window !== 'undefined') {
             }
           });
         }
+
+        // Initialize VisibilityIntegration now that user is authenticated
+        if (window.visibilityIntegration && !window.visibilityIntegration.isInitialized) {
+          console.log('🔗 AUTH: Initializing VisibilityIntegration after authentication...');
+          window.visibilityIntegration.initialize().then(success => {
+            if (success) {
+              console.log('✅ AUTH: VisibilityIntegration initialized successfully');
+            } else {
+              console.log('❌ AUTH: VisibilityIntegration initialization failed');
+            }
+          });
+        }
+
+        // Initialize ReactionsIntegration now that user is authenticated
+        if (window.reactionsIntegration && !window.reactionsIntegration.isInitialized) {
+          console.log('🔗 AUTH: Initializing ReactionsIntegration after authentication...');
+          window.reactionsIntegration.initialize().then(success => {
+            if (success) {
+              console.log('✅ AUTH: ReactionsIntegration initialized successfully');
+            } else {
+              console.log('❌ AUTH: ReactionsIntegration initialization failed');
+            }
+          });
+        }
+
+        // Initialize AurasIntegration now that user is authenticated
+        if (window.aurasIntegration && !window.aurasIntegration.isInitialized) {
+          console.log('🔗 AUTH: Initializing AurasIntegration after authentication...');
+          window.aurasIntegration.initialize().then(success => {
+            if (success) {
+              console.log('✅ AUTH: AurasIntegration initialized successfully');
+            } else {
+              console.log('❌ AUTH: AurasIntegration initialization failed');
+            }
+          });
+        }
       } else {
         console.log('❌ SUPABASE AUTH: User not authenticated');
       }
@@ -7936,6 +7972,42 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
           });
         }
+
+        // Initialize VisibilityIntegration now that user is authenticated
+        if (event === 'SIGNED_IN' && window.visibilityIntegration && !window.visibilityIntegration.isInitialized) {
+          console.log('🔗 AUTH: Initializing VisibilityIntegration after authentication...');
+          window.visibilityIntegration.initialize().then(success => {
+            if (success) {
+              console.log('✅ AUTH: VisibilityIntegration initialized successfully');
+            } else {
+              console.log('❌ AUTH: VisibilityIntegration initialization failed');
+            }
+          });
+        }
+
+        // Initialize ReactionsIntegration now that user is authenticated
+        if (event === 'SIGNED_IN' && window.reactionsIntegration && !window.reactionsIntegration.isInitialized) {
+          console.log('🔗 AUTH: Initializing ReactionsIntegration after authentication...');
+          window.reactionsIntegration.initialize().then(success => {
+            if (success) {
+              console.log('✅ AUTH: ReactionsIntegration initialized successfully');
+            } else {
+              console.log('❌ AUTH: ReactionsIntegration initialization failed');
+            }
+          });
+        }
+
+        // Initialize AurasIntegration now that user is authenticated
+        if (event === 'SIGNED_IN' && window.aurasIntegration && !window.aurasIntegration.isInitialized) {
+          console.log('🔗 AUTH: Initializing AurasIntegration after authentication...');
+          window.aurasIntegration.initialize().then(success => {
+            if (success) {
+              console.log('✅ AUTH: AurasIntegration initialized successfully');
+            } else {
+              console.log('❌ AUTH: AurasIntegration initialization failed');
+            }
+          });
+        }
       });
       
       // Check initial auth state
@@ -9115,6 +9187,39 @@ async function startPresenceTracking() {
       console.log('🔧 PRESENCE: Using legacy SupabaseRealtimeClient system...');
       await joinPageWithSupabase(currentPageId, urlData.normalizedUrl);
       console.log('✅ PRESENCE: Legacy SupabaseRealtimeClient configured with user and page');
+    }
+
+    // Join page with visibility system if available
+    if (window.visibilityIntegration && window.visibilityIntegration.isInitialized) {
+      console.log('🔧 PRESENCE: Using visibility integration system...');
+      const visibilityJoinSuccess = await window.visibilityIntegration.joinPage(urlData.normalizedUrl);
+      if (visibilityJoinSuccess) {
+        console.log('✅ PRESENCE: Visibility integration system configured with user and page');
+      } else {
+        console.warn('⚠️ PRESENCE: Visibility integration failed');
+      }
+    }
+
+    // Join page with reactions system if available
+    if (window.reactionsIntegration && window.reactionsIntegration.isInitialized) {
+      console.log('🔧 PRESENCE: Using reactions integration system...');
+      const reactionsJoinSuccess = await window.reactionsIntegration.joinPage(urlData.normalizedUrl);
+      if (reactionsJoinSuccess) {
+        console.log('✅ PRESENCE: Reactions integration system configured with user and page');
+      } else {
+        console.warn('⚠️ PRESENCE: Reactions integration failed');
+      }
+    }
+
+    // Join page with auras system if available
+    if (window.aurasIntegration && window.aurasIntegration.isInitialized) {
+      console.log('🔧 PRESENCE: Using auras integration system...');
+      const aurasJoinSuccess = await window.aurasIntegration.joinPage(urlData.normalizedUrl);
+      if (aurasJoinSuccess) {
+        console.log('✅ PRESENCE: Auras integration system configured with user and page');
+      } else {
+        console.warn('⚠️ PRESENCE: Auras integration failed');
+      }
     }
     
     // Set up single comprehensive Supabase real-time subscription for this page
