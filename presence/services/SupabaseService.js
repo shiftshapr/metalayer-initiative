@@ -13,7 +13,7 @@
 class SupabaseService {
   constructor(config = {}) {
     this.config = {
-      url: config.url || 'https://zwxomzkmncwzwryvudwu.supabase.co',
+      url: config.url || window.SUPABASE_URL || 'https://zwxomzkmncwzwryvudwu.supabase.co',
       key: config.key || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp3eG9temttbmN3endyeXZ1ZHd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk2Njg2ODQsImV4cCI6MjA3NTI0NDY4NH0.CoceGOzumiF6aYVGQSWily93snNYh9N9C4p8lrjrTyM',
       ...config
     };

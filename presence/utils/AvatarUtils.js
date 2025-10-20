@@ -28,6 +28,13 @@ class AvatarUtils {
         Logger.avatar(`✅ SD1 FIX: Using avatar_url from user object (user_presence): ${avatarUrl}`);
       }
       
+      // SD1 FIX: PRIORITY 1.5 - Check if user object has avatarUrl (camelCase) - for profile avatars
+      if (!avatarUrl && user.avatarUrl && !user.avatarUrl.includes('default-user')) {
+        avatarUrl = user.avatarUrl;
+        avatarSource = 'user_object_avatarUrl';
+        Logger.avatar(`✅ SD1 FIX: Using avatarUrl from user object (profile): ${avatarUrl}`);
+      }
+      
       // PRIORITY 2: For current user, use user_metadata (same as profile avatar system)
       if (!avatarUrl) {
         const currentUser = window.currentUser || {};
@@ -75,16 +82,35 @@ class AvatarUtils {
         } else {
           Logger.avatar(`ℹ️ No unfiltered visibility data available`);
         }
+        
+        // PRIORITY 3.5: Check if current user has real avatar in window.currentUser
+        if (!avatarUrl && window.currentUser && (user.user_email || user.email) === window.currentUser.email) {
+          if (window.currentUser.avatarUrl && !window.currentUser.avatarUrl.includes('default-user')) {
+            avatarUrl = window.currentUser.avatarUrl;
+            avatarSource = 'window_currentUser';
+            Logger.avatar(`✅ Using window.currentUser avatar for ${user.user_email || user.email} - avatarUrl: ${avatarUrl}`);
+          }
+        }
       }
     } catch (error) {
       Logger.error(`Exception processing avatar for ${user.user_email || user.email}`, error, 'avatar');
     }
 
-    // Only fallback to generic if absolutely necessary
-    if (!avatarUrl) {
-      Logger.avatar(`⚠️ No real avatar found, using generic for ${user.user_email || user.email}`);
+    // CRITICAL FIX: Enhanced avatar URL validation and fallback
+    if (!avatarUrl || avatarUrl.trim() === '') {
+      Logger.avatar(`⚠️ No avatar URL found, using generic for ${user.user_email || user.email}`);
       avatarUrl = `https://lh3.googleusercontent.com/a/default-user=s96-c`;
       avatarSource = 'generic-fallback';
+    } else if (avatarUrl.includes('default-user')) {
+      Logger.avatar(`⚠️ Avatar URL contains default-user, treating as generic for ${user.user_email || user.email}`);
+      avatarSource = 'generic-fallback';
+    } else if (!avatarUrl.startsWith('http://') && !avatarUrl.startsWith('https://')) {
+      Logger.avatar(`⚠️ Invalid avatar URL format, using generic for ${user.user_email || user.email}: ${avatarUrl}`);
+      avatarUrl = `https://lh3.googleusercontent.com/a/default-user=s96-c`;
+      avatarSource = 'generic-fallback';
+    } else {
+      // SD1 FIX: Ensure we don't treat real avatars as generic
+      Logger.avatar(`✅ SD1 FIX: Using REAL avatar for ${user.user_email || user.email}: ${avatarUrl}`);
     }
 
     Logger.avatar(`Avatar result: ${user.user_email || user.email} - avatarUrl: ${avatarUrl}, source: ${avatarSource}, name: ${userName}`);

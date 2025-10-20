@@ -314,3 +314,6 @@ if (typeof window !== 'undefined') {
 
 console.log('✅ SidepanelCore initialized');
 
+
+
+

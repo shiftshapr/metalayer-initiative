@@ -314,7 +314,19 @@ class UIManager {
       </div>
     `;
     
-    document.body.appendChild(modal);
+    if (document.body) {
+      document.body.appendChild(modal);
+    } else {
+      Logger.warn('Document body not available, deferring error modal creation', null, 'ui');
+      // Defer modal creation until DOM is ready
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+          if (document.body) {
+            document.body.appendChild(modal);
+          }
+        });
+      }
+    }
     
     // Add event listeners
     const closeBtn = modal.querySelector('#error-modal-close');
@@ -357,7 +369,19 @@ class UIManager {
       </div>
     `;
     
-    document.body.appendChild(modal);
+    if (document.body) {
+      document.body.appendChild(modal);
+    } else {
+      Logger.warn('Document body not available, deferring modal creation', null, 'ui');
+      // Defer modal creation until DOM is ready
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+          if (document.body) {
+            document.body.appendChild(modal);
+          }
+        });
+      }
+    }
   }
 
   /**

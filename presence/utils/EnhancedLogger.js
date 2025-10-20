@@ -224,7 +224,9 @@ class EnhancedLogger {
 }
 
 // Make available globally
-window.Logger = EnhancedLogger;
+if (typeof window !== 'undefined') {
+  window.Logger = EnhancedLogger;
+}
 
 // Initialize with default settings
 EnhancedLogger.setLevel('debug');
@@ -236,4 +238,7 @@ console.log('🔧 Enhanced Logger initialized');
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = EnhancedLogger;
 }
+
+
+
 

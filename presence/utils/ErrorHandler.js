@@ -264,12 +264,17 @@ class ErrorHandler {
 }
 
 // Make available globally
-window.ErrorHandler = ErrorHandler;
+if (typeof window !== 'undefined') {
+  window.ErrorHandler = ErrorHandler;
+}
 
 // Export for module use
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = ErrorHandler;
 }
 
-Logger.success('ErrorHandler initialized');
+// Logger.success('ErrorHandler initialized');
+
+
+
 

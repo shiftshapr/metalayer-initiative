@@ -350,3 +350,6 @@ class ProfileManager {
 window.ProfileManager = ProfileManager;
 
 Logger.info('ProfileManager module loaded', null, 'profile');
+
+
+

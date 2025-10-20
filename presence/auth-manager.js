@@ -232,7 +232,7 @@ class SupabaseAuthProvider extends BaseAuthProvider {
     try {
       // Use Chrome identity API for OAuth
       const redirectUrl = chrome.identity.getRedirectURL();
-      const authUrl = `https://bvshfzikwwjasluumfkr.supabase.co/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(redirectUrl)}`;
+      const authUrl = `${window.SUPABASE_URL}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(redirectUrl)}`;
       
       // Launch OAuth flow
       const responseUrl = await new Promise((resolve, reject) => {
@@ -497,7 +497,7 @@ class MetalayerAuthProvider extends BaseAuthProvider {
     try {
       // Use Chrome identity API for OAuth
       const redirectUrl = chrome.identity.getRedirectURL();
-      const authUrl = `https://bvshfzikwwjasluumfkr.supabase.co/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(redirectUrl)}`;
+      const authUrl = `${window.SUPABASE_URL}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(redirectUrl)}`;
       
       // Launch OAuth flow
       const responseUrl = await new Promise((resolve, reject) => {

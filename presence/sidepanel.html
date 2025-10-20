@@ -5,111 +5,53 @@
   <meta charset="utf-8">
   <link rel="stylesheet" href="sidepanel.css">
   
-  <!-- ===== ERROR HANDLING REMOVED - RESTORING ORIGINAL FUNCTIONALITY ===== -->
-  <!-- Load Debug Configuration -->
-  <script src="debug-config.js"></script>
-  <!-- Load Performance Monitor -->
-  <script src="performance-monitor.js"></script>
-  <!-- Load Real-time Logger -->
-  <script src="realtime-logger.js"></script>
+  <!-- ===== CORE SYSTEM LOADING ===== -->
   <!-- Load LOCAL Supabase JS Library (CDN blocked by CSP) -->
   <script src="lib/supabase.min.js"></script>
   
-  <!-- ===== NEW MODULAR ARCHITECTURE ===== -->
-  <!-- Load Logger System -->
-  <!-- OLD Logger.js removed - replaced with EnhancedLogger.js -->
+  <!-- ===== MODULAR ARCHITECTURE ===== -->
+  <!-- Load Enhanced Logger System -->
+  <script src="utils/EnhancedLogger.js"></script>
+  <!-- Load Avatar Utilities -->
+  <script src="utils/AvatarUtils.js"></script>
+  <!-- Load Error Handler -->
+  <script src="utils/ErrorHandler.js"></script>
+  <!-- Load Message Diagnostic Manager -->
+  <script src="MessageDiagnosticManager.js"></script>
+  <!-- Load Robust Message Operations Manager -->
+  <script src="RobustMessageOperationsManager.js"></script>
+  
   <!-- Load Supabase Service -->
   <script src="services/SupabaseService.js"></script>
+  <!-- Load Unified Authentication System -->
+  <script src="unified-auth.js"></script>
   <!-- Load Visibility Manager -->
   <script src="features/VisibilityManager.js"></script>
   <!-- Load Sidepanel Core -->
   <script src="core/SidepanelCore.js"></script>
-  <!-- Load Migration Script -->
-  <script src="migration-to-modular.js"></script>
   
-  <!-- Legacy Supabase Client (for backward compatibility) -->
-  <script src="supabase-realtime-client.js"></script>
+  <!-- Load Feature Modules -->
+  <script src="features/ProfileManager.js"></script>
+  <script src="features/UIManager.js"></script>
+  
+  <!-- Legacy Supabase Client removed - using new integrated system -->
   <!-- Load Loosely Coupled Auth Manager -->
   <script src="auth-manager.js"></script>
   <!-- Load YouTube Transcription Service -->
   <script src="youtube-transcription.js"></script>
   
-  <!-- Test Script for Debugging -->
-  <script src="test-script.js"></script>
   <!-- Load Real Google Auth for Actual Profile Pictures -->
   <script src="real-google-auth.js"></script>
   <!-- Load Notification Manager -->
   <script src="notification-manager.js"></script>
   <!-- Load URL Normalization Utility -->
   <script src="urlNormalization.js"></script>
-  <!-- Load Real-time Diagnostics -->
-  <script src="realtime-diagnostics.js"></script>
-  <!-- Load Real-time Presence Handler (NO POLLING!) -->
-  <script src="realtime-presence-handler.js"></script>
-  <!-- Diagnostic Tool: Visibility Issue Analyzer -->
-  <script src="diagnose-visibility-issue.js"></script>
-  <!-- Diagnostic Tool: Page Navigation Checker -->
-  <script src="check-page-navigation.js"></script>
-  <!-- Diagnostic Tool: Active Tab Checker -->
-  <script src="diagnose-active-tab.js"></script>
-  <!-- Diagnostic Tool: Page Tracking Analyzer (SD1) -->
-  <script src="diagnose-page-tracking.js"></script>
-  <!-- Test Suite: Comprehensive Presence System Tests (TE2) -->
-  <script src="test-presence-system.js"></script>
-  <!-- Test Suite: Modular Architecture Tests (TE2) -->
-  <script src="test-modular-architecture.js"></script>
-  <!-- Debug: Avatar Issue Analysis (SD1) -->
-  <script src="debug-avatar-issue.js"></script>
-  <!-- SD1 Critical Fix: Create user_profiles table -->
-  <script src="create-user-profiles-table.js"></script>
-  <!-- TE2 Test Suite: Avatar Fix Verification -->
-  <script src="test-avatar-fix.js"></script>
-  <!-- Test Suite: Verify Polling Removal -->
-  <script src="test-polling-removal.js"></script>
-  <!-- Test Suite: Aura Changes -->
-  <script src="test-aura-changes.js"></script>
-  <!-- Test Suite: Notifications -->
-  <script src="test-notifications.js"></script>
-  <!-- Test Suite: Comprehensive Real-time Tests -->
-  <script src="test-realtime-comprehensive.js"></script>
-  <!-- Enhanced Diagnostic: Real-time Event Monitor -->
-  <script src="realtime-event-monitor.js"></script>
-  <!-- TE2 Comprehensive Diagnostics - WRAPPED WITH ERROR HANDLING -->
-  <script src="comprehensive-realtime-diagnostics.js" onerror="console.error('🚨 comprehensive-realtime-diagnostics.js failed to load')"></script>
   
-  <!-- TE2 Visibility Test Suite (Oct 14, 2025) -->
-  <script src="te2-visibility-tests.js"></script>
+  <!-- Legacy SimpleRealtimeManager removed - using RobustRealtimeManager -->
   
-  <!-- TE2 Avatar Fix Testing Suite (Oct 16, 2025) -->
-  <script src="test-avatar-fix-comprehensive.js"></script>
+        <!-- Removed conflicting fix files - they were causing system conflicts -->
   
-  <!-- SD1 Enhanced Utilities (Oct 16, 2025) -->
-  <script src="utils/EnhancedLogger.js"></script>
-  <script src="utils/AvatarUtils.js"></script>
-  <script src="utils/ErrorHandler.js"></script>
-  
-  <!-- TE2 Comprehensive Test Suite (Oct 16, 2025) -->
-  <script src="TE2-COMPREHENSIVE-TEST-SUITE.js"></script>
-  
-  <!-- Module Testing (Oct 16, 2025) -->
-  <script src="TEST-REFACTORED-MODULES.js"></script>
-  
-  <!-- TE2 Logger Diagnostic Test (Oct 16, 2025) -->
-  <script src="TE2-LOGGER-DIAGNOSTIC-TEST.js"></script>
-  
-  <!-- TE2 Avatar Pattern Test (Oct 16, 2025) -->
-  <script src="TE2-AVATAR-PATTERN-TEST.js"></script>
-  
-  <!-- SD1 Database Schema Check (Oct 16, 2025) -->
-  <script src="SD1-DATABASE-SCHEMA-CHECK.js"></script>
-  
-  <!-- SD1 Phase 6 Refactoring - Feature Modules (Oct 16, 2025) -->
-  <script src="features/AuthManager.js"></script>
-  <script src="features/ProfileManager.js"></script>
-  <script src="features/UIManager.js"></script>
-  
-  <!-- TE2 Avatar Source Diagnostic (Oct 16, 2025) -->
-  <script src="TE2-AVATAR-SOURCE-DIAGNOSTIC.js"></script>
+  <script src="CleanRealtimeManager.js"></script>
 </head>
 <body>
   <!-- Main Sidebar Container -->
@@ -200,7 +142,9 @@
         </div>
         <div id="canopi-visible" class="sub-tab-content">
           <h3>Canopi Visible Content</h3>
-          <p>Content for Canopi visible tab.</p>
+          <ul class="user-list" style="list-style: none; padding: 0; margin: 0;">
+            <!-- User list items will be populated here -->
+          </ul>
         </div>
       </div>
       
@@ -315,26 +259,17 @@
     </div>
   </div>
   
-  <!-- Debug Functions - REMOVED INLINE SCRIPT -->
   <!-- Load Modern Systems -->
   <script src="config.js"></script>
   <script src="security.js"></script>
   <script src="performance-optimizer.js"></script>
-  <script src="logger.js"></script>
   <!-- Load Modernization Classes -->
   <script src="StateManager.js"></script>
   <script src="EventBus.js"></script>
   <script src="LifecycleManager.js"></script>
-  <!-- Debug script loading -->
-  <script src="script-loading-debug.js"></script>
   
-  <!-- The debug logic is now in sidepanel.js -->
-  
-<!-- WebSocket Client for Real-time Communication -->
-<!-- CHROME EXTENSION WEBSOCKET FIX: WebSocket client removed - now handled by background service worker -->
-<!-- <script src="websocket-client.js"></script> -->
-<!-- Include the main sidebar JavaScript - WRAPPED WITH ERROR HANDLING -->
-<script src="sidepanel.js" onerror="console.error('🚨 sidepanel.js failed to load')"></script>
+  <!-- Include the main sidebar JavaScript -->
+  <script src="sidepanel.js"></script>
 
   <!-- Context Bar for Reply/Edit - Separate row above input -->
   <div id="context-bar" style="display: none; position: fixed; bottom: 60px; left: 0; right: 0; background: #e8f4fd; padding: 2px 8px; border-bottom: 1px solid #b3d9ff; font-size: 10px; color: #0066cc; line-height: 1.2; height: 18px; overflow: hidden; z-index: 1001;">
@@ -467,45 +402,28 @@
     }
   </style>
   
-  <!-- Console Test Functions for Supabase -->
-  <script src="console-test-supabase-fix.js"></script>
+  <!-- ROBUST REAL-TIME SYSTEM (Loaded after main system to prevent conflicts) -->
+  <!-- Load Logger first -->
+  <script src="Logger.js"></script>
   
-          <!-- Avatar Fix Test Suite -->
-          <script src="test-avatar-fixes.js"></script>
-          
-    <!-- Avatar & Visibility Diagnostics -->
-    <script src="test-avatar-visibility-diagnostics.js"></script>
-    <!-- Comprehensive Test Suite for TE2 -->
-    <script src="test-avatar-visibility-comprehensive.js"></script>
-    
-<!-- Cache Bug Fix Test Suite for TE2 -->
-<script src="test-cache-bug-fix.js"></script>
-
-<!-- Visibility Timing & Messages Test Suite for TE2 -->
-<script src="test-visibility-messages-fix.js"></script>
-    
-    <!-- TE2 TEST: Tab Navigation & Ghost Presence Fix -->
-    <script src="test-tab-navigation-fix.js"></script>
-    
-<!-- TE2 TEST: Supabase Initialization Fix Verification -->
-<script src="test-supabase-init-fix.js"></script>
-
-<!-- TE2 COMPREHENSIVE: Visibility Timing & Ghost Presence Diagnostics -->
-<script src="test-visibility-timing-comprehensive.js"></script>
-    
-    <!-- TE2 DIAGNOSTIC: Page ID Mismatch Checker -->
-    <script src="diagnostic-page-id.js"></script>
-    
-    <!-- SD1: Comprehensive Diagnostic Script -->
-    <script src="diagnostic-comprehensive-sd1.js"></script>
-    
-  <!-- TE2: Comprehensive Test Infrastructure -->
-  <script src="test-infrastructure-te2.js"></script>
+  <!-- Load Robust Modules (Architecture-First Approach) -->
+  <!-- Load Unified Initialization Manager -->
+  <script src="UnifiedInitializationManager.js"></script>
+  <!-- Load Robust Modules -->
+  <!-- Removed RobustAuthManager.js - using CleanRealtimeManager instead -->
+  <!-- Removed RobustRealtimeManager.js - using CleanRealtimeManager.js instead -->
+  <script src="RobustIntegration.js"></script>
   
-  <!-- TE2: Last Seen Display Debug Tool (Oct 14, 2025) -->
-  <script src="debug-last-seen-display.js"></script>
+  <!-- Load Rate Limiting Modules -->
+  <script src="APIRateLimiter.js"></script>
+  <script src="SupabaseWrapper.js"></script>
+  <script src="APIMonitor.js"></script>
   
-  <!-- TE2: Last Seen Proper Debug Tool (Oct 14, 2025) -->
-  <script src="debug-last-seen-proper.js"></script>
+  <!-- Load Real-time Diagnostic Tools -->
+  <script src="diagnose-realtime-propagation.js"></script>
+  <!-- Load Real-time Authentication Fix -->
+  <script src="fix-realtime-auth.js"></script>
+  <!-- Bind robust realtime events to UI refresh -->
+  <script src="ui-realtime-bindings.js"></script>
         </body>
         </html>

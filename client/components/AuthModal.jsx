@@ -98,9 +98,9 @@ const AuthModal = ({ isOpen, onLogin, onClose }) => {
       return;
     }
 
-    const checkClosed = setInterval(() => {
+    // NO POLLING - Use event-driven approach instead
+    const checkClosed = () => {
       if (popup.closed) {
-        clearInterval(checkClosed);
         
         // Wait a bit for the popup to finish processing
         setTimeout(() => {

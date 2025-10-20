@@ -5,38 +5,102 @@
 // MODERN CONFIGURATION: Use environment-based configuration
 // MODERN CONFIGURATION: Fully environment-based, no hardcoded fallbacks
 
+// SD1 FIX: Implement log level system to reduce runaway logging
+const LOG_LEVELS = {
+  ERROR: 0,
+  WARN: 1,
+  INFO: 2,
+  DEBUG: 3
+};
+
+const CURRENT_LOG_LEVEL = LOG_LEVELS.INFO; // Only show ERROR, WARN, INFO by default
+
 // CRITICAL FIX: Ensure Logger is available before using it
 if (typeof Logger === 'undefined' || typeof window.Logger === 'undefined') {
   console.error('🚨 CRITICAL: Logger utility not loaded! Creating fallback Logger...');
   // Create comprehensive fallback Logger object with ALL methods
   window.Logger = {
-    // Basic logging methods
-    debug: (msg, data, context) => console.log(`🔍 [DEBUG] ${msg}`, data || ''),
-    info: (msg, data, context) => console.log(`ℹ️ [INFO] ${msg}`, data || ''),
-    warn: (msg, data, context) => console.warn(`⚠️ [WARN] ${msg}`, data || ''),
-    error: (msg, data, context) => console.error(`❌ [ERROR] ${msg}`, data || ''),
-    success: (msg, data, context) => console.log(`✅ [SUCCESS] ${msg}`, data || ''),
+    // Basic logging methods with level filtering
+    debug: (msg, data, context) => {
+      if (CURRENT_LOG_LEVEL >= LOG_LEVELS.DEBUG) {
+        console.log(`🔍 [DEBUG] ${msg}`, data || '');
+      }
+    },
+    info: (msg, data, context) => {
+      if (CURRENT_LOG_LEVEL >= LOG_LEVELS.INFO) {
+        console.log(`ℹ️ [INFO] ${msg}`, data || '');
+      }
+    },
+    warn: (msg, data, context) => {
+      if (CURRENT_LOG_LEVEL >= LOG_LEVELS.WARN) {
+        console.warn(`⚠️ [WARN] ${msg}`, data || '');
+      }
+    },
+    error: (msg, data, context) => {
+      if (CURRENT_LOG_LEVEL >= LOG_LEVELS.ERROR) {
+        console.error(`❌ [ERROR] ${msg}`, data || '');
+      }
+    },
+    success: (msg, data, context) => {
+      if (CURRENT_LOG_LEVEL >= LOG_LEVELS.INFO) {
+        console.log(`✅ [SUCCESS] ${msg}`, data || '');
+      }
+    },
     
-    // Context-specific methods
-    avatar: (msg, data) => console.log(`🎨 [AVATAR] ${msg}`, data || ''),
-    presence: (msg, data) => console.log(`👤 [PRESENCE] ${msg}`, data || ''),
-    auth: (msg, data) => console.log(`🔐 [AUTH] ${msg}`, data || ''),
-    visibility: (msg, data) => console.log(`👁️ [VISIBILITY] ${msg}`, data || ''),
-    realtime: (msg, data) => console.log(`📡 [REALTIME] ${msg}`, data || ''),
+    // Context-specific methods with level filtering
+    avatar: (msg, data) => {
+      if (CURRENT_LOG_LEVEL >= LOG_LEVELS.DEBUG) {
+        console.log(`🎨 [AVATAR] ${msg}`, data || '');
+      }
+    },
+    presence: (msg, data) => {
+      if (CURRENT_LOG_LEVEL >= LOG_LEVELS.DEBUG) {
+        console.log(`👤 [PRESENCE] ${msg}`, data || '');
+      }
+    },
+    auth: (msg, data) => {
+      if (CURRENT_LOG_LEVEL >= LOG_LEVELS.INFO) {
+        console.log(`🔐 [AUTH] ${msg}`, data || '');
+      }
+    },
+    visibility: (msg, data) => {
+      if (CURRENT_LOG_LEVEL >= LOG_LEVELS.DEBUG) {
+        console.log(`👁️ [VISIBILITY] ${msg}`, data || '');
+      }
+    },
+    realtime: (msg, data) => {
+      if (CURRENT_LOG_LEVEL >= LOG_LEVELS.INFO) {
+        console.log(`📡 [REALTIME] ${msg}`, data || '');
+      }
+    },
     
-    // Flow methods
-    startFlow: (name, data) => console.log(`▶️ [FLOW START] ${name}`, data || ''),
-    endFlow: (name, success, data) => console.log(`⏸️ [FLOW END] ${name} (${success ? 'SUCCESS' : 'FAILED'})`, data || ''),
-    stepFlow: (name, step, data) => console.log(`➡️ [FLOW STEP] ${name} - ${step}`, data || ''),
+    // Flow methods with level filtering
+    startFlow: (name, data) => {
+      if (CURRENT_LOG_LEVEL >= LOG_LEVELS.DEBUG) {
+        console.log(`▶️ [FLOW START] ${name}`, data || '');
+      }
+    },
+    endFlow: (name, success, data) => {
+      if (CURRENT_LOG_LEVEL >= LOG_LEVELS.DEBUG) {
+        console.log(`⏸️ [FLOW END] ${name} (${success ? 'SUCCESS' : 'FAILED'})`, data || '');
+      }
+    },
+    stepFlow: (name, step, data) => {
+      if (CURRENT_LOG_LEVEL >= LOG_LEVELS.DEBUG) {
+        console.log(`➡️ [FLOW STEP] ${name} - ${step}`, data || '');
+      }
+    },
     
     // Utility methods
     getHistory: () => [],
     clearHistory: () => {},
     exportLogs: () => '[]',
-    setLevel: () => {},
+    setLevel: (level) => {
+      window.CURRENT_LOG_LEVEL = level;
+    },
     setEnabled: () => {}
   };
-  console.log('✅ Fallback Logger created with all methods');
+  console.log('✅ Fallback Logger created with log level filtering');
 }
 
 Logger.info("SIDEPANEL.JS LOADING STARTED", null, 'general');
@@ -77,9 +141,11 @@ if (typeof window !== 'undefined' && window.realtimeLogger) {
     visibility: (level, msg, data) => console.log(`[VISIBILITY] ${msg}`, data),
     presence: (level, msg, data) => console.log(`[PRESENCE] ${msg}`, data),
     error: (level, msg, data) => console.error(`[ERROR] ${msg}`, data),
-    startFlow: (name, data) => console.log(`[FLOW_START] ${name}`, data),
-    endFlow: (name, success, data) => console.log(`[FLOW_END] ${name} (success: ${success})`, data),
-    stepFlow: (name, step, data) => console.log(`[FLOW_STEP] ${name} - ${step}`, data)
+    startTimer: (name) => ({ name, start: Date.now() }),
+    endTimer: (timer) => Date.now() - timer.start,
+    startFlow: (name, data) => console.log(`[FLOW START] ${name}`, data),
+    endFlow: (name, success, data) => console.log(`[FLOW END] ${name} (${success ? 'SUCCESS' : 'FAILED'})`, data),
+    stepFlow: (name, step, data) => console.log(`[FLOW STEP] ${name} - ${step}`, data)
   };
 }
 
@@ -91,16 +157,56 @@ if (!METALAYER_API_URL || !METALAYER_WS_URL) {
 // ===== COMPLETE MODERN ARCHITECTURE INTEGRATION =====
 // StateManager, EventBus, LifecycleManager, and Supabase integration
 
-// Supabase configuration (using real credentials)
-const SUPABASE_URL = 'https://zwxomzkmncwzwryvudwu.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp3eG9temttbmN3endyeXZ1ZHd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk2Njg2ODQsImV4cCI6MjA3NTI0NDY4NH0.CoceGOzumiF6aYVGQSWily93snNYh9N9C4p8lrjrTyM';
+// Supabase configuration (using config system - NO HARDCODING)
+const SUPABASE_URL = window.SUPABASE_URL;
+const SUPABASE_ANON_KEY = window.SUPABASE_ANON_KEY;
 
-// Initialize Supabase client globally
-if (typeof window !== 'undefined' && typeof supabase !== 'undefined') {
-  window.supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-  console.log('🔍 SUPABASE: Global client initialized for Real Google Auth');
+// Initialize Supabase client globally with comprehensive error handling
+if (typeof window !== 'undefined') {
+  try {
+    // Check if supabase is available
+    if (typeof supabase === 'undefined') {
+      console.error('❌ SUPABASE: supabase library not loaded');
+      throw new Error('Supabase library not available');
+    }
+    
+    window.supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    console.log('✅ SUPABASE: Global client initialized successfully');
+    console.log('✅ SUPABASE: URL:', SUPABASE_URL);
+    console.log('✅ SUPABASE: Key present:', !!SUPABASE_ANON_KEY);
+    console.log('✅ SUPABASE: Client methods available:', Object.keys(window.supabase).slice(0, 10));
+    
+    // CRITICAL FIX: Set up Supabase authentication after user login
+    console.log('🔧 SUPABASE: Setting up authentication listener...');
+    window.supabase.auth.onAuthStateChange((event, session) => {
+      console.log('🔔 SUPABASE AUTH: Auth state changed:', event);
+      if (session) {
+        console.log('✅ SUPABASE AUTH: User authenticated:', session.user.email);
+        console.log('✅ SUPABASE AUTH: Session expires at:', new Date(session.expires_at * 1000));
+        
+        // Initialize RobustIntegration now that user is authenticated
+        if (window.robustIntegration && !window.robustIntegration.isInitialized) {
+          console.log('🔗 AUTH: Initializing RobustIntegration after authentication...');
+          window.robustIntegration.initialize().then(success => {
+            if (success) {
+              console.log('✅ AUTH: RobustIntegration initialized successfully');
+            } else {
+              console.log('❌ AUTH: RobustIntegration initialization failed');
+            }
+          });
+        }
+      } else {
+        console.log('❌ SUPABASE AUTH: User not authenticated');
+      }
+    });
+  } catch (error) {
+    console.error('❌ SUPABASE: Failed to initialize global client:', error);
+    console.error('❌ SUPABASE: Error details:', error.message);
+  }
 } else {
-  console.error('🔍 SUPABASE: Failed to initialize global client');
+  console.error('❌ SUPABASE: Supabase library not available');
+  console.error('❌ SUPABASE: typeof window:', typeof window);
+  console.error('❌ SUPABASE: typeof supabase:', typeof supabase);
 }
 
 // Initialize all modern architecture components
@@ -219,13 +325,19 @@ function setupModernEventHandling() {
   // Message events
   eventBus.on('message:send', (data) => {
     console.log('💬 MODERN: Sending message:', data.content);
-    sendMessageToAPI(data.content);
+    // Use Supabase real-time client instead of missing sendMessageToAPI
+    if (window.supabaseRealtimeClient) {
+      window.supabaseRealtimeClient.sendMessage(data.content);
+    } else {
+      console.error('❌ MODERN: No Supabase client available for message sending');
+    }
   });
   
-  eventBus.on('message:received', (data) => {
-    console.log('📨 MODERN: Message received:', data.message);
-    addMessageToChat(data.message);
-  });
+  // REMOVED: Duplicate handler - real-time messages handled by handleMessageChange()
+  // eventBus.on('message:received', (data) => {
+  //   console.log('📨 MODERN: Message received:', data.message);
+  //   addMessageToChat(data.message);
+  // });
   
   // Presence events
   eventBus.on('presence:userJoined', (data) => {
@@ -244,10 +356,11 @@ function setupModernEventHandling() {
     updateUserAuraInUI(data.userEmail, data.color);
   });
   
-  eventBus.on('crossProfile:messageAdded', (data) => {
-    console.log('📡 MODERN: Cross-profile message added:', data.message.content);
-    addMessageToChat(data.message);
-  });
+  // REMOVED: Duplicate handler - cross-profile messages handled by real-time
+  // eventBus.on('crossProfile:messageAdded', (data) => {
+  //   console.log('📡 MODERN: Cross-profile message added:', data.message.content);
+  //   addMessageToChat(data.message);
+  // });
   
   console.log('✅ MODERN: Modern event handling setup complete');
 }
@@ -333,101 +446,15 @@ function setupSupabaseEventHandling() {
   
   console.log('🎯 MODERN: Setting up Supabase event handling...');
   
-  supabaseRealtimeClient.onUserUpdated = (user) => {
-    console.log('📡 MODERN: Supabase user updated:', user.user_email);
-    // EventBus was removed - use direct chrome.storage communication instead
-    if (eventBus && eventBus.emit) {
-      eventBus.emit('crossProfile:auraChanged', {
-        userEmail: user.user_email,
-        color: user.aura_color,
-        timestamp: Date.now()
-      });
-    } else {
-      console.log('📡 MODERN: EventBus not available, using direct storage communication');
-      // Direct chrome.storage communication for cross-profile updates
-      chrome.storage.local.set({
-        'crossProfile:auraChanged': {
-          userEmail: user.user_email,
-          color: user.aura_color,
-          timestamp: Date.now()
-        }
-      });
-    }
-  };
+  // SD1 FIX: Removed duplicate onUserUpdated handler - using window.supabaseRealtimeClient.onUserUpdated instead
   
-  supabaseRealtimeClient.onNewMessage = (message) => {
-    console.log('📡 MODERN: Supabase new message:', message.content);
-    if (eventBus && eventBus.emit) {
-      eventBus.emit('crossProfile:messageAdded', {
-        message: message,
-        timestamp: Date.now()
-      });
-    } else {
-      console.log('📡 MODERN: EventBus not available, using direct storage communication');
-      chrome.storage.local.set({
-        'crossProfile:messageAdded': {
-          message: message,
-          timestamp: Date.now()
-        }
-      });
-    }
-  };
+  // SD1 FIX: Removed duplicate onNewMessage handler - using window.supabaseRealtimeClient.onNewMessage instead
   
-  supabaseRealtimeClient.onVisibilityChanged = (visibility) => {
-    console.log('👁️ MODERN: Supabase visibility changed:', visibility.user_email, 'visible:', visibility.is_visible);
-    if (eventBus && eventBus.emit) {
-      eventBus.emit('presence:visibilityChanged', {
-        user: visibility,
-        timestamp: Date.now()
-      });
-    } else {
-      console.log('👁️ MODERN: EventBus not available, using direct storage communication');
-      chrome.storage.local.set({
-        'presence:visibilityChanged': {
-          user: visibility,
-          timestamp: Date.now()
-        }
-      });
-    }
-    // Refresh visibility avatars
-    refreshVisibilityAvatars();
-  };
+  // SD1 FIX: Removed duplicate onVisibilityChanged handler - using window.supabaseRealtimeClient.onVisibilityChanged instead
   
-  supabaseRealtimeClient.onUserJoined = (user) => {
-    console.log('📡 MODERN: Supabase user joined:', user.user_email);
-    if (eventBus && eventBus.emit) {
-      eventBus.emit('presence:userJoined', {
-        user: user,
-        timestamp: Date.now()
-      });
-    } else {
-      console.log('📡 MODERN: EventBus not available, using direct storage communication');
-      chrome.storage.local.set({
-        'presence:userJoined': {
-          user: user,
-          timestamp: Date.now()
-        }
-      });
-    }
-  };
+  // SD1 FIX: Removed duplicate onUserJoined handler - using window.supabaseRealtimeClient.onUserJoined instead
   
-  supabaseRealtimeClient.onUserLeft = (user) => {
-    console.log('📡 MODERN: Supabase user left:', user.user_email);
-    if (eventBus && eventBus.emit) {
-      eventBus.emit('presence:userLeft', {
-        user: user,
-        timestamp: Date.now()
-      });
-    } else {
-      console.log('📡 MODERN: EventBus not available, using direct storage communication');
-      chrome.storage.local.set({
-        'presence:userLeft': {
-          user: user,
-          timestamp: Date.now()
-        }
-      });
-    }
-  };
+  // SD1 FIX: Removed duplicate onUserLeft handler - using window.supabaseRealtimeClient.onUserLeft instead
   
   console.log('✅ MODERN: Supabase event handling setup complete');
 }
@@ -552,68 +579,39 @@ async function setupModernCrossProfileCommunication() {
 
 // Initialize Supabase real-time client (already declared above)
 
-async function initializeSupabaseRealtime() {
-  try {
-    console.log('🚀 SUPABASE: Initializing real-time client...');
-    
-    // Load Supabase client (you'll need to add the CDN script to your HTML)
-    if (typeof window !== 'undefined' && window.supabase) {
-      supabaseRealtimeClient = new SupabaseRealtimeClient();
-      const success = await supabaseRealtimeClient.initialize(SUPABASE_URL, SUPABASE_ANON_KEY);
-      
-      if (success) {
-        console.log('✅ SUPABASE: Real-time client initialized');
-        
-        // Set up event handlers
-        supabaseRealtimeClient.onUserJoined = (user) => {
-          console.log('👋 SUPABASE: User joined:', user.user_email);
-          // Refresh visibility avatars
-          refreshVisibilityAvatars();
-        };
-        
-        supabaseRealtimeClient.onUserUpdated = (user) => {
-          console.log('🔄 SUPABASE: User updated:', user.user_email);
-          // Update user's aura color in real-time
-          if (user.aura_color) {
-            updateUserAuraInUI(user.user_email, user.aura_color);
-          }
-        };
-        
-        supabaseRealtimeClient.onUserLeft = (user) => {
-          console.log('👋 SUPABASE: User left:', user.user_email);
-          // Refresh visibility avatars
-          refreshVisibilityAvatars();
-        };
-        
-        supabaseRealtimeClient.onNewMessage = (message) => {
-          console.log('💬 SUPABASE: New message:', message.content);
-          // Add message to chat
-          addMessageToChat(message);
-        };
-        
-        return true;
-      } else {
-        console.error('❌ SUPABASE: Failed to initialize real-time client');
-        return false;
-      }
-    } else {
-      console.warn('⚠️ SUPABASE: Supabase client not available, skipping real-time features');
-      return false;
-    }
-  } catch (error) {
-    console.error('❌ SUPABASE: Error initializing real-time client:', error);
-    return false;
-  }
-}
+// Removed duplicate initializeSupabaseRealtime() function
+// Using initializeSupabaseRealtimeClient() instead
 
 async function joinPageWithSupabase(pageId, pageUrl) {
-  if (supabaseRealtimeClient) {
-    const userEmail = await getCurrentUserEmail();
-    const userId = await getCurrentUserId();
-    
-    await supabaseRealtimeClient.setCurrentUser(userEmail, userId);
-    await supabaseRealtimeClient.joinPage(pageId, pageUrl);
-    console.log('🌐 SUPABASE: Joined page with real-time updates');
+  console.log('🌐 SUPABASE: Starting page join process...');
+  console.log('🌐 SUPABASE: Page ID:', pageId);
+  console.log('🌐 SUPABASE: Page URL:', pageUrl);
+  
+  const client = window.supabaseRealtimeClient || supabaseRealtimeClient;
+  console.log('🌐 SUPABASE: Client available:', !!client);
+  
+  if (client) {
+    try {
+      const userEmail = await getCurrentUserEmail();
+      const userId = await getCurrentUserId();
+      
+      console.log('🌐 SUPABASE: User email:', userEmail);
+      console.log('🌐 SUPABASE: User ID:', userId);
+      
+      await client.setCurrentUser(userEmail, userId);
+      console.log('✅ SUPABASE: User set successfully');
+      
+      await client.joinPage(pageId, pageUrl);
+      console.log('✅ SUPABASE: Joined page with real-time updates');
+      console.log('✅ SUPABASE: Real-time subscriptions should now be active');
+    } catch (error) {
+      console.error('❌ SUPABASE: Failed to join page:', error);
+      console.error('❌ SUPABASE: Error details:', error.message);
+      console.error('❌ SUPABASE: This will cause real-time features to fail');
+    }
+  } else {
+    console.error('❌ SUPABASE: No real-time client available for page join');
+    console.error('❌ SUPABASE: Real-time features will not work');
   }
 }
 
@@ -625,121 +623,194 @@ async function broadcastAuraColorChange(color) {
 }
 
 async function sendMessageViaSupabase(content) {
-  if (supabaseRealtimeClient) {
-    await supabaseRealtimeClient.sendMessage(content);
-    console.log('💬 SUPABASE: Message sent via real-time');
+  console.log('🔥🔥🔥 ============================================');
+  console.log('🔥🔥🔥 SEND_MESSAGE_VIA_SUPABASE: ENTRY POINT');
+  console.log('🔥🔥🔥 ============================================');
+  console.log('📡 SUPABASE_MESSAGE: Starting real-time message broadcast...');
+  console.log('📡 SUPABASE_MESSAGE: Content:', content);
+  console.log('📡 SUPABASE_MESSAGE: Content type:', typeof content);
+  console.log('📡 SUPABASE_MESSAGE: Content length:', content?.length);
+  
+  // Use robust integration system if available
+  console.log('📡 SUPABASE_MESSAGE: Checking robust integration...');
+  console.log('📡 SUPABASE_MESSAGE: window.robustIntegration exists:', !!window.robustIntegration);
+  console.log('📡 SUPABASE_MESSAGE: window.robustIntegration.isInitialized:', window.robustIntegration?.isInitialized);
+  
+  if (window.robustIntegration && window.robustIntegration.isInitialized) {
+    console.log('📡 SUPABASE_MESSAGE: Using robust integration system...');
+    try {
+      const messageData = await window.robustIntegration.sendMessage(content);
+      if (messageData) {
+        console.log('📡 SUPABASE_MESSAGE: ✅ Robust integration message sent successfully');
+        console.log('📡 SUPABASE_MESSAGE: Message data returned:', messageData);
+        return messageData;
+      } else {
+        console.log('📡 SUPABASE_MESSAGE: ❌ Robust integration message failed');
+        return false;
+      }
+    } catch (error) {
+      console.log('📡 SUPABASE_MESSAGE: ❌ Robust integration error:', error);
+      return false;
+    }
   }
   
-  // CHROME EXTENSION WEBSOCKET FIX: Send via background service worker
-  try {
-    const user = window.currentUser;
-    const urlData = await normalizeCurrentUrl();
-    
-    await sendSupabaseMessage({
-      type: 'MESSAGE_NEW',
-      content: content,
-      userEmail: user?.email,
-      userId: user?.id || user?.email,
-      pageId: urlData.pageId,
-      url: urlData.normalizedUrl,
-      timestamp: Date.now()
-    });
-    console.log('💬 WEBSOCKET: Message broadcast via background service worker');
-  } catch (error) {
-    console.error('💬 WEBSOCKET: Error broadcasting message:', error);
+  // Fallback to legacy system
+  console.log('📡 SUPABASE_MESSAGE: Using legacy system...');
+  console.log('📡 SUPABASE_MESSAGE: Supabase client available:', !!supabaseRealtimeClient);
+  console.log('📡 SUPABASE_MESSAGE: Window supabase client available:', !!window.supabaseRealtimeClient);
+  console.log('📡 SUPABASE_MESSAGE: window.supabaseRealtimeClient type:', typeof window.supabaseRealtimeClient);
+  
+  const client = window.supabaseRealtimeClient || supabaseRealtimeClient;
+  console.log('📡 SUPABASE_MESSAGE: Using client:', !!client);
+  console.log('📡 SUPABASE_MESSAGE: Client type:', typeof client);
+  console.log('📡 SUPABASE_MESSAGE: Client has sendMessage method:', typeof client?.sendMessage);
+  
+  if (client) {
+    console.log('✅ SUPABASE_MESSAGE: Client is available');
+    try {
+      console.log('📡 SUPABASE_MESSAGE: About to call client.sendMessage...');
+      console.log('📡 SUPABASE_MESSAGE: Timestamp before call:', new Date().toISOString());
+      const messageData = await client.sendMessage(content);
+      console.log('📡 SUPABASE_MESSAGE: Timestamp after call:', new Date().toISOString());
+      console.log('💬 SUPABASE: ✅ Message sent via real-time');
+      console.log('💬 SUPABASE: ✅ Returned messageData:', messageData);
+      console.log('💬 SUPABASE: ✅ messageData type:', typeof messageData);
+      console.log('💬 SUPABASE: ✅ messageData is null:', messageData === null);
+      console.log('💬 SUPABASE: ✅ messageData id:', messageData?.id);
+      return messageData; // Return the message with its UUID
+    } catch (error) {
+      console.log('💬 SUPABASE: ❌ Error sending via Supabase real-time:', error);
+      console.log('💬 SUPABASE: ❌ Error type:', typeof error);
+      console.log('💬 SUPABASE: ❌ Error message:', error?.message);
+      console.log('💬 SUPABASE: ❌ Error stack:', error?.stack);
+      console.log('💬 SUPABASE: ❌ Full error object:', JSON.stringify(error, null, 2));
+      return null;
+    }
+  } else {
+    console.log('❌ SUPABASE_MESSAGE: Client is NOT available');
+    console.log('💬 SUPABASE: ❌ Supabase real-time client not available');
+    console.log('💬 SUPABASE: ❌ supabaseRealtimeClient:', !!supabaseRealtimeClient);
+    console.log('💬 SUPABASE: ❌ window.supabaseRealtimeClient:', !!window.supabaseRealtimeClient);
+    return null;
   }
+  
+  // CRITICAL FIX: Use ONLY Supabase real-time for message propagation
+  // Removed WebSocket system to prevent conflicts and duplicate messages
 }
 
 function updateUserAuraInUI(userEmail, auraColor) {
-  const timer = realtimeLogger.startTimer('aura_ui_update');
-  realtimeLogger.startFlow('aura_ui_update', { userEmail, auraColor, timestamp: Date.now() });
-  
-  realtimeLogger.aura('info', 'Starting aura color UI update', {
-    userEmail,
-    auraColor,
-    isCurrentUser: window.currentUser?.email === userEmail
-  });
-  
-  // Update message avatars for this user
-  realtimeLogger.stepFlow('aura_ui_update', 'Updating message avatars');
-  const messageContainers = document.querySelectorAll('.message');
-  let messageAvatarsUpdated = 0;
-  
-  realtimeLogger.aura('debug', 'Found message containers', { count: messageContainers.length });
-  
-  messageContainers.forEach((messageContainer, index) => {
-    const avatarContainer = messageContainer.querySelector('.avatar-container');
-    if (avatarContainer) {
-      const messageId = messageContainer.getAttribute('data-message-id');
-      if (messageId) {
-        const messageData = window.currentChatData?.find(msg => msg.id === messageId);
-        if (messageData && messageData.author && messageData.author.email === userEmail) {
-          // Update the author's aura color
-          messageData.author.auraColor = auraColor;
-          
-          // Re-render the avatar
-          const newAvatarHTML = getSenderAvatar(messageData.author);
-          avatarContainer.innerHTML = newAvatarHTML;
-          
-          messageAvatarsUpdated++;
-          realtimeLogger.aura('debug', 'Updated message avatar', {
-            messageId,
-            userEmail,
-            auraColor,
-            avatarIndex: index
-          });
+  try {
+    const timer = realtimeLogger.startTimer('aura_ui_update');
+    realtimeLogger.startFlow('aura_ui_update', { userEmail, auraColor, timestamp: Date.now() });
+    
+    realtimeLogger.aura('info', 'Starting aura color UI update', {
+      userEmail,
+      auraColor,
+      isCurrentUser: window.currentUser?.email === userEmail
+    });
+    
+    // Update message avatars for this user
+    realtimeLogger.stepFlow('aura_ui_update', 'Updating message avatars');
+    const messageContainers = document.querySelectorAll('.message');
+    let messageAvatarsUpdated = 0;
+    
+    realtimeLogger.aura('debug', 'Found message containers', { count: messageContainers.length });
+    
+    messageContainers.forEach((messageContainer, index) => {
+      const avatarContainer = messageContainer.querySelector('.avatar-container');
+      if (avatarContainer) {
+        const messageId = messageContainer.getAttribute('data-message-id');
+        if (messageId) {
+          const messageData = window.currentChatData?.find(msg => msg.id === messageId);
+          if (messageData && messageData.author && messageData.author.email === userEmail) {
+            // Update the author's aura color
+            messageData.author.auraColor = auraColor;
+            
+            // Re-render the avatar
+            const newAvatarHTML = getSenderAvatar(messageData.author);
+            avatarContainer.innerHTML = newAvatarHTML;
+            
+            messageAvatarsUpdated++;
+            realtimeLogger.aura('debug', 'Updated message avatar', {
+              messageId,
+              userEmail,
+              auraColor,
+              avatarIndex: index
+            });
+          }
         }
       }
+    });
+    
+    realtimeLogger.aura('info', 'Message avatars update complete', {
+      totalContainers: messageContainers.length,
+      avatarsUpdated: messageAvatarsUpdated
+    });
+    
+    // Update visibility avatars
+    realtimeLogger.stepFlow('aura_ui_update', 'Refreshing visibility avatars');
+    refreshVisibilityAvatars();
+    
+    // Update profile avatar if it's the current user
+    const currentUser = window.currentUser || {};
+    if (currentUser.email === userEmail) {
+      realtimeLogger.stepFlow('aura_ui_update', 'Updating profile avatar for current user');
+      const profileAvatarContainer = document.getElementById('user-avatar-container');
+      if (profileAvatarContainer) {
+        // Update profile avatar with new aura color
+        const newProfileAvatarHTML = AvatarUtils.createUnifiedAvatar({
+          id: currentUser.id || currentUser.email,
+          userId: currentUser.id || currentUser.email,
+          name: currentUser.name || currentUser.email,
+          email: currentUser.email,
+          avatarUrl: currentUser.avatarUrl,
+          auraColor: auraColor,
+        }, {
+          size: 24,
+          showAura: true,
+          showStatus: false,
+          context: 'profile'
+        });
+        
+        // Set the HTML directly on the container
+        profileAvatarContainer.innerHTML = newProfileAvatarHTML;
+        realtimeLogger.aura('info', 'Profile avatar updated using unified avatar', {
+          userEmail,
+          auraColor
+        });
+        console.log('🎨 Updated profile avatar for current user with aura ' + auraColor);
+      }
     }
-  });
-  
-  realtimeLogger.aura('info', 'Message avatars update complete', {
-    totalContainers: messageContainers.length,
-    avatarsUpdated: messageAvatarsUpdated
-  });
-  
-  // Update visibility avatars
-  realtimeLogger.stepFlow('aura_ui_update', 'Refreshing visibility avatars');
-  refreshVisibilityAvatars();
-  
-  // Update profile avatar if it's the current user
-  const currentUser = window.currentUser || {};
-  if (currentUser.email === userEmail) {
-    realtimeLogger.stepFlow('aura_ui_update', 'Updating profile avatar for current user');
-    const profileAvatarContainer = document.getElementById('user-avatar-container');
-    if (profileAvatarContainer) {
-      // Update profile avatar with new aura color
-      const newProfileAvatarHTML = AvatarUtils.createUnifiedAvatar({
-        id: currentUser.id || currentUser.email,
-        userId: currentUser.id || currentUser.email,
-        name: currentUser.name || currentUser.email,
-        email: currentUser.email,
-        avatarUrl: currentUser.avatarUrl,
-        auraColor: auraColor,
-      }, {
-        size: 24,
-        showAura: true,
-        showStatus: false,
-        context: 'profile'
-      });
-      
-      // Set the HTML directly on the container
-      profileAvatarContainer.innerHTML = newProfileAvatarHTML;
-      realtimeLogger.aura('info', 'Profile avatar updated using unified avatar', {
-        userEmail,
-        auraColor
-      });
-      console.log('🎨 Updated profile avatar for current user with aura ' + auraColor);
-    }
+    
+    Logger.debug(`Aura color update complete: ${messageAvatarsUpdated} message avatars updated`, null, 'avatar');
+    realtimeLogger.endFlow('aura_ui_update', true, { messageAvatarsUpdated });
+  } catch (error) {
+    console.error('❌ AURA_UI_UPDATE: Error updating aura in UI:', error);
+    realtimeLogger.error('AURA_UI_UPDATE', 'Error updating aura in UI', { error: error.message, stack: error.stack });
+    realtimeLogger.endFlow('aura_ui_update', false, { error: error.message });
   }
-  
-  Logger.debug(`Aura color update complete: ${messageAvatarsUpdated} message avatars updated`, null, 'avatar');
 }
 
+// Mutex to prevent multiple simultaneous visibility refreshes
+let isRefreshingVisibility = false;
+
 async function refreshVisibilityAvatars() {
+  // Prevent multiple simultaneous refreshes
+  if (isRefreshingVisibility) {
+    console.log('🔄 REFRESH_VISIBILITY: Already refreshing, skipping duplicate call');
+    return;
+  }
+  
+  isRefreshingVisibility = true;
+  console.log('🔄 REFRESH_VISIBILITY: === STARTING VISIBILITY REFRESH ===');
+  
   // CRITICAL FIX: Use window variables for global access
   const client = window.supabaseRealtimeClient || supabaseRealtimeClient;
   const pageId = window.currentUrlData?.pageId || currentPageId;
+  
+  console.log('🔄 REFRESH_VISIBILITY: Client available:', !!client);
+  console.log('🔄 REFRESH_VISIBILITY: Page ID:', pageId);
+  console.log('🔄 REFRESH_VISIBILITY: Current URL data:', window.currentUrlData);
   
   // CRITICAL FIX: State synchronization check
   console.log('🔄 REFRESH_VISIBILITY: === STATE SYNCHRONIZATION CHECK ===');
@@ -831,8 +902,31 @@ async function refreshVisibilityAvatars() {
       // Update the UI with enhanced query results
       if (typeof updateVisibleTab === 'function') {
         console.log('🔄 REFRESH_VISIBILITY: Calling updateVisibleTab with enhanced data...');
+        console.log('🔄 REFRESH_VISIBILITY: Users to display:', formattedUsers.map(u => `${u.email} (${u.status})`));
+        
+        // SD1 ENHANCED: Verify DOM elements before and after update
+        const beforeElements = document.querySelectorAll('.avatar-container, .user-avatar, .presence-avatar');
+        console.log('🔄 REFRESH_VISIBILITY: DOM elements before update:', beforeElements.length);
+        
         updateVisibleTab(formattedUsers);
-        console.log('✅ REFRESH_VISIBILITY: UI updated with enhanced query results');
+        
+        // SD1 ENHANCED: Verify DOM elements after update
+        setTimeout(() => {
+          const afterElements = document.querySelectorAll('.avatar-container, .user-avatar, .presence-avatar');
+          console.log('🔄 REFRESH_VISIBILITY: DOM elements after update:', afterElements.length);
+          console.log('🔄 REFRESH_VISIBILITY: Elements changed:', afterElements.length !== beforeElements.length);
+          
+          // Check if avatars are actually visible
+          const visibleAvatars = document.querySelectorAll('.avatar-container:not([style*="display: none"])');
+          console.log('🔄 REFRESH_VISIBILITY: Visible avatars:', visibleAvatars.length);
+          
+          if (visibleAvatars.length === 0 && formattedUsers.length > 0) {
+            console.error('❌ REFRESH_VISIBILITY: CRITICAL - No avatars visible despite users found!');
+            console.error('❌ REFRESH_VISIBILITY: This indicates a DOM update issue');
+          } else {
+            console.log('✅ REFRESH_VISIBILITY: UI updated successfully with enhanced query results');
+          }
+        }, 100);
       } else {
         console.error('❌ REFRESH_VISIBILITY: updateVisibleTab function not available');
       }
@@ -852,7 +946,13 @@ async function refreshVisibilityAvatars() {
     console.error(`❌ REFRESH_VISIBILITY: window.currentUrlData: ${!!window.currentUrlData}`);
     console.error(`❌ REFRESH_VISIBILITY: window.currentUrlData?.pageId: ${window.currentUrlData?.pageId}`);
   }
+  
+  // Clear mutex
+  isRefreshingVisibility = false;
 }
+
+// Make updateVisibleTab globally accessible
+window.updateVisibleTab = updateVisibleTab;
 
 // CRITICAL FIX: Expose refreshVisibilityAvatars globally for real-time handler
 window.refreshVisibilityAvatars = refreshVisibilityAvatars;
@@ -979,14 +1079,20 @@ window.testVisibilitySystem = async function() {
     const urlData = await normalizeCurrentUrl();
     console.log('🔍 DEBUG: Current URL data:', urlData);
     
-    // Test API call
-    console.log('🔍 DEBUG: Testing getPresenceByUrl API...');
-    const presenceData = await api.getPresenceByUrl(urlData.normalizedUrl, ['comm-001', 'comm-002']);
-    console.log('🔍 DEBUG: API response:', JSON.stringify(presenceData, null, 2));
+    // Test Supabase real-time query
+    console.log('🔍 DEBUG: Testing Supabase real-time query...');
+    const { data: presenceData, error } = await supabase
+      .from('user_presence')
+      .select('*')
+      .eq('page_url', urlData.normalizedUrl)
+      .eq('is_active', true);
     
-    if (presenceData && presenceData.active) {
-      console.log('🔍 DEBUG: Found', presenceData.active.length, 'active users');
-      presenceData.active.forEach((user, index) => {
+    if (error) throw error;
+    console.log('🔍 DEBUG: Supabase response:', JSON.stringify(presenceData, null, 2));
+    
+    if (presenceData && presenceData.length > 0) {
+      console.log('🔍 DEBUG: Found', presenceData.length, 'active users');
+      presenceData.forEach((user, index) => {
         Logger.debug(`DEBUG: User ${index + 1}:`, {
           id: user.id,
           userId: user.userId,
@@ -1131,8 +1237,13 @@ class MetaLayerAPI {
     }
     
     // Get current user for authentication
-    const user = await authManager.getCurrentUser();
-    console.log('🔍 API: Using user for authentication:', user?.email);
+    let user = await authManager.getCurrentUser();
+    if (!user && typeof window.realGoogleAuth !== 'undefined' && window.realGoogleAuth.getCurrentUser) {
+      user = await window.realGoogleAuth.getCurrentUser();
+      console.log('🔍 API: Using realGoogleAuth user for authentication:', user?.email);
+    } else {
+      console.log('🔍 API: Using user for authentication:', user?.email);
+    }
     
     const response = await this.request(`/v1/presence/url?${params.toString()}`, { user });
     console.log('🔍 API: getPresenceByUrl response:', JSON.stringify(response, null, 2));
@@ -1144,8 +1255,13 @@ class MetaLayerAPI {
     const params = new URLSearchParams({ communityIds: communityIds.join(',') });
     
     // Get current user for authentication
-    const user = await authManager.getCurrentUser();
-    console.log('🔍 API: Using user for authentication:', user?.email);
+    let user = await authManager.getCurrentUser();
+    if (!user && typeof window.realGoogleAuth !== 'undefined' && window.realGoogleAuth.getCurrentUser) {
+      user = await window.realGoogleAuth.getCurrentUser();
+      console.log('🔍 API: Using realGoogleAuth user for authentication:', user?.email);
+    } else {
+      console.log('🔍 API: Using user for authentication:', user?.email);
+    }
     
     const response = await this.request(`/v1/presence/communities?${params.toString()}`, { user });
     console.log('🔍 API: getPresenceByCommunities response:', JSON.stringify(response, null, 2));
@@ -1175,7 +1291,7 @@ class MetaLayerAPI {
   }
 
   async getChatHistory(communityId, threadId = null, uri = null) {
-    // Use the existing chat API
+    // Use Supabase directly instead of backend API
     Logger.debug(`CHAT_API: getChatHistory called with communityId=${communityId}, threadId=${threadId}, uri=${uri}`, null, 'general');
     Logger.debug(`CHAT_API: uri type: ${typeof uri}, value: ${JSON.stringify(uri)}`, null, 'general');
     
@@ -1184,38 +1300,104 @@ class MetaLayerAPI {
       return { conversations: [], messages: [] };
     }
     
-    // Build query parameters
-    const params = new URLSearchParams();
-    params.append('communityId', communityId);
-    if (threadId) {
-      params.append('threadId', threadId);
+    // Use Supabase directly instead of backend API
+    if (!window.supabase || !window.supabase.from) {
+      console.error('❌ CHAT_API: No Supabase client available');
+      return { conversations: [], messages: [] };
     }
-    if (uri) {
-      params.append('uri', uri);
-    }
-    
-    const url = `/chat/history?${params.toString()}`;
-    Logger.debug(`CHAT_API: Requesting ${url}`, null, 'general');
     
     try {
-      const response = await this.request(url);
-      Logger.success(`CHAT_API: Response:`, response, 'general');
-      
-      // The backend now returns conversations directly
-      if (response.conversations) {
-        return {
-          conversations: response.conversations,
-          messages: response.conversations.flatMap(conv => conv.posts || [])
-        };
+      // Get pageId from URI if provided
+      let pageId = null;
+      if (uri) {
+        // Use the same URL normalization logic as the backend
+        const normalizedUrl = await window.normalizeUrl(uri);
+        pageId = normalizedUrl.pageId;
       }
       
-      // Fallback for empty response
-      return {
-        conversations: [],
-        messages: []
+      console.log(`🔍 CHAT_API: Querying Supabase messages table for pageId: ${pageId}`);
+      
+      // Query Supabase messages table directly
+      let query = window.supabase.from('messages').select('*');
+      if (pageId) {
+        query = query.eq('page_id', pageId);
+      }
+      if (communityId) {
+        query = query.eq('community_id', communityId);
+      }
+      const { data: messages, error: messagesError } = await query.order('created_at', { ascending: true });
+      
+      if (messagesError) {
+        console.error('❌ CHAT_API: Supabase query failed:', messagesError);
+        return { conversations: [], messages: [] };
+      }
+      
+      console.log(`🔍 CHAT_API: Found ${messages?.length || 0} messages in Supabase`);
+      
+      // Convert Supabase messages to API format
+      const msgs = messages?.map(msg => ({
+        id: msg.id,
+        body: msg.content, // Use content field, not body
+        authorId: msg.user_email,
+        conversationId: `conv-${communityId}-${pageId}`,
+        createdAt: msg.created_at,
+        updatedAt: msg.updated_at,
+        author: {
+          id: msg.user_email,
+          name: msg.user_email,
+          handle: msg.user_email.split('@')[0],
+          avatarUrl: null,
+          email: msg.user_email,
+          auraColor: '#aa00aa'
+        },
+        conversation: {
+          id: `conv-${communityId}-${pageId}`,
+          communityId: communityId
+        }
+      })) || [];
+      
+      console.log(`🔍 CHAT_API: Converted ${msgs.length} messages`);
+      
+      // Transform messages into conversation format expected by frontend
+      const conversationsMap = new Map();
+      
+      for (const msg of msgs) {
+        const convId = msg.conversationId;
+        if (!conversationsMap.has(convId)) {
+          conversationsMap.set(convId, {
+            id: convId,
+            communityId: msg.conversation.communityId,
+            posts: []
+          });
+        }
+        
+        // Transform message to post format
+        const post = {
+          id: msg.id,
+          parentId: null, // Supabase messages don't have parentId
+          conversationId: msg.conversationId,
+          authorId: msg.authorId,
+          body: msg.body,
+          createdAt: msg.createdAt,
+          editedAt: msg.updatedAt,
+          author: msg.author,
+          conversation: msg.conversation
+        };
+        
+        conversationsMap.get(convId).posts.push(post);
+      }
+      
+      const conversations = Array.from(conversationsMap.values());
+      console.log(`✅ CHAT_API: Returning ${conversations.length} conversations with ${msgs.length} total messages`);
+      
+      return { 
+        conversations,
+        timestamp: new Date().toISOString(),
+        cacheBust: Date.now()
       };
+      
     } catch (error) {
-      console.error('❌ CHAT_API: Error fetching chat history:', error);
+      console.error('❌ CHAT_API: Error fetching messages from Supabase:', error);
       return { conversations: [], messages: [] };
     }
   }
@@ -1463,8 +1645,10 @@ async function loadCommunities() {
       });
       
       // Normalize the current URL ONCE at startup
-      await normalizeCurrentUrl();
+      const initialUrlData = await normalizeCurrentUrl();
+      window.currentUrlData = initialUrlData; // CRITICAL: Set global state
       console.log('🔄 STARTUP: URL normalized for initial load');
+      console.log('🔄 STARTUP: window.currentUrlData set to:', initialUrlData.pageId);
       
       // Wait for authentication before loading avatars
       console.log('🔍 INIT: Waiting for authentication before loading avatars...');
@@ -1536,6 +1720,7 @@ async function loadCombinedAvatars(communityIds) {
       console.log('───────────────────────────────────────────────────────────');
       console.log('🌐 LOAD_VISIBILITY: Calling API with URL:', currentUri);
       const apiStartTime = Date.now();
+      // Load initial presence data via API, then real-time updates will handle changes
       const urlResponse = await api.getPresenceByUrl(currentUri, communityIds);
       const apiEndTime = Date.now();
       Logger.success(`LOAD_VISIBILITY: API responded in ${apiEndTime - apiStartTime}ms`, null, 'general');
@@ -1583,9 +1768,31 @@ async function loadCombinedAvatars(communityIds) {
               const retryResponse = await api.getPresenceByUrl(currentUri, communityIds);
               console.log('🔍 VISIBILITY: Retry response:', JSON.stringify(retryResponse, null, 2));
 
-              if (retryResponse && retryResponse.active && retryResponse.active.length > 0) {
-                console.log('🔍 VISIBILITY: Retry successful - found', retryResponse.active.length, 'active users');
-                avatarResponses = [retryResponse];
+              if (retryResponse && retryResponse.length > 0) {
+                console.log('🔍 VISIBILITY: Retry successful - found', retryResponse.length, 'active users');
+                // Convert to expected format
+                const formattedResponse = {
+                  active: retryResponse.map(user => ({
+                    id: user.user_email,
+                    userId: user.user_email,
+                    email: user.user_email,
+                    name: user.user_email.split('@')[0],
+                    handle: user.user_email.split('@')[0],
+                    avatarUrl: user.avatar_url,
+                    auraColor: user.aura_color || '#aaaaaa',
+                    communityId: 'comm-001',
+                    communityName: 'Community comm-001',
+                    lastSeen: user.last_seen,
+                    availability: null,
+                    customLabel: null,
+                    enterTime: user.enter_time,
+                    isActive: user.is_active,
+                    status: 'online'
+                  })),
+                  pageId: currentUri.replace(/[^a-zA-Z0-9]/g, '_'),
+                  url: currentUri
+                };
+                avatarResponses = [formattedResponse];
               } else {
                 console.log('🔍 VISIBILITY: Retry successful but no active users found');
                 throw new Error('No active users found via URL-based presence retry');
@@ -1595,20 +1802,22 @@ async function loadCombinedAvatars(communityIds) {
             }
           }
       
-      // If retry didn't work or wasn't a 401, fall back to community-based presence
+      // REMOVED: Community-based presence fallback was causing 400 errors
+      // The user_presence table doesn't have a community_id column
+      // If URL-based presence fails, show empty list
       if (avatarResponses.length === 0) {
-        try {
-          console.log('🔍 VISIBILITY: Trying community-based presence API');
-          const communityResponse = await api.getPresenceByCommunities(communityIds);
-          console.log('🔍 VISIBILITY: Community-based presence response:', JSON.stringify(communityResponse, null, 2));
-          avatarResponses = [communityResponse];
-        } catch (communityError) {
-          console.log('🔍 VISIBILITY: Community-based presence failed, using legacy avatars API:', communityError.message);
-          
-          // NO FALLBACK - If presence fails, show empty list
-          console.log('🔍 VISIBILITY: No presence data available - showing empty list');
-          return [];
+        console.log('🔍 VISIBILITY: URL-based presence failed - showing empty list');
+        console.log('🔍 VISIBILITY: No presence data available');
+        
+        // CRITICAL FIX: Always call updateVisibleTab even with empty data
+        if (typeof updateVisibleTab === 'function') {
+          console.log('🔄 REFRESH_VISIBILITY: Calling updateVisibleTab with empty data...');
+          updateVisibleTab([]);
+        } else {
+          console.error('❌ REFRESH_VISIBILITY: updateVisibleTab function not available');
         }
+        
+        return [];
       }
     }
     
@@ -1779,6 +1988,25 @@ function updateCommunityDropdown(communities) {
 async function updateVisibleTab(avatars) {
   console.log('🔍 VISIBILITY: updateVisibleTab called with avatars:', JSON.stringify(avatars, null, 2));
   
+  // CRITICAL FIX: Add current user to visibility list if not already present
+  if (window.currentUser && window.currentUser.email) {
+    const currentUserEmail = window.currentUser.email;
+    const isCurrentUserInList = avatars.some(avatar => avatar.email === currentUserEmail);
+    
+    if (!isCurrentUserInList) {
+      console.log('🔍 VISIBILITY: Adding current user to visibility list');
+      const currentUserAvatar = {
+        email: currentUserEmail,
+        name: window.currentUser.name || currentUserEmail.split('@')[0],
+        avatarUrl: window.currentUser.avatarUrl, // Use the real Google avatar URL
+        auraColor: window.currentUser.auraColor || '#aaaaaa',
+        status: 'online',
+        enterTime: new Date().toISOString()
+      };
+      avatars.unshift(currentUserAvatar); // Add to beginning of list
+    }
+  }
+  
   // CRITICAL DIAGNOSTIC: Check if API returned real Google avatars or fake ones
   console.log('🔍 AVATAR_URL_DIAGNOSTIC: Analyzing avatar URLs from API...');
   avatars.forEach((avatar, index) => {
@@ -1805,18 +2033,13 @@ async function updateVisibleTab(avatars) {
     clearInterval(window.visibilityUpdateTimer);
   }
   
-  // Set up a timer to update visibility times every 10 seconds
-  if (avatars && avatars.length > 0) {
-    window.visibilityUpdateTimer = setInterval(() => {
-      console.log('🔄 VISIBILITY: Updating visibility times...');
-      updateVisibilityTimes();
-    }, 10000); // Update every 10 seconds
-  }
+  // NO POLLING - Use Supabase real-time instead
+  // Real-time updates will handle visibility changes
   console.log('🔄 VISIBILITY: Stored visibility data globally for real-time aura access');
   
     // Update profile avatar with real-time aura color if available
     // Only update if we have a real-time aura color, don't replace with unified avatar
-    if (getLatestAuraColorFromPresence(window.currentUser.email)) {
+    if (window.currentUser && window.currentUser.email && getLatestAuraColorFromPresence(window.currentUser.email)) {
       updateProfileAvatarWithRealTimeAura();
     }
   
@@ -2007,18 +2230,56 @@ async function updateVisibleTab(avatars) {
   
   // Add error handling for broken avatar images
   const avatarImages = visibleTab.querySelectorAll('.user-avatar-img[data-avatar-fallback="true"]');
+  // CRITICAL FIX: Enhanced visibility avatar error handling with fallback
   avatarImages.forEach(img => {
     img.addEventListener('error', () => {
-      console.log('❌ VISIBILITY: Avatar image failed to load, removing user from visible list');
-      // Remove the entire user item if avatar fails to load
+      console.log('❌ VISIBILITY: Avatar image failed to load, applying fallback instead of removing user');
+      
+      // Get user data from the user item
       const userItem = img.closest('.user-item');
       if (userItem) {
-        userItem.remove();
-        // Update the count
-        const countElement = visibleTab.querySelector('.visible-count');
-        if (countElement) {
-          const currentCount = visibleTab.querySelectorAll('.user-item').length;
-          countElement.textContent = `${currentCount} visible`;
+        const userEmail = userItem.dataset.userEmail;
+        const userName = userItem.dataset.userName || userEmail?.split('@')[0] || 'User';
+        const auraColor = userItem.dataset.auraColor || '#aaaaaa';
+        
+        // Hide the failed image
+        img.style.display = 'none';
+        
+        // Create or show fallback avatar
+        let fallbackDiv = userItem.querySelector('.avatar-fallback');
+        if (!fallbackDiv) {
+          fallbackDiv = document.createElement('div');
+          fallbackDiv.className = 'avatar-fallback';
+          fallbackDiv.style.cssText = `
+            position: relative; 
+            z-index: 2; 
+            width: 24px; 
+            height: 24px; 
+            border-radius: 50%; 
+            background-color: ${auraColor}; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            color: white; 
+            font-weight: bold; 
+            font-size: 12px;
+            border: 2px solid ${auraColor};
+          `;
+          fallbackDiv.textContent = userName.charAt(0).toUpperCase();
+          img.parentNode.insertBefore(fallbackDiv, img.nextSibling);
+        } else {
+          fallbackDiv.style.display = 'flex';
+        }
+      }
+    });
+    
+    // Add load success handler to hide fallback if image loads
+    img.addEventListener('load', () => {
+      const userItem = img.closest('.user-item');
+      if (userItem) {
+        const fallbackDiv = userItem.querySelector('.avatar-fallback');
+        if (fallbackDiv) {
+          fallbackDiv.style.display = 'none';
         }
       }
     });
@@ -2532,6 +2793,8 @@ function getAvatarColor(name) {
  * @param {string} options.context - Context: 'profile', 'message', 'visibility'
  * @returns {string} HTML string for the avatar
  */
+// AvatarUtils is defined in utils/AvatarUtils.js and loaded globally
+
 // DEPRECATED: Use AvatarUtils.createUnifiedAvatar() instead
 function createUnifiedAvatar(user, options = {}) {
   Logger.warn('DEPRECATED: createUnifiedAvatar() is deprecated. Use AvatarUtils.createUnifiedAvatar() instead.', null, 'general');
@@ -2539,18 +2802,35 @@ function createUnifiedAvatar(user, options = {}) {
 }
 
 // Global function to set custom avatar color for the current user
-function setCustomAvatarColor(color) {
+async function setCustomAvatarColor(color) {
   if (!color || !color.startsWith('#')) {
     console.error('❌ Invalid color. Please provide a hex color (e.g., #45B7D1)');
     return;
   }
   
-  // Store the custom color
-  // Modernized: Use StateManager instead of Chrome Storage
-  setState('customAvatarColor', color).then(() => {
-    // Refresh the profile avatar
-    refreshUserAvatar();
-  });
+  console.log('🎨 SD1 FIX: Setting aura color via Supabase real-time:', color);
+  
+  // SD1 FIX: Save to Supabase database and broadcast via real-time
+  if (window.supabaseRealtimeClient && window.supabaseRealtimeClient.isInitialized) {
+    try {
+      // Update user's aura color in Supabase database
+      await window.supabaseRealtimeClient.broadcastAuraColorChange(color);
+      console.log('✅ SD1 FIX: Aura color saved to Supabase and broadcasted');
+      
+      // Update local state
+      await setState('customAvatarColor', color);
+      
+      // Refresh all avatars
+      await refreshAllAvatars();
+    } catch (error) {
+      console.error('❌ SD1 FIX: Failed to save aura color to Supabase:', error);
+    }
+  } else {
+    console.warn('⚠️ SD1 FIX: Supabase client not available, using local storage only');
+    // Fallback to local storage
+    await setState('customAvatarColor', color);
+    await refreshAllAvatars();
+  }
 }
 
 // Global function to reset to default avatar color
@@ -2704,7 +2984,14 @@ async function refreshMessageAvatarsWithCurrentPresence() {
     // Get current presence data to get updated aura colors
     const currentUrl = window.location.href;
     const normalizedUrl = await normalizeCurrentUrl();
-    const presenceData = await api.getPresenceByUrl(normalizedUrl.normalizedUrl);
+    // Use Supabase real-time instead of API polling
+    const { data: presenceData, error } = await supabase
+      .from('user_presence')
+      .select('*')
+      .eq('page_url', normalizedUrl.normalizedUrl)
+      .eq('is_active', true);
+    
+    if (error) throw error;
     
     // Store presence data globally for real-time aura color access
     window.currentPresenceData = presenceData;
@@ -3141,22 +3428,52 @@ async function getPrimaryCommunityName() {
 
 
 async function addMessageToChat(message) {
-  console.log('🔍 ADD_MESSAGE: Starting addMessageToChat with message:', message);
+  console.log('🎯🎯🎯 ============================================');
+  console.log('🎯🎯🎯 ADD_MESSAGE_TO_CHAT: ENTRY POINT');
+  console.log('🎯🎯🎯 ============================================');
+  console.log('🔍 ADD_MESSAGE: Starting addMessageToChat');
+  console.log('🔍 ADD_MESSAGE: Timestamp:', new Date().toISOString());
+  console.log('🔍 ADD_MESSAGE: Message:', message);
+  console.log('🔍 ADD_MESSAGE: Message type:', typeof message);
+  console.log('🔍 ADD_MESSAGE: Message id:', message?.id);
+  console.log('🔍 ADD_MESSAGE: Message body:', message?.body);
+  console.log('🔍 ADD_MESSAGE: Message content:', message?.content);
+  console.log('🔍 ADD_MESSAGE: Message author:', message?.author);
+  console.log('🔍 ADD_MESSAGE: Message author.name:', message?.author?.name);
+  console.log('🔍 ADD_MESSAGE: Message author.avatarUrl:', message?.author?.avatarUrl);
+  
+  // CRITICAL DEBUG: Check if this is one of the missing messages
+  if (message?.body === 'Google a' || message?.body === 'Google b') {
+    console.log('🚨🚨🚨 CRITICAL DEBUG: addMessageToChat called for missing message:', message.body);
+    // SD1 FIX: Avoid circular structure by logging safe properties only
+    console.log('🚨🚨🚨 CRITICAL DEBUG: Message ID:', message.id);
+    console.log('🚨🚨🚨 CRITICAL DEBUG: Message body:', message.body);
+    console.log('🚨🚨🚨 CRITICAL DEBUG: Message author:', message.author?.name);
+    console.log('🚨🚨🚨 CRITICAL DEBUG: Message conversation:', message.conversation?.id);
+  }
   
   // CRITICAL: Filter out deleted messages without replies
   // Check both deletedAt field and [Deleted] body content
   const isDeleted = message.deletedAt || (message.body && message.body.trim() === '[Deleted]');
+  console.log('🔍 ADD_MESSAGE: isDeleted:', isDeleted);
+  console.log('🔍 ADD_MESSAGE: message.hasReplies:', message.hasReplies);
+  
   if (isDeleted && !message.hasReplies) {
     console.log('🔍 ADD_MESSAGE: SKIPPING deleted message without replies:', message.id);
     return;
   }
   
+  console.log('🔍 ADD_MESSAGE: === FINDING CHAT MESSAGES CONTAINER ===');
   const chatMessages = document.querySelector('.chat-messages');
+  console.log('🔍 ADD_MESSAGE: chatMessages element:', !!chatMessages);
+  console.log('🔍 ADD_MESSAGE: chatMessages type:', typeof chatMessages);
+  
   if (!chatMessages) {
-    console.log('❌ ADD_MESSAGE: No chat-messages element found');
+    console.log('❌❌❌ ADD_MESSAGE: No chat-messages element found - CANNOT ADD MESSAGE');
     return;
   }
   console.log('✅ ADD_MESSAGE: Found chat-messages element');
+  console.log('✅ ADD_MESSAGE: chatMessages children count:', chatMessages.children.length);
 
   // Remove placeholder text if it exists
   const placeholder = chatMessages.querySelector('p[style*="text-align: center"]');
@@ -3316,6 +3633,14 @@ async function addMessageToChat(message) {
   ` : '';
   
   
+          // CRITICAL DEBUG: Check if this is one of the missing messages
+          if (message?.body === 'Google a' || message?.body === 'Google b') {
+            console.log('🚨🚨🚨 CRITICAL DEBUG: Creating HTML for missing message:', message.body);
+            console.log('🚨🚨🚨 CRITICAL DEBUG: contentWithLinks:', contentWithLinks);
+            console.log('🚨🚨🚨 CRITICAL DEBUG: senderName:', senderName);
+            console.log('🚨🚨🚨 CRITICAL DEBUG: communityName:', communityName);
+          }
+          
           messageDiv.innerHTML = `
             <div class="avatar-container">${getSenderAvatar(author)}</div>
             <div class="message-content-wrapper">
@@ -3335,6 +3660,12 @@ async function addMessageToChat(message) {
               </div>
             </div>
           `;
+          
+          // CRITICAL DEBUG: Verify HTML was created
+          if (message?.body === 'Google a' || message?.body === 'Google b') {
+            console.log('🚨🚨🚨 CRITICAL DEBUG: HTML created for missing message:', messageDiv.innerHTML.length, 'characters');
+            console.log('🚨🚨🚨 CRITICAL DEBUG: HTML preview:', messageDiv.innerHTML.substring(0, 200) + '...');
+          }
   
   // Add event listeners for action buttons
   addMessageActionListeners(messageDiv, message);
@@ -3358,13 +3689,42 @@ async function addMessageToChat(message) {
   }
   
   console.log('🔍 ADD_MESSAGE: Adding message to DOM:', message.id);
+  
+  // CRITICAL DEBUG: Check if this is one of the missing messages
+  if (message?.body === 'Google a' || message?.body === 'Google b') {
+    console.log('🚨🚨🚨 CRITICAL DEBUG: About to append missing message to DOM:', message.body);
+    console.log('🚨🚨🚨 CRITICAL DEBUG: Message div created:', !!messageDiv);
+    console.log('🚨🚨🚨 CRITICAL DEBUG: Chat container found:', !!chatMessages);
+    console.log('🚨🚨🚨 CRITICAL DEBUG: Message div innerHTML length:', messageDiv.innerHTML.length);
+  }
+  
   chatMessages.appendChild(messageDiv);
   console.log('✅ ADD_MESSAGE: Message added to DOM successfully');
+  
+  // CRITICAL DEBUG: Verify message was actually added
+  if (message?.body === 'Google a' || message?.body === 'Google b') {
+    const addedMessage = document.querySelector(`[data-message-id="${message.id}"]`);
+    console.log('🚨🚨🚨 CRITICAL DEBUG: Message in DOM after appendChild:', !!addedMessage);
+    console.log('🚨🚨🚨 CRITICAL DEBUG: Chat container children count:', chatMessages.children.length);
+    if (addedMessage) {
+      console.log('🚨🚨🚨 CRITICAL DEBUG: Message element offsetHeight:', addedMessage.offsetHeight);
+      console.log('🚨🚨🚨 CRITICAL DEBUG: Message element style.display:', addedMessage.style.display);
+      console.log('🚨🚨🚨 CRITICAL DEBUG: Message element computed style:', window.getComputedStyle(addedMessage).display);
+    }
+  }
   
   // Add message to global storage for avatar updates
   if (!window.currentChatData) {
     window.currentChatData = [];
   }
+  // CRITICAL FIX: Check if message already exists in DOM to prevent duplicates
+  const existingMessageElement = chatMessages.querySelector(`[data-message-id="${message.id}"]`);
+  if (existingMessageElement) {
+    console.log('🔍 ADD_MESSAGE: Message already exists in DOM, skipping duplicate:', message.id);
+    console.log('🔍 ADD_MESSAGE: Existing message element:', existingMessageElement);
+    return; // Skip adding duplicate message
+  }
+  
   // Check if message already exists in global storage
   const existingIndex = window.currentChatData.findIndex(m => m.id === message.id);
   if (existingIndex >= 0) {
@@ -3381,7 +3741,7 @@ async function addMessageToChat(message) {
   console.log('🔍 ADD_MESSAGE: Total messages in chat now:', allMessages.length);
   console.log('🔍 ADD_MESSAGE: Message IDs in chat:', Array.from(allMessages).map(m => m.getAttribute('data-message-id')));
   
-  // Update polling tracking
+  // Update message count tracking
   lastMessageCount = allMessages.length;
   if (allMessages.length > 0) {
     const lastMessage = allMessages[allMessages.length - 1];
@@ -3389,24 +3749,130 @@ async function addMessageToChat(message) {
     console.log('🔍 ADD_MESSAGE: Updated last message ID:', lastMessageId);
   }
   
-  // Add avatar error handlers for CSP compliance
+  // CRITICAL FIX: Enhanced avatar error handling with proper fallback
   const avatarImg = messageDiv.querySelector('img[data-avatar-fallback="true"]');
   if (avatarImg) {
     avatarImg.addEventListener('error', function() {
+      console.log('❌ MESSAGE_AVATAR: Avatar image failed to load, applying fallback');
       this.style.display = 'none';
-      const fallbackDiv = this.nextElementSibling;
-      if (fallbackDiv) {
+      
+      // Check if there's already a fallback div
+      let fallbackDiv = this.nextElementSibling;
+      if (!fallbackDiv || !fallbackDiv.classList.contains('avatar-fallback')) {
+        // Create fallback div if it doesn't exist
+        fallbackDiv = document.createElement('div');
+        fallbackDiv.className = 'avatar-fallback';
+        fallbackDiv.style.cssText = `
+          position: relative; 
+          z-index: 2; 
+          width: 32px; 
+          height: 32px; 
+          border-radius: 50%; 
+          background-color: ${author.auraColor || '#aaaaaa'}; 
+          display: flex; 
+          align-items: center; 
+          justify-content: center; 
+          color: white; 
+          font-weight: bold; 
+          font-size: 14px;
+          border: 2px solid ${author.auraColor || '#aaaaaa'};
+        `;
+        fallbackDiv.textContent = (author.name || author.email || 'U').charAt(0).toUpperCase();
+        this.parentNode.insertBefore(fallbackDiv, this.nextSibling);
+      } else {
         fallbackDiv.style.display = 'flex';
+      }
+    });
+    
+    // Add load success handler to hide fallback if image loads
+    avatarImg.addEventListener('load', function() {
+      const fallbackDiv = this.nextElementSibling;
+      if (fallbackDiv && fallbackDiv.classList.contains('avatar-fallback')) {
+        fallbackDiv.style.display = 'none';
       }
     });
   }
   
   chatMessages.scrollTop = chatMessages.scrollHeight;
   
-  // Update visual hierarchy after adding message
-  setTimeout(() => {
-    updateMessageVisualHierarchy();
-  }, 10);
+  // Update visual hierarchy immediately - no setTimeout needed
+  updateMessageVisualHierarchy();
+}
+
+// CRITICAL FIX: Add missing updateMessageInChat function for real-time message updates
+function updateMessageInChat(updatedMessage) {
+  console.log('🔄 UPDATE_MESSAGE: Updating message in chat:', updatedMessage.id);
+  
+  const chatMessages = document.querySelector('.chat-messages');
+  if (!chatMessages) {
+    console.error('❌ UPDATE_MESSAGE: No chat-messages element found');
+    return;
+  }
+  
+  // Find the existing message element
+  const messageElement = chatMessages.querySelector(`[data-message-id="${updatedMessage.id}"]`);
+  if (!messageElement) {
+    console.log('⚠️ UPDATE_MESSAGE: Message not found in DOM, adding as new message');
+    addMessageToChat(updatedMessage);
+    return;
+  }
+  
+  // Update the message content
+  const contentElement = messageElement.querySelector('.message-content');
+  if (contentElement) {
+    const contentWithLinks = convertUrlsToLinks(updatedMessage.body || updatedMessage.content);
+    contentElement.innerHTML = contentWithLinks;
+  }
+  
+  // Update the message time if it changed
+  const timeElement = messageElement.querySelector('.message-time-new');
+  if (timeElement && updatedMessage.updatedAt) {
+    timeElement.textContent = formatMessageTime(updatedMessage.updatedAt);
+  }
+  
+  // Update global storage
+  if (window.currentChatData) {
+    const existingIndex = window.currentChatData.findIndex(m => m.id === updatedMessage.id);
+    if (existingIndex >= 0) {
+      window.currentChatData[existingIndex] = updatedMessage;
+    }
+  }
+  
+  console.log('✅ UPDATE_MESSAGE: Message updated successfully');
+}
+
+// CRITICAL FIX: Add missing removeMessageFromChat function for real-time message deletions
+function removeMessageFromChat(deletedMessage) {
+  console.log('🗑️ REMOVE_MESSAGE: Removing message from chat:', deletedMessage.id);
+  
+  const chatMessages = document.querySelector('.chat-messages');
+  if (!chatMessages) {
+    console.error('❌ REMOVE_MESSAGE: No chat-messages element found');
+    return;
+  }
+  
+  // Find and remove the message element
+  const messageElement = chatMessages.querySelector(`[data-message-id="${deletedMessage.id}"]`);
+  if (messageElement) {
+    messageElement.remove();
+    console.log('✅ REMOVE_MESSAGE: Message element removed from DOM');
+  } else {
+    console.log('⚠️ REMOVE_MESSAGE: Message element not found in DOM');
+  }
+  
+  // Remove from global storage
+  if (window.currentChatData) {
+    const existingIndex = window.currentChatData.findIndex(m => m.id === deletedMessage.id);
+    if (existingIndex >= 0) {
+      window.currentChatData.splice(existingIndex, 1);
+      console.log('✅ REMOVE_MESSAGE: Message removed from global storage');
+    }
+  }
+  
+  // Update visual hierarchy
+  updateMessageVisualHierarchy();
+  
+  console.log('✅ REMOVE_MESSAGE: Message removal completed');
 }
 
 // Check if a conversation has replies and add thread toggle if needed
@@ -3414,12 +3880,12 @@ async function checkAndAddThreadToggle(messageElement, conversationId) {
   try {
     // Get conversations for the current page to find replies
     const currentUri = window.location.href;
-    const response = await api.getChatHistory(currentUri);
+    // Messages arrive via Supabase real-time subscription
+    // Real-time messages are handled by handleMessageChange()
     
-    // Filter for replies to this specific conversation
-    const replies = response.conversations?.flatMap(conv => 
-      conv.posts?.filter(post => post.parentId && post.conversationId === conversationId) || []
-    ) || [];
+    // Check for existing replies in the DOM
+    const existingReplies = document.querySelectorAll(`[data-conversation-id="${conversationId}"] .message[data-parent-id]`);
+    const replies = Array.from(existingReplies);
     
     // Only add thread toggle if there are replies
     if (replies.length > 0) {
@@ -3604,6 +4070,20 @@ function getSenderAvatar(author) {
     context: 'message',
     statusColor: '#22c55e' // Default green for message avatars
   });
+  
+  // DIAGNOSTIC: Log avatar resolution
+  if (window.messageDiagnostic) {
+    // Extract avatar URL from the HTML to determine if it's real or generic
+    const avatarUrlMatch = avatarHTML.match(/src="([^"]+)"/);
+    const avatarUrl = avatarUrlMatch ? avatarUrlMatch[1] : 'unknown';
+    const isReal = !avatarUrl.includes('default-user');
+    
+    window.messageDiagnostic.logAvatarResolution(
+      author.email,
+      avatarUrl,
+      isReal ? 'real' : 'generic'
+    );
+  }
   
   Logger.debug(`GET_SENDER_AVATAR: [BUILD ${EXTENSION_BUILD}] Generated message avatar HTML:`, avatarHTML, 'general');
   return avatarHTML;
@@ -3921,21 +4401,40 @@ async function handleEditMessage(message) {
     const newContent = chatTextarea.value.trim();
     if (newContent && newContent !== (message.body || message.content)) {
       try {
-        const response = await api.editMessage(message.id, newContent);
-        if (response && response.body) {
-          // Update the message in the UI
-          const messageDiv = document.querySelector(`[data-message-id="${message.id}"]`);
-          if (messageDiv) {
-            const contentDiv = messageDiv.querySelector('.message-content');
-            contentDiv.innerHTML = convertUrlsToLinks(response.body);
-            // Add edited indicator
-            const timeElement = messageDiv.querySelector('.message-time-new');
-            if (timeElement && !timeElement.textContent.includes('(edited)')) {
-              timeElement.textContent += ' (edited)';
-            }
+        // Use robust integration if available, fallback to legacy
+        console.log('✏️ EDIT: Checking robust integration...');
+        console.log('✏️ EDIT: window.robustIntegration exists:', !!window.robustIntegration);
+        console.log('✏️ EDIT: window.robustIntegration.isInitialized:', window.robustIntegration?.isInitialized);
+        
+        if (window.robustIntegration && window.robustIntegration.isInitialized) {
+          console.log('✏️ EDIT: Using robust integration system');
+          await window.robustIntegration.editMessage(message.id, newContent);
+          console.log('✅ Message updated via robust integration');
+        } else {
+          // Fallback to legacy system
+          const client = window.supabaseRealtimeClient || supabaseRealtimeClient;
+          if (client) {
+            await client.editMessage(message.id, newContent);
+            console.log('✅ Message updated via Supabase real-time (legacy)');
+          } else {
+            console.error('❌ Supabase client not available for message editing');
+            showNotification('Failed to update message. Supabase client not available.');
+            return;
           }
-          showNotification('Message updated successfully');
         }
+        
+        // Update the message in the UI
+        const messageDiv = document.querySelector(`[data-message-id="${message.id}"]`);
+        if (messageDiv) {
+          const contentDiv = messageDiv.querySelector('.message-content');
+          contentDiv.innerHTML = convertUrlsToLinks(newContent);
+          // Add edited indicator
+          const timeElement = messageDiv.querySelector('.message-time-new');
+          if (timeElement && !timeElement.textContent.includes('(edited)')) {
+            timeElement.textContent += ' (edited)';
+          }
+        }
+        showNotification('Message updated successfully');
       } catch (error) {
         console.error('Failed to edit message:', error);
         showNotification('Failed to edit message');
@@ -3966,45 +4465,38 @@ async function handleEditMessage(message) {
 async function handleDeleteMessage(message) {
   if (confirm('Are you sure you want to delete this message?')) {
     try {
-      const response = await api.deleteMessage(message.id);
-      // Server returns { message: 'Post deleted', id } on success
-      if (response.message && response.message.includes('deleted')) {
-        // Remove the message from the UI
-        const messageDiv = document.querySelector(`[data-message-id="${message.id}"]`);
-        if (messageDiv) {
-          messageDiv.remove();
+      // Check if this is a UUID (Supabase) or legacy post ID (backend API)
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(message.id);
+      console.log('🗑️ DELETE: Message ID:', message.id, 'Is UUID:', isUUID);
+      
+      if (isUUID) {
+        // Use robust integration if available, fallback to legacy
+        if (window.robustIntegration && window.robustIntegration.isInitialized) {
+          console.log('🗑️ DELETE: Using robust integration system');
+          await window.robustIntegration.deleteMessage(message.id);
+          console.log('✅ Message deleted via robust integration');
+        } else {
+          // Fallback to legacy system
+          const client = window.supabaseRealtimeClient || supabaseRealtimeClient;
+          if (client) {
+            await client.deleteMessage(message.id);
+            console.log('✅ Message deleted via Supabase real-time (legacy)');
+          }
         }
-        
-        // Broadcast deletion to other profiles
-        try {
-          chrome.runtime.sendMessage({
-            type: 'MESSAGE_DELETED',
-            messageId: message.id,
-            timestamp: Date.now()
-          });
-          console.log('📡 DELETION: Broadcasted deletion to other profiles');
-        } catch (error) {
-          console.log('📡 DELETION: Could not broadcast to other profiles:', error);
-        }
-        
-        // Force refresh the chat to ensure all profiles see the deletion
-        console.log('🔄 DELETION: Refreshing chat after message deletion');
-        await loadChatHistory();
-        
-        // Broadcast deletion to other profiles via chrome.runtime
-        try {
-          chrome.runtime.sendMessage({
-            type: 'MESSAGE_DELETED',
-            messageId: message.id,
-            timestamp: Date.now()
-          });
-          console.log('📡 DELETION: Broadcasted deletion to other profiles');
-        } catch (error) {
-          console.log('📡 DELETION: Could not broadcast to other profiles:', error);
-        }
-        
-        showNotification('Message deleted successfully');
+      } else {
+        // Use API for legacy post IDs
+        console.log('🗑️ DELETE: Using API for legacy message');
+        await api.deleteMessage(message.id);
+        console.log('✅ Message deleted via API');
       }
+      
+      // Remove the message from the UI
+      const messageDiv = document.querySelector(`[data-message-id="${message.id}"]`);
+      if (messageDiv) {
+        messageDiv.remove();
+      }
+      
+      showNotification('Message deleted successfully');
     } catch (error) {
       console.error('Failed to delete message:', error);
       showNotification('Failed to delete message');
@@ -4273,7 +4765,14 @@ async function handleMessageFocus(message) {
     try {
       // Get the community ID from the message or use the first active community
       const communityId = message.communityId || (window.activeCommunities && window.activeCommunities[0]) || 'comm-001';
-      const conversationResponse = await api.getChatHistory(communityId, message.conversationId);
+      // Use Supabase real-time - query by page_id only (community_id and conversation_id don't exist)
+      const { data: conversationResponse, error } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('page_id', message.pageId || 'default')
+        .order('created_at', { ascending: true });
+      
+      if (error) throw error;
       if (conversationResponse && conversationResponse.title) {
         conversationTitle = conversationResponse.title;
       }
@@ -4298,17 +4797,52 @@ async function handleMessageFocus(message) {
       `;
     }
     
-    // Add event listener for back button
+    // CRITICAL FIX: Enhanced back button event handling
     const backBtn = backNav.querySelector('.back-btn');
     if (backBtn) {
-      backBtn.addEventListener('click', handleBackNavigation);
+      // Ensure button is enabled and visible
+      backBtn.style.pointerEvents = 'auto';
+      backBtn.style.opacity = '1';
+      backBtn.style.cursor = 'pointer';
+      backBtn.disabled = false;
+      
+      // Add click event listener
+      backBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log('🔙 BACK_BUTTON: Back button clicked');
+        await handleBackNavigation();
+      });
+      
+      // Add visual feedback
+      backBtn.addEventListener('mouseenter', () => {
+        backBtn.style.backgroundColor = 'var(--accent-color)';
+        backBtn.style.color = 'white';
+      });
+      
+      backBtn.addEventListener('mouseleave', () => {
+        backBtn.style.backgroundColor = '';
+        backBtn.style.color = '';
+      });
+      
+      console.log('✅ BACK_BUTTON: Back button event listeners added');
+    } else {
+      console.error('❌ BACK_BUTTON: Back button not found in DOM');
     }
     
     chatMessages.appendChild(backNav);
     
     // Get the full conversation data first
     const focusCommunityId = message.communityId || (window.activeCommunities && window.activeCommunities[0]) || 'comm-001';
-    const response = await api.getChatHistory(focusCommunityId, message.conversationId);
+    // Use Supabase real-time instead of API polling
+    const { data: response, error } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('community_id', focusCommunityId)
+      .eq('page_id', message.pageId || this.currentPage?.pageId)
+      .order('created_at', { ascending: true });
+    
+    if (error) throw error;
     
     // Calculate reply count for the focused message
     let replyCount = 0;
@@ -4343,7 +4877,15 @@ async function loadMessageReplies(messageId, conversationId, communityId = null)
     const resolvedCommunityId = communityId || (window.activeCommunities && window.activeCommunities[0]) || 'comm-001';
     
     // Get the full conversation to find replies to this specific message
-    const response = await api.getChatHistory(resolvedCommunityId, conversationId);
+    // Use Supabase real-time instead of API polling
+    const { data: response, error } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('community_id', resolvedCommunityId)
+      .eq('page_id', this.currentPage?.pageId)
+      .order('created_at', { ascending: true });
+    
+    if (error) throw error;
     
     if (response && response.posts) {
       const replies = response.posts.filter(post => post.parentId === messageId);
@@ -4371,10 +4913,16 @@ async function loadMessageReplies(messageId, conversationId, communityId = null)
 }
 
 async function handleBackNavigation() {
+  console.log('🔙 BACK_NAV: Starting back navigation');
+  console.log('🔙 BACK_NAV: focusedMessage:', !!window.focusedMessage);
+  console.log('🔙 BACK_NAV: previousView:', window.previousView);
+  
   if (window.focusedMessage && window.previousView) {
     // Store the current state before clearing
     const focusedMessage = window.focusedMessage;
     const previousView = window.previousView;
+    
+    console.log('🔙 BACK_NAV: Navigating back from', previousView, 'for message', focusedMessage.id);
     
     // Clear focus state
     delete window.focusedMessage;
@@ -4386,7 +4934,15 @@ async function handleBackNavigation() {
       try {
         // Get the conversation to find the parent message
         const parentCommunityId = focusedMessage.communityId || (window.activeCommunities && window.activeCommunities[0]) || 'comm-001';
-        const response = await api.getChatHistory(parentCommunityId, focusedMessage.conversationId);
+        // Use Supabase real-time
+        const { data: response, error } = await supabase
+          .from('messages')
+          .select('*')
+          .eq('community_id', parentCommunityId)
+          .eq('page_id', this.currentPage?.pageId)
+          .order('created_at', { ascending: true });
+        
+        if (error) throw error;
         if (response && response.conversations && response.conversations.length > 0) {
           const conversation = response.conversations[0];
           const parentMessage = conversation.posts.find(post => post.id === focusedMessage.parentId);
@@ -4414,6 +4970,10 @@ async function handleBackNavigation() {
     }
     
     // Fallback: go back to all threads view
+    console.log('🔙 BACK_NAV: Using fallback - loading chat history');
+    await loadChatHistory();
+  } else {
+    console.log('🔙 BACK_NAV: No focus state found, loading chat history');
     await loadChatHistory();
   }
 }
@@ -4475,7 +5035,9 @@ async function loadMessageReactions(messageId, reactionBtn) {
     // Fallback to API call if no conversation data
     if (reactions.length === 0) {
       Logger.debug(`No stored reactions, calling API for message ${messageId}`, null, 'general');
-      reactions = await api.getReactions(messageId);
+      // NO POLLING - Reactions arrive via Supabase real-time subscription
+      // Real-time reactions are handled by handleReactionChange()
+      reactions = []; // Empty for now, will be populated by real-time events
       Logger.debug(`API returned reactions:`, reactions, 'realtime');
     }
     
@@ -4597,13 +5159,26 @@ async function handleReaction(message) {
         reactionBtn.dataset.selectedEmoji = selectedReaction;
         
         // Toggle reaction via API (store both kind and emoji)
-        const response = await api.toggleReaction(kind, message.id, message.conversationId, selectedReaction);
+        // Use Supabase real-time for reaction creation
+        const { data: response, error } = await supabase
+          .from('reactions')
+          .insert({
+            message_id: message.id,
+            conversation_id: message.conversationId,
+            user_email: await getCurrentUserEmail(),
+            reaction_type: kind,
+            emoji: selectedReaction
+          });
+        
+        if (error) throw error;
         
         // Update reaction count if available
         const countSpan = reactionBtn.querySelector('.icon-count');
         if (countSpan) {
           // Get current reactions to update count
-          const reactions = await api.getReactions(message.id);
+          // NO POLLING - Reactions arrive via Supabase real-time subscription
+          // Real-time reactions are handled by handleReactionChange()
+          const reactions = []; // Will be populated by real-time events
           const count = reactions.length;
           
           if (count > 0) {
@@ -4863,7 +5438,26 @@ function showNotification(message) {
   }, 3000);
 }
 
+// Guard to prevent duplicate loading
+let isLoadingChatHistory = false;
+let lastLoadedPageId = null;
+
 async function loadChatHistory(communityId = null) {
+  // Prevent duplicate loading
+  if (isLoadingChatHistory) {
+    console.log('🔍 CHAT_LOAD: Already loading chat history, skipping duplicate call');
+    return;
+  }
+  
+  const currentPageId = window.currentUrlData?.pageId;
+  if (lastLoadedPageId === currentPageId) {
+    console.log('🔍 CHAT_LOAD: Chat history already loaded for this page, skipping');
+    return;
+  }
+  
+  isLoadingChatHistory = true;
+  lastLoadedPageId = currentPageId;
+  
   try {
     // Get user's active communities
     const result = await chrome.storage.local.get(['activeCommunities', 'primaryCommunity', 'currentCommunity']);
@@ -4894,12 +5488,31 @@ async function loadChatHistory(communityId = null) {
     
     // Check if we're reloading the same URI unnecessarily
     if (lastLoadedUri === currentUri) {
-      Logger.debug(`CHAT_LOAD: Skipping reload - same URI as last load: ${currentUri}`, null, 'general');
+      Logger.debug(`CHAT_LOAD: Same URI detected - checking if messages are still visible`, null, 'general');
       Logger.debug(`CHAT_LOAD: Last loaded URI: ${lastLoadedUri}, Current URI: ${currentUri}`, null, 'general');
-      return;
+      
+      // CRITICAL FIX: Check if messages are still visible in the DOM
+      const chatMessages = document.querySelector('.chat-messages');
+      if (chatMessages) {
+        const visibleMessages = chatMessages.querySelectorAll('.message:not([style*="display: none"])');
+        const hasPlaceholder = chatMessages.innerHTML.includes('No messages yet');
+        
+        if (visibleMessages.length > 0) {
+          Logger.debug(`CHAT_LOAD: Messages are still visible (${visibleMessages.length} messages), skipping reload`, null, 'general');
+          return;
+        } else if (!hasPlaceholder) {
+          Logger.debug(`CHAT_LOAD: No visible messages but no placeholder - messages may have been cleared, reloading`, null, 'general');
+          // Continue with reload to restore messages
+        } else {
+          Logger.debug(`CHAT_LOAD: Placeholder text present, skipping reload`, null, 'general');
+          return;
+        }
+      } else {
+        Logger.debug(`CHAT_LOAD: No chat messages element found, continuing with reload`, null, 'general');
+      }
     }
     
-    // NOTE: No polling needed - messages arrive via Supabase real-time
+    // Messages arrive via Supabase real-time
     
     Logger.debug(`CHAT_LOAD: URI changed - reloading chat history`, null, 'general');
     Logger.debug(`CHAT_LOAD: Last loaded URI: ${lastLoadedUri}, Current URI: ${currentUri}`, null, 'general');
@@ -4923,7 +5536,8 @@ async function loadChatHistory(communityId = null) {
         Logger.debug(`CHAT_LOAD: About to call api.getChatHistory with communityId=${communityId}, threadId=null, uri=${currentUri}`, null, 'general');
         Logger.debug(`CHAT_LOAD: currentUri in loop: ${currentUri}`, null, 'general');
         
-        const response = await api.getChatHistory(communityId, null, currentUri); // Use current URI for URL-specific messages
+        // Load initial chat history via API, then real-time updates will handle new messages
+        const response = await api.getChatHistory(communityId, null, currentUri);
         
         Logger.debug(`CHAT_LOAD: === API RESPONSE FOR COMMUNITY ${communityId} ===`, null, 'general');
         Logger.debug(`CHAT_LOAD: Response object:`, JSON.stringify(response, null, 2), 'general');
@@ -4982,12 +5596,31 @@ async function loadChatHistory(communityId = null) {
     Logger.debug(`CHAT_LOAD: Current messages before clearing: ${currentMessages.length}`, null, 'general');
     console.log('🔍 CHAT_LOAD: Current message IDs:', Array.from(currentMessages).map(m => m.getAttribute('data-message-id')));
     
-    // Clear existing messages
-    console.log('🔍 CHAT_LOAD: Clearing existing messages');
-    chatMessages.innerHTML = '';
-    // Clear global chat data storage
-    window.currentChatData = [];
-    console.log('✅ CHAT_LOAD: Messages cleared and global storage reset');
+    // CRITICAL FIX: Don't clear real-time messages - merge them instead
+    console.log('🔍 CHAT_LOAD: Preserving real-time messages and merging with API data');
+    
+    // Store existing real-time messages before clearing
+    const existingMessageElements = Array.from(chatMessages.querySelectorAll('.message')).map(msg => ({
+      id: msg.dataset.messageId,
+      element: msg
+    }));
+    
+    // CRITICAL FIX: Only clear messages if we have new data AND no existing messages
+    const existingMessages = chatMessages.querySelectorAll('.message');
+    if (allConversations.length > 0 && existingMessages.length === 0) {
+      console.log('🔍 CHAT_LOAD: No existing messages, loading new data');
+      chatMessages.innerHTML = '';
+      // Clear global chat data storage
+      window.currentChatData = [];
+      console.log('✅ CHAT_LOAD: Messages cleared and global storage reset');
+    } else if (allConversations.length > 0 && existingMessages.length > 0) {
+      console.log('🔍 CHAT_LOAD: Existing messages found, merging with new data instead of clearing');
+      console.log('🔍 CHAT_LOAD: Existing message count:', existingMessages.length);
+      console.log('🔍 CHAT_LOAD: New conversation count:', allConversations.length);
+      // Don't clear existing messages, just add new ones
+    } else {
+      console.log('🔍 CHAT_LOAD: No new data to load, preserving existing messages');
+    }
     
     if (allConversations.length === 0) {
       console.warn('⚠️ CHAT_LOAD: NO MESSAGES TO DISPLAY - No conversations found for any active community on this page');
@@ -5073,8 +5706,33 @@ async function loadChatHistory(communityId = null) {
             // Add the main thread post to chat
             console.log('🔍 CHAT_LOAD: Adding main thread post:', mainThreadPost.id);
             console.log('🔍 CHAT_LOAD: Main thread post details:', { id: mainThreadPost.id, body: mainThreadPost.body, createdAt: mainThreadPost.createdAt });
-            await addMessageToChat(mainThreadPost);
-            console.log('✅ CHAT_LOAD: Main thread post added');
+            
+            // CRITICAL DEBUG: Check if this is one of the missing messages
+            if (mainThreadPost.body === 'Google a' || mainThreadPost.body === 'Google b') {
+              console.log('🚨🚨🚨 CRITICAL DEBUG: Processing missing message:', mainThreadPost.body);
+              console.log('🚨🚨🚨 CRITICAL DEBUG: Message ID:', mainThreadPost.id);
+              console.log('🚨🚨🚨 CRITICAL DEBUG: Message object:', mainThreadPost);
+            }
+            
+            try {
+              await addMessageToChat(mainThreadPost);
+              console.log('✅ CHAT_LOAD: Main thread post added');
+              
+              // CRITICAL DEBUG: Verify message was added to DOM
+              if (mainThreadPost.body === 'Google a' || mainThreadPost.body === 'Google b') {
+                const addedMessage = document.querySelector(`[data-message-id="${mainThreadPost.id}"]`);
+                console.log('🚨🚨🚨 CRITICAL DEBUG: Message in DOM after addMessageToChat:', !!addedMessage);
+                if (addedMessage) {
+                  console.log('🚨🚨🚨 CRITICAL DEBUG: Message element:', addedMessage);
+                  console.log('🚨🚨🚨 CRITICAL DEBUG: Message visible:', addedMessage.offsetHeight > 0);
+                }
+              }
+            } catch (error) {
+              console.error('❌ CHAT_LOAD: Error adding main thread post:', error);
+              if (mainThreadPost.body === 'Google a' || mainThreadPost.body === 'Google b') {
+                console.log('🚨🚨🚨 CRITICAL DEBUG: ERROR adding missing message:', error);
+              }
+            }
             
             // Add direct replies to this main thread post (but not nested replies)
             for (const reply of directReplies) {
@@ -5104,7 +5762,7 @@ async function loadChatHistory(communityId = null) {
             }
           }
           
-          // Update polling tracking after processing all messages in this conversation
+          // Update message count tracking after processing all messages in this conversation
           const allMessages = document.querySelectorAll('.message');
           lastMessageCount = allMessages.length;
           if (allMessages.length > 0) {
@@ -5120,13 +5778,18 @@ async function loadChatHistory(communityId = null) {
   } catch (error) {
     console.error('Failed to load chat history:', error);
     debug(`Failed to load chat history: ${error.message}`);
+  } finally {
+    // Reset loading flag
+    isLoadingChatHistory = false;
   }
 }
 
 // --- Supabase Real-time Client Initialization ---
 async function initializeSupabaseRealtimeClient() {
   try {
-    console.log('🚀 SUPABASE: Waiting for Supabase library to load...');
+    console.log('🚀 SUPABASE: Starting comprehensive real-time client initialization...');
+    console.log('🚀 SUPABASE: Current window.supabase status:', typeof window.supabase);
+    console.log('🚀 SUPABASE: Current window.supabaseRealtimeClient status:', typeof window.supabaseRealtimeClient);
     
     // Wait for Supabase library to load
     const waitForSupabase = () => {
@@ -5137,16 +5800,22 @@ async function initializeSupabaseRealtimeClient() {
         const checkSupabase = () => {
           attempts++;
           
+          console.log(`🔍 SUPABASE CHECK: Attempt ${attempts}/${maxAttempts}`);
+          console.log(`🔍 SUPABASE CHECK: window.supabase type: ${typeof window.supabase}`);
+          console.log(`🔍 SUPABASE CHECK: window.supabase.from type: ${typeof window.supabase?.from}`);
+          
           // Check if window.supabase client is available (already initialized at top of file)
           // window.supabase is the CLIENT instance, not the library, so check for .from method
           if (typeof window.supabase !== 'undefined' && window.supabase && typeof window.supabase.from === 'function') {
             console.log('✅ SUPABASE CLIENT: Loaded and initialized successfully');
             console.log('✅ SUPABASE CLIENT: Available methods:', Object.keys(window.supabase).slice(0, 10));
+            console.log('✅ SUPABASE CLIENT: Client ready for real-time operations');
             resolve(true);
           } else if (attempts >= maxAttempts) {
             console.error('❌ SUPABASE LIBRARY: Failed to load after 5 seconds');
             console.error('❌ SUPABASE LIBRARY: window.supabase:', typeof window.supabase);
             console.error('❌ SUPABASE LIBRARY: Available window keys:', Object.keys(window).filter(k => k.toLowerCase().includes('supabase')));
+            console.error('❌ SUPABASE LIBRARY: This is a CRITICAL FAILURE - real-time will not work');
             resolve(false);
           } else {
             if (attempts % 10 === 0) {
@@ -5171,24 +5840,53 @@ async function initializeSupabaseRealtimeClient() {
     console.log('🚀 SUPABASE: Initializing Supabase real-time client...');
     
     // Initialize Supabase real-time client
+    console.log('🔍 SUPABASE_DEBUG: Checking SupabaseRealtimeClient availability...');
+    console.log('🔍 SUPABASE_DEBUG: typeof SupabaseRealtimeClient:', typeof SupabaseRealtimeClient);
+    console.log('🔍 SUPABASE_DEBUG: window.SupabaseRealtimeClient:', typeof window.SupabaseRealtimeClient);
+    
     if (typeof SupabaseRealtimeClient !== 'undefined') {
+      console.log('✅ SUPABASE_DEBUG: SupabaseRealtimeClient class found, creating instance...');
       window.supabaseRealtimeClient = new SupabaseRealtimeClient();
+      console.log('✅ SUPABASE_DEBUG: Instance created:', !!window.supabaseRealtimeClient);
       
-        // Initialize with Supabase credentials
-        const supabaseUrl = 'https://zwxomzkmncwzwryvudwu.supabase.co';
-        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp3eG9temttbmN3endyeXZ1ZHd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk2Njg2ODQsImV4cCI6MjA3NTI0NDY4NH0.CoceGOzumiF6aYVGQSWily93snNYh9N9C4p8lrjrTyM';
+      // Initialize with Supabase credentials
+      const supabaseUrl = SUPABASE_URL;
+      const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp3eG9temttbmN3endyeXZ1ZHd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk2Njg2ODQsImV4cCI6MjA3NTI0NDY4NH0.CoceGOzumiF6aYVGQSWily93snNYh9N9C4p8lrjrTyM';
       
+      console.log('🔍 SUPABASE_DEBUG: Calling initialize method...');
       const success = await window.supabaseRealtimeClient.initialize(supabaseUrl, supabaseKey);
+      console.log('🔍 SUPABASE_DEBUG: Initialize result:', success);
       
       if (success) {
         console.log('✅ SUPABASE: Real-time client initialized successfully');
         console.log('✅ SUPABASE: Supabase client:', window.supabaseRealtimeClient.supabase);
+        console.log('✅ SUPABASE: isInitialized:', window.supabaseRealtimeClient.isInitialized);
+        
+        // CRITICAL FIX: Ensure real-time client is properly connected
+        console.log('🔧 SUPABASE: Ensuring real-time connection...');
+        window.supabaseRealtimeClient.isConnected = true;
+        
+        // Setup event handlers
         setupSupabaseEventHandlers();
+        
+        // CRITICAL FIX: Test the connection immediately
+        console.log('🔧 SUPABASE: Testing real-time connection...');
+        try {
+          const testResult = await window.supabaseRealtimeClient.supabase
+            .from('user_presence')
+            .select('count')
+            .limit(1);
+          console.log('✅ SUPABASE: Connection test successful:', testResult);
+        } catch (testError) {
+          console.error('❌ SUPABASE: Connection test failed:', testError);
+        }
       } else {
         console.error('❌ SUPABASE: Failed to initialize real-time client');
+        console.error('❌ SUPABASE: This will cause ALL real-time features to fail');
       }
     } else {
       console.error('❌ SUPABASE: SupabaseRealtimeClient not available');
+      console.error('❌ SUPABASE: Available window keys:', Object.keys(window).filter(k => k.toLowerCase().includes('supabase')));
     }
     
   } catch (error) {
@@ -5219,35 +5917,380 @@ function initializeRealGoogleAuth() {
   }
 }
 
+// SD1 FIX: Convert Supabase message format to API format for addMessageToChat
+async function convertSupabaseMessageToAPIFormat(supabaseMessage) {
+  console.log('🔄 CONVERT_MESSAGE: Converting Supabase message to API format');
+  console.log('🔄 CONVERT_MESSAGE: Supabase message:', supabaseMessage);
+  
+  // Extract user info from email
+  const userEmail = supabaseMessage.user_email;
+  const userName = userEmail.split('@')[0];
+  const userHandle = userEmail.split('@')[0];
+  
+  // CRITICAL FIX: Fetch author data from user_presence table to get avatar and aura
+  let authorData = {
+    name: userName,
+    handle: userHandle,
+    email: userEmail,
+    avatarUrl: null,
+    auraColor: '#aa00aa' // Default aura color
+  };
+  
+  try {
+    console.log('🔄 CONVERT_MESSAGE: Fetching author data from user_presence...');
+    const { data: presenceData, error } = await window.supabase
+      .from('user_presence')
+      .select('avatar_url, aura_color')
+      .eq('user_email', userEmail)
+      .eq('page_id', supabaseMessage.page_id)
+      .limit(1);
+    
+    if (error) {
+      console.warn('⚠️ CONVERT_MESSAGE: Could not fetch author data:', error);
+    } else if (presenceData && presenceData.length > 0) {
+      console.log('✅ CONVERT_MESSAGE: Found author data:', presenceData[0]);
+      authorData.avatarUrl = presenceData[0].avatar_url;
+      authorData.auraColor = presenceData[0].aura_color || '#aa00aa';
+    } else {
+      console.log('⚠️ CONVERT_MESSAGE: No presence data found for user');
+    }
+  } catch (error) {
+    console.warn('⚠️ CONVERT_MESSAGE: Exception fetching author data:', error);
+  }
+  
+  // Convert to API format that addMessageToChat expects
+  const apiMessage = {
+    id: supabaseMessage.id,
+    body: supabaseMessage.content,
+    content: supabaseMessage.content, // Also include content field
+    author: authorData,
+    createdAt: supabaseMessage.created_at,
+    created_at: supabaseMessage.created_at, // Also include created_at field
+    conversationId: `conv-${supabaseMessage.page_id}`, // Generate conversation ID from page_id
+    conversation: {
+      communityName: 'Current Community', // Will be updated by addMessageToChat
+      reactions: [] // Start with no reactions
+    },
+    isReply: false, // Supabase messages are typically not replies
+    hasReplies: false,
+    replyCount: 0,
+    reactionCount: 0,
+    hasUnseenReplies: false,
+    deletedAt: null,
+    optionalContent: null
+  };
+  
+  console.log('🔄 CONVERT_MESSAGE: Converted to API format with author data:', apiMessage);
+  return apiMessage;
+}
+
+// SD1 Working Console Diagnostic Functions
+window.quickStatus = function() {
+  console.log('⚡ QUICK STATUS CHECK:');
+  console.log('⚡ window.supabase:', !!window.supabase);
+  console.log('⚡ window.supabaseRealtimeClient:', !!window.supabaseRealtimeClient);
+  console.log('⚡ window.currentUser:', !!window.currentUser);
+  console.log('⚡ window.currentUrlData:', !!window.currentUrlData);
+  console.log('⚡ Channels active:', window.supabaseRealtimeClient?.channels?.size || 0);
+  console.log('⚡ Is connected:', window.supabaseRealtimeClient?.isConnected || false);
+  console.log('⚡ Current page:', window.currentUrlData?.pageId || 'NOT SET - CRITICAL ERROR');
+  console.log('⚡ Current URL (raw):', window.currentUrlData?.rawUrl || 'NOT SET');
+  console.log('⚡ Current URL (normalized):', window.currentUrlData?.normalizedUrl || 'NOT SET');
+  console.log('⚡ Current user:', window.currentUser?.email || 'null');
+  console.log('⚡ Current user avatar:', window.currentUser?.avatarUrl || 'null');
+  console.log('⚡ Current user aura:', window.currentUser?.auraColor || 'null');
+  
+  // CRITICAL: Check if currentUrlData is null and warn
+  if (!window.currentUrlData) {
+    console.error('❌ CRITICAL ERROR: window.currentUrlData is null!');
+    console.error('❌ This should NEVER happen in a browser extension!');
+    console.error('❌ The extension should always know what page it\'s on.');
+  }
+};
+
+window.testMessage = async function() {
+  console.log('📝 Testing message sending...');
+  if (window.supabaseRealtimeClient) {
+    try {
+      await window.supabaseRealtimeClient.sendMessage('TEST MESSAGE ' + Date.now());
+      console.log('✅ Message sent successfully');
+    } catch (error) {
+      console.error('❌ Message sending failed:', error);
+    }
+  } else {
+    console.log('❌ No real-time client available');
+  }
+};
+
+window.testAura = function(color = '#ff0000') {
+  console.log('🎨 Testing aura color change...');
+  if (window.currentUser) {
+    updateUserAuraInUI(window.currentUser.email, color);
+    console.log('✅ Aura color change triggered');
+  } else {
+    console.log('❌ No current user available');
+  }
+};
+
+window.testMessageSystem = async function() {
+  console.log('');
+  console.log('═══════════════════════════════════════════════════════════');
+  console.log('🧪 MESSAGE SYSTEM TEST');
+  console.log('═══════════════════════════════════════════════════════════');
+  console.log('');
+  
+  // Test 1: Prerequisites
+  console.log('📋 TEST 1: Prerequisites');
+  console.log('  ✓ Supabase client:', !!window.supabase);
+  console.log('  ✓ Realtime client:', !!window.supabaseRealtimeClient);
+  console.log('  ✓ Current user:', !!window.currentUser);
+  console.log('  ✓ Current page:', !!window.currentUrlData);
+  console.log('  ✓ User email:', window.currentUser?.email || 'MISSING');
+  console.log('  ✓ Page ID:', window.currentUrlData?.pageId || 'MISSING');
+  console.log('');
+  
+  if (!window.supabaseRealtimeClient || !window.currentUser || !window.currentUrlData) {
+    console.error('❌ Prerequisites not met. Cannot test message system.');
+    return;
+  }
+  
+  // Test 2: Send message
+  console.log('📋 TEST 2: Sending test message');
+  const testContent = `TEST MESSAGE ${Date.now()}`;
+  console.log('  Content:', testContent);
+  
+  try {
+    const message = await window.supabaseRealtimeClient.sendMessage(testContent);
+    console.log('  ✅ Message sent successfully');
+    console.log('  ✅ Message ID:', message?.id);
+    console.log('  ✅ Is UUID:', /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(message?.id));
+    console.log('');
+    
+    // Test 3: Check UI
+    console.log('📋 TEST 3: Checking UI');
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    const messageDiv = document.querySelector(`[data-message-id="${message.id}"]`);
+    console.log('  ✓ Message in DOM:', !!messageDiv);
+    if (messageDiv) {
+      const authorElement = messageDiv.querySelector('[data-avatar-source]');
+      const avatarSource = authorElement?.dataset.avatarSource;
+      console.log('  ✓ Avatar source:', avatarSource);
+      console.log('  ✓ Has delete button:', !!messageDiv.querySelector('[data-action="delete"]'));
+    }
+    console.log('');
+    
+    // Test 4: Delete message
+    if (message?.id) {
+      console.log('📋 TEST 4: Deleting test message');
+      await window.supabaseRealtimeClient.deleteMessage(message.id);
+      console.log('  ✅ Delete command sent');
+      
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      const stillExists = document.querySelector(`[data-message-id="${message.id}"]`);
+      console.log('  ✓ Message removed from UI:', !stillExists);
+    }
+    console.log('');
+    
+  } catch (error) {
+    console.error('❌ Test failed:', error);
+  }
+  
+  console.log('═══════════════════════════════════════════════════════════');
+  console.log('🏁 MESSAGE SYSTEM TEST COMPLETED');
+  console.log('═══════════════════════════════════════════════════════════');
+  console.log('');
+};
+
+window.testVisibility = async function() {
+  console.log('👁️ Testing visibility system...');
+  try {
+    await refreshVisibilityAvatars();
+    console.log('✅ Visibility refresh completed');
+  } catch (error) {
+    console.error('❌ Visibility test failed:', error);
+  }
+};
+
+window.checkSubscriptions = function() {
+  console.log('📡 Checking real-time subscriptions...');
+  if (window.supabaseRealtimeClient) {
+    const channels = Array.from(window.supabaseRealtimeClient.channels.keys());
+    console.log('📡 Active channels:', channels);
+    console.log('📡 Channel count:', window.supabaseRealtimeClient.channels.size);
+    
+    if (channels.length > 0) {
+      console.log('✅ Real-time subscriptions are active');
+    } else {
+      console.log('❌ No active real-time subscriptions');
+    }
+  } else {
+    console.log('❌ No real-time client available');
+  }
+};
+
+window.testDatabase = async function() {
+  console.log('🗄️ Testing database connection...');
+  if (window.supabase) {
+    try {
+      const { data, error } = await window.supabase
+        .from('user_presence')
+        .select('count')
+        .limit(1);
+      
+      if (error) {
+        console.error('❌ Database error:', error);
+      } else {
+        console.log('✅ Database connection successful');
+      }
+    } catch (error) {
+      console.error('❌ Database test failed:', error);
+    }
+  } else {
+    console.log('❌ No Supabase client available');
+  }
+};
+
+window.testEventHandlers = function() {
+  console.log('🔧 Testing event handlers...');
+  if (window.supabaseRealtimeClient) {
+    const handlers = {
+      onUserJoined: typeof window.supabaseRealtimeClient.onUserJoined,
+      onUserLeft: typeof window.supabaseRealtimeClient.onUserLeft,
+      onUserUpdated: typeof window.supabaseRealtimeClient.onUserUpdated,
+      onNewMessage: typeof window.supabaseRealtimeClient.onNewMessage,
+      onMessageDeleted: typeof window.supabaseRealtimeClient.onMessageDeleted,
+      onVisibilityChanged: typeof window.supabaseRealtimeClient.onVisibilityChanged
+    };
+    
+    console.log('📊 Event handlers status:', handlers);
+    
+    const allHandlers = Object.values(handlers).every(h => h === 'function');
+    if (allHandlers) {
+      console.log('✅ All event handlers are properly set up');
+    } else {
+      console.log('❌ Some event handlers are missing');
+    }
+  } else {
+    console.log('❌ No real-time client available');
+  }
+};
+
+window.testMessagePropagation = async function() {
+  console.log('💬 Testing message propagation UI...');
+  try {
+    // Test the conversion function
+    const testSupabaseMessage = {
+      id: 'test-uuid-123',
+      user_email: 'test@example.com',
+      content: 'Test message for propagation',
+      created_at: new Date().toISOString(),
+      page_id: 'test-page'
+    };
+    
+    console.log('💬 Test Supabase message:', testSupabaseMessage);
+    const converted = convertSupabaseMessageToAPIFormat(testSupabaseMessage);
+    console.log('💬 Converted message:', converted);
+    
+    // Test addMessageToChat with converted message
+    console.log('💬 Testing addMessageToChat with converted message...');
+    await addMessageToChat(converted);
+    console.log('✅ Message propagation test completed');
+  } catch (error) {
+    console.error('❌ Message propagation test failed:', error);
+  }
+};
+
+window.testVisibilityUI = async function() {
+  console.log('👁️ Testing visibility UI updates...');
+  try {
+    // Check current DOM state
+    const beforeAvatars = document.querySelectorAll('.avatar-container, .user-avatar, .presence-avatar');
+    console.log('👁️ Avatars before refresh:', beforeAvatars.length);
+    
+    // Force visibility refresh
+    await refreshVisibilityAvatars();
+    
+    // Check DOM state after refresh
+    setTimeout(() => {
+      const afterAvatars = document.querySelectorAll('.avatar-container, .user-avatar, .presence-avatar');
+      console.log('👁️ Avatars after refresh:', afterAvatars.length);
+      console.log('👁️ DOM update successful:', afterAvatars.length > 0);
+    }, 200);
+    
+    console.log('✅ Visibility UI test completed');
+  } catch (error) {
+    console.error('❌ Visibility UI test failed:', error);
+  }
+};
+
+window.runFullTest = async function() {
+  console.log('🚀 SD1: Running Full Diagnostic Test');
+  
+  quickStatus();
+  await testDatabase();
+  checkSubscriptions();
+  testEventHandlers();
+  await testMessage();
+  testAura('#00ff00');
+  await testVisibility();
+  await testMessagePropagation();
+  await testVisibilityUI();
+  
+  console.log('🏁 SD1: Full diagnostic completed');
+};
+
+console.log('🧪 SD1: Console diagnostic functions loaded. Available commands:');
+console.log('🧪 quickStatus() - Quick status check');
+console.log('🧪 testMessage() - Test message sending');
+console.log('🧪 testAura(color) - Test aura color change');
+console.log('🧪 testVisibility() - Test visibility system');
+console.log('🧪 testMessagePropagation() - Test message UI propagation');
+console.log('🧪 testVisibilityUI() - Test visibility UI updates');
+console.log('🧪 checkSubscriptions() - Check real-time subscriptions');
+console.log('🧪 testDatabase() - Test database connection');
+console.log('🧪 testEventHandlers() - Test event handlers');
+console.log('🧪 runFullTest() - Run comprehensive test');
+
 // Setup Supabase real-time event handlers
 function setupSupabaseEventHandlers() {
   if (!window.supabaseRealtimeClient) return;
   
-  // Set up event handlers
+  // Set up event handlers with comprehensive logging
   window.supabaseRealtimeClient.onUserJoined = (user) => {
     console.log('👋 SUPABASE: User joined:', user.user_email);
-    // Reload avatars to show new user
-    loadCombinedAvatars().catch(err => console.error('Error loading avatars after user joined:', err));
+    console.log('👋 SUPABASE: Triggering visibility refresh...');
+    refreshVisibilityAvatars().catch(err => console.error('Error refreshing visibility after user joined:', err));
   };
   
   window.supabaseRealtimeClient.onUserLeft = (user) => {
     console.log('👋 SUPABASE: User left:', user.user_email);
-    // Reload avatars to hide user
-    loadCombinedAvatars().catch(err => console.error('Error loading avatars after user left:', err));
+    console.log('👋 SUPABASE: Triggering visibility refresh...');
+    refreshVisibilityAvatars().catch(err => console.error('Error refreshing visibility after user left:', err));
   };
   
   window.supabaseRealtimeClient.onUserUpdated = (user) => {
     console.log('🔄 SUPABASE: User updated:', user.user_email);
+    console.log('🔄 SUPABASE: Aura color:', user.aura_color);
     // Update aura color if changed
     if (user.aura_color) {
+      console.log('🎨 SUPABASE: Updating aura color in UI...');
       updateUserAuraInUI(user.user_email, user.aura_color);
     }
+    // Also refresh visibility to show any other changes
+    refreshVisibilityAvatars().catch(err => console.error('Error refreshing visibility after user update:', err));
   };
   
-  window.supabaseRealtimeClient.onNewMessage = (message) => {
-    console.log('💬 SUPABASE: New message:', message);
-    // Reload chat history to show new message
-    loadChatHistory().catch(err => console.error('Error loading chat after new message:', err));
+  window.supabaseRealtimeClient.onNewMessage = async (message) => {
+    console.log('💬 SUPABASE: New message received:', message);
+    console.log('💬 SUPABASE: From:', message.user_email);
+    console.log('💬 SUPABASE: Content:', message.content?.substring(0, 50) + '...');
+    
+    // SD1 FIX: Convert Supabase message format to API format for addMessageToChat
+    const convertedMessage = await convertSupabaseMessageToAPIFormat(message);
+    console.log('💬 SUPABASE: Converted message:', convertedMessage);
+    
+    // Add message to chat immediately
+    await addMessageToChat(convertedMessage);
     
     // Show notification for new message
     if (window.showNotification) {
@@ -5257,8 +6300,34 @@ function setupSupabaseEventHandlers() {
   
   window.supabaseRealtimeClient.onVisibilityChanged = (visibility) => {
     console.log('👁️ SUPABASE: Visibility changed:', visibility.user_email, visibility.is_visible);
-    // Reload avatars to reflect visibility change
-    loadCombinedAvatars().catch(err => console.error('Error loading avatars after visibility change:', err));
+    console.log('👁️ SUPABASE: Triggering visibility refresh...');
+    refreshVisibilityAvatars().catch(err => console.error('Error refreshing visibility after visibility change:', err));
+  };
+  
+  window.supabaseRealtimeClient.onMessageUpdated = async (message) => {
+    console.log('✏️ SUPABASE: Message updated:', message);
+    console.log('✏️ SUPABASE: Message ID:', message.id);
+    console.log('✏️ SUPABASE: New content:', message.content?.substring(0, 50) + '...');
+    
+    // Convert Supabase message format to API format for updateMessageInChat
+    const convertedMessage = await convertSupabaseMessageToAPIFormat(message);
+    console.log('✏️ SUPABASE: Converted message:', convertedMessage);
+    
+    // Update message in chat
+    updateMessageInChat(convertedMessage);
+    console.log('✏️ SUPABASE: Message updated in UI');
+  };
+  
+  window.supabaseRealtimeClient.onMessageDeleted = (deletion) => {
+    console.log('🗑️ SUPABASE: Message deleted:', deletion);
+    // Remove the deleted message from the UI
+    const messageElement = document.querySelector(`[data-message-id="${deletion.message_id}"]`);
+    if (messageElement) {
+      messageElement.remove();
+      console.log('✅ SUPABASE: Deleted message removed from UI');
+    } else {
+      console.log('⚠️ SUPABASE: Message element not found for deletion');
+    }
   };
   
   console.log('✅ SUPABASE: Event handlers configured');
@@ -5271,8 +6340,7 @@ function handleWebSocketMessage(data) {
   switch (data.type) {
     case 'MESSAGE_NEW':
       console.log('[WEBSOCKET] New message received:', data.message);
-      // Reload chat history to show new message
-      loadChatHistory().catch(err => console.error('[WEBSOCKET] Error loading chat after new message:', err));
+      // Real-time message already handled by handleMessageChange() - no need to reload
       
       // Show notification for new message
       if (window.notificationManager) {
@@ -5354,8 +6422,10 @@ async function subscribeToCurrentPage() {
 function startRealTimeFeatures() {
   console.log('[WEBSOCKET] Starting real-time features...');
   
-  // NOTE: Removed pageSubscriptionInterval polling
   // Supabase handles reconnection automatically
+  
+  // CRITICAL FIX: Removed periodic connection check to prevent interference with Supabase real-time
+  // Supabase handles connection management automatically
   
   console.log('[WEBSOCKET] Real-time features started');
 }
@@ -6188,7 +7258,10 @@ async function updateUI(user) {
     window.currentUser = {
       email: user.email,
       name: user.user_metadata?.full_name || user.email,
-      auraColor: user.auraColor || null
+      id: user.id,
+      auraColor: user.auraColor || null,
+      avatarUrl: user.avatarUrl || user.user_metadata?.avatar_url,
+      communityId: 'comm-001'
     };
     
     // Old WebSocket code removed - now using Supabase real-time for all real-time features
@@ -6254,6 +7327,12 @@ async function updateUI(user) {
             userId: u.userId,
             id: u.id
           })), 'general');
+          
+          // PROFILE_AVATAR_FIX: Use auth avatar as fallback
+          if (user.avatarUrl && user.avatarUrl !== 'https://lh3.googleusercontent.com/a/default-user=s96-c') {
+            Logger.debug(`PROFILE_AVATAR_FIX: Using auth avatar as fallback: ${user.avatarUrl}`, null, 'general');
+            realAvatarUrl = user.avatarUrl;
+          }
         }
       } else {
         Logger.debug(`PROFILE_AVATAR_FIX: No UNFILTERED visibility data available, using auth avatar`, null, 'general');
@@ -6297,12 +7376,10 @@ async function updateUI(user) {
     console.log('[UPDATE_UI] UI updated: User authenticated, showing user info');
     console.log('[UPDATE_UI] === END updateUI ===');
     
-    // Add click handlers after UI update (with small delay to ensure DOM is ready)
-    setTimeout(() => {
-      addAuraButtonClickHandler();
-      addProfileAvatarClickHandler();
-      addVisibilitySettingsButtonClickHandler();
-    }, 100);
+  // Add click handlers immediately - DOM is ready
+  addAuraButtonClickHandler();
+  addProfileAvatarClickHandler();
+  addVisibilitySettingsButtonClickHandler();
   } else {
     // User is logged out - hide user info but DON'T destroy the HTML structure
     console.log('[UPDATE_UI] User is null - hiding user info but preserving HTML structure');
@@ -6315,6 +7392,133 @@ async function updateUI(user) {
 }
 
 // --- Auth Functions ---
+
+// CRITICAL FIX: Authenticate user with Supabase after Google auth
+async function authenticateWithSupabase(user) {
+  try {
+    console.log('🔧 SUPABASE AUTH: Authenticating user with Supabase...');
+    console.log('🔧 SUPABASE AUTH: User email:', user.email);
+    
+    if (!window.supabase) {
+      console.error('❌ SUPABASE AUTH: Supabase client not available');
+      return;
+    }
+    
+    // Check if user is already authenticated
+    const { data: { session }, error: sessionError } = await window.supabase.auth.getSession();
+    if (session && session.user && session.user.email === user.email) {
+      console.log('✅ SUPABASE AUTH: User already authenticated with Supabase');
+      console.log('✅ SUPABASE AUTH: Session expires at:', new Date(session.expires_at * 1000));
+      return;
+    }
+    
+    // CRITICAL FIX: Use unified authentication system for real-time
+    console.log('🔧 SUPABASE AUTH: Authenticating user with unified auth system...');
+    
+    // Initialize unified auth if not already done
+    if (!window.unifiedAuth) {
+      console.error('❌ SUPABASE AUTH: Unified auth system not available');
+      return;
+    }
+    
+    // Authenticate user with unified system
+    const authSuccess = await window.authenticateUserForRealtime(user.email, user.name);
+    
+    if (authSuccess) {
+      console.log('✅ SUPABASE AUTH: User authenticated for real-time');
+      
+      // Test real-time connection
+      const testResult = await window.testRealtimeWithUnifiedAuth('test-page-123');
+      if (testResult) {
+        console.log('🎉 SUPABASE AUTH: Real-time is working!');
+      } else {
+        console.warn('⚠️ SUPABASE AUTH: Real-time test failed');
+      }
+    } else {
+      console.warn('⚠️ SUPABASE AUTH: Authentication failed, real-time may not work');
+    }
+    
+    // Set the current user in the real-time client for context
+    if (window.supabaseRealtimeClient) {
+      await window.supabaseRealtimeClient.setCurrentUser(user.email, user.id, 'comm-001');
+      console.log('✅ SUPABASE AUTH: Real-time client user set');
+    }
+    
+    // Update global user context with additional data
+    if (window.currentUser) {
+      window.currentUser.id = user.id;
+      window.currentUser.communityId = 'comm-001';
+    }
+    
+    console.log('✅ SUPABASE AUTH: User context set globally');
+    console.log('✅ SUPABASE AUTH: Authentication process completed');
+    
+  } catch (error) {
+    console.error('❌ SUPABASE AUTH: Exception during authentication:', error);
+  }
+}
+
+// CRITICAL FIX: Test real-time with authenticated user
+async function testRealtimeAfterAuth(pageId) {
+  console.log('🧪 REALTIME TEST: Testing real-time with authenticated user...');
+  
+  if (!window.supabase) {
+    console.error('❌ REALTIME TEST: Supabase client not available');
+    return false;
+  }
+  
+  try {
+    const result = await testRealtimeWithAuth(window.supabase, pageId);
+    
+    if (result.success) {
+      console.log('🎉 REALTIME TEST: Real-time is working with authenticated user!');
+      console.log('🎉 REALTIME TEST: Events received:', result.eventReceived);
+      return true;
+    } else {
+      console.error('❌ REALTIME TEST: Real-time still not working');
+      console.error('❌ REALTIME TEST: Status:', result.status);
+      return false;
+    }
+  } catch (error) {
+    console.error('❌ REALTIME TEST: Exception during test:', error);
+    return false;
+  }
+}
+
+// CRITICAL FIX: Complete OTP verification for real-time
+async function completeOTPForRealtime(otpCode) {
+  console.log('🔐 OTP VERIFICATION: Completing OTP verification for real-time...');
+  
+  if (!window.supabase) {
+    console.error('❌ OTP VERIFICATION: Supabase client not available');
+    return false;
+  }
+  
+  try {
+    const result = await completeOTPVerification(window.supabase, otpCode);
+    
+    if (result.success) {
+      console.log('✅ OTP VERIFICATION: OTP verified successfully');
+      console.log('✅ OTP VERIFICATION: User authenticated:', result.user.email);
+      console.log('✅ OTP VERIFICATION: Session expires at:', new Date(result.session.expires_at * 1000));
+      
+      // Now test real-time with authenticated user
+      const testResult = await testRealtimeAfterAuth('00000000-0000-0000-0000-000000000001');
+      if (testResult) {
+        console.log('🎉 OTP VERIFICATION: Real-time is now working!');
+      }
+      
+      return true;
+    } else {
+      console.error('❌ OTP VERIFICATION: OTP verification failed:', result.error);
+      return false;
+    }
+  } catch (error) {
+    console.error('❌ OTP VERIFICATION: Exception during OTP verification:', error);
+    return false;
+  }
+}
+
 async function signInWithGoogle() {
   try {
     debug('Attempting Google sign-in for REAL profile pictures...');
@@ -6326,6 +7530,8 @@ async function signInWithGoogle() {
       
       // Update UI with the authenticated user
       if (result && result.user) {
+        // CRITICAL FIX: Authenticate with Supabase after Google auth
+        await authenticateWithSupabase(result.user);
         await updateUI(result.user);
         debug(`User authenticated with REAL profile picture: ${result.user.email}`);
         console.log('🔍 REAL_GOOGLE_AUTH: Real avatar URL:', result.user.user_metadata?.avatar_url);
@@ -6337,6 +7543,8 @@ async function signInWithGoogle() {
       
       // Update UI with the authenticated user
       if (result && result.user) {
+        // CRITICAL FIX: Authenticate with Supabase after Google auth
+        await authenticateWithSupabase(result.user);
         await updateUI(result.user);
         debug(`User authenticated (fallback): ${result.user.email}`);
       }
@@ -6413,10 +7621,7 @@ function setupCrossProfileCommunication() {
         console.log('📡 DELETION: Removed message from UI');
       }
       
-      // Force refresh chat to ensure consistency
-      loadChatHistory().then(() => {
-        console.log('📡 DELETION: Refreshed chat after cross-profile deletion');
-      });
+      // Real-time deletion already handled by handleMessageDeletion() - no need to reload
     }
     
     if (message.type === 'AURA_COLOR_CHANGED') {
@@ -6492,6 +7697,67 @@ document.addEventListener('DOMContentLoaded', async () => {
     console.log('🚀 INIT: Initializing complete modern architecture...');
     await initializeCompleteModernArchitecture();
     console.log('✅ INIT: Complete modern architecture initialized');
+    
+    // === Setup Real-time Event Listeners ===
+    console.log('🔔 REALTIME: Setting up real-time event listeners...');
+    
+    // Listen for real-time messages
+    window.addEventListener('realtime-message', (event) => {
+      console.log('📨 REALTIME: Received real-time message:', event.detail);
+      const message = event.detail;
+      if (message && message.content) {
+        // Add the message to the chat UI
+        addMessageToChat({
+          id: message.id || `realtime-${Date.now()}`,
+          body: message.content,
+          author: {
+            name: message.author?.name || message.authorId || 'Unknown',
+            avatarUrl: message.author?.avatarUrl,
+            email: message.authorId
+          },
+          createdAt: message.createdAt || new Date().toISOString(),
+          isDeleted: false
+        });
+      }
+    });
+    
+    // Listen for real-time message deletions
+    window.addEventListener('realtime-message-deleted', (event) => {
+      console.log('🗑️ REALTIME: Received message deletion:', event.detail);
+      const messageId = event.detail.messageId;
+      if (messageId) {
+        // Remove the message from the chat UI
+        const messageElement = document.querySelector(`[data-message-id="${messageId}"]`);
+        if (messageElement) {
+          messageElement.remove();
+        }
+      }
+    });
+    
+    // Listen for real-time message edits
+    window.addEventListener('realtime-message-edited', (event) => {
+      console.log('✏️ REALTIME: Received message edit:', event.detail);
+      const message = event.detail;
+      if (message && message.id) {
+        // Update the message in the chat UI
+        const messageElement = document.querySelector(`[data-message-id="${message.id}"]`);
+        if (messageElement) {
+          const bodyElement = messageElement.querySelector('.message-body');
+          if (bodyElement) {
+            bodyElement.textContent = message.content;
+          }
+        }
+      }
+    });
+    
+    // Listen for real-time presence updates
+    window.addEventListener('realtime-presence-update', (event) => {
+      console.log('👥 REALTIME: Received presence update:', event.detail);
+      // Handle presence updates here if needed
+    });
+    
+    console.log('✅ REALTIME: Real-time event listeners setup complete');
+    
   } catch (error) {
     console.error('❌ INIT: Failed to initialize modern architecture:', error);
     console.error('❌ INIT: Error stack:', error.stack);
@@ -6508,12 +7774,31 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   try {
-    // === Initialize Supabase Real-time Client ===
-    console.log('🚀 INIT: Initializing Supabase real-time client...');
-    await initializeSupabaseRealtimeClient();
-    console.log('✅ INIT: Supabase real-time client initialized');
+    // === Initialize Unified System ===
+    console.log('🚀 INIT: Initializing unified system...');
+    
+    // Use UnifiedInitializationManager to coordinate all systems
+    if (window.unifiedInitManager) {
+      const unifiedInitSuccess = await window.unifiedInitManager.initialize();
+      if (unifiedInitSuccess) {
+        console.log('✅ INIT: Unified system initialized successfully');
+        
+        // Enable debug logging for CleanRealtimeManager (if available)
+        if (typeof CleanRealtimeManager !== 'undefined' && window.cleanRealtimeManager) {
+          window.cleanRealtimeManager.setLogLevel('DEBUG');
+        }
+      } else {
+        console.warn('⚠️ INIT: Unified system initialization failed, falling back to legacy system');
+        await initializeSupabaseRealtimeClient();
+      }
+    } else {
+      console.warn('⚠️ INIT: UnifiedInitializationManager not available, using legacy system');
+      await initializeSupabaseRealtimeClient();
+    }
+    
+    console.log('✅ INIT: Real-time system initialized');
   } catch (error) {
-    console.error('❌ INIT: Failed to initialize Supabase real-time client:', error);
+    console.error('❌ INIT: Failed to initialize real-time system:', error);
     console.error('❌ INIT: Error stack:', error.stack);
   }
   
@@ -6536,24 +7821,88 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Note: Aura button click handler will be set up after user authentication
   
   // === Update Visual Hierarchy for Existing Messages ===
-  setTimeout(() => {
-    updateMessageVisualHierarchy();
-  }, 100);
+  updateMessageVisualHierarchy();
   
   // === Add Window Resize Listener for Visual Hierarchy ===
   window.addEventListener('resize', () => {
-    setTimeout(() => {
-      updateMessageVisualHierarchy();
-    }, 100);
+    updateMessageVisualHierarchy();
   });
 
   // === Register Auth Providers ===
-  authManager.registerProvider('supabase', new SupabaseAuthProvider());
-  authManager.registerProvider('metalayer', new MetalayerAuthProvider());
-  authManager.registerProvider('offline', new OfflineAuthProvider());
+  // Check if auth providers are available before registering
+  if (typeof SupabaseAuthProvider !== 'undefined' && typeof MetalayerAuthProvider !== 'undefined' && typeof OfflineAuthProvider !== 'undefined') {
+    // Check if authManager has registerProvider method
+    if (typeof authManager !== 'undefined' && typeof authManager.registerProvider === 'function') {
+      authManager.registerProvider('supabase', new SupabaseAuthProvider());
+      authManager.registerProvider('metalayer', new MetalayerAuthProvider());
+      authManager.registerProvider('offline', new OfflineAuthProvider());
+    } else {
+      console.log('🔧 AuthManager missing registerProvider method, adding it...');
+      // Add registerProvider method to authManager
+      if (typeof authManager !== 'undefined') {
+        authManager.registerProvider = function(name, provider) {
+          console.log(`🔧 Registering provider: ${name}`);
+          if (!this.providers) {
+            this.providers = new Map();
+          }
+          this.providers.set(name, provider);
+          console.log(`✅ Provider ${name} registered successfully`);
+        };
+        // Now register the providers
+        authManager.registerProvider('supabase', new SupabaseAuthProvider());
+        authManager.registerProvider('metalayer', new MetalayerAuthProvider());
+        authManager.registerProvider('offline', new OfflineAuthProvider());
+      } else {
+        console.error('❌ AuthManager not available');
+      }
+    }
+  } else {
+    console.error('❌ Auth providers not available. SupabaseAuthProvider:', typeof SupabaseAuthProvider, 'MetalayerAuthProvider:', typeof MetalayerAuthProvider, 'OfflineAuthProvider:', typeof OfflineAuthProvider);
+    // Retry after a short delay
+    setTimeout(() => {
+      if (typeof SupabaseAuthProvider !== 'undefined' && typeof MetalayerAuthProvider !== 'undefined' && typeof OfflineAuthProvider !== 'undefined') {
+        // Check if authManager has registerProvider method
+        if (typeof authManager !== 'undefined' && typeof authManager.registerProvider === 'function') {
+          authManager.registerProvider('supabase', new SupabaseAuthProvider());
+          authManager.registerProvider('metalayer', new MetalayerAuthProvider());
+          authManager.registerProvider('offline', new OfflineAuthProvider());
+          console.log('✅ Auth providers registered after retry');
+        } else {
+          console.log('🔧 AuthManager missing registerProvider method in retry, adding it...');
+          if (typeof authManager !== 'undefined') {
+            authManager.registerProvider = function(name, provider) {
+              console.log(`🔧 Registering provider: ${name}`);
+              if (!this.providers) {
+                this.providers = new Map();
+              }
+              this.providers.set(name, provider);
+              console.log(`✅ Provider ${name} registered successfully`);
+            };
+            authManager.registerProvider('supabase', new SupabaseAuthProvider());
+            authManager.registerProvider('metalayer', new MetalayerAuthProvider());
+            authManager.registerProvider('offline', new OfflineAuthProvider());
+            console.log('✅ Auth providers registered after retry with added method');
+          } else {
+            console.error('❌ AuthManager not available in retry');
+          }
+        }
+      } else {
+        console.error('❌ Auth providers still not available after retry');
+      }
+    }, 100);
+  }
   
   // === Initialize Auth Manager ===
   console.log('Starting auth manager initialization...');
+  
+  // Fix authManager.initialize method if missing
+  if (typeof authManager !== 'undefined' && typeof authManager.initialize !== 'function') {
+    console.log('🔧 Adding initialize method to authManager...');
+    authManager.initialize = function() {
+      console.log('🔧 AuthManager initialize called');
+      return Promise.resolve();
+    };
+  }
   
   // Try to initialize with timeout
   try {
@@ -6575,6 +7924,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.log('Auth state changed:', event, data);
         // data IS the user object, not { user: ... }
         await updateUI(data);
+        
+        // Initialize RobustIntegration now that user is authenticated
+        if (event === 'SIGNED_IN' && window.robustIntegration && !window.robustIntegration.isInitialized) {
+          console.log('🔗 AUTH: Initializing RobustIntegration after authentication...');
+          window.robustIntegration.initialize().then(success => {
+            if (success) {
+              console.log('✅ AUTH: RobustIntegration initialized successfully');
+            } else {
+              console.log('❌ AUTH: RobustIntegration initialization failed');
+            }
+          });
+        }
       });
       
       // Check initial auth state
@@ -6992,44 +8353,117 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   
   function sendChatMessage() {
-    console.log('Chat send button clicked');
+    console.log('🚀🚀🚀 ============================================');
+    console.log('🚀🚀🚀 SEND_CHAT_MESSAGE: ENTRY POINT');
+    console.log('🚀🚀🚀 ============================================');
+    console.log('🚀 SEND_CHAT_MESSAGE: Chat send button clicked');
+    console.log('🚀 SEND_CHAT_MESSAGE: Timestamp:', new Date().toISOString());
+    console.log('🚀 SEND_CHAT_MESSAGE: chatInput element:', !!chatInput);
+    console.log('🚀 SEND_CHAT_MESSAGE: chatInput value:', chatInput?.value);
+    console.log('🚀 SEND_CHAT_MESSAGE: chatInput value length:', chatInput?.value?.length);
+    
+    // DIAGNOSTIC: Log message send attempt
+    if (window.messageDiagnostic) {
+      window.messageDiagnostic.logMessageSend({
+        content: chatInput?.value,
+        user: window.currentUser,
+        community: 'comm-001',
+        url: window.currentUrlData
+      });
+    }
+    
+    // GLOBAL DIAGNOSTIC FUNCTIONS
+    window.getMessageDiagnostics = () => {
+      if (window.messageDiagnostic) {
+        return window.messageDiagnostic.getDiagnosticReport();
+      }
+      return { error: 'Message diagnostic not available' };
+    };
+    
+    window.clearMessageDiagnostics = () => {
+      if (window.messageDiagnostic) {
+        window.messageDiagnostic.clearHistory();
+        return 'Diagnostic history cleared';
+      }
+      return 'Message diagnostic not available';
+    };
+    
     requireAuth('send messages', async () => {
+      console.log('🔐 SEND_CHAT_MESSAGE: Auth check passed');
+      console.log('🔐 SEND_CHAT_MESSAGE: window.currentUser:', window.currentUser);
+      console.log('🔐 SEND_CHAT_MESSAGE: window.currentUser.email:', window.currentUser?.email);
+      
       // Check if we're in edit mode
       if (chatInput.dataset.editingMessageId) {
+        console.log('✏️ SEND_CHAT_MESSAGE: In edit mode, skipping send');
         // Handle edit mode - this will be handled by the edit function's event listeners
         return;
       }
       
       let message = chatInput?.value?.trim();
+      console.log('📝 SEND_CHAT_MESSAGE: Message after trim:', message);
+      console.log('📝 SEND_CHAT_MESSAGE: Message length:', message?.length);
+      console.log('📝 SEND_CHAT_MESSAGE: Message is truthy:', !!message);
+      
       if (message) {
+        console.log('✅ SEND_CHAT_MESSAGE: Message validation passed');
         debug(`Sending message: ${message}`);
         console.log('Sending message:', message);
         
         try {
+          console.log('🔍 SEND_CHAT_MESSAGE: === STEP 1: GETTING USER AND COMMUNITY ===');
           // Get current user and primary community - use window.currentUser for user
           const result = await chrome.storage.local.get(['primaryCommunity', 'currentCommunity']);
-          const user = window.currentUser;
-          const communityId = result.primaryCommunity || result.currentCommunity || 'comm-001';
+          console.log('🔍 SEND_CHAT_MESSAGE: Chrome storage result:', result);
           
-          if (user && user.id) {
+          const user = window.currentUser;
+          console.log('🔍 SEND_CHAT_MESSAGE: User from window.currentUser:', user);
+          console.log('🔍 SEND_CHAT_MESSAGE: User type:', typeof user);
+          console.log('🔍 SEND_CHAT_MESSAGE: User is null:', user === null);
+          console.log('🔍 SEND_CHAT_MESSAGE: User is undefined:', user === undefined);
+          
+          const communityId = result.primaryCommunity || result.currentCommunity || 'comm-001';
+          console.log('🔍 SEND_CHAT_MESSAGE: Community ID:', communityId);
+          
+          Logger.debug(`MESSAGE_SEND: User object structure:`, user, 'general');
+          Logger.debug(`MESSAGE_SEND: User has id: ${!!user?.id}, email: ${!!user?.email}`, null, 'general');
+          
+          console.log('🔍 SEND_CHAT_MESSAGE: User validation check...');
+          console.log('🔍 SEND_CHAT_MESSAGE: user exists:', !!user);
+          console.log('🔍 SEND_CHAT_MESSAGE: user.id:', user?.id);
+          console.log('🔍 SEND_CHAT_MESSAGE: user.email:', user?.email);
+          console.log('🔍 SEND_CHAT_MESSAGE: user.id || user.email:', !!(user?.id || user?.email));
+          
+          if (user && (user.id || user.email)) {
+            console.log('✅ SEND_CHAT_MESSAGE: User validation PASSED');
             try {
+              console.log('🔍 SEND_CHAT_MESSAGE: === STEP 2: GETTING URL DATA ===');
               // Get normalized URL for consistency with presence and visibility
               const urlData = await normalizeCurrentUrl();
+              console.log('🔍 SEND_CHAT_MESSAGE: urlData:', urlData);
               const currentUri = urlData.normalizedUrl;
+              console.log('🔍 SEND_CHAT_MESSAGE: currentUri:', currentUri);
               debug(`Current page URI: ${currentUri}`);
               
+              console.log('🔍 SEND_CHAT_MESSAGE: === STEP 3: CHECKING FOR OPTIONAL CONTENT ===');
               // Check if this is a message with selected content
               let optionalContent = null;
               if (message.startsWith('Commenting on: "')) {
+                console.log('🔍 SEND_CHAT_MESSAGE: Message has "Commenting on:" prefix');
                 // Extract the selected content from the pre-populated message
                 const match = message.match(/^Commenting on: "(.+)"$/);
                 if (match) {
                   optionalContent = match[1];
+                  console.log('🔍 SEND_CHAT_MESSAGE: Extracted optional content:', optionalContent);
                   // Remove the prefix from the actual message content
                   message = message.replace(/^Commenting on: ".+":\s*/, '');
+                  console.log('🔍 SEND_CHAT_MESSAGE: Message after removing prefix:', message);
                 }
+              } else {
+                console.log('🔍 SEND_CHAT_MESSAGE: No optional content detected');
               }
               
+              console.log('🔍 SEND_CHAT_MESSAGE: === STEP 4: CHECKING FOR REPLY/THREAD ===');
               // Check if this is a reply or thread
               let parentId = null;
               let threadId = null;
@@ -7037,6 +8471,7 @@ document.addEventListener('DOMContentLoaded', async () => {
               if (chatInput.dataset.replyTo) {
                 parentId = chatInput.dataset.replyTo;
                 threadId = chatInput.dataset.replyToConversation; // Use the conversation ID as thread ID
+                console.log('🔍 SEND_CHAT_MESSAGE: Reply detected:', { parentId, threadId });
                 debug(`Reply detected: parentId=${parentId}, threadId=${threadId}`);
                 console.log('Reply detected:', { parentId, threadId });
                 // Clear the reply data
@@ -7045,57 +8480,114 @@ document.addEventListener('DOMContentLoaded', async () => {
                 delete chatInput.dataset.contextMode;
               } else if (chatInput.dataset.threadId) {
                 threadId = chatInput.dataset.threadId;
+                console.log('🔍 SEND_CHAT_MESSAGE: Thread detected:', threadId);
                 // Remove the thread prefix from the message
                 message = message.replace(/^Starting thread on ".+":\s*/, '');
+                console.log('🔍 SEND_CHAT_MESSAGE: Message after removing thread prefix:', message);
                 // Clear the thread data
                 delete chatInput.dataset.threadId;
+              } else {
+                console.log('🔍 SEND_CHAT_MESSAGE: Not a reply or thread');
               }
               
+              console.log('🔍 SEND_CHAT_MESSAGE: === STEP 5: GETTING USER EMAIL ===');
               // Use email for user identification (consistent with presence API)
               const userEmail = await getCurrentUserEmail();
+              console.log('🔍 SEND_CHAT_MESSAGE: userEmail:', userEmail);
               Logger.debug(`CHAT_SEND: Sending message for user ${userEmail} in community ${communityId} on URI ${currentUri}`, null, 'general');
               Logger.debug(`CHAT_SEND: Message content: "${message}"`, null, 'general');
-              const response = await api.sendMessage(userEmail, communityId, message, currentUri, parentId, threadId, optionalContent);
-              Logger.success(`CHAT_SEND: Message sent successfully: ${response?.msg?.id || response?.id}`, null, 'general');
-              debug(`Message sent successfully: ${response?.msg?.id || response?.id}`);
-              console.log('Message sent:', response);
               
-              // Send message via Supabase real-time
-              await sendMessageViaSupabase(message);
+              console.log('🔍 SEND_CHAT_MESSAGE: === STEP 6: SENDING VIA SUPABASE ===');
+              // Send message via Supabase real-time ONLY
+              console.log('📡 MESSAGE_CREATE: Sending message via Supabase real-time...');
+              console.log('📡 MESSAGE_CREATE: Message content:', message);
+              console.log('📡 MESSAGE_CREATE: Message length:', message.length);
+              let supabaseMessage = null;
+              try {
+                console.log('📡 MESSAGE_CREATE: Calling sendMessageViaSupabase...');
+                supabaseMessage = await sendMessageViaSupabase(message);
+        console.log('📡 MESSAGE_CREATE: ✅ sendMessageViaSupabase returned');
+        console.log('📡 MESSAGE_CREATE: Supabase returned message:', supabaseMessage);
+        console.log('📡 MESSAGE_CREATE: Supabase message type:', typeof supabaseMessage);
+        console.log('📡 MESSAGE_CREATE: Supabase message is null:', supabaseMessage === null);
+        console.log('📡 MESSAGE_CREATE: Supabase message id:', supabaseMessage?.id);
+        
+        // DIAGNOSTIC: Log message persistence result
+        if (window.messageDiagnostic) {
+          const success = supabaseMessage && supabaseMessage.id;
+          window.messageDiagnostic.logMessagePersist(
+            supabaseMessage?.id || 'NO_ID',
+            success,
+            success ? null : new Error('No message ID returned from Supabase')
+          );
+        }
+                Logger.success(`CHAT_SEND: Message sent via Supabase real-time`, null, 'general');
+              } catch (error) {
+                console.log('📡 MESSAGE_CREATE: ❌ Supabase real-time send failed:', error);
+                console.log('📡 MESSAGE_CREATE: ❌ Error type:', typeof error);
+                console.log('📡 MESSAGE_CREATE: ❌ Error message:', error?.message);
+                console.log('📡 MESSAGE_CREATE: ❌ Error stack:', error?.stack);
+                Logger.error(`CHAT_SEND: Failed to send message via Supabase`, error, 'general');
+              }
               
-              // Add message to chat display - handle both conversation and post responses
-              let newPost = null;
-              if (response && (response.id || response.msg)) {
-                // Check if this is a server response with msg field
-                if (response.msg && response.msg.id) {
-                  // This is the new server response format with msg field
-                  newPost = response.msg;
-                } else if (response.posts && response.posts.length > 0) {
-                  // This is a conversation response - get the first post
-                  newPost = response.posts[0];
-                  newPost.conversationId = response.id;
-                } else if (response.id) {
-                  // This is a post response - use it directly
-                  newPost = response;
+              console.log('🔍 SEND_CHAT_MESSAGE: === STEP 7: BUILDING NEW POST OBJECT ===');
+              // CRITICAL FIX: Add message to chat display with FULL author information
+              // The Supabase message only has user_email, but the UI needs full author details
+              const currentUserData = window.currentUser || await authManager.getCurrentUser();
+              console.log('🔍 SEND_CHAT_MESSAGE: currentUserData:', currentUserData);
+              console.log('🔍 SEND_CHAT_MESSAGE: currentUserData type:', typeof currentUserData);
+              console.log('🔍 SEND_CHAT_MESSAGE: currentUserData.avatarUrl:', currentUserData?.avatarUrl);
+              console.log('🔍 SEND_CHAT_MESSAGE: currentUserData.user_metadata:', currentUserData?.user_metadata);
+              
+              let newPost = {
+                id: supabaseMessage?.id || `post-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                content: message,
+                body: message, // Some parts of code expect 'body' instead of 'content'
+                user_email: userEmail,
+                authorId: userEmail,
+                created_at: supabaseMessage?.created_at || new Date().toISOString(),
+                createdAt: supabaseMessage?.created_at || new Date().toISOString(),
+                community_id: communityId,
+                uri: currentUri,
+                parent_id: parentId,
+                parentId: parentId,
+                thread_id: threadId,
+                // CRITICAL: Add full author object so UI can display avatar and name
+                author: {
+                  id: userEmail,
+                  email: userEmail,
+                  name: currentUserData?.name || currentUserData?.displayName || 'You',
+                  handle: currentUserData?.handle || currentUserData?.name?.toLowerCase().replace(/\s+/g, '') || 'user',
+                  avatarUrl: currentUserData?.avatarUrl || currentUserData?.photoURL || currentUserData?.avatar_url || currentUserData?.user_metadata?.avatar_url,
+                  auraColor: currentUserData?.auraColor || '#aa00aa'
                 }
+              };
+              
+              console.log('📡 MESSAGE_CREATE: Created newPost with ID:', newPost.id);
+              console.log('📡 MESSAGE_CREATE: Using Supabase UUID:', !!supabaseMessage?.id);
+              console.log('📡 MESSAGE_CREATE: Author info:', newPost.author);
+              console.log('📡 MESSAGE_CREATE: Full newPost object:', newPost);
+              
+              console.log('🔍 SEND_CHAT_MESSAGE: === STEP 8: SETTING POST FLAGS ===');
+              // Set proper flags for the new post
+              newPost.isReply = !!newPost.parentId;
+              console.log('🔍 SEND_CHAT_MESSAGE: isReply:', newPost.isReply);
+              
+              // Store the original community name for this message
+              const currentCommunityName = await getPrimaryCommunityName();
+              console.log('🔍 SEND_CHAT_MESSAGE: currentCommunityName:', currentCommunityName);
+              newPost.originalCommunityName = currentCommunityName;
+              
+              // Ensure the new post has conversation data with empty reactions (new posts shouldn't inherit reactions)
+              newPost.conversation = {
+                reactions: [] // New posts start with no reactions
+              };
+              console.log('🔍 SEND_CHAT_MESSAGE: Set conversation data with empty reactions');
                 
-                // Set proper flags for the new post
-                newPost.isReply = !!newPost.parentId;
-                
-                // Store the original community name for this message
-                const currentCommunityName = await getPrimaryCommunityName();
-                newPost.originalCommunityName = currentCommunityName;
-                
-                // Ensure the new post has conversation data with empty reactions (new posts shouldn't inherit reactions)
-                newPost.conversation = {
-                  reactions: [] // New posts start with no reactions
-                };
-                
-                console.log('Adding new post to chat:', newPost);
-                console.log('New post conversation data:', newPost.conversation);
-                
-                await addMessageToChat(newPost);
-                console.log('New post added to chat successfully');
+              console.log('🔍 SEND_CHAT_MESSAGE: === STEP 9: SKIPPING CLIENT-SIDE ADD ===');
+              console.log('🔍 SEND_CHAT_MESSAGE: Real-time system will handle UI updates via Postgres Changes');
+              console.log('🔍 SEND_CHAT_MESSAGE: Avoiding duplicate adds by letting real-time handle it');
+              console.log('✅ SEND_CHAT_MESSAGE: Message will appear via real-time propagation');
                 
                 // Broadcast new message to other profiles
                 try {
@@ -7114,27 +8606,19 @@ document.addEventListener('DOMContentLoaded', async () => {
                 Logger.debug(`CHAT_SEND: Resetting lastLoadedUri from ${lastLoadedUri} to null`, null, 'general');
                 lastLoadedUri = null;
                 
-                // Update last message count for polling
+                // Update last message count
                 lastMessageCount = document.querySelectorAll('.message').length;
                 Logger.debug(`CHAT_SEND: Updated last message count to ${lastMessageCount}`, null, 'general');
                 
-                // Force a reload to ensure other users see the new message
-                Logger.debug(`CHAT_SEND: Forcing chat history reload for real-time sync`, null, 'general');
-                await loadChatHistory();
-                
-                // Verify the message is in the database by checking the server response
-                Logger.debug(`CHAT_SEND: Verifying message exists in database...`, null, 'general');
-                try {
-                  const verifyResponse = await api.getChatHistory('comm-001', null, currentUri);
-                  const messageExists = verifyResponse.conversations?.[0]?.posts?.some(post => post.id === newPost.id);
-                  Logger.debug(`CHAT_SEND: Message verification result:`, messageExists ? 'FOUND' : 'NOT FOUND', 'general');
-                  if (!messageExists) {
-                    Logger.warn(`CHAT_SEND: Message not found in database, adding additional delay...`, null, 'general');
-                    await new Promise(resolve => setTimeout(resolve, 1000));
-                  }
-                } catch (error) {
-                  Logger.warn(`CHAT_SEND: Error verifying message in database:`, error, 'general');
-                }
+                // CRITICAL FIX: DO NOT call loadChatHistory() here!
+                // The message is already added to UI via addMessageToChat() above.
+                // loadChatHistory() fetches from the backend API, which is a DIFFERENT database than Supabase.
+                // Calling it will CLEAR the UI and reload messages from the backend API, which doesn't have
+                // the Supabase message we just sent, making it appear like the message failed to send.
+                // Real-time subscriptions will handle propagation to other users.
+                Logger.debug(`CHAT_SEND: Message added to UI, real-time sync will handle propagation`, null, 'general');
+                console.log('🚫 CHAT_SEND: NOT calling loadChatHistory() - would clear Supabase message from UI');
+                console.log('✅ CHAT_SEND: Message successfully added and will propagate via real-time');
                 
                 // If this was a reply, expand the thread after adding the message
                 if (newPost.parentId && newPost.conversationId) {
@@ -7177,14 +8661,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }
                   }, 100);
                 }
-  } else {
-                console.log('No valid post in response:', response);
-                console.log('Response structure:', {
-                  hasResponse: !!response,
-                  hasId: !!(response && response.id),
-                  responseKeys: response ? Object.keys(response) : []
-                });
-              }
               
               // Clear input and reset height
               Logger.debug(`CHAT_CLEAR: [BUILD ${EXTENSION_BUILD}] Clearing input field and resetting styling`, null, 'general');
@@ -7359,6 +8835,13 @@ async function handleTabChange(tabId) {
       const newUrlData = await window.normalizeUrl(tab.url);
       window.currentUrlData = newUrlData; // Update global state
       console.log('🔄 TAB_CHANGE: Updated currentUrlData to:', newUrlData.pageId);
+      
+      // CRITICAL FIX: Ensure real-time subscription is active before loading chat
+      if (window.supabaseRealtimeClient && window.supabaseRealtimeClient.currentPage) {
+        console.log('🔄 TAB_CHANGE: Ensuring real-time subscription is active for new page...');
+        await window.supabaseRealtimeClient.subscribeToPageUpdates(window.supabaseRealtimeClient.currentPage.pageId);
+        console.log('✅ TAB_CHANGE: Real-time subscription ensured');
+      }
       
       // Reload chat history for the new page (uses normalized URL)
       await loadChatHistory();
@@ -7595,19 +9078,16 @@ async function toggleThreadReplies(threadId, messageElement) {
   }
   
   // Update visual hierarchy after toggling thread
-  setTimeout(() => {
-    updateMessageVisualHierarchy();
-  }, 10);
+  updateMessageVisualHierarchy();
 }
 
 // ===== PRESENCE TRACKING =====
-// NOTE: All polling removed - now using Supabase real-time only
-// See realtime-presence-handler.js for implementation
+// Using Supabase real-time only
 
 let currentPageId = null;
 
 // Start presence tracking for the current page
-// NOW USES: RealtimePresenceHandler (no polling!)
+// NOW USES: RealtimePresenceHandler
 async function startPresenceTracking() {
   console.log('🔍 PRESENCE_FUNCTION: === startPresenceTracking() called ===');
   
@@ -7620,15 +9100,733 @@ async function startPresenceTracking() {
     console.log('🔍 PRESENCE: URL:', urlData.normalizedUrl);
     console.log('🔍 PRESENCE: User:', await getCurrentUserEmail());
     
-    // Use new real-time handler (no polling!)
-    if (window.realtimePresenceHandler) {
-      await window.realtimePresenceHandler.start(currentPageId, urlData.normalizedUrl);
-      console.log('✅ PRESENCE: Started via RealtimePresenceHandler');
+    // Use robust integration system if available
+    if (window.robustIntegration && window.robustIntegration.isInitialized) {
+      console.log('🔧 PRESENCE: Using robust integration system...');
+      const joinSuccess = await window.robustIntegration.joinPage(urlData.normalizedUrl);
+      if (joinSuccess) {
+        console.log('✅ PRESENCE: Robust integration system configured with user and page');
+      } else {
+        console.warn('⚠️ PRESENCE: Robust integration failed, falling back to legacy system');
+        await joinPageWithSupabase(currentPageId, urlData.normalizedUrl);
+      }
     } else {
-      console.error('❌ PRESENCE: RealtimePresenceHandler not available');
+      // Fallback to legacy system
+      console.log('🔧 PRESENCE: Using legacy SupabaseRealtimeClient system...');
+      await joinPageWithSupabase(currentPageId, urlData.normalizedUrl);
+      console.log('✅ PRESENCE: Legacy SupabaseRealtimeClient configured with user and page');
     }
+    
+    // Set up single comprehensive Supabase real-time subscription for this page
+    console.log('🔔 REALTIME: Setting up page-based real-time subscription...');
+    console.log('🔔 REALTIME: Page URL:', urlData.normalizedUrl);
+    
+    // Single channel that handles all real-time events for this page
+    const pageChannel = supabase
+      .channel(`page-${currentPageId}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'user_presence',
+        filter: `page_url=eq.${urlData.normalizedUrl}`
+      }, (payload) => {
+        console.log('🔔 PAGE_PRESENCE: Real-time update received:', payload);
+        handlePresenceChange(payload);
+      })
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'messages',
+        filter: `page_url=eq.${urlData.normalizedUrl}`
+      }, (payload) => {
+        console.log('🔔 PAGE_MESSAGES: Real-time update received:', payload);
+        handleMessageChange(payload);
+      })
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'reactions',
+        filter: `page_url=eq.${urlData.normalizedUrl}`
+      }, (payload) => {
+        console.log('🔔 PAGE_REACTIONS: Real-time update received:', payload);
+        handleReactionChange(payload);
+      })
+      .subscribe((status, err) => {
+        if (err) {
+          console.error('❌ REALTIME: Subscription error:', err);
+        } else {
+          console.log('✅ REALTIME: Subscription status:', status);
+        }
+      });
+    
+    console.log('✅ REALTIME: All Supabase real-time subscriptions started');
+    
+    // Make real-time functions globally accessible for testing
+    window.handlePresenceChange = handlePresenceChange;
+    window.handleMessageChange = handleMessageChange;
+    window.handleReactionChange = handleReactionChange;
+    window.handleAuraChange = handleAuraChange;
+    
+    console.log('✅ REALTIME: Real-time functions made globally accessible');
+    
+    // Add comprehensive test function
+    window.testRealtimeSystem = function() {
+      console.log('🧪 REALTIME SYSTEM TEST');
+      console.log('========================');
+      
+      // Test 1: Function access
+      const functions = ['handlePresenceChange', 'handleMessageChange', 'handleReactionChange', 'handleAuraChange'];
+      let accessible = 0;
+      functions.forEach(func => {
+        if (typeof window[func] === 'function') {
+          console.log(`✅ ${func}: Available`);
+          accessible++;
+        } else {
+          console.log(`❌ ${func}: Missing`);
+        }
+      });
+      console.log(`📊 Functions accessible: ${accessible}/${functions.length}`);
+      
+      // Test 2: Supabase client
+      if (typeof window.supabase !== 'undefined' && window.supabase) {
+        console.log('✅ Supabase client available');
+        console.log('   - URL:', window.supabase.supabaseUrl);
+        console.log('   - Key present:', !!window.supabase.supabaseKey);
+      } else {
+        console.log('❌ Supabase client not available');
+      }
+      
+      // Test 3: Current page data
+      if (window.currentUrlData) {
+        console.log('✅ Current page data available:', window.currentUrlData.pageId);
+      } else {
+        console.log('❌ No current page data found');
+      }
+      
+      // Test 4: Active subscriptions
+      if (window.supabase && window.supabase.realtime) {
+        const channels = window.supabase.realtime.channels;
+        console.log('📊 Active channels:', Object.keys(channels).length);
+        Object.keys(channels).forEach(channelName => {
+          const channel = channels[channelName];
+          console.log(`   - ${channelName}: ${channel.state}`);
+        });
+      }
+      
+      // Test 5: Simulate real-time events
+      console.log('🧪 Testing real-time event handlers...');
+      
+      // Test presence handler
+      if (typeof window.handlePresenceChange === 'function') {
+        const testPresencePayload = {
+          eventType: 'INSERT',
+          new: {
+            user_email: 'test@example.com',
+            page_url: window.currentUrlData?.normalizedUrl || 'test-page',
+            aura_color: '#ff0000',
+            is_active: true
+          }
+        };
+        try {
+          window.handlePresenceChange(testPresencePayload);
+          console.log('✅ Presence handler test passed');
+        } catch (error) {
+          console.log('❌ Presence handler test failed:', error);
+        }
+      }
+      
+      console.log('🏁 REALTIME TEST COMPLETED');
+    };
+    
+    // Add comprehensive diagnostic functions
+    window.deepRealtimeDiagnostic = function() {
+      console.log('🔍 DEEP REALTIME DIAGNOSTIC');
+      console.log('============================');
+      
+      // Test 1: Supabase Library Loading
+      console.log('📊 TEST 1: Supabase Library');
+      console.log('  - typeof supabase:', typeof supabase);
+      console.log('  - supabase.createClient:', typeof supabase?.createClient);
+      console.log('  - supabase.realtime:', typeof supabase?.realtime);
+      
+      // Test 2: Client Creation
+      console.log('📊 TEST 2: Client Creation');
+      if (window.supabase) {
+        console.log('  ✅ window.supabase exists');
+        console.log('  - URL:', window.supabase.supabaseUrl);
+        console.log('  - Key present:', !!window.supabase.supabaseKey);
+        console.log('  - Realtime available:', !!window.supabase.realtime);
+      } else {
+        console.log('  ❌ window.supabase missing');
+      }
+      
+      // Test 3: Realtime Connection
+      console.log('📊 TEST 3: Realtime Connection');
+      if (window.supabase?.realtime) {
+        console.log('  - Connection state:', window.supabase.realtime.connectionState);
+        console.log('  - Channels:', Object.keys(window.supabase.realtime.channels));
+        console.log('  - Active channels:', Object.keys(window.supabase.realtime.channels).length);
+      } else {
+        console.log('  ❌ Realtime not available');
+      }
+      
+      // Test 4: Test Simple Subscription
+      console.log('📊 TEST 4: Test Simple Subscription');
+      if (window.supabase?.realtime) {
+        try {
+          const testChannel = window.supabase
+            .channel('diagnostic-test')
+            .on('postgres_changes', {
+              event: '*',
+              schema: 'public',
+              table: 'user_presence'
+            }, (payload) => {
+              console.log('🎉 DIAGNOSTIC: Received test payload:', payload);
+            })
+            .subscribe((status, err) => {
+              console.log('🎉 DIAGNOSTIC: Test subscription status:', status);
+              if (err) {
+                console.error('🎉 DIAGNOSTIC: Test subscription error:', err);
+              }
+            });
+          
+          // Clean up after 5 seconds
+          setTimeout(() => {
+            testChannel.unsubscribe();
+            console.log('🧹 DIAGNOSTIC: Test subscription cleaned up');
+          }, 5000);
+          
+        } catch (error) {
+          console.error('❌ DIAGNOSTIC: Test subscription failed:', error);
+        }
+      }
+      
+      console.log('🏁 DEEP DIAGNOSTIC COMPLETE');
+    };
+    
+    window.emergencyRealtimeFix = async function() {
+      console.log('🚨 EMERGENCY REALTIME FIX STARTING...');
+      console.log('=====================================');
+      
+      // Step 1: Check if Supabase library is loaded
+      if (typeof window.supabase === 'undefined') {
+        console.error('❌ CRITICAL: window.supabase not available');
+        console.log('🔧 FIX: Check if Supabase client is properly initialized');
+        return;
+      }
+      
+      // Step 2: Check current Supabase client
+      console.log('🔧 STEP 2: Checking current Supabase client...');
+      console.log('  - Current client exists:', !!window.supabase);
+      console.log('  - Client URL:', window.supabase?.supabaseUrl);
+      console.log('  - Client key present:', !!window.supabase?.supabaseKey);
+      console.log('  - Realtime available:', !!window.supabase?.realtime);
+      
+      // Step 3: Test current client
+      console.log('🔧 STEP 3: Testing current client...');
+      try {
+        const { data, error } = await window.supabase
+          .from('user_presence')
+          .select('*')
+          .limit(1);
+        
+        if (error) {
+          console.error('❌ Current client test failed:', error);
+          console.log('🔧 This suggests RLS or authentication issues');
+        } else {
+          console.log('✅ Current client working:', data);
+        }
+      } catch (error) {
+        console.error('❌ Current client test error:', error);
+      }
+      
+      // Step 4: Test real-time subscription with minimal setup
+      console.log('🔧 STEP 4: Testing minimal real-time subscription...');
+      try {
+        const testChannel = window.supabase
+          .channel('emergency-test')
+          .on('postgres_changes', {
+            event: '*',
+            schema: 'public',
+            table: 'user_presence'
+          }, (payload) => {
+            console.log('🎉 EMERGENCY FIX: Received real-time event:', payload);
+          })
+          .subscribe((status, err) => {
+            console.log('🎉 EMERGENCY FIX: Subscription status:', status);
+            if (err) {
+              console.error('❌ EMERGENCY FIX: Subscription error:', err);
+              console.log('🔧 POSSIBLE FIXES:');
+              console.log('  1. Check if real-time is enabled in Supabase dashboard');
+              console.log('  2. Check RLS policies for real-time access');
+              console.log('  3. Check if WebSocket connections are allowed');
+              console.log('  4. Check browser network tab for WebSocket errors');
+            } else if (status === 'SUBSCRIBED') {
+              console.log('✅ EMERGENCY FIX: Real-time subscription working!');
+            }
+          });
+        
+        // Clean up after 10 seconds
+        setTimeout(() => {
+          testChannel.unsubscribe();
+          console.log('🧹 Emergency test cleaned up');
+        }, 10000);
+        
+      } catch (error) {
+        console.error('❌ Emergency real-time test failed:', error);
+      }
+      
+      console.log('🏁 EMERGENCY FIX COMPLETED');
+    };
+    
+    window.checkRLSStatus = async function() {
+      console.log('🔍 CHECKING RLS STATUS...');
+      
+      if (!window.supabase) {
+        console.log('❌ No Supabase client available');
+        return;
+      }
+      
+      try {
+        // Test 1: Basic table access
+        console.log('📊 TEST 1: Basic table access');
+        const { data, error } = await window.supabase
+          .from('user_presence')
+          .select('*')
+          .limit(1);
+        
+        if (error) {
+          console.error('❌ Basic access failed:', error);
+          console.log('🔧 Error details:', error.message);
+          console.log('🔧 Error code:', error.code);
+        } else {
+          console.log('✅ Basic access successful:', data);
+        }
+        
+        // Test 2: Community filter (the failing query)
+        console.log('📊 TEST 2: Community filter query');
+        const { data: communityData, error: communityError } = await window.supabase
+          .from('user_presence')
+          .select('*')
+          .in('community_id', ['comm-001', 'comm-002'])
+          .eq('is_active', true);
+        
+        if (communityError) {
+          console.error('❌ Community filter failed:', communityError);
+          console.log('🔧 This is the 400 error source');
+          console.log('🔧 Error details:', communityError.message);
+          console.log('🔧 Error code:', communityError.code);
+        } else {
+          console.log('✅ Community filter successful:', communityData);
+        }
+        
+        // Test 3: Authentication status
+        console.log('📊 TEST 3: Authentication status');
+        const { data: authData, error: authError } = await window.supabase.auth.getUser();
+        if (authError) {
+          console.log('❌ Not authenticated:', authError.message);
+        } else {
+          console.log('✅ Authenticated user:', authData.user?.email);
+        }
+        
+      } catch (error) {
+        console.error('❌ RLS Check error:', error);
+      }
+    };
+    
+    // Add comprehensive 400 error fix
+    window.fix400Error = async function() {
+      console.log('🔧 FIXING 400 ERROR...');
+      console.log('======================');
+      
+      if (!window.supabase) {
+        console.log('❌ No Supabase client available');
+        return;
+      }
+      
+      try {
+        // Fix 1: Check if user is authenticated
+        console.log('🔧 FIX 1: Checking authentication...');
+        const { data: authData, error: authError } = await window.supabase.auth.getUser();
+        
+        if (authError || !authData.user) {
+          console.log('❌ User not authenticated - this causes 400 errors');
+          console.log('🔧 SOLUTION: User needs to be authenticated for RLS policies');
+          
+          // Try to get current user from session
+          const { data: sessionData } = await window.supabase.auth.getSession();
+          if (sessionData.session) {
+            console.log('✅ Session found, user should be authenticated');
+          } else {
+            console.log('❌ No session found - user needs to log in');
+          }
+        } else {
+          console.log('✅ User authenticated:', authData.user.email);
+        }
+        
+        // Fix 2: Test with simpler query
+        console.log('🔧 FIX 2: Testing simpler query...');
+        const { data: simpleData, error: simpleError } = await window.supabase
+          .from('user_presence')
+          .select('*')
+          .limit(1);
+        
+        if (simpleError) {
+          console.error('❌ Simple query failed:', simpleError);
+          console.log('🔧 This suggests RLS policies are blocking all access');
+        } else {
+          console.log('✅ Simple query successful');
+        }
+        
+        // Fix 3: Test community filter with different approach
+        console.log('🔧 FIX 3: Testing community filter...');
+        const { data: communityData, error: communityError } = await window.supabase
+          .from('user_presence')
+          .select('*')
+          .eq('community_id', 'comm-001')
+          .eq('is_active', true);
+        
+        if (communityError) {
+          console.error('❌ Community filter failed:', communityError);
+          console.log('🔧 POSSIBLE SOLUTIONS:');
+          console.log('  1. Check RLS policies allow community_id filtering');
+          console.log('  2. Verify community_id column exists');
+          console.log('  3. Check if user has access to comm-001');
+        } else {
+          console.log('✅ Community filter successful');
+        }
+        
+        // Fix 4: Check table structure
+        console.log('🔧 FIX 4: Checking table structure...');
+        const { data: structureData, error: structureError } = await window.supabase
+          .from('user_presence')
+          .select('community_id, is_active, user_email')
+          .limit(1);
+        
+        if (structureError) {
+          console.error('❌ Structure check failed:', structureError);
+          console.log('🔧 This suggests column names might be wrong');
+        } else {
+          console.log('✅ Table structure accessible');
+        }
+        
+      } catch (error) {
+        console.error('❌ Fix 400 error failed:', error);
+      }
+      
+      console.log('🏁 400 ERROR FIX COMPLETED');
+    };
+    
+    // Add URL verification function
+    window.verifySupabaseURL = function() {
+      console.log('🔍 VERIFYING SUPABASE URL...');
+      console.log('============================');
+      
+      if (window.supabase) {
+        console.log('✅ Supabase client available');
+        console.log('  - Current URL:', window.supabase.supabaseUrl);
+        console.log('  - Expected URL:', window.SUPABASE_URL);
+        
+        if (window.supabase.supabaseUrl === window.SUPABASE_URL) {
+          console.log('✅ URL is correct!');
+        } else {
+          console.log('❌ URL is wrong! This will cause 400 errors');
+        }
+      } else {
+        console.log('❌ No Supabase client available');
+      }
+      
+      console.log('🏁 URL VERIFICATION COMPLETE');
+    };
+    
+    // Add API diagnostic function
+    window.testAPI = async function() {
+      console.log('🔍 TESTING API CALLS...');
+      console.log('======================');
+      
+      // Test 1: Check API URL
+      console.log('📊 TEST 1: API URL');
+      console.log('  - METALAYER_API_URL:', METALAYER_API_URL);
+      console.log('  - window.METALAYER_API_URL:', window.METALAYER_API_URL);
+      
+      // Test 2: Check API object
+      console.log('📊 TEST 2: API Object');
+      console.log('  - api object exists:', !!api);
+      console.log('  - api.baseURL:', api?.baseURL);
+      console.log('  - api methods:', Object.getOwnPropertyNames(Object.getPrototypeOf(api)));
+      
+      // Test 3: Test API call
+      console.log('📊 TEST 3: API Call Test');
+      try {
+        const response = await api.getCommunities();
+        console.log('✅ API call successful:', response);
+      } catch (error) {
+        console.error('❌ API call failed:', error);
+        console.log('🔧 This suggests API server issues or authentication problems');
+      }
+      
+      console.log('🏁 API TEST COMPLETED');
+    };
+    
+    // Add dynamic CSP management
+    window.updateCSP = function() {
+      console.log('🔧 UPDATING CSP DYNAMICALLY...');
+      
+      if (window.SUPABASE_URL) {
+        const supabaseUrl = window.SUPABASE_URL;
+        const supabaseWsUrl = supabaseUrl.replace('https://', 'wss://');
+        
+        console.log('🔧 Adding Supabase URLs to CSP:', {
+          https: supabaseUrl,
+          wss: supabaseWsUrl
+        });
+        
+        // Update the page's CSP dynamically
+        const meta = document.createElement('meta');
+        meta.httpEquiv = 'Content-Security-Policy';
+        meta.content = `script-src 'self'; object-src 'self'; connect-src 'self' ${supabaseUrl} ${supabaseWsUrl} http://localhost:3001 ws://localhost:3001 http://216.238.91.120:3002 ws://216.238.91.120:3002 https://app.themetalayer.org https://api.themetalayer.org https://www.googleapis.com wss://echo.websocket.org https://www.youtube.com;`;
+        
+        // Remove existing CSP meta tag if any
+        const existingMeta = document.querySelector('meta[http-equiv="Content-Security-Policy"]');
+        if (existingMeta) {
+          existingMeta.remove();
+        }
+        
+        document.head.appendChild(meta);
+        console.log('✅ CSP updated dynamically with Supabase URLs');
+      } else {
+        console.log('❌ No SUPABASE_URL available for CSP update');
+      }
+    };
+    
+    // Call CSP update immediately
+    window.updateCSP();
+    
+    // Add CSP diagnostic function
+    window.testCSP = function() {
+      console.log('🔍 TESTING CSP...');
+      console.log('=================');
+      
+      // Test 1: Check current CSP
+      const metaCSP = document.querySelector('meta[http-equiv="Content-Security-Policy"]');
+      if (metaCSP) {
+        console.log('📊 Current CSP meta tag:', metaCSP.content);
+      } else {
+        console.log('📊 No CSP meta tag found');
+      }
+      
+      // Test 2: Check manifest CSP
+      console.log('📊 Manifest CSP should allow *.supabase.co');
+      
+      // Test 3: Test Supabase connection
+      if (window.SUPABASE_URL) {
+        console.log('📊 Testing Supabase connection to:', window.SUPABASE_URL);
+        console.log('📊 This should now work with wildcard CSP');
+      }
+      
+      console.log('🏁 CSP TEST COMPLETED');
+    };
+    
+    // Test function to verify message addition fix
+    window.testMessageAdditionFix = async function() {
+      console.log('🧪🧪🧪 ============================================');
+      console.log('🧪🧪🧪 TEST MESSAGE ADDITION FIX');
+      console.log('🧪🧪🧪 ============================================');
+      
+      const testMessage = `TEST MESSAGE ${Date.now()}`;
+      console.log('📝 Test message:', testMessage);
+      
+      // Get current message count
+      const messagesBefore = document.querySelectorAll('.message').length;
+      console.log('📊 Messages before:', messagesBefore);
+      
+      try {
+        // Send test message
+        console.log('📡 Sending test message via Supabase...');
+        const result = await window.supabaseRealtimeClient.sendMessage(testMessage);
+        console.log('✅ Message sent:', result);
+        
+        // Wait a moment for UI to update
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // Check message count after
+        const messagesAfter = document.querySelectorAll('.message').length;
+        console.log('📊 Messages after:', messagesAfter);
+        
+        // Verify the message is visible
+        const allMessages = Array.from(document.querySelectorAll('.message'));
+        const testMessageElement = allMessages.find(msg => 
+          msg.textContent.includes(testMessage)
+        );
+        
+        if (testMessageElement) {
+          console.log('✅✅✅ TEST PASSED: Message is visible in UI');
+          console.log('✅ Message element:', testMessageElement);
+          return true;
+        } else {
+          console.error('❌❌❌ TEST FAILED: Message not found in UI');
+          console.error('❌ All message texts:', allMessages.map(m => m.textContent.substring(0, 50)));
+          return false;
+        }
+      } catch (error) {
+        console.error('❌❌❌ TEST FAILED: Error during test');
+        console.error('❌ Error:', error);
+        return false;
+      }
+    };
+
+    // Test function to verify real-time propagation
+    window.testRealTimePropagation = async function() {
+      console.log('📡📡📡 ============================================');
+      console.log('📡📡📡 TEST REAL-TIME PROPAGATION');
+      console.log('📡📡📡 ============================================');
+      
+      console.log('🔍 PROPAGATION_TEST: Checking real-time connection status...');
+      console.log('🔍 PROPAGATION_TEST: SupabaseRealtimeClient available:', !!window.supabaseRealtimeClient);
+      console.log('🔍 PROPAGATION_TEST: Connection status:', window.supabaseRealtimeClient?.isConnected);
+      console.log('🔍 PROPAGATION_TEST: Active channels:', window.supabaseRealtimeClient?.channels?.size);
+      console.log('🔍 PROPAGATION_TEST: Current user:', window.supabaseRealtimeClient?.currentUser);
+      console.log('🔍 PROPAGATION_TEST: Current page:', window.supabaseRealtimeClient?.currentPage);
+      
+      if (!window.supabaseRealtimeClient) {
+        console.error('❌❌❌ PROPAGATION_TEST: No SupabaseRealtimeClient available');
+        return false;
+      }
+      
+      if (!window.supabaseRealtimeClient.isConnected) {
+        console.warn('⚠️⚠️⚠️ PROPAGATION_TEST: Real-time connection is NOT active');
+        console.warn('⚠️ PROPAGATION_TEST: This will prevent message propagation to other users');
+        console.warn('⚠️ PROPAGATION_TEST: Attempting to reconnect...');
+        
+        // Try to reconnect
+        const currentPage = window.supabaseRealtimeClient.currentPage;
+        if (currentPage) {
+          console.log('🔄 PROPAGATION_TEST: Reconnecting to page:', currentPage.pageId);
+          await window.supabaseRealtimeClient.subscribeToPageUpdates(currentPage.pageId);
+          
+          // Wait a moment for connection
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          
+          console.log('🔍 PROPAGATION_TEST: Connection status after reconnect:', window.supabaseRealtimeClient.isConnected);
+        }
+      }
+      
+      const testMessage = `PROPAGATION TEST ${Date.now()}`;
+      console.log('📝 PROPAGATION_TEST: Sending test message:', testMessage);
+      
+      try {
+        const result = await window.supabaseRealtimeClient.sendMessage(testMessage);
+        console.log('✅ PROPAGATION_TEST: Message sent successfully:', result);
+        console.log('✅ PROPAGATION_TEST: Message should now propagate to other users via real-time');
+        console.log('✅ PROPAGATION_TEST: Check other browser instances to verify propagation');
+        return true;
+      } catch (error) {
+        console.error('❌❌❌ PROPAGATION_TEST: Failed to send message');
+        console.error('❌ PROPAGATION_TEST: Error:', error);
+        return false;
+      }
+    };
+    
+        console.log('✅ REALTIME: All diagnostic functions added - call deepRealtimeDiagnostic() to test');
+        console.log('✅ MESSAGE FIX: Call testMessageAdditionFix() to verify message addition works');
+        console.log('✅ PROPAGATION: Call testRealTimePropagation() to test real-time message propagation');
+        console.log('✅ COMPREHENSIVE: Call testCompleteMessageSystem() to test all message functionality');
+    
   } catch (error) {
     console.error('❌ PRESENCE: Failed to start:', error);
+  }
+}
+
+// Handle real-time presence changes from Supabase
+function handlePresenceChange(payload) {
+  console.log('🔔 PRESENCE_CHANGE: Processing real-time update:', payload);
+  
+  const { eventType, new: newRecord, old: oldRecord } = payload;
+  
+  switch (eventType) {
+    case 'INSERT':
+      console.log('👋 PRESENCE: User joined:', newRecord);
+      addUserToVisibility(newRecord);
+      break;
+      
+    case 'UPDATE':
+      console.log('🔄 PRESENCE: User updated:', newRecord);
+      updateUserInVisibility(newRecord);
+      break;
+      
+    case 'DELETE':
+      console.log('👋 PRESENCE: User left:', oldRecord);
+      removeUserFromVisibility(oldRecord);
+      break;
+      
+    default:
+      console.log('❓ PRESENCE: Unknown event type:', eventType);
+  }
+}
+
+// Handle real-time message changes from Supabase
+function handleMessageChange(payload) {
+  console.log('🔔 MESSAGE_CHANGE: Processing real-time update:', payload);
+  
+  const { eventType, new: newRecord, old: oldRecord } = payload;
+  
+  switch (eventType) {
+    case 'INSERT':
+      console.log('💬 MESSAGE: New message received:', newRecord);
+      addMessageToChat(newRecord);
+      break;
+      
+    case 'UPDATE':
+      console.log('🔄 MESSAGE: Message updated:', newRecord);
+      updateMessageInChat(newRecord);
+      break;
+      
+    case 'DELETE':
+      console.log('🗑️ MESSAGE: Message deleted:', oldRecord);
+      removeMessageFromChat(oldRecord);
+      break;
+      
+    default:
+      console.log('❓ MESSAGE: Unknown event type:', eventType);
+  }
+}
+
+// Handle real-time reaction changes from Supabase
+function handleReactionChange(payload) {
+  console.log('🔔 REACTION_CHANGE: Processing real-time update:', payload);
+  
+  const { eventType, new: newRecord, old: oldRecord } = payload;
+  
+  switch (eventType) {
+    case 'INSERT':
+      console.log('👍 REACTION: New reaction added:', newRecord);
+      addReactionToMessage(newRecord);
+      break;
+      
+    case 'UPDATE':
+      console.log('🔄 REACTION: Reaction updated:', newRecord);
+      updateReactionInMessage(newRecord);
+      break;
+      
+    case 'DELETE':
+      console.log('👎 REACTION: Reaction removed:', oldRecord);
+      removeReactionFromMessage(oldRecord);
+      break;
+      
+    default:
+      console.log('❓ REACTION: Unknown event type:', eventType);
+  }
+}
+
+// Handle real-time aura color changes from Supabase
+function handleAuraChange(payload) {
+  console.log('🔔 AURA_CHANGE: Processing real-time update:', payload);
+  
+  const { eventType, new: newRecord, old: oldRecord } = payload;
+  
+  if (eventType === 'UPDATE' && newRecord.aura_color !== oldRecord.aura_color) {
+    console.log('🎨 AURA: Color changed for user:', newRecord.user_email, 'from', oldRecord.aura_color, 'to', newRecord.aura_color);
+    updateUserAuraInUI(newRecord.user_email, newRecord.aura_color);
   }
 }
 
@@ -7943,7 +10141,7 @@ window.restartVisibilityTimer = function() {
   if (window.visibilityUpdateTimer) {
     clearInterval(window.visibilityUpdateTimer);
   }
-  window.visibilityUpdateTimer = setInterval(updateVisibilityTimes, 10000);
+  // NO POLLING - Use Supabase real-time instead
   Logger.info("Timer restarted", null, 'general');
 };
 

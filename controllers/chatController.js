@@ -159,35 +159,58 @@ exports.getChatHistory = async (req, res) => {
       return;
     }
 
-    // Get messages from all conversations in this community
-    const msgs = await prisma.post.findMany({
-      where: {
-        conversationId: {
-          in: conversationIds
-        }
+    // FIXED: Use Supabase messages table (not Prisma post table)
+    const { createClient } = require('@supabase/supabase-js');
+    const supabase = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_ANON_KEY
+    );
+    
+    // Get pageId from URI if provided
+    let pageId = null;
+    if (uri) {
+      const UrlNormalizationService = require('../services/urlNormalizationService');
+      const urlNormalization = new UrlNormalizationService();
+      const normalizedUrl = await urlNormalization.normalizeUrl(uri);
+      pageId = normalizedUrl.pageId;
+    }
+    
+    console.log(`🔍 CHAT_API: Querying Supabase messages table for pageId: ${pageId}`);
+    
+    let query = supabase.from('messages').select('*');
+    if (pageId) {
+      query = query.eq('page_id', pageId);
+    }
+    const { data: messages, error: messagesError } = await query.order('created_at', { ascending: true });
+    
+    if (messagesError) {
+      console.error('❌ CHAT_API: Supabase query failed:', messagesError);
+      return res.status(500).json({ error: 'Failed to fetch messages', details: messagesError.message });
+    }
+    
+    console.log(`🔍 CHAT_API: Found ${messages?.length || 0} messages in Supabase`);
+    
+    // Convert Supabase messages to API format
+    const msgs = messages?.map(msg => ({
+      id: msg.id,
+      body: msg.content,
+      authorId: msg.user_email,
+      conversationId: `conv-${communityId}-${pageId}`,
+      createdAt: msg.created_at,
+      updatedAt: msg.updated_at,
+      author: {
+        id: msg.user_email,
+        name: msg.user_email,
+        handle: msg.user_email.split('@')[0],
+        avatarUrl: null,
+        email: msg.user_email,
+        auraColor: '#aa00aa'
       },
-      include: {
-        author: {
-          select: {
-            id: true,
-            name: true,
-            handle: true,
-            avatarUrl: true,
-            email: true,
-            auraColor: true
-          }
-        },
-        conversation: {
-          select: {
-            id: true,
-            communityId: true
-          }
-        }
-      },
-      orderBy: {
-        createdAt: 'asc'
+      conversation: {
+        id: `conv-${communityId}-${pageId}`,
+        communityId: communityId
       }
-    });
+    })) || [];
 
     console.log(`🔍 CHAT: Found ${msgs.length} messages for community ${communityId}`);
     console.log(`🔍 CHAT: Messages found:`, msgs.map(m => ({ id: m.id, body: m.body, createdAt: m.createdAt, conversationId: m.conversationId })));
@@ -211,12 +234,12 @@ exports.getChatHistory = async (req, res) => {
       // Transform message to post format
       const post = {
         id: msg.id,
-        parentId: msg.parentId,
+        parentId: null, // Supabase messages don't have parentId
         conversationId: msg.conversationId,
         authorId: msg.authorId,
         body: msg.body,
         createdAt: msg.createdAt,
-        editedAt: msg.editedAt,
+        editedAt: msg.updatedAt,
         author: msg.author,
         conversation: msg.conversation
       };
@@ -230,7 +253,16 @@ exports.getChatHistory = async (req, res) => {
       console.log(`🔍 CHAT_RESULT: URI-filtered results for ${uri}: ${conversations.length} conversations`);
     }
     
-    res.json({ conversations });
+    // Add cache-busting headers to prevent browser caching
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    
+    res.json({ 
+      conversations,
+      timestamp: new Date().toISOString(),
+      cacheBust: Date.now()
+    });
   } catch (error) {
     console.error('❌ CHAT: Error fetching messages:', error);
     res.status(500).json({ error: 'Failed to fetch messages', details: error.message });
@@ -246,40 +278,8 @@ exports.getChatThreads = async (req, res) => {
       return res.status(400).json({ error: 'communityId query is required' });
     }
 
-    // Build query filters
-    const where = {
-      spaceId: communityId,
-      parentId: null // Only root messages (thread starters)
-    };
-    
-    if (uri) {
-      where.url = uri;
-    }
-
-    const threads = await prisma.post.findMany({
-      where,
-      include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            handle: true,
-            avatarUrl: true
-          }
-        },
-        _count: {
-          select: {
-            children: true // Count replies
-          }
-        }
-      },
-      orderBy: {
-        createdAt: 'desc'
-      }
-    });
-
-    console.log(`Found ${threads.length} threads for community ${communityId}`);
-    res.json({ threads });
+    // REMOVED: Old Prisma fallback - using Supabase-only system
+    // This was causing the API to return old data instead of new Supabase messages
   } catch (error) {
     console.error('❌ CHAT: Error fetching threads:', error);
     res.status(500).json({ error: 'Failed to fetch threads', details: error.message });

@@ -19,7 +19,7 @@ class StateManager {
         previousView: null,          // window.previousView
         lastMessageCount: 0,         // lastMessageCount
         lastMessageId: null,         // lastMessageId
-        pollingInterval: null,       // messagePollingInterval
+        // NO POLLING - Using Supabase real-time instead
         isPolling: false
       },
       
@@ -363,7 +363,7 @@ class StateManager {
         previousView: null,
         lastMessageCount: 0,
         lastMessageId: null,
-        pollingInterval: null,
+        // NO POLLING - Using Supabase real-time instead
         isPolling: false
       },
       avatars: {
