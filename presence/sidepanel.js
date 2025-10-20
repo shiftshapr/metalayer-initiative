@@ -6087,6 +6087,14 @@ async function convertSupabaseMessageToAPIFormat(supabaseMessage) {
             authorData.name = userInVisibility.name || authorData.name;
           }
         }
+        
+        // If still no avatar, try to get from UnifiedPresenceManager if available
+        if (!authorData.avatarUrl && window.UnifiedPresenceManager) {
+          console.log('🔍 REMOTE AVATAR DEBUG: Trying UnifiedPresenceManager...');
+          // This would need to be implemented in UnifiedPresenceManager
+          // For now, we'll use a generic avatar as fallback
+          console.log('🔍 REMOTE AVATAR DEBUG: Using generic avatar as final fallback');
+        }
       }
     } else if (presenceData && presenceData.length > 0) {
       console.log('✅ CONVERT_MESSAGE: Found author data:', presenceData[0]);
@@ -9368,29 +9376,53 @@ async function startPresenceTracking() {
       }
     }
 
-    // Send initial presence event to backend
-    console.log('🔧 PRESENCE: Sending initial presence event to backend...');
-    console.log('🔍 PRESENCE DEBUG: Current user:', await getCurrentUserEmail());
-    console.log('🔍 PRESENCE DEBUG: Current page ID:', currentPageId);
-    console.log('🔍 PRESENCE DEBUG: URL data:', urlData);
-    try {
-      const presenceResult = await sendPresenceEvent('ENTER');
-      console.log('✅ PRESENCE: Initial presence event sent successfully');
-      console.log('🔍 PRESENCE DEBUG: Presence event result:', presenceResult);
-      
-      // Wait a moment for the presence to be processed, then refresh visibility
-      setTimeout(async () => {
-        console.log('🔍 PRESENCE DEBUG: Refreshing visibility after presence event...');
-        try {
-          await refreshVisibilityAvatars();
-          console.log('✅ PRESENCE DEBUG: Visibility refreshed after presence event');
-        } catch (error) {
-          console.error('❌ PRESENCE DEBUG: Failed to refresh visibility:', error);
+    // Use UnifiedPresenceManager if available, otherwise fallback to existing system
+    if (window.UnifiedPresenceManager) {
+      console.log('🔧 PRESENCE: Using UnifiedPresenceManager...');
+      try {
+        const unifiedPresence = new window.UnifiedPresenceManager(window.supabase);
+        const initSuccess = await unifiedPresence.initialize(
+          { email: await getCurrentUserEmail() }, 
+          currentPageId
+        );
+        
+        if (initSuccess) {
+          console.log('✅ PRESENCE: UnifiedPresenceManager initialized successfully');
+          
+          // Listen for presence updates
+          window.addEventListener('presenceUpdate', (event) => {
+            console.log('🔍 PRESENCE: Received presence update:', event.detail);
+            // Update visibility UI with active users
+            updateVisibleTab(event.detail.activeUsers);
+          });
+        } else {
+          console.error('❌ PRESENCE: UnifiedPresenceManager initialization failed');
         }
-      }, 2000);
-    } catch (error) {
-      console.error('❌ PRESENCE: Failed to send initial presence event:', error);
-      console.error('🔍 PRESENCE DEBUG: Error details:', error.message, error.stack);
+      } catch (error) {
+        console.error('❌ PRESENCE: Error with UnifiedPresenceManager:', error);
+      }
+    } else {
+      // Fallback to existing system
+      console.log('🔧 PRESENCE: Using existing presence system...');
+      try {
+        const presenceResult = await sendPresenceEvent('ENTER');
+        console.log('✅ PRESENCE: Initial presence event sent successfully');
+        console.log('🔍 PRESENCE DEBUG: Presence event result:', presenceResult);
+        
+        // Wait a moment for the presence to be processed, then refresh visibility
+        setTimeout(async () => {
+          console.log('🔍 PRESENCE DEBUG: Refreshing visibility after presence event...');
+          try {
+            await refreshVisibilityAvatars();
+            console.log('✅ PRESENCE DEBUG: Visibility refreshed after presence event');
+          } catch (error) {
+            console.error('❌ PRESENCE DEBUG: Failed to refresh visibility:', error);
+          }
+        }, 2000);
+      } catch (error) {
+        console.error('❌ PRESENCE: Failed to send initial presence event:', error);
+        console.error('🔍 PRESENCE DEBUG: Error details:', error.message, error.stack);
+      }
     }
     
     // Set up single comprehensive Supabase real-time subscription for this page
@@ -10225,7 +10257,10 @@ function updateAllMessageAvatars(userEmail, auraColor) {
     .message-avatar[data-user-email="${userEmail}"],
     .message-avatar[data-user-id="${userEmail}"],
     .avatar[data-user-email="${userEmail}"],
-    .avatar[data-user-id="${userEmail}"]
+    .avatar[data-user-id="${userEmail}"],
+    .message[data-author-id="${userEmail}"] .message-avatar,
+    .message[data-author-id="${userEmail}"] .avatar,
+    .message[data-author-id="${userEmail}"] img[src*="googleusercontent.com"]
   `);
   console.log('🔍 AURA DEBUG: Found message avatars:', messageAvatars.length);
   
