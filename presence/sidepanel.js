@@ -6070,6 +6070,23 @@ async function convertSupabaseMessageToAPIFormat(supabaseMessage) {
         authorData.avatarUrl = fallbackData[0].avatar_url;
         authorData.auraColor = fallbackData[0].aura_color || window.currentUser?.auraColor || '#aa00aa';
         authorData.name = fallbackData[0].user_name || authorData.name;
+        console.log('🔍 REMOTE AVATAR DEBUG: Updated author data with fallback:', {
+          avatarUrl: authorData.avatarUrl,
+          auraColor: authorData.auraColor,
+          name: authorData.name
+        });
+      } else {
+        console.log('🔍 REMOTE AVATAR DEBUG: No fallback data found, trying to get from visibility data...');
+        // Try to get avatar from current visibility data
+        if (window.currentVisibilityDataUnfiltered && window.currentVisibilityDataUnfiltered.active) {
+          const userInVisibility = window.currentVisibilityDataUnfiltered.active.find(u => u.email === userEmail);
+          if (userInVisibility && userInVisibility.avatarUrl) {
+            console.log('🔍 REMOTE AVATAR DEBUG: Found avatar in visibility data:', userInVisibility.avatarUrl);
+            authorData.avatarUrl = userInVisibility.avatarUrl;
+            authorData.auraColor = userInVisibility.auraColor || '#aa00aa';
+            authorData.name = userInVisibility.name || authorData.name;
+          }
+        }
       }
     } else if (presenceData && presenceData.length > 0) {
       console.log('✅ CONVERT_MESSAGE: Found author data:', presenceData[0]);
@@ -7392,18 +7409,35 @@ async function updateUI(user) {
     // Fetch user's aura color from database
     console.log('🔍 AURA DEBUG: Fetching user aura color from database...');
     try {
-      const { data: userData, error } = await window.supabase
-        .from('app_users')
+      // Try user_presence table first (where aura colors are actually stored)
+      const { data: presenceData, error: presenceError } = await window.supabase
+        .from('user_presence')
         .select('aura_color')
-        .eq('email', user.email)
-        .single();
+        .eq('user_email', user.email)
+        .order('updated_at', { ascending: false })
+        .limit(1);
       
-      if (error) {
-        console.log('🔍 AURA DEBUG: Error fetching user aura color:', error);
-        console.log('🔍 AURA DEBUG: Using fallback aura color');
-      } else if (userData && userData.aura_color) {
-        console.log('🔍 AURA DEBUG: Found user aura color in database:', userData.aura_color);
-        window.currentUser.auraColor = userData.aura_color;
+      if (presenceError) {
+        console.log('🔍 AURA DEBUG: Error fetching from user_presence:', presenceError);
+        console.log('🔍 AURA DEBUG: Trying app_users table...');
+        
+        // Fallback to app_users table
+        const { data: userData, error: userError } = await window.supabase
+          .from('app_users')
+          .select('aura_color')
+          .eq('email', user.email)
+          .single();
+        
+        if (userError) {
+          console.log('🔍 AURA DEBUG: Error fetching from app_users:', userError);
+          console.log('🔍 AURA DEBUG: Using fallback aura color');
+        } else if (userData && userData.aura_color) {
+          console.log('🔍 AURA DEBUG: Found user aura color in app_users:', userData.aura_color);
+          window.currentUser.auraColor = userData.aura_color;
+        }
+      } else if (presenceData && presenceData.length > 0 && presenceData[0].aura_color) {
+        console.log('🔍 AURA DEBUG: Found user aura color in user_presence:', presenceData[0].aura_color);
+        window.currentUser.auraColor = presenceData[0].aura_color;
         console.log('🔍 AURA DEBUG: Updated window.currentUser.auraColor to:', window.currentUser.auraColor);
       } else {
         console.log('🔍 AURA DEBUG: No aura color found in database, using fallback');
@@ -9343,6 +9377,17 @@ async function startPresenceTracking() {
       const presenceResult = await sendPresenceEvent('ENTER');
       console.log('✅ PRESENCE: Initial presence event sent successfully');
       console.log('🔍 PRESENCE DEBUG: Presence event result:', presenceResult);
+      
+      // Wait a moment for the presence to be processed, then refresh visibility
+      setTimeout(async () => {
+        console.log('🔍 PRESENCE DEBUG: Refreshing visibility after presence event...');
+        try {
+          await refreshVisibilityAvatars();
+          console.log('✅ PRESENCE DEBUG: Visibility refreshed after presence event');
+        } catch (error) {
+          console.error('❌ PRESENCE DEBUG: Failed to refresh visibility:', error);
+        }
+      }, 2000);
     } catch (error) {
       console.error('❌ PRESENCE: Failed to send initial presence event:', error);
       console.error('🔍 PRESENCE DEBUG: Error details:', error.message, error.stack);
@@ -10175,75 +10220,102 @@ let currentRawUrl = null;
 function updateAllMessageAvatars(userEmail, auraColor) {
   console.log('🔍 AURA DEBUG: Updating message avatars for user:', userEmail, 'with color:', auraColor);
   
-  // Find all message avatars for this user
-  const messageAvatars = document.querySelectorAll(`.message-avatar[data-user-email="${userEmail}"]`);
+  // Find all message avatars for this user - try multiple selectors
+  const messageAvatars = document.querySelectorAll(`
+    .message-avatar[data-user-email="${userEmail}"],
+    .message-avatar[data-user-id="${userEmail}"],
+    .avatar[data-user-email="${userEmail}"],
+    .avatar[data-user-id="${userEmail}"]
+  `);
   console.log('🔍 AURA DEBUG: Found message avatars:', messageAvatars.length);
+  
+  // Also try to find avatars in messages by user email
+  const allMessages = document.querySelectorAll('.message');
+  let foundInMessages = 0;
+  
+  allMessages.forEach(message => {
+    const authorEmail = message.dataset.authorId || message.querySelector('[data-user-email]')?.dataset.userEmail;
+    if (authorEmail === userEmail) {
+      const avatar = message.querySelector('.message-avatar, .avatar');
+      if (avatar) {
+        foundInMessages++;
+        console.log('🔍 AURA DEBUG: Found avatar in message:', avatar);
+        updateAvatarAura(avatar, auraColor);
+      }
+    }
+  });
+  
+  console.log('🔍 AURA DEBUG: Found avatars in messages:', foundInMessages);
   
   messageAvatars.forEach(avatar => {
     console.log('🔍 AURA DEBUG: Updating message avatar:', avatar);
-    // Update the aura color in the avatar's data attribute
-    avatar.setAttribute('data-aura-color', auraColor);
-    
-    // Update the avatar's aura visual effect
-    const auraElement = avatar.querySelector('.aura-effect');
-    if (auraElement) {
-      auraElement.style.boxShadow = `0 0 10px 3px ${auraColor}`;
-    } else {
-      // Create aura effect if it doesn't exist
-      const aura = document.createElement('div');
-      aura.className = 'aura-effect';
-      aura.style.cssText = `
-        position: absolute;
-        top: -3px;
-        left: -3px;
-        right: -3px;
-        bottom: -3px;
-        border-radius: 50%;
-        box-shadow: 0 0 10px 3px ${auraColor};
-        pointer-events: none;
-        z-index: -1;
-      `;
-      avatar.style.position = 'relative';
-      avatar.appendChild(aura);
-    }
+    updateAvatarAura(avatar, auraColor);
   });
+}
+
+// Helper function to update a single avatar's aura
+function updateAvatarAura(avatar, auraColor) {
+  // Update the aura color in the avatar's data attribute
+  avatar.setAttribute('data-aura-color', auraColor);
+  
+  // Update the avatar's aura visual effect
+  const auraElement = avatar.querySelector('.aura-effect');
+  if (auraElement) {
+    auraElement.style.boxShadow = `0 0 10px 3px ${auraColor}`;
+  } else {
+    // Create aura effect if it doesn't exist
+    const aura = document.createElement('div');
+    aura.className = 'aura-effect';
+    aura.style.cssText = `
+      position: absolute;
+      top: -3px;
+      left: -3px;
+      right: -3px;
+      bottom: -3px;
+      border-radius: 50%;
+      box-shadow: 0 0 10px 3px ${auraColor};
+      pointer-events: none;
+      z-index: -1;
+    `;
+    avatar.style.position = 'relative';
+    avatar.appendChild(aura);
+  }
 }
 
 // Function to update all visibility avatars with new aura color
 function updateAllVisibilityAvatars(userEmail, auraColor) {
   console.log('🔍 AURA DEBUG: Updating visibility avatars for user:', userEmail, 'with color:', auraColor);
   
-  // Find all visibility avatars for this user
-  const visibilityAvatars = document.querySelectorAll(`.avatar[data-user-email="${userEmail}"], .user-avatar[data-user-email="${userEmail}"]`);
+  // Find all visibility avatars for this user - try multiple selectors
+  const visibilityAvatars = document.querySelectorAll(`
+    .avatar[data-user-email="${userEmail}"],
+    .user-avatar[data-user-email="${userEmail}"],
+    .avatar[data-user-id="${userEmail}"],
+    .user-avatar[data-user-id="${userEmail}"]
+  `);
   console.log('🔍 AURA DEBUG: Found visibility avatars:', visibilityAvatars.length);
+  
+  // Also try to find avatars in visibility containers
+  const visibilityContainers = document.querySelectorAll('.visibility-container, .avatars-container, #canopi-visible');
+  let foundInVisibility = 0;
+  
+  visibilityContainers.forEach(container => {
+    const avatars = container.querySelectorAll('.avatar, .user-avatar');
+    avatars.forEach(avatar => {
+      const avatarEmail = avatar.dataset.userEmail || avatar.dataset.userId;
+      if (avatarEmail === userEmail) {
+        foundInVisibility++;
+        console.log('🔍 AURA DEBUG: Found avatar in visibility container:', avatar);
+        updateAvatarAura(avatar, auraColor);
+      }
+    });
+  });
+  
+  console.log('🔍 AURA DEBUG: Found avatars in visibility containers:', foundInVisibility);
   
   visibilityAvatars.forEach(avatar => {
     console.log('🔍 AURA DEBUG: Updating visibility avatar:', avatar);
-    // Update the aura color in the avatar's data attribute
-    avatar.setAttribute('data-aura-color', auraColor);
-    
-    // Update the avatar's aura visual effect
-    const auraElement = avatar.querySelector('.aura-effect');
-    if (auraElement) {
-      auraElement.style.boxShadow = `0 0 10px 3px ${auraColor}`;
-    } else {
-      // Create aura effect if it doesn't exist
-      const aura = document.createElement('div');
-      aura.className = 'aura-effect';
-      aura.style.cssText = `
-        position: absolute;
-        top: -3px;
-        left: -3px;
-        right: -3px;
-        bottom: -3px;
-        border-radius: 50%;
-        box-shadow: 0 0 10px 3px ${auraColor};
-        pointer-events: none;
-        z-index: -1;
-      `;
-      avatar.style.position = 'relative';
-      avatar.appendChild(aura);
-    }
+    updateAvatarAura(avatar, auraColor);
   });
 }
 
