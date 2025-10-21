@@ -151,13 +151,13 @@ class AvatarUtils {
     // Status dot color based on activity
     const statusDotColor = user.is_active ? '#22c55e' : '#6b7280';
 
-    let html = `<div style="position: relative; width: ${size}px; height: ${size}px;">`;
+    let html = `<div style="position: relative; width: ${size}px; height: ${size}px;" data-user-email="${user.user_email || user.email}" data-user-id="${user.user_email || user.email}">`;
     
     if (showAura) {
       html += `<div style="position: absolute; top: -2px; left: -2px; width: ${size + 4}px; height: ${size + 4}px; border-radius: 50%; background-color: ${auraColor}; z-index: 1; border: 2px solid ${auraColor};"></div>`;
     }
     
-    html += `<img src="${avatarUrl}" alt="${userName}" style="position: relative; z-index: 2; width: ${size}px; height: ${size}px; border-radius: 50%; object-fit: cover; border: 2px solid ${auraColor};" data-avatar-fallback="true" data-avatar-source="${avatarSource}">`;
+    html += `<img src="${avatarUrl}" alt="${userName}" style="position: relative; z-index: 2; width: ${size}px; height: ${size}px; border-radius: 50%; object-fit: cover; border: 2px solid ${auraColor};" data-avatar-fallback="true" data-avatar-source="${avatarSource}" data-user-email="${user.user_email || user.email}" data-user-id="${user.user_email || user.email}">`;
     
     if (showStatus) {
       html += `<div style="position: absolute; bottom: -2px; right: -2px; width: 8px; height: 8px; border-radius: 50%; background-color: ${statusDotColor}; border: 2px solid white; z-index: 3;"></div>`;

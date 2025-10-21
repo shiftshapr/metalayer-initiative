@@ -3592,6 +3592,7 @@ async function addMessageToChat(message) {
   
   messageDiv.dataset.messageId = message.id;
   messageDiv.dataset.conversationId = message.conversationId;
+  messageDiv.dataset.authorId = message.authorId || author.email || author.id;
   
   // Store reactions data for reactions loading (avoid circular reference)
   if (message.conversation && message.conversation.reactions) {
