@@ -319,6 +319,12 @@ class AurasRealtimeManager {
 // Export for use
 if (typeof window !== 'undefined') {
   window.AurasRealtimeManager = AurasRealtimeManager;
+  
+  // Create global instance when dependencies are available
+  if (window.realtimeFoundation && window.supabase) {
+    window.aurasRealtimeManager = new AurasRealtimeManager(window.realtimeFoundation, window.supabase);
+    window.aurasRealtimeManager.initialize();
+  }
 }
 
 if (typeof module !== 'undefined' && module.exports) {
