@@ -38,9 +38,15 @@ class AurasIntegration {
       this.logger.info('Initializing auras integration...');
       
       // Step 1: Check if foundation is available
-      if (typeof window.realtimeFoundation === 'undefined') {
-        this.logger.error('RealtimeFoundation not available');
-        return false;
+      if (!this.realtimeFoundation) {
+        // Try to get the realtime foundation from global scope if not provided in constructor
+        if (window.realtimeFoundation) {
+          this.logger.info('Using global realtimeFoundation');
+          this.realtimeFoundation = window.realtimeFoundation;
+        } else {
+          this.logger.error('RealtimeFoundation not available in constructor or globally');
+          return false;
+        }
       }
 
       // Step 2: Get current user
@@ -54,8 +60,14 @@ class AurasIntegration {
       
       // Step 3: Initialize auras manager
       if (!this.aurasRealtimeManager) {
-        this.logger.error('AurasRealtimeManager not provided in constructor');
-        return false;
+        // Try to get the auras manager from global scope if not provided in constructor
+        if (window.aurasRealtimeManager) {
+          this.logger.info('Using global aurasRealtimeManager');
+          this.aurasRealtimeManager = window.aurasRealtimeManager;
+        } else {
+          this.logger.error('AurasRealtimeManager not available in constructor or globally');
+          return false;
+        }
       }
 
       // Use the provided auras manager instead of creating new one
