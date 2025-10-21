@@ -10,12 +10,19 @@
  */
 
 class AurasIntegration {
-  constructor() {
+  constructor(realtimeFoundation, aurasRealtimeManager) {
+    this.realtimeFoundation = realtimeFoundation;
+    this.aurasRealtimeManager = aurasRealtimeManager;
     this.isInitialized = false;
     this.aurasManager = null;
     this.currentUser = null;
     this.currentPage = null;
     this.logger = this._createLogger();
+    
+    // If dependencies aren't available yet, we'll initialize later
+    if (!this.realtimeFoundation || !this.aurasRealtimeManager) {
+      this.logger.warn('AurasIntegration created without dependencies - will initialize later');
+    }
   }
 
   /**
@@ -336,7 +343,12 @@ class AurasIntegration {
 
 // Create global instance
 if (typeof window !== 'undefined') {
-  window.aurasIntegration = new AurasIntegration();
+  // Initialize with proper dependencies when they're available
+  // Use fallback values if dependencies aren't ready yet
+  window.aurasIntegration = new AurasIntegration(
+    window.realtimeFoundation || null,
+    window.aurasRealtimeManager || null
+  );
 }
 
 // Export for use
