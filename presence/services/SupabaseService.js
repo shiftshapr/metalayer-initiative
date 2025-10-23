@@ -25,13 +25,15 @@ class SupabaseService {
     this.channels = new Map();
     this.eventHandlers = new Map();
     
-    this.logger = window.Logger || {
-      startFlow: (name, data) => console.log(`[FLOW START] ${name}`, data),
-      endFlow: (name, success, data) => console.log(`[FLOW END] ${name} (${success ? 'SUCCESS' : 'FAILED'})`, data),
-      debug: (msg, data, category) => console.log(`[DEBUG] ${msg}`, data),
-      info: (msg, data, category) => console.log(`[INFO] ${msg}`, data),
-      success: (msg, data, category) => console.log(`[SUCCESS] ${msg}`, data),
-      error: (msg, data, category) => console.error(`[ERROR] ${msg}`, data)
+    // Ensure logger has all required methods
+    const baseLogger = window.Logger || console;
+    this.logger = {
+      startFlow: baseLogger.startFlow || ((name, data) => console.log(`[FLOW START] ${name}`, data)),
+      endFlow: baseLogger.endFlow || ((name, success, data) => console.log(`[FLOW END] ${name} (${success ? 'SUCCESS' : 'FAILED'})`, data)),
+      debug: baseLogger.debug || ((msg, data, category) => console.log(`[DEBUG] ${msg}`, data)),
+      info: baseLogger.info || ((msg, data, category) => console.log(`[INFO] ${msg}`, data)),
+      success: baseLogger.success || ((msg, data, category) => console.log(`[SUCCESS] ${msg}`, data)),
+      error: baseLogger.error || ((msg, data, category) => console.error(`[ERROR] ${msg}`, data))
     };
   }
 
