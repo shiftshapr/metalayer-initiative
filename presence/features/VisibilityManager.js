@@ -413,44 +413,11 @@ async function updateVisibleTab(avatars) {
   }
 }
 
-/**
- * Refresh visibility avatars
- */
-async function refreshVisibilityAvatars() {
-  console.log('🔄 VISIBILITY: refreshVisibilityAvatars called');
-  
-  try {
-    // Get current user and page data
-    const currentUser = await getCurrentUserEmail();
-    const currentPage = window.currentUrlData?.pageId;
-    
-    if (!currentUser || !currentPage) {
-      console.log('❌ VISIBILITY: Missing currentUser or currentPage');
-      return;
-    }
-    
-    console.log(`🔄 VISIBILITY: Refreshing for user: ${currentUser}, page: ${currentPage}`);
-    
-    // Load combined avatars for current communities
-    const result = await chrome.storage.local.get(['activeCommunities']);
-    const activeCommunities = result.activeCommunities || ['comm-001'];
-    
-    if (typeof loadCombinedAvatars === 'function') {
-      await loadCombinedAvatars(activeCommunities);
-    } else {
-      console.log('❌ VISIBILITY: loadCombinedAvatars function not available');
-    }
-    
-  } catch (error) {
-    console.error('❌ VISIBILITY: Error refreshing visibility avatars:', error);
-  }
-}
 
 // Make available globally
 if (typeof window !== 'undefined') {
   window.VisibilityManager = VisibilityManager;
   window.updateVisibleTab = updateVisibleTab;
-  window.refreshVisibilityAvatars = refreshVisibilityAvatars;
 }
 
 console.log('✅ VisibilityManager initialized');

@@ -327,6 +327,99 @@ async function setupModernCrossProfileCommunication() {
 // Make updateVisibleTab globally accessible
 window.updateVisibleTab = updateVisibleTab;
 
+// ===== ORCHESTRATION FUNCTION: refreshVisibilityAvatars =====
+async function refreshVisibilityAvatars() {
+  // Prevent multiple simultaneous refreshes
+  if (isRefreshingVisibility) {
+    console.log('🔄 REFRESH_VISIBILITY: Already refreshing, skipping duplicate call');
+    return;
+  }
+  
+  isRefreshingVisibility = true;
+  console.log('🔄 REFRESH_VISIBILITY: === STARTING VISIBILITY REFRESH ===');
+  
+  try {
+    // CRITICAL FIX: Use window variables for global access
+    const client = window.supabaseRealtimeClient || supabaseRealtimeClient;
+    const pageId = window.currentUrlData?.pageId || currentPageId;
+    
+    console.log('🔄 REFRESH_VISIBILITY: Client available:', !!client);
+    console.log('🔄 REFRESH_VISIBILITY: Page ID:', pageId);
+    console.log('🔄 REFRESH_VISIBILITY: Current URL data:', window.currentUrlData);
+    
+    if (client && pageId) {
+      console.log('🔄 REFRESH_VISIBILITY: === STARTING ENHANCED VISIBILITY REFRESH ===');
+      
+      const users = await client.getPageUsers(pageId);
+      console.log('👁️ REFRESH_VISIBILITY: Enhanced query returned users:', users.length);
+      console.log('👁️ REFRESH_VISIBILITY: Users:', users.map(u => `${u.user_email} (${u.is_active ? 'ACTIVE' : 'INACTIVE'})`));
+      
+      if (users && users.length > 0) {
+        console.log('🔄 REFRESH_VISIBILITY: Processing enhanced query results...');
+        
+        // Use AvatarUtils for consistent avatar URL fetching
+        const usersWithAvatars = await Promise.all(users.map(async (user) => {
+          let avatarUrl = null;
+          let userName = user.user_email.split('@')[0];
+          let userHandle = user.user_email.split('@')[0];
+          let avatarSource = 'none';
+          
+          try {
+            // Use AvatarUtils for consistent avatar URL fetching
+            if (window.AvatarUtils) {
+              const avatarData = window.AvatarUtils.getAvatarUrl(user, 'visibility');
+              avatarUrl = avatarData.avatarUrl;
+              userName = avatarData.userName;
+              avatarSource = avatarData.source;
+            } else {
+              // Fallback if AvatarUtils not available
+              avatarUrl = user.avatar_url || null;
+              userName = user.user_email.split('@')[0];
+            }
+          } catch (error) {
+            console.error('❌ REFRESH_VISIBILITY: Error getting avatar for user:', user.user_email, error);
+          }
+          
+          return {
+            userId: user.user_email,
+            handle: userHandle,
+            name: userName,
+            email: user.user_email,
+            avatarUrl: avatarUrl,
+            auraColor: user.aura_color || '#aaaaaa',
+            isActive: user.is_active,
+            enterTime: user.enter_time,
+            lastSeen: user.last_seen,
+            status: user.is_active ? 'online' : 'offline'
+          };
+        }));
+        
+        console.log('🔄 REFRESH_VISIBILITY: Processed users with avatars:', usersWithAvatars.length);
+        
+        // Update visibility using the VisibilityManager
+        if (typeof window.updateVisibleTab === 'function') {
+          await window.updateVisibleTab(usersWithAvatars);
+        } else {
+          console.log('❌ REFRESH_VISIBILITY: updateVisibleTab function not available');
+        }
+      } else {
+        console.log('👁️ REFRESH_VISIBILITY: No users found for page');
+        // Clear visibility if no users
+        if (typeof window.updateVisibleTab === 'function') {
+          await window.updateVisibleTab([]);
+        }
+      }
+    } else {
+      console.log('❌ REFRESH_VISIBILITY: Missing client or pageId');
+    }
+  } catch (error) {
+    console.error('❌ REFRESH_VISIBILITY: Error during visibility refresh:', error);
+  } finally {
+    isRefreshingVisibility = false;
+    console.log('🔄 REFRESH_VISIBILITY: === VISIBILITY REFRESH COMPLETE ===');
+  }
+}
+
 // CRITICAL FIX: Expose refreshVisibilityAvatars globally for real-time handler
 window.refreshVisibilityAvatars = refreshVisibilityAvatars;
 
