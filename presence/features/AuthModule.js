@@ -609,42 +609,7 @@ async function completeOTPForRealtime(otpCode) {
   }
 }
 
-async function getCurrentUserEmail() {
-  try {
-    // FIRST: Try real Google auth for actual profile pictures
-    if (realGoogleAuth) {
-      const user = await realGoogleAuth.getCurrentUser();
-      console.log('[AUTH] Real Google Auth returned user:', user);
-      
-      if (user && user.email) {
-        console.log('[AUTH] Found authenticated user with REAL profile picture:', user.email);
-        console.log('[AUTH] Real avatar URL:', user.user_metadata?.avatar_url);
-        return user.email;
-      }
-    }
-    
-    // SECOND: Fallback to AuthManager
-    const user = await authManager.getCurrentUser();
-    console.log('[AUTH] AuthManager returned user:', user);
-    
-    if (user && user.email) {
-      console.log('[AUTH] Found authenticated user (fallback):', user.email);
-      return user.email;
-    }
-    
-    console.error('[AUTH] No authenticated user found via any method');
-    
-    // Show authentication prompt for proper OAuth flow
-    console.log('[AUTH] No user found, showing authentication prompt...');
-    showAuthPrompt('access presence features');
-    
-    // Return null instead of throwing error to allow graceful handling
-    return null;
-  } catch (error) {
-    console.error('[AUTH] Error getting current user:', error.message);
-    throw new Error('User not authenticated');
-  }
-}
 
 // Export for global access
 window.AuthModule = AuthModule;
+window.getCurrentUserEmail = getCurrentUserEmail;

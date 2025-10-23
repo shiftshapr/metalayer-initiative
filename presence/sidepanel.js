@@ -423,6 +423,61 @@ async function refreshVisibilityAvatars() {
 // CRITICAL FIX: Expose refreshVisibilityAvatars globally for real-time handler
 window.refreshVisibilityAvatars = refreshVisibilityAvatars;
 
+// ===== ORCHESTRATION FUNCTION: normalizeCurrentUrl =====
+async function normalizeCurrentUrl() {
+  try {
+    const rawUri = await getCurrentPageUri();
+    console.log(`URL_NORMALIZE: Normalizing current URL: ${rawUri}`);
+    
+    // Use window.normalizeUrl if available (from UIManager)
+    if (typeof window.normalizeUrl === 'function') {
+      const urlData = await window.normalizeUrl(rawUri);
+      console.log(`URL_NORMALIZE: Normalized URL data:`, urlData);
+      return urlData;
+    } else {
+      console.log('❌ URL_NORMALIZE: window.normalizeUrl not available');
+      // Fallback - create basic URL data
+      return {
+        rawUrl: rawUri,
+        normalizedUrl: rawUri,
+        pageId: rawUri.replace(/[^a-zA-Z0-9]/g, '_')
+      };
+    }
+  } catch (error) {
+    console.error('❌ URL_NORMALIZE: Error normalizing URL:', error);
+    return {
+      rawUrl: window.location.href,
+      normalizedUrl: window.location.href,
+      pageId: window.location.href.replace(/[^a-zA-Z0-9]/g, '_')
+    };
+  }
+}
+
+// ===== ORCHESTRATION FUNCTION: updateUI =====
+async function updateUI(user) {
+  try {
+    console.log('🔄 UPDATE_UI: Updating UI for user:', user);
+    
+    // Update profile avatar if available
+    if (window.ProfileManager && typeof window.ProfileManager.updateProfile === 'function') {
+      await window.ProfileManager.updateProfile(user);
+    }
+    
+    // Update visibility if available
+    if (typeof window.refreshVisibilityAvatars === 'function') {
+      await window.refreshVisibilityAvatars();
+    }
+    
+    console.log('✅ UPDATE_UI: UI update complete');
+  } catch (error) {
+    console.error('❌ UPDATE_UI: Error updating UI:', error);
+  }
+}
+
+// Make functions globally accessible
+window.normalizeCurrentUrl = normalizeCurrentUrl;
+window.updateUI = updateUI;
+
 // ===== USER SETTINGS FOR THRESHOLD CONFIGURATION =====
 
 // Set Last Seen threshold (user-configurable)

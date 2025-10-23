@@ -535,3 +535,4 @@ async function loadMessageReplies(messageId, conversationId, communityId = null)
 
 // Export for global access
 window.CommunitiesModule = CommunitiesModule;
+window.loadCombinedAvatars = loadCombinedAvatars;

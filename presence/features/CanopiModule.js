@@ -2716,3 +2716,5 @@ async function toggleThreadReplies(threadId, messageElement) {
 
 // Export for global access
 window.CanopiModule = CanopiModule;
+window.loadChatHistory = loadChatHistory;
+window.addMessageToChat = addMessageToChat;
