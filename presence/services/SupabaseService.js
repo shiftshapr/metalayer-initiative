@@ -35,6 +35,11 @@ class SupabaseService {
     try {
       this.logger.startFlow('SUPABASE_INIT', { url: this.config.url });
       
+      // Check if Supabase library is available
+      if (typeof supabase === 'undefined') {
+        throw new Error('Supabase library not loaded. Make sure lib/supabase.min.js is loaded.');
+      }
+      
       // Initialize Supabase client
       this.client = supabase.createClient(this.config.url, this.config.key);
       
@@ -46,6 +51,11 @@ class SupabaseService {
       }
       
       this.isConnected = true;
+      
+      // Expose client globally for other modules
+      window.supabase = this.client;
+      window.supabaseService = this;
+      
       this.logger.endFlow('SUPABASE_INIT', true, { connected: true });
       
       return { success: true, client: this.client };
@@ -422,6 +432,14 @@ if (typeof module !== 'undefined' && module.exports) {
 // Make available globally
 if (typeof window !== 'undefined') {
   window.SupabaseService = SupabaseService;
+  
+  // Auto-initialize SupabaseService
+  const supabaseService = new SupabaseService();
+  supabaseService.initialize().then(() => {
+    console.log('✅ SupabaseService initialized and connected');
+  }).catch(error => {
+    console.error('❌ SupabaseService initialization failed:', error);
+  });
 }
 
 console.log('✅ SupabaseService initialized');
