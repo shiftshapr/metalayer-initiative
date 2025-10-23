@@ -433,13 +433,30 @@ if (typeof module !== 'undefined' && module.exports) {
 if (typeof window !== 'undefined') {
   window.SupabaseService = SupabaseService;
   
-  // Auto-initialize SupabaseService
-  const supabaseService = new SupabaseService();
-  supabaseService.initialize().then(() => {
-    console.log('✅ SupabaseService initialized and connected');
-  }).catch(error => {
-    console.error('❌ SupabaseService initialization failed:', error);
-  });
+  // Auto-initialize SupabaseService when DOM is loaded
+  function initializeSupabaseService() {
+    // Check if Supabase library is available
+    if (typeof supabase === 'undefined') {
+      console.error('❌ SUPABASE: Library not loaded. Make sure lib/supabase.min.js is loaded first');
+      return;
+    }
+    
+    const supabaseService = new SupabaseService();
+    supabaseService.initialize().then(() => {
+      console.log('✅ SupabaseService initialized and connected');
+    }).catch(error => {
+      console.error('❌ SupabaseService initialization failed:', error);
+      console.error('❌ SupabaseService: Make sure lib/supabase.min.js is loaded first');
+    });
+  }
+  
+  // Initialize when DOM is ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeSupabaseService);
+  } else {
+    // DOM is already loaded
+    initializeSupabaseService();
+  }
 }
 
 console.log('✅ SupabaseService initialized');
