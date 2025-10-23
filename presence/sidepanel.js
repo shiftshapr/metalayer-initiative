@@ -477,7 +477,6 @@ async function updateUI(user) {
 // Make functions globally accessible
 window.normalizeCurrentUrl = normalizeCurrentUrl;
 window.updateUI = updateUI;
-window.debug = debug;
 
 // ===== USER SETTINGS FOR THRESHOLD CONFIGURATION =====
 
