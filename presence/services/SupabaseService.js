@@ -312,6 +312,108 @@ class SupabaseService {
   }
 }
 
+
+// ===== COMPLETE MODERN ARCHITECTURE INTEGRATION =====
+// StateManager, EventBus, LifecycleManager, and Supabase integration
+
+// Supabase configuration (using config system - NO HARDCODING)
+const SUPABASE_URL = window.SUPABASE_URL;
+const SUPABASE_ANON_KEY = window.SUPABASE_ANON_KEY;
+
+// Initialize Supabase client globally with comprehensive error handling
+if (typeof window !== 'undefined') {
+  try {
+    // Check if supabase is available
+    if (typeof supabase === 'undefined') {
+      console.error('❌ SUPABASE: supabase library not loaded');
+      throw new Error('Supabase library not available');
+    }
+    
+    window.supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    console.log('✅ SUPABASE: Global client initialized successfully');
+    console.log('✅ SUPABASE: URL:', SUPABASE_URL);
+    console.log('✅ SUPABASE: Key present:', !!SUPABASE_ANON_KEY);
+    console.log('✅ SUPABASE: Client methods available:', Object.keys(window.supabase).slice(0, 10));
+    
+    // CRITICAL FIX: Set up Supabase authentication after user login
+    console.log('🔧 SUPABASE: Setting up authentication listener...');
+    window.supabase.auth.onAuthStateChange((event, session) => {
+      console.log('🔔 SUPABASE AUTH: Auth state changed:', event);
+      if (session) {
+        console.log('✅ SUPABASE AUTH: User authenticated:', session.user.email);
+        console.log('✅ SUPABASE AUTH: Session expires at:', new Date(session.expires_at * 1000));
+        
+        // Initialize RobustIntegration now that user is authenticated
+        if (window.robustIntegration && !window.robustIntegration.isInitialized) {
+          console.log('🔗 AUTH: Initializing RobustIntegration after authentication...');
+          window.robustIntegration.initialize().then(success => {
+            if (success) {
+              console.log('✅ AUTH: RobustIntegration initialized successfully');
+            } else {
+              console.log('❌ AUTH: RobustIntegration initialization failed');
+            }
+          });
+        }
+
+        // Initialize VisibilityIntegration now that user is authenticated
+        if (window.visibilityIntegration && !window.visibilityIntegration.isInitialized) {
+          console.log('🔗 AUTH: Initializing VisibilityIntegration after authentication...');
+          window.visibilityIntegration.initialize().then(success => {
+            if (success) {
+              console.log('✅ AUTH: VisibilityIntegration initialized successfully');
+            } else {
+              console.log('❌ AUTH: VisibilityIntegration initialization failed');
+            }
+          });
+        }
+
+        // Initialize ReactionsIntegration now that user is authenticated
+        if (window.reactionsIntegration && !window.reactionsIntegration.isInitialized) {
+          console.log('🔗 AUTH: Initializing ReactionsIntegration after authentication...');
+          window.reactionsIntegration.initialize().then(success => {
+            if (success) {
+              console.log('✅ AUTH: ReactionsIntegration initialized successfully');
+            } else {
+              console.log('❌ AUTH: ReactionsIntegration initialization failed');
+            }
+          });
+        }
+
+        // Initialize AurasIntegration now that user is authenticated
+        if (window.aurasIntegration && !window.aurasIntegration.isInitialized) {
+          console.log('🔗 AUTH: Initializing AurasIntegration after authentication...');
+          window.aurasIntegration.initialize().then(success => {
+            if (success) {
+              console.log('✅ AUTH: AurasIntegration initialized successfully');
+            } else {
+              console.log('❌ AUTH: AurasIntegration initialization failed');
+            }
+          });
+        }
+      } else {
+        console.log('❌ SUPABASE AUTH: User not authenticated');
+      }
+    });
+  } catch (error) {
+    console.error('❌ SUPABASE: Failed to initialize global client:', error);
+    console.error('❌ SUPABASE: Error details:', error.message);
+  }
+} else {
+  console.error('❌ SUPABASE: Supabase library not available');
+  console.error('❌ SUPABASE: typeof window:', typeof window);
+  console.error('❌ SUPABASE: typeof supabase:', typeof supabase);
+}
+
+// Initialize all modern architecture components
+let stateManager = null;
+let eventBus = null;
+let lifecycleManager = null;
+let modernArchitectureInitialized = false;
+let supabaseRealtimeClient = null;
+
+// Initialize real Google auth for actual profile pictures
+let realGoogleAuth = null;
+
 // Export for module systems
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = SupabaseService;
