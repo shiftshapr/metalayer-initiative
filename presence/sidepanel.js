@@ -1676,3 +1676,74 @@ let lastLoadedUri = null;
 
 // Global storage for current chat data (for avatar updates)
 window.currentChatData = [];
+
+// ===== CRITICAL WINDOW DECLARATIONS =====
+// These are essential for the modular system to work properly
+
+// Core system objects
+window.Logger = window.Logger || console;
+window.supabase = window.supabase || null;
+window.api = window.api || null;
+window.supabaseRealtimeClient = window.supabaseRealtimeClient || null;
+
+// Global state variables
+window.currentUser = window.currentUser || null;
+window.currentUrlData = window.currentUrlData || null;
+window.currentVisibilityData = window.currentVisibilityData || null;
+window.currentVisibilityDataUnfiltered = window.currentVisibilityDataUnfiltered || null;
+window.currentPresenceData = window.currentPresenceData || null;
+
+// UI state
+window.focusedMessage = window.focusedMessage || null;
+window.previousView = window.previousView || null;
+
+// Manager instances
+window.notificationHistory = window.notificationHistory || null;
+window.navigationManager = window.navigationManager || null;
+
+// Avatar functions (from ProfileManager)
+window.getCurrentUserAvatarBgColor = window.getCurrentUserAvatarBgColor || function() { return '#ffffff'; };
+window.setCustomAvatarColor = window.setCustomAvatarColor || function() {};
+window.resetCustomAvatarColor = window.resetCustomAvatarColor || function() {};
+window.getCurrentUserAvatarColor = window.getCurrentUserAvatarColor || function() { return '#ffffff'; };
+
+// UI functions (from UIManager)
+window.updateVisualHierarchy = window.updateVisualHierarchy || function() {};
+window.debugHierarchy = window.debugHierarchy || function() {};
+window.forceRefreshCSS = window.forceRefreshCSS || function() {};
+
+// Diagnostic functions (from Diagnostics)
+window.getMessageDiagnostics = window.getMessageDiagnostics || function() { return {}; };
+window.clearMessageDiagnostics = window.clearMessageDiagnostics || function() {};
+
+// Additional diagnostic functions
+window.diagnoseJavaScriptErrors = window.diagnoseJavaScriptErrors || function() {};
+window.safeDiagnostic = window.safeDiagnostic || function() {};
+window.testVisibilitySystem = window.testVisibilitySystem || function() {};
+window.refreshVisibility = window.refreshVisibility || function() {};
+
+// Testing functions
+window.debugAvatar = window.debugAvatar || function() {};
+window.debugVisibility = window.debugVisibility || function() {};
+window.testTimeUpdate = window.testTimeUpdate || function() {};
+window.forceAvatarRefresh = window.forceAvatarRefresh || function() {};
+window.restartVisibilityTimer = window.restartVisibilityTimer || function() {};
+window.quickDebug = window.quickDebug || function() {};
+
+// Navigation functions
+window.quickStatus = window.quickStatus || function() {};
+window.testMessage = window.testMessage || function() {};
+window.testAura = window.testAura || function() {};
+
+// Background service functions
+window.requireAuth = window.requireAuth || function() {};
+window.addFriend = window.addFriend || function() {};
+window.openUserProfile = window.openUserProfile || function() {};
+
+// Module instances
+window.CommunitiesModule = window.CommunitiesModule || null;
+window.SettingsModule = window.SettingsModule || null;
+window.AuraColorModal = window.AuraColorModal || null;
+window.SupabaseService = window.SupabaseService || null;
+
+console.log('✅ WINDOW DECLARATIONS: All critical window objects declared');
