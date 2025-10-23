@@ -474,9 +474,20 @@ async function updateUI(user) {
   }
 }
 
+// ===== DEBUG FUNCTION (FROM COMP) =====
+function debug(message) {
+  const debugContent = document.getElementById('debug-content');
+  if (debugContent) {
+    const time = new Date().toLocaleTimeString();
+    debugContent.innerHTML += `<div>${time}: ${message}</div>`;
+    debugContent.scrollTop = debugContent.scrollHeight;
+  }
+}
+
 // Make functions globally accessible
 window.normalizeCurrentUrl = normalizeCurrentUrl;
 window.updateUI = updateUI;
+window.debug = debug;
 
 // ===== USER SETTINGS FOR THRESHOLD CONFIGURATION =====
 
