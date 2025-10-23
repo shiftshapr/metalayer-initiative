@@ -474,16 +474,6 @@ async function updateUI(user) {
   }
 }
 
-// ===== DEBUG FUNCTION (FROM COMP) =====
-function debug(message) {
-  const debugContent = document.getElementById('debug-content');
-  if (debugContent) {
-    const time = new Date().toLocaleTimeString();
-    debugContent.innerHTML += `<div>${time}: ${message}</div>`;
-    debugContent.scrollTop = debugContent.scrollHeight;
-  }
-}
-
 // Make functions globally accessible
 window.normalizeCurrentUrl = normalizeCurrentUrl;
 window.updateUI = updateUI;
@@ -811,7 +801,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 async function handleTabChange(tabId) {
   console.log('🔄 TAB_CHANGE: === HANDLING TAB CHANGE ===');
   console.log('🔄 TAB_CHANGE: Tab ID:', tabId);
-  debug(`Handling tab change for tab: ${tabId}`);
+  console.log(`🔄 TAB_CHANGE: Handling tab change for tab: ${tabId}`);
   try {
     // CRITICAL FIX: Leave current page BEFORE switching to new page
     // This prevents "ghost presence" where user appears on old page for 30 seconds
