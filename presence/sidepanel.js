@@ -76,6 +76,10 @@ async function initializeCompleteModernArchitecture() {
     
     console.log('✅ MODERN: Complete modern architecture initialized successfully');
     modernArchitectureInitialized = true;
+    
+    // === SETUP MODERN EVENT HANDLING (FROM COMP) ===
+    setupModernEventHandling();
+    
     return true;
   } catch (error) {
     console.error('❌ MODERN: Error initializing modern architecture:', error);
@@ -422,6 +426,68 @@ async function refreshVisibilityAvatars() {
 
 // CRITICAL FIX: Expose refreshVisibilityAvatars globally for real-time handler
 window.refreshVisibilityAvatars = refreshVisibilityAvatars;
+
+// ===== SETUP MODERN EVENT HANDLING (FROM COMP) =====
+function setupModernEventHandling() {
+  console.log('🎯 MODERN: Setting up modern event handling...');
+  
+  // Check if EventBus is available
+  if (!eventBus || !eventBus.on) {
+    console.log('⚠️ MODERN: EventBus not available, using direct chrome.storage communication');
+    return;
+  }
+  
+  // Avatar events
+  eventBus.on('avatar:colorChanged', (data) => {
+    console.log('🎨 MODERN: Avatar color changed:', data.color);
+    if (typeof window.updateAvatarColor === 'function') {
+      window.updateAvatarColor(data.color);
+    }
+    if (window.supabaseRealtimeClient) {
+      if (typeof window.broadcastAuraColorChange === 'function') {
+        window.broadcastAuraColorChange(data.color);
+      }
+    }
+  });
+  
+  // Message events
+  eventBus.on('message:send', (data) => {
+    console.log('💬 MODERN: Sending message:', data.content);
+    // Use Supabase real-time client instead of missing sendMessageToAPI
+    if (window.supabaseRealtimeClient) {
+      if (typeof window.supabaseRealtimeClient.sendMessage === 'function') {
+        window.supabaseRealtimeClient.sendMessage(data.content);
+      }
+    } else {
+      console.error('❌ MODERN: No Supabase client available for message sending');
+    }
+  });
+  
+  // Presence events
+  eventBus.on('presence:userJoined', (data) => {
+    console.log('👋 MODERN: User joined:', data.user);
+    if (typeof window.refreshVisibilityAvatars === 'function') {
+      window.refreshVisibilityAvatars();
+    }
+  });
+  
+  eventBus.on('presence:userLeft', (data) => {
+    console.log('👋 MODERN: User left:', data.user);
+    if (typeof window.refreshVisibilityAvatars === 'function') {
+      window.refreshVisibilityAvatars();
+    }
+  });
+  
+  // Cross-profile aura changes
+  eventBus.on('crossProfile:auraChanged', (data) => {
+    console.log('🎨 MODERN: Cross-profile aura changed:', data.color);
+    if (typeof window.refreshVisibilityAvatars === 'function') {
+      window.refreshVisibilityAvatars();
+    }
+  });
+  
+  console.log('✅ MODERN: Modern event handling setup complete');
+}
 
 // ===== ORCHESTRATION FUNCTION: normalizeCurrentUrl =====
 async function normalizeCurrentUrl() {
