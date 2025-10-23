@@ -1910,6 +1910,50 @@ function initializeSidepanel() {
   }
   
   // Initialize other components that need DOM
+  
+  // === Setup Real-time Event Listeners (FROM COMP) ===
+  console.log('🔔 REALTIME: Setting up real-time event listeners...');
+  
+  // Listen for real-time messages
+  window.addEventListener('realtime-message', (event) => {
+    console.log('📨 REALTIME: Received real-time message:', event.detail);
+    const message = event.detail;
+    if (message && message.content && typeof window.addMessageToChat === 'function') {
+      window.addMessageToChat({
+        id: message.id || `realtime-${Date.now()}`,
+        body: message.content,
+        author: {
+          name: message.author?.name || message.authorId || 'Unknown',
+          avatarUrl: message.author?.avatarUrl,
+          email: message.authorId
+        },
+        createdAt: message.createdAt || new Date().toISOString(),
+        isDeleted: false
+      });
+    }
+  });
+  
+  // Listen for real-time message deletions
+  window.addEventListener('realtime-message-deleted', (event) => {
+    console.log('🗑️ REALTIME: Received message deletion:', event.detail);
+    const messageId = event.detail.messageId;
+    if (messageId) {
+      const messageElement = document.querySelector(`[data-message-id="${messageId}"]`);
+      if (messageElement) {
+        messageElement.remove();
+      }
+    }
+  });
+  
+  // Listen for real-time message edits
+  window.addEventListener('realtime-message-edited', (event) => {
+    console.log('✏️ REALTIME: Received message edit:', event.detail);
+    const message = event.detail;
+    if (message && message.id && typeof window.updateMessageInChat === 'function') {
+      window.updateMessageInChat(message);
+    }
+  });
+  
   console.log('✅ SIDEPANEL: Sidepanel initialization complete');
 }
 
