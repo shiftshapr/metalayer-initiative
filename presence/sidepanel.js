@@ -540,6 +540,87 @@ async function updateUI(user) {
   }
 }
 
+// ===== AUTHENTICATION FUNCTIONS (FROM COMP) =====
+function showAuthPrompt(action) {
+  console.log('showAuthPrompt called for:', action);
+  const authPrompt = document.getElementById('auth-prompt-modal');
+  if (!authPrompt) {
+    console.log('Creating auth prompt modal');
+    createAuthPromptModal();
+  }
+  
+  const actionText = document.getElementById('auth-prompt-action');
+  if (actionText) {
+    actionText.textContent = action;
+  }
+  
+  // Show which auth provider is available
+  const providerName = 'Google'; // Default to Google
+  const providerInfo = document.getElementById('auth-prompt-provider');
+  if (providerInfo) {
+    providerInfo.textContent = `Using ${providerName} authentication`;
+  }
+  
+  const modal = document.getElementById('auth-prompt-modal');
+  if (modal) {
+    modal.style.display = 'block';
+    console.log('Auth prompt modal displayed');
+  } else {
+    console.error('Auth prompt modal not found!');
+  }
+  console.log(`Auth required for: ${action} (provider: ${providerName})`);
+}
+
+function createAuthPromptModal() {
+  const modal = document.createElement('div');
+  modal.id = 'auth-prompt-modal';
+  modal.className = 'modal';
+  modal.style.display = 'none';
+  
+  modal.innerHTML = `
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Authentication Required</h3>
+        <button id="close-auth-prompt" class="close-button">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p>You need to sign in to <span id="auth-prompt-action">perform this action</span>.</p>
+        <p class="provider-info" id="auth-prompt-provider" style="font-size: 0.9em; color: #666; margin: 10px 0;"></p>
+        <div class="auth-prompt-buttons">
+          <button id="auth-prompt-google" class="auth-button google">Sign in with Google</button>
+          <button id="auth-prompt-magic" class="auth-button magic">Sign in with Magic Link</button>
+        </div>
+        <button id="auth-prompt-cancel" class="cancel-button">Cancel</button>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(modal);
+  
+  // Add event listeners
+  document.getElementById('close-auth-prompt').addEventListener('click', () => {
+    modal.style.display = 'none';
+  });
+  
+  document.getElementById('auth-prompt-cancel').addEventListener('click', () => {
+    modal.style.display = 'none';
+  });
+  
+  document.getElementById('auth-prompt-google').addEventListener('click', () => {
+    console.log('Google auth clicked');
+    // TODO: Implement Google auth
+    modal.style.display = 'none';
+  });
+  
+  document.getElementById('auth-prompt-magic').addEventListener('click', () => {
+    console.log('Magic link auth clicked');
+    // TODO: Implement magic link auth
+    modal.style.display = 'none';
+  });
+  
+  console.log('Auth prompt modal created');
+}
+
 // Make functions globally accessible
 window.normalizeCurrentUrl = normalizeCurrentUrl;
 window.updateUI = updateUI;
@@ -1997,6 +2078,25 @@ function initializeSidepanel() {
       }
       
       console.log('✅ MODULES: Module initialization complete');
+      
+      // === INITIALIZE REAL GOOGLE AUTH (FROM COMP) ===
+      console.log('🚀 INIT: Initializing real Google auth...');
+      if (typeof window.initializeRealGoogleAuth === 'function') {
+        window.initializeRealGoogleAuth();
+        console.log('✅ INIT: Real Google auth initialized');
+      } else {
+        console.warn('⚠️ INIT: initializeRealGoogleAuth not available');
+      }
+      
+      // === CHECK FOR AUTHENTICATION (FROM COMP) ===
+      console.log('🔐 AUTH: Checking for authenticated user...');
+      const currentUser = await getCurrentUserEmail();
+      if (!currentUser) {
+        console.log('🔐 AUTH: No authenticated user found, showing auth prompt');
+        showAuthPrompt('access presence features');
+      } else {
+        console.log('🔐 AUTH: User authenticated:', currentUser);
+      }
     }).catch(error => {
       console.error('❌ SIDEPANEL: Modern architecture initialization failed:', error);
     });
