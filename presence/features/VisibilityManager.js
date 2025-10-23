@@ -280,9 +280,177 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = VisibilityManager;
 }
 
+// ===== CORE VISIBILITY FUNCTIONS =====
+
+/**
+ * Update the visible tab with avatars
+ * @param {Array} avatars - Array of avatar objects
+ */
+async function updateVisibleTab(avatars) {
+  console.log('🔍 VISIBILITY: updateVisibleTab called with avatars:', JSON.stringify(avatars, null, 2));
+  
+  // CRITICAL FIX: Add current user to visibility list if not already present
+  if (window.currentUser && window.currentUser.email) {
+    const currentUserEmail = window.currentUser.email;
+    const isCurrentUserInList = avatars.some(avatar => avatar.email === currentUserEmail);
+    
+    if (!isCurrentUserInList) {
+      console.log('🔍 VISIBILITY: Adding current user to visibility list');
+      const currentUserAvatar = {
+        email: currentUserEmail,
+        name: window.currentUser.name || currentUserEmail.split('@')[0],
+        avatarUrl: window.currentUser.avatarUrl, // Use the real Google avatar URL
+        auraColor: window.currentUser.auraColor || '#aaaaaa',
+        status: 'online',
+        enterTime: new Date().toISOString()
+      };
+      avatars.unshift(currentUserAvatar); // Add to beginning of list
+    }
+  }
+  
+  // Store visibility data globally for real-time aura color access
+  window.currentVisibilityData = { active: avatars };
+  
+  // Clear any existing visibility update timer
+  if (window.visibilityUpdateTimer) {
+    clearInterval(window.visibilityUpdateTimer);
+  }
+  
+  console.log('🔄 VISIBILITY: Stored visibility data globally for real-time aura access');
+  
+  const visibleTab = document.getElementById('canopi-visible');
+  if (!visibleTab) {
+    console.log('❌ VISIBILITY: visibleTab element not found');
+    return;
+  }
+  
+  console.log(`VISIBILITY: Updating visible tab with ${avatars.length} avatars`);
+  
+  // Get current user email for filtering
+  const currentUserEmail = await getCurrentUserEmail();
+  console.log(`VISIBILITY: Current user email: ${currentUserEmail}`);
+  
+  // Store the UNFILTERED data globally BEFORE filtering out current user
+  window.currentVisibilityDataUnfiltered = { active: avatars };
+  console.log(`VISIBILITY_UNFILTERED: Stored ${avatars.length} avatars (including current user) for profile avatar lookup`);
+  
+  // Filter out ONLY the current user - show all other users
+  const usersWithAvatars = avatars.filter(avatar => {
+    const userIdMatch = avatar.userId === currentUserEmail;
+    const handleMatch = avatar.handle === currentUserEmail.split('@')[0];
+    const nameMatch = avatar.name === currentUserEmail.split('@')[0];
+    const emailMatch = avatar.email === currentUserEmail;
+    
+    const isCurrentUser = userIdMatch || handleMatch || nameMatch || emailMatch;
+    
+    if (isCurrentUser) {
+      console.log(`VISIBILITY: 🚫 FILTERING OUT current user from their own visibility list`);
+      return false;
+    }
+    
+    console.log(`VISIBILITY: NOT CURRENT USER - Keeping avatar: ${avatar.name} (${avatar.userId})`);
+    return true;
+  });
+  
+  console.log(`VISIBILITY: Showing ${usersWithAvatars.length} users with real avatars (filtered from ${avatars.length} total)`);
+  
+  // Create a compact header with search, count, and go invisible button
+  visibleTab.innerHTML = `
+    <div class="visible-users">
+      <div class="visible-header" style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px; padding: 8px; background: var(--background-secondary); border-radius: 6px;">
+        <div class="visible-count" style="font-weight: bold; color: var(--text-primary);">
+          ${usersWithAvatars.length} visible
+        </div>
+        <input type="text" id="visible-search" placeholder="Search users..." style="flex: 1; padding: 4px 8px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--background-primary); color: var(--text-primary); font-size: 12px;">
+        <button id="go-invisible-btn" style="padding: 4px 8px; background: var(--accent-color); color: white; border: none; border-radius: 4px; font-size: 12px; cursor: pointer;">Go Invisible</button>
+      </div>
+      <ul class="item-list">
+        ${usersWithAvatars.map((avatar, index) => {
+          const isActive = avatar.isActive === true;
+          const hasLeft = avatar.status === 'offline' || !isActive;
+          
+          return `
+            <li class="item" style="display: flex; align-items: center; gap: 8px; padding: 8px; border-bottom: 1px solid var(--border-color);">
+              <div class="avatar-container" style="position: relative; width: 32px; height: 32px;">
+                <img src="${avatar.avatarUrl || '/icons/default-user.svg'}" 
+                     alt="${avatar.name}" 
+                     style="width: 32px; height: 32px; border-radius: 50%; border: 2px solid ${avatar.auraColor || '#aaaaaa'};">
+              </div>
+              <div class="user-info" style="flex: 1; min-width: 0;">
+                <div class="user-name" style="font-weight: bold; color: var(--text-primary); font-size: 14px;">${avatar.name}</div>
+                <div class="user-status" style="font-size: 12px; color: ${isActive ? 'var(--success-color)' : 'var(--text-secondary)'};">
+                  ${isActive ? 'Active' : 'Inactive'}
+                </div>
+              </div>
+            </li>
+          `;
+        }).join('')}
+      </ul>
+    </div>
+  `;
+  
+  // Add search functionality
+  const searchInput = document.getElementById('visible-search');
+  if (searchInput) {
+    searchInput.addEventListener('input', (e) => {
+      const searchTerm = e.target.value.toLowerCase();
+      const items = visibleTab.querySelectorAll('.item');
+      items.forEach(item => {
+        const userName = item.querySelector('.user-name').textContent.toLowerCase();
+        const isVisible = userName.includes(searchTerm);
+        item.style.display = isVisible ? 'flex' : 'none';
+      });
+    });
+  }
+  
+  // Add go invisible functionality
+  const goInvisibleBtn = document.getElementById('go-invisible-btn');
+  if (goInvisibleBtn) {
+    goInvisibleBtn.addEventListener('click', async () => {
+      console.log('🔍 VISIBILITY: Go invisible clicked');
+      // TODO: Implement go invisible functionality
+    });
+  }
+}
+
+/**
+ * Refresh visibility avatars
+ */
+async function refreshVisibilityAvatars() {
+  console.log('🔄 VISIBILITY: refreshVisibilityAvatars called');
+  
+  try {
+    // Get current user and page data
+    const currentUser = await getCurrentUserEmail();
+    const currentPage = window.currentUrlData?.pageId;
+    
+    if (!currentUser || !currentPage) {
+      console.log('❌ VISIBILITY: Missing currentUser or currentPage');
+      return;
+    }
+    
+    console.log(`🔄 VISIBILITY: Refreshing for user: ${currentUser}, page: ${currentPage}`);
+    
+    // Load combined avatars for current communities
+    const result = await chrome.storage.local.get(['activeCommunities']);
+    const activeCommunities = result.activeCommunities || ['comm-001'];
+    
+    if (typeof loadCombinedAvatars === 'function') {
+      await loadCombinedAvatars(activeCommunities);
+    } else {
+      console.log('❌ VISIBILITY: loadCombinedAvatars function not available');
+    }
+    
+  } catch (error) {
+    console.error('❌ VISIBILITY: Error refreshing visibility avatars:', error);
+  }
+}
+
 // Make available globally
 if (typeof window !== 'undefined') {
   window.VisibilityManager = VisibilityManager;
+  window.updateVisibleTab = updateVisibleTab;
+  window.refreshVisibilityAvatars = refreshVisibilityAvatars;
 }
 
 console.log('✅ VisibilityManager initialized');
