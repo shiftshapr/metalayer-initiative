@@ -25,7 +25,14 @@ class SupabaseService {
     this.channels = new Map();
     this.eventHandlers = new Map();
     
-    this.logger = window.Logger || console;
+    this.logger = window.Logger || {
+      startFlow: (name, data) => console.log(`[FLOW START] ${name}`, data),
+      endFlow: (name, success, data) => console.log(`[FLOW END] ${name} (${success ? 'SUCCESS' : 'FAILED'})`, data),
+      debug: (msg, data, category) => console.log(`[DEBUG] ${msg}`, data),
+      info: (msg, data, category) => console.log(`[INFO] ${msg}`, data),
+      success: (msg, data, category) => console.log(`[SUCCESS] ${msg}`, data),
+      error: (msg, data, category) => console.error(`[ERROR] ${msg}`, data)
+    };
   }
 
   /**
@@ -33,7 +40,7 @@ class SupabaseService {
    */
   async initialize() {
     try {
-      this.logger.startFlow('SUPABASE_INIT', { url: this.config.url });
+      console.log('🚀 SUPABASE_INIT: Starting Supabase initialization...', { url: this.config.url });
       
       // Check if Supabase library is available
       if (typeof supabase === 'undefined') {
