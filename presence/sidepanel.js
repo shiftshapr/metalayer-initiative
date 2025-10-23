@@ -1895,3 +1895,28 @@ window.AuraColorModal = window.AuraColorModal || null;
 window.SupabaseService = window.SupabaseService || null;
 
 console.log('✅ WINDOW DECLARATIONS: All critical window objects declared');
+
+// ===== DOM READY INITIALIZATION =====
+function initializeSidepanel() {
+  console.log('🚀 SIDEPANEL: Initializing sidepanel after DOM ready...');
+  
+  // Initialize modern architecture if available
+  if (typeof initializeCompleteModernArchitecture === 'function') {
+    initializeCompleteModernArchitecture().then(() => {
+      console.log('✅ SIDEPANEL: Modern architecture initialized');
+    }).catch(error => {
+      console.error('❌ SIDEPANEL: Modern architecture initialization failed:', error);
+    });
+  }
+  
+  // Initialize other components that need DOM
+  console.log('✅ SIDEPANEL: Sidepanel initialization complete');
+}
+
+// Initialize when DOM is ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initializeSidepanel);
+} else {
+  // DOM is already loaded
+  initializeSidepanel();
+}
