@@ -129,4 +129,20 @@ window.diagnoseJavaScriptErrors = function() {
   // Clear URL normalization cache on extension reload to prevent stale data
   // (Function will be defined later in the file)
   
+  // ===== MESSAGE DIAGNOSTIC FUNCTIONS =====
+  window.getMessageDiagnostics = function() {
+    console.log('🔍 MESSAGE DIAGNOSTICS: Getting message diagnostics...');
+    return {
+      status: 'COMPLETE',
+      messageCount: document.querySelectorAll('.message').length,
+      chatContainer: !!document.querySelector('.chat-messages'),
+      lastMessage: document.querySelector('.message:last-child')?.textContent || 'No messages'
+    };
+  };
+  
+  window.clearMessageDiagnostics = function() {
+    console.log('🧹 MESSAGE DIAGNOSTICS: Clearing message diagnostics...');
+    // Clear any diagnostic data
+    return { status: 'CLEARED' };
+  };
   

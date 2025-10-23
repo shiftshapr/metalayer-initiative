@@ -613,3 +613,8 @@ async function completeOTPForRealtime(otpCode) {
 // Export for global access
 window.AuthModule = AuthModule;
 window.getCurrentUserEmail = getCurrentUserEmail;
+window.authenticateWithSupabase = authenticateWithSupabase;
+window.requireAuth = requireAuth;
+window.showAuthPrompt = showAuthPrompt;
+window.createAuthPromptModal = createAuthPromptModal;
+window.initializeRealGoogleAuth = initializeRealGoogleAuth;

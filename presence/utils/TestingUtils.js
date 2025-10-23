@@ -72,3 +72,35 @@ window.debugAvatar = function() {
       window.quickDebug();
     }
   }, 1000);
+  
+  // ===== ADDITIONAL TESTING FUNCTIONS =====
+  window.quickStatus = function() {
+    Logger.info("=== QUICK STATUS ===", null, 'general');
+    Logger.info("Current user:", window.currentUser?.email || 'Not logged in', 'general');
+    Logger.info("Current page:", window.currentUrlData?.pageId || 'Unknown', 'general');
+    Logger.info("Visibility data:", window.currentVisibilityData?.active?.length || 0, 'users', 'general');
+    Logger.info("Supabase client:", !!window.supabase, 'general');
+    Logger.info("Realtime client:", !!window.supabaseRealtimeClient, 'general');
+  };
+  
+  window.testMessage = function() {
+    Logger.info("=== TEST MESSAGE ===", null, 'general');
+    const testMessage = `Test message ${Date.now()}`;
+    if (typeof window.sendMessageViaSupabase === 'function') {
+      window.sendMessageViaSupabase(testMessage);
+      Logger.info("Test message sent:", testMessage, 'general');
+    } else {
+      Logger.info("sendMessageViaSupabase function not available", null, 'general');
+    }
+  };
+  
+  window.testAura = function() {
+    Logger.info("=== TEST AURA ===", null, 'general');
+    const testColor = '#ff0000';
+    if (typeof window.setCustomAvatarColor === 'function') {
+      window.setCustomAvatarColor(testColor);
+      Logger.info("Test aura color set:", testColor, 'general');
+    } else {
+      Logger.info("setCustomAvatarColor function not available", null, 'general');
+    }
+  };

@@ -472,7 +472,35 @@ class UIManager {
   }
 }
 
+// ===== GLOBAL UI FUNCTIONS =====
+function updateVisualHierarchy() {
+  console.log('🔄 UI: updateVisualHierarchy called');
+  // Update visual hierarchy for messages and UI elements
+  if (window.UIManager && window.UIManager.updateVisualHierarchy) {
+    window.UIManager.updateVisualHierarchy();
+  }
+}
+
+function debugHierarchy() {
+  console.log('🔍 UI: debugHierarchy called');
+  // Debug visual hierarchy
+  if (window.UIManager && window.UIManager.debugHierarchy) {
+    window.UIManager.debugHierarchy();
+  }
+}
+
+function forceRefreshCSS() {
+  console.log('🔄 UI: forceRefreshCSS called');
+  // Force CSS refresh
+  if (window.UIManager && window.UIManager.forceRefreshCSS) {
+    window.UIManager.forceRefreshCSS();
+  }
+}
+
 // Make available globally
 window.UIManager = UIManager;
+window.updateVisualHierarchy = updateVisualHierarchy;
+window.debugHierarchy = debugHierarchy;
+window.forceRefreshCSS = forceRefreshCSS;
 
 Logger.info('UIManager module loaded', null, 'ui');

@@ -346,8 +346,47 @@ class ProfileManager {
   }
 }
 
+// ===== GLOBAL AVATAR FUNCTIONS =====
+function getCurrentUserAvatarBgColor() {
+  if (window.currentUser && window.currentUser.auraColor) {
+    return window.currentUser.auraColor;
+  }
+  return '#ffffff'; // Default white
+}
+
+function getCurrentUserAvatarColor() {
+  if (window.currentUser && window.currentUser.auraColor) {
+    return window.currentUser.auraColor;
+  }
+  return '#ffffff'; // Default white
+}
+
+function setCustomAvatarColor(color) {
+  if (window.currentUser) {
+    window.currentUser.auraColor = color;
+    // Update profile if ProfileManager instance exists
+    if (window.ProfileManager && window.ProfileManager.updateProfile) {
+      window.ProfileManager.updateProfile(window.currentUser);
+    }
+  }
+}
+
+function resetCustomAvatarColor() {
+  if (window.currentUser) {
+    window.currentUser.auraColor = '#aaaaaa'; // Default gray
+    // Update profile if ProfileManager instance exists
+    if (window.ProfileManager && window.ProfileManager.updateProfile) {
+      window.ProfileManager.updateProfile(window.currentUser);
+    }
+  }
+}
+
 // Make available globally
 window.ProfileManager = ProfileManager;
+window.getCurrentUserAvatarBgColor = getCurrentUserAvatarBgColor;
+window.getCurrentUserAvatarColor = getCurrentUserAvatarColor;
+window.setCustomAvatarColor = setCustomAvatarColor;
+window.resetCustomAvatarColor = resetCustomAvatarColor;
 
 Logger.info('ProfileManager module loaded', null, 'profile');
 

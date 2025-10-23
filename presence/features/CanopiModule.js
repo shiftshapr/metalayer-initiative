@@ -2718,3 +2718,7 @@ async function toggleThreadReplies(threadId, messageElement) {
 window.CanopiModule = CanopiModule;
 window.loadChatHistory = loadChatHistory;
 window.addMessageToChat = addMessageToChat;
+window.sendMessageViaSupabase = sendMessageViaSupabase;
+window.updateMessageInChat = updateMessageInChat;
+window.removeMessageFromChat = removeMessageFromChat;
+window.checkAndAddThreadToggle = checkAndAddThreadToggle;
