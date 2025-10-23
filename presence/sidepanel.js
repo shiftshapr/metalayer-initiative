@@ -815,7 +815,7 @@ async function handleTabChange(tabId) {
     const tab = await chrome.tabs.get(tabId);
     if (tab && tab.url) {
       console.log('🔄 TAB_CHANGE: New tab URL:', tab.url);
-      debug(`New tab URL: ${tab.url}`);
+      console.log(`🔄 TAB_CHANGE: New tab URL: ${tab.url}`);
       
       // CRITICAL FIX: Normalize the SPECIFIC tab URL, not the active tab
       console.log('🔄 TAB_CHANGE: Normalizing SPECIFIC tab URL:', tab.url);
@@ -841,11 +841,11 @@ async function handleTabChange(tabId) {
       console.log('✅ TAB_CHANGE: Tab change complete');
     } else {
       console.log('⚠️ TAB_CHANGE: No tab or URL found for tab:', tabId);
-      debug(`No tab or URL found for tab: ${tabId}`);
+      console.log(`❌ TAB_CHANGE: No tab or URL found for tab: ${tabId}`);
     }
   } catch (error) {
     console.error('❌ TAB_CHANGE: Error handling tab change:', error);
-    debug(`Error handling tab change: ${error.message}`);
+    console.error(`❌ TAB_CHANGE: Error handling tab change: ${error.message}`);
   }
 }
 
@@ -853,7 +853,7 @@ async function handleTabChange(tabId) {
 async function handleTabClosed(tabId) {
   console.log('🔄 TAB_CLOSED: === HANDLING TAB CLOSURE ===');
   console.log('🔄 TAB_CLOSED: Tab ID:', tabId);
-  debug(`Handling tab closure for tab: ${tabId}`);
+  console.log(`🔄 TAB_CLOSE: Handling tab closure for tab: ${tabId}`);
   try {
     // CRITICAL FIX: Leave current page when tab is closed
     // This immediately marks user as inactive on the closed page
@@ -866,7 +866,7 @@ async function handleTabClosed(tabId) {
     console.log('✅ TAB_CLOSED: Tab closure handled successfully');
   } catch (error) {
     console.error('❌ TAB_CLOSED: Error handling tab closure:', error);
-    debug(`Error handling tab closure: ${error.message}`);
+    console.error(`❌ TAB_CLOSE: Error handling tab closure: ${error.message}`);
   }
 }
 
@@ -879,7 +879,7 @@ async function handleTabUpdate(tabId, url) {
   console.log('🔄 TAB_UPDATE: Tab ID:', tabId);
   console.log('🔄 TAB_UPDATE: New URL:', url);
   console.log('🔄 TAB_UPDATE: Timestamp:', new Date().toISOString());
-  debug(`Handling tab update for tab: ${tabId}, URL: ${url}`);
+  console.log(`🔄 TAB_UPDATE: Handling tab update for tab: ${tabId}, URL: ${url}`);
   
   try {
     // === STEP 1: LOG CURRENT STATE ===
@@ -1025,7 +1025,7 @@ async function handleTabUpdate(tabId, url) {
     console.error('❌ TAB_UPDATE: Error stack:', error.stack);
     console.log('═══════════════════════════════════════════════════════════');
     console.log('');
-    debug(`Error handling tab update: ${error.message}`);
+    console.error(`❌ TAB_UPDATE: Error handling tab update: ${error.message}`);
   }
 }
 
