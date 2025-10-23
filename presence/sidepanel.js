@@ -1902,8 +1902,35 @@ function initializeSidepanel() {
   
   // Initialize modern architecture if available
   if (typeof initializeCompleteModernArchitecture === 'function') {
-    initializeCompleteModernArchitecture().then(() => {
+    initializeCompleteModernArchitecture().then(async () => {
       console.log('✅ SIDEPANEL: Modern architecture initialized');
+      
+      // === INITIALIZE MODULES (FROM COMP) ===
+      console.log('🚀 MODULES: Initializing modules...');
+      
+      // Initialize unified system
+      if (window.unifiedInitManager && typeof window.unifiedInitManager.initialize === 'function') {
+        try {
+          const unifiedInitSuccess = await window.unifiedInitManager.initialize();
+          if (unifiedInitSuccess) {
+            console.log('✅ MODULES: Unified system initialized successfully');
+          }
+        } catch (error) {
+          console.error('❌ MODULES: Unified system initialization failed:', error);
+        }
+      }
+      
+      // Initialize Supabase real-time client
+      if (typeof window.initializeSupabaseRealtimeClient === 'function') {
+        try {
+          await window.initializeSupabaseRealtimeClient();
+          console.log('✅ MODULES: Supabase real-time client initialized');
+        } catch (error) {
+          console.error('❌ MODULES: Supabase real-time client initialization failed:', error);
+        }
+      }
+      
+      console.log('✅ MODULES: Module initialization complete');
     }).catch(error => {
       console.error('❌ SIDEPANEL: Modern architecture initialization failed:', error);
     });
