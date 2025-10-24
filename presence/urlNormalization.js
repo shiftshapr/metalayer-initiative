@@ -282,4 +282,14 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = UrlNormalization;
 } else {
   window.UrlNormalization = UrlNormalization;
+  // Create global normalizeUrl function
+  const urlNormalizer = new UrlNormalization();
+  window.normalizeUrl = async function(url) {
+    const result = urlNormalizer.normalizeUrl(url);
+    return {
+      rawUrl: url,
+      normalizedUrl: result.normalizedUrl,
+      pageId: result.pageId
+    };
+  };
 }

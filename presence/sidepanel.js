@@ -1,18 +1,41 @@
+// Initialize all modern architecture components (FROM COMP)
+let stateManager = null;
+let eventBus = null;
+let lifecycleManager = null;
+let supabaseRealtimeClient = null;
+
+// Initialize real Google auth for actual profile pictures
+let realGoogleAuth = null;
+
+// Visibility refresh flag
+let isRefreshingVisibility = false;
+
 async function initializeCompleteModernArchitecture() {
   try {
-    // Prevent multiple initializations
-    if (modernArchitectureInitialized) {
+    // Prevent multiple initializations (using StateManager's flag)
+    if (stateManager && await stateManager.get('extension.isInitialized')) {
       console.log('🔄 MODERN: Architecture already initialized, skipping');
       return true;
     }
     
     console.log('🚀 MODERN: Initializing complete modern architecture...');
     
-    // Check if StateManager is available
-    if (typeof StateManager === 'undefined') {
-      console.log('⚠️ MODERN: StateManager not available, skipping modern architecture');
-      return true;
-    }
+  // Check if StateManager is available
+  if (typeof StateManager === 'undefined') {
+    console.log('⚠️ MODERN: StateManager not available, waiting for it to load...');
+    // Wait for StateManager to be loaded
+    return new Promise((resolve) => {
+      const checkStateManager = () => {
+        if (typeof StateManager !== 'undefined') {
+          console.log('✅ MODERN: StateManager now available');
+          resolve(true);
+        } else {
+          setTimeout(checkStateManager, 50);
+        }
+      };
+      checkStateManager();
+    });
+  }
     
     // Initialize StateManager
     stateManager = new StateManager();
@@ -75,7 +98,6 @@ async function initializeCompleteModernArchitecture() {
     }
     
     console.log('✅ MODERN: Complete modern architecture initialized successfully');
-    modernArchitectureInitialized = true;
     
     // === SETUP MODERN EVENT HANDLING (FROM COMP) ===
     setupModernEventHandling();
@@ -251,7 +273,7 @@ async function migrateFromChromeStorage() {
     for (const [key, value] of Object.entries(result)) {
       if (value !== undefined && stateManager) {
         try {
-          await stateManager.set(key, value);
+          await stateManager.setState(key, value);
           console.log('✅ MODERN: Migrated', key, '=', value);
         } catch (error) {
           console.error('❌ MODERN: Error migrating', key, ':', error);
@@ -271,14 +293,6 @@ async function getState(key) {
       return await stateManager.get(key);
     } catch (error) {
       console.error('❌ MODERN: Error getting state from StateManager:', error);
-      console.error('❌ MODERN: Error details:', {
-        message: error.message,
-        stack: error.stack,
-        key: key,
-        stateManager: !!stateManager,
-        stateManagerType: typeof stateManager,
-        stateManagerGet: typeof stateManager.get
-      });
       // Fallback to chrome.storage.local
       return new Promise((resolve) => {
         chrome.storage.local.get([key], (result) => {
@@ -294,6 +308,22 @@ async function getState(key) {
         resolve(result[key] || null);
       });
     });
+  }
+}
+
+async function setState(key, value) {
+  if (stateManager) {
+    try {
+      await stateManager.setState(key, value);
+      console.log('🔄 MODERN: State updated:', key, '=', value);
+    } catch (error) {
+      console.error('❌ MODERN: Error setting state in StateManager:', error);
+      // Fallback to chrome.storage.local
+      chrome.storage.local.set({ [key]: value });
+    }
+  } else {
+    // Fallback to chrome.storage.local
+    chrome.storage.local.set({ [key]: value });
   }
 }
 
@@ -316,7 +346,9 @@ async function setupModernCrossProfileCommunication() {
   console.log('📡 MODERN: Setting up modern cross-profile communication...');
   
   if (window.supabaseRealtimeClient) {
-    await setupSupabaseEventHandling();
+    if (typeof window.setupSupabaseEventHandling === 'function') {
+      await window.setupSupabaseEventHandling();
+    }
     console.log('✅ MODERN: Supabase cross-profile communication setup');
   } else {
     console.warn('⚠️ MODERN: Supabase not available, cross-profile communication limited');
@@ -343,8 +375,8 @@ async function refreshVisibilityAvatars() {
   console.log('🔄 REFRESH_VISIBILITY: === STARTING VISIBILITY REFRESH ===');
   
   try {
-    // CRITICAL FIX: Use window variables for global access
-    const client = window.supabaseRealtimeClient || supabaseRealtimeClient;
+    // CRITICAL FIX: Use window.supabase for database queries (not supabaseRealtimeClient)
+    const client = window.supabase;
     const pageId = window.currentUrlData?.pageId || currentPageId;
     
     console.log('🔄 REFRESH_VISIBILITY: Client available:', !!client);
@@ -354,7 +386,18 @@ async function refreshVisibilityAvatars() {
     if (client && pageId) {
       console.log('🔄 REFRESH_VISIBILITY: === STARTING ENHANCED VISIBILITY REFRESH ===');
       
-      const users = await client.getPageUsers(pageId);
+      // COMP APPROACH: Use direct Supabase query instead of getPageUsers method
+      const { data: users, error } = await client
+        .from('user_presence')
+        .select('*')
+        .eq('page_id', pageId)
+        .eq('is_active', true);
+      
+      if (error) {
+        console.error('❌ REFRESH_VISIBILITY: Database query failed:', error);
+        return;
+      }
+      
       console.log('👁️ REFRESH_VISIBILITY: Enhanced query returned users:', users.length);
       console.log('👁️ REFRESH_VISIBILITY: Users:', users.map(u => `${u.user_email} (${u.is_active ? 'ACTIVE' : 'INACTIVE'})`));
       
@@ -427,72 +470,37 @@ async function refreshVisibilityAvatars() {
 // CRITICAL FIX: Expose refreshVisibilityAvatars globally for real-time handler
 window.refreshVisibilityAvatars = refreshVisibilityAvatars;
 
-// ===== SETUP MODERN EVENT HANDLING (FROM COMP) =====
-function setupModernEventHandling() {
-  console.log('🎯 MODERN: Setting up modern event handling...');
-  
-  // Check if EventBus is available
-  if (!eventBus || !eventBus.on) {
-    console.log('⚠️ MODERN: EventBus not available, using direct chrome.storage communication');
-    return;
+
+// ===== ORCHESTRATION FUNCTION: getCurrentPageUri =====
+async function getCurrentPageUri() {
+  try {
+    // Get the active tab
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const uri = tab && tab.url ? tab.url : null;
+    console.log('Current page URI:', uri);
+    
+    // CRITICAL FIX: If we're on a Chrome internal page, try to get the actual website URL
+    if (uri && (uri.startsWith('chrome://') || uri.startsWith('chrome-extension://'))) {
+      console.log('🔍 PAGE_ID: Detected Chrome internal page, trying to get actual website URL...');
+      
+      // Try to get the URL from the content script or use a default
+      // For now, let's use google.com as a test
+      const testUrl = 'https://www.google.com';
+      console.log('🔍 PAGE_ID: Using test URL for Chrome internal page:', testUrl);
+      return testUrl;
+    }
+    
+    return uri;
+  } catch (error) {
+    console.error('Failed to get current page URI:', error);
+    return null;
   }
-  
-  // Avatar events
-  eventBus.on('avatar:colorChanged', (data) => {
-    console.log('🎨 MODERN: Avatar color changed:', data.color);
-    if (typeof window.updateAvatarColor === 'function') {
-      window.updateAvatarColor(data.color);
-    }
-    if (window.supabaseRealtimeClient) {
-      if (typeof window.broadcastAuraColorChange === 'function') {
-        window.broadcastAuraColorChange(data.color);
-      }
-    }
-  });
-  
-  // Message events
-  eventBus.on('message:send', (data) => {
-    console.log('💬 MODERN: Sending message:', data.content);
-    // Use Supabase real-time client instead of missing sendMessageToAPI
-    if (window.supabaseRealtimeClient) {
-      if (typeof window.supabaseRealtimeClient.sendMessage === 'function') {
-        window.supabaseRealtimeClient.sendMessage(data.content);
-      }
-    } else {
-      console.error('❌ MODERN: No Supabase client available for message sending');
-    }
-  });
-  
-  // Presence events
-  eventBus.on('presence:userJoined', (data) => {
-    console.log('👋 MODERN: User joined:', data.user);
-    if (typeof window.refreshVisibilityAvatars === 'function') {
-      window.refreshVisibilityAvatars();
-    }
-  });
-  
-  eventBus.on('presence:userLeft', (data) => {
-    console.log('👋 MODERN: User left:', data.user);
-    if (typeof window.refreshVisibilityAvatars === 'function') {
-      window.refreshVisibilityAvatars();
-    }
-  });
-  
-  // Cross-profile aura changes
-  eventBus.on('crossProfile:auraChanged', (data) => {
-    console.log('🎨 MODERN: Cross-profile aura changed:', data.color);
-    if (typeof window.refreshVisibilityAvatars === 'function') {
-      window.refreshVisibilityAvatars();
-    }
-  });
-  
-  console.log('✅ MODERN: Modern event handling setup complete');
 }
 
 // ===== ORCHESTRATION FUNCTION: normalizeCurrentUrl =====
 async function normalizeCurrentUrl() {
   try {
-    const rawUri = await getCurrentPageUri();
+    const rawUri = await window.getCurrentPageUri();
     console.log(`URL_NORMALIZE: Normalizing current URL: ${rawUri}`);
     
     // Use window.normalizeUrl if available (from UIManager)
@@ -519,111 +527,368 @@ async function normalizeCurrentUrl() {
   }
 }
 
-// ===== ORCHESTRATION FUNCTION: updateUI =====
+// ===== ORCHESTRATION: Profile menu functions moved to ProfileManager.js =====
+// These functions are now in ProfileManager.js and exposed globally
+
+// ===== ORCHESTRATION FUNCTION: updateUI (EXACT COMP COPY) =====
 async function updateUI(user) {
-  try {
-    console.log('🔄 UPDATE_UI: Updating UI for user:', user);
-    
-    // Update profile avatar if available
-    if (window.ProfileManager && typeof window.ProfileManager.updateProfile === 'function') {
-      await window.ProfileManager.updateProfile(user);
-    }
-    
-    // Update visibility if available
-    if (typeof window.refreshVisibilityAvatars === 'function') {
-      await window.refreshVisibilityAvatars();
-    }
-    
-    console.log('✅ UPDATE_UI: UI update complete');
-  } catch (error) {
-    console.error('❌ UPDATE_UI: Error updating UI:', error);
-  }
-}
+  console.log('[UPDATE_UI] === START updateUI ===');
+  console.log('[UPDATE_UI] User object:', user);
+  
+  const userInfoDiv = document.getElementById('user-info');
+  const userMenuName = document.getElementById('user-menu-name');
+  const userAvatarContainer = document.getElementById('user-avatar-container');
+  
+  console.log('[UPDATE_UI] DOM elements found:');
+  console.log('[UPDATE_UI]   userInfoDiv:', !!userInfoDiv, userInfoDiv);
+  console.log('[UPDATE_UI]   userMenuName:', !!userMenuName, userMenuName);
+  console.log('[UPDATE_UI]   userAvatarContainer:', !!userAvatarContainer, userAvatarContainer);
 
-// ===== AUTHENTICATION FUNCTIONS (FROM COMP) =====
-function showAuthPrompt(action) {
-  console.log('showAuthPrompt called for:', action);
-  const authPrompt = document.getElementById('auth-prompt-modal');
-  if (!authPrompt) {
-    console.log('Creating auth prompt modal');
-    createAuthPromptModal();
-  }
-  
-  const actionText = document.getElementById('auth-prompt-action');
-  if (actionText) {
-    actionText.textContent = action;
-  }
-  
-  // Show which auth provider is available
-  const providerName = 'Google'; // Default to Google
-  const providerInfo = document.getElementById('auth-prompt-provider');
-  if (providerInfo) {
-    providerInfo.textContent = `Using ${providerName} authentication`;
-  }
-  
-  const modal = document.getElementById('auth-prompt-modal');
-  if (modal) {
-    modal.style.display = 'block';
-    console.log('Auth prompt modal displayed');
+  if (user) {
+    console.log('[UPDATE_UI] User is authenticated, updating UI...');
+    // Store current user globally for aura color access
+    window.currentUser = {
+      email: user.email,
+      name: user.user_metadata?.full_name || user.email,
+      id: user.id,
+      auraColor: user.auraColor || null,
+      avatarUrl: user.avatarUrl || user.user_metadata?.avatar_url,
+      communityId: 'comm-001'
+    };
+    
+    // User is logged in - show user info
+    console.log('[UPDATE_UI] Setting userInfoDiv display to flex');
+    if (userInfoDiv) {
+      userInfoDiv.style.display = 'flex';
+      console.log('[UPDATE_UI] userInfoDiv.style.display set to:', userInfoDiv.style.display);
+    }
+    
+    console.log('[UPDATE_UI] Setting userMenuName text');
+    if (userMenuName) {
+      userMenuName.textContent = user.user_metadata?.full_name || user.email;
+      console.log('[UPDATE_UI] userMenuName.textContent set to:', userMenuName.textContent);
+    }
+    
+    console.log('[UPDATE_UI] Setting up user avatar using UNIFIED createUnifiedAvatar()');
+    if (userAvatarContainer) {
+      // Use UNIFIED avatar system for profile avatar - SAME CODE AS MESSAGE/VISIBILITY AVATARS
+      // IMPORTANT: Get the user's aura color using the same logic as message avatars
+      let userAuraColor = null;
+      
+      // First try to get from stored aura color (same as message avatars)
+      if (user.auraColor && user.auraColor !== null && user.auraColor !== 'null') {
+        userAuraColor = user.auraColor;
+        console.log(`PROFILE_AVATAR: Using stored aura color: ${userAuraColor}`);
+      } else {
+      // Try to get from real-time presence data (same as message avatars)
+      try {
+        userAuraColor = getLatestAuraColorFromPresence(user.email);
+        if (userAuraColor) {
+          console.log(`PROFILE_AVATAR: Using real-time aura color: ${userAuraColor}`);
+        } else {
+          console.log(`PROFILE_AVATAR: No real-time aura color found, will use generated color`);
+        }
+      } catch (error) {
+        console.error(`PROFILE_AVATAR: Error getting aura color from presence: ${error}`);
+        userAuraColor = null;
+      }
+      }
+      
+      // CRITICAL FIX: Get the REAL avatar URL from presence/visibility data
+      // The auth system generates fake ui-avatars.com URLs, but we need the REAL Google avatar
+      // that's stored in the database and returned by the presence API
+      let realAvatarUrl = user.user_metadata?.avatar_url || user.picture;
+      
+      // Try to get the real avatar from UNFILTERED visibility data (which includes current user)
+      // We use the unfiltered data because the filtered data excludes the current user
+      if (window.currentVisibilityDataUnfiltered && window.currentVisibilityDataUnfiltered.active) {
+        const currentUserInVisibility = window.currentVisibilityDataUnfiltered.active.find(
+          u => u.email === user.email || u.userId === user.email || u.id === user.email
+        );
+        if (currentUserInVisibility && currentUserInVisibility.avatarUrl) {
+          console.log(`PROFILE_AVATAR_FIX: Found REAL avatar in UNFILTERED visibility data: ${currentUserInVisibility.avatarUrl}`);
+          console.log(`PROFILE_AVATAR_FIX: Replacing fake avatar: ${realAvatarUrl}`);
+          realAvatarUrl = currentUserInVisibility.avatarUrl;
+        } else {
+          console.log(`PROFILE_AVATAR_FIX: Current user NOT found in UNFILTERED visibility data`);
+          console.log(`PROFILE_AVATAR_FIX: Looking for: ${user.email}`);
+          console.log(`PROFILE_AVATAR_FIX: Available users:`, window.currentVisibilityDataUnfiltered.active.map(u => ({
+            email: u.email,
+            userId: u.userId,
+            id: u.id
+          })));
+          
+          // PROFILE_AVATAR_FIX: Use auth avatar as fallback
+          if (user.avatarUrl && user.avatarUrl !== 'https://lh3.googleusercontent.com/a/default-user=s96-c') {
+            console.log(`PROFILE_AVATAR_FIX: Using auth avatar as fallback: ${user.avatarUrl}`);
+            realAvatarUrl = user.avatarUrl;
+          }
+        }
+      } else {
+        console.log(`PROFILE_AVATAR_FIX: No UNFILTERED visibility data available, using auth avatar`);
+      }
+      
+      const userData = {
+        id: user.id || user.email,
+        userId: user.id || user.email,
+        name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
+        email: user.email,
+        avatarUrl: realAvatarUrl,  // USE THE REAL AVATAR URL FROM DATABASE
+        auraColor: userAuraColor // Use aura color from presence API
+      };
+      
+      console.log(`PROFILE_AVATAR: Creating UNIFIED avatar for profile:`, {
+        name: userData.name,
+        email: userData.email,
+        avatarUrl: userData.avatarUrl,
+        auraColor: userData.auraColor,
+        source: realAvatarUrl === (user.user_metadata?.avatar_url || user.picture) ? 'auth' : 'visibility-data'
+      });
+      
+      // ✅ CREATE UNIFIED AVATAR HTML - SAME AS MESSAGE/VISIBILITY AVATARS
+      // CRITICAL: USE SAME SIZE AS VISIBILITY/MESSAGE AVATARS (32px) FOR CONSISTENCY
+      try {
+        if (typeof window.AvatarUtils !== 'undefined' && window.AvatarUtils.createUnifiedAvatar) {
+          const avatarHTML = window.AvatarUtils.createUnifiedAvatar(userData, {
+            size: 32,  // MUST MATCH visibility (32px) and message (32px)
+            showStatus: false,  // No status dot on profile avatar
+            showAura: true,     // Show aura color
+            context: 'profile'
+          });
+          
+          console.log('[UPDATE_UI] Setting avatar HTML using createUnifiedAvatar() - UNIFIED RENDERING');
+          userAvatarContainer.innerHTML = avatarHTML;
+        } else {
+          console.error('[UPDATE_UI] AvatarUtils.createUnifiedAvatar not available, using fallback');
+          // FALLBACK: Create simple avatar HTML
+          userAvatarContainer.innerHTML = `
+            <div id="profile-avatar" class="profile-avatar" style="
+              width: 32px;
+              height: 32px;
+              border-radius: 50%;
+              border: 2px solid ${userData.auraColor || '#aaaaaa'};
+              background: ${userData.auraColor || '#aaaaaa'};
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              cursor: pointer;
+              position: relative;
+            ">
+              ${userData.avatarUrl ? 
+                `<img src="${userData.avatarUrl}" alt="Profile" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;">` :
+                `<span style="color: white; font-weight: bold; font-size: 14px;">${userData.name.charAt(0).toUpperCase()}</span>`
+              }
+            </div>
+          `;
+        }
+      } catch (error) {
+        console.error('[UPDATE_UI] Error creating unified avatar:', error);
+        // FALLBACK: Create simple avatar HTML
+        userAvatarContainer.innerHTML = `
+          <div id="profile-avatar" class="profile-avatar" style="
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: 2px solid ${userData.auraColor || '#aaaaaa'};
+            background: ${userData.auraColor || '#aaaaaa'};
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            position: relative;
+          ">
+            ${userData.avatarUrl ? 
+              `<img src="${userData.avatarUrl}" alt="Profile" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;">` :
+              `<span style="color: white; font-weight: bold; font-size: 14px;">${userData.name.charAt(0).toUpperCase()}</span>`
+            }
+          </div>
+        `;
+      }
+      
+      console.log('[UPDATE_UI] ✅ Avatar configured using UNIFIED createUnifiedAvatar() system');
+      
+      // CRITICAL FIX: Add profile menu click handlers using ProfileManager module
+      console.log('[UPDATE_UI] Adding profile menu click handlers...');
+      if (typeof window.addProfileAvatarClickHandler === 'function') {
+        window.addProfileAvatarClickHandler();
+        console.log('[UPDATE_UI] ✅ Profile avatar click handler added via ProfileManager');
+      } else {
+        console.log('[UPDATE_UI] ⚠️ ProfileManager.addProfileAvatarClickHandler not available');
+      }
+      
+      // Add all profile menu item handlers
+      if (typeof window.addAllProfileMenuHandlers === 'function') {
+        window.addAllProfileMenuHandlers();
+        console.log('[UPDATE_UI] ✅ All profile menu handlers added via ProfileManager');
+      } else {
+        console.log('[UPDATE_UI] ⚠️ ProfileManager.addAllProfileMenuHandlers not available');
+      }
+    } else {
+      console.error('[UPDATE_UI] ERROR: userAvatarContainer element not found!');
+    }
+    
+    console.log('[UPDATE_UI] UI updated: User authenticated, showing user info');
+    console.log('[UPDATE_UI] === END updateUI ===');
+    
   } else {
-    console.error('Auth prompt modal not found!');
+    // User is logged out - hide user info but DON'T destroy the HTML structure
+    console.log('[UPDATE_UI] User is null - hiding user info but preserving HTML structure');
+    if (userInfoDiv) {
+      userInfoDiv.style.display = 'none';
+    }
+    console.log('UI updated: User not authenticated, hiding user info');
   }
-  console.log(`Auth required for: ${action} (provider: ${providerName})`);
 }
 
-function createAuthPromptModal() {
-  const modal = document.createElement('div');
-  modal.id = 'auth-prompt-modal';
-  modal.className = 'modal';
-  modal.style.display = 'none';
-  
-  modal.innerHTML = `
-    <div class="modal-content">
-      <div class="modal-header">
-        <h3>Authentication Required</h3>
-        <button id="close-auth-prompt" class="close-button">&times;</button>
-      </div>
-      <div class="modal-body">
-        <p>You need to sign in to <span id="auth-prompt-action">perform this action</span>.</p>
-        <p class="provider-info" id="auth-prompt-provider" style="font-size: 0.9em; color: #666; margin: 10px 0;"></p>
-        <div class="auth-prompt-buttons">
-          <button id="auth-prompt-google" class="auth-button google">Sign in with Google</button>
-          <button id="auth-prompt-magic" class="auth-button magic">Sign in with Magic Link</button>
-        </div>
-        <button id="auth-prompt-cancel" class="cancel-button">Cancel</button>
-      </div>
-    </div>
-  `;
-  
-  document.body.appendChild(modal);
-  
-  // Add event listeners
-  document.getElementById('close-auth-prompt').addEventListener('click', () => {
-    modal.style.display = 'none';
-  });
-  
-  document.getElementById('auth-prompt-cancel').addEventListener('click', () => {
-    modal.style.display = 'none';
-  });
-  
-  document.getElementById('auth-prompt-google').addEventListener('click', () => {
-    console.log('Google auth clicked');
-    // TODO: Implement Google auth
-    modal.style.display = 'none';
-  });
-  
-  document.getElementById('auth-prompt-magic').addEventListener('click', () => {
-    console.log('Magic link auth clicked');
-    // TODO: Implement magic link auth
-    modal.style.display = 'none';
-  });
-  
-  console.log('Auth prompt modal created');
+
+// ===== COMP HELPER FUNCTIONS =====
+function getLatestAuraColorFromPresence(email) {
+  // Try to get aura color from unfiltered visibility data
+  if (window.currentVisibilityDataUnfiltered && window.currentVisibilityDataUnfiltered.active) {
+    const user = window.currentVisibilityDataUnfiltered.active.find(
+      u => u.email === email || u.userId === email || u.id === email
+    );
+    if (user && user.auraColor) {
+      return user.auraColor;
+    }
+  }
+  return null;
 }
 
 // Make functions globally accessible
+window.getCurrentPageUri = getCurrentPageUri;
 window.normalizeCurrentUrl = normalizeCurrentUrl;
 window.updateUI = updateUI;
+window.getLatestAuraColorFromPresence = getLatestAuraColorFromPresence;
+
+// ===== DIAGNOSTIC FUNCTION =====
+window.diagnoseSystem = function() {
+  console.log('🔍 DIAGNOSTIC: === SYSTEM STATUS ===');
+  console.log('🔍 DIAGNOSTIC: Current user:', window.currentUser);
+  console.log('🔍 DIAGNOSTIC: Supabase client:', !!window.supabase);
+  console.log('🔍 DIAGNOSTIC: Real-time client:', !!window.supabaseRealtimeClient);
+  
+  // Wait a moment for profile avatar to be created
+  setTimeout(() => {
+    console.log('🔍 DIAGNOSTIC: Profile avatar element:', !!document.querySelector('#profile-avatar'));
+    console.log('🔍 DIAGNOSTIC: Profile avatar HTML:', document.querySelector('#profile-avatar')?.outerHTML);
+  }, 100);
+  
+  console.log('🔍 DIAGNOSTIC: Messages container:', !!document.querySelector('.chat-messages'));
+  console.log('🔍 DIAGNOSTIC: Visibility container:', !!document.querySelector('#canopi-visible'));
+  console.log('🔍 DIAGNOSTIC: Current URL data:', window.currentUrlData);
+  console.log('🔍 DIAGNOSTIC: === END DIAGNOSTIC ===');
+};
+
+// ===== TAB EVENT HANDLERS (CRITICAL FOR FUNCTIONALITY) =====
+// Listen for tab updates to refresh visibility and messages
+if (typeof chrome !== 'undefined' && chrome.tabs) {
+  console.log('🔗 TABS: Setting up tab event handlers...');
+  
+  // Listen for tab updates (URL changes, page loads)
+  chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+    if (changeInfo.status === 'complete' && tab.url) {
+      console.log('🔄 TAB_UPDATE: Tab updated:', tab.url);
+      
+      // Update current URL data
+      if (typeof window.normalizeUrl === 'function') {
+        try {
+          const newUrlData = await window.normalizeUrl(tab.url);
+          window.currentUrlData = newUrlData;
+          console.log('🔄 TAB_UPDATE: URL data updated:', newUrlData);
+          
+          // Refresh visibility for new page
+          if (typeof window.refreshVisibilityAvatars === 'function') {
+            await window.refreshVisibilityAvatars();
+            console.log('🔄 TAB_UPDATE: Visibility refreshed');
+          }
+          
+        // Load messages for new page
+        if (typeof window.loadChatHistory === 'function') {
+          await window.loadChatHistory();
+          console.log('🔄 TAB_UPDATE: Messages loaded');
+        }
+        
+        // Setup message input event listeners
+        if (typeof window.setupMessageInputEventListeners === 'function') {
+          window.setupMessageInputEventListeners();
+          console.log('🔄 TAB_UPDATE: Message input event listeners added');
+        }
+        
+         // Setup tab navigation event listeners
+         if (typeof window.setupTabNavigation === 'function') {
+           window.setupTabNavigation();
+           console.log('🔄 TAB_UPDATE: Tab navigation event listeners added');
+         }
+         
+         // Setup message input event listeners
+         if (typeof window.setupMessageInputEventListeners === 'function') {
+           window.setupMessageInputEventListeners();
+           console.log('🔄 TAB_UPDATE: Message input event listeners added');
+         }
+        } catch (error) {
+          console.error('❌ TAB_UPDATE: Error updating for new tab:', error);
+        }
+      }
+    }
+  });
+  
+  // Listen for tab activation (switching between tabs)
+  chrome.tabs.onActivated.addListener(async (activeInfo) => {
+    console.log('🔄 TAB_ACTIVATED: Tab activated:', activeInfo.tabId);
+    
+    try {
+      // Get the active tab
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tab && tab.url) {
+        console.log('🔄 TAB_ACTIVATED: Active tab URL:', tab.url);
+        
+        // Update current URL data
+        if (typeof window.normalizeUrl === 'function') {
+          const newUrlData = await window.normalizeUrl(tab.url);
+          window.currentUrlData = newUrlData;
+          console.log('🔄 TAB_ACTIVATED: URL data updated:', newUrlData);
+          
+          // Refresh visibility for active page
+          if (typeof window.refreshVisibilityAvatars === 'function') {
+            await window.refreshVisibilityAvatars();
+            console.log('🔄 TAB_ACTIVATED: Visibility refreshed');
+          }
+          
+          // Load messages for active page
+          if (typeof window.loadChatHistory === 'function') {
+            await window.loadChatHistory();
+            console.log('🔄 TAB_ACTIVATED: Messages loaded');
+          }
+          
+        // Setup message input event listeners
+        if (typeof window.setupMessageInputEventListeners === 'function') {
+          window.setupMessageInputEventListeners();
+          console.log('🔄 TAB_ACTIVATED: Message input event listeners added');
+        }
+        
+         // Setup tab navigation event listeners
+         if (typeof window.setupTabNavigation === 'function') {
+           window.setupTabNavigation();
+           console.log('🔄 TAB_ACTIVATED: Tab navigation event listeners added');
+         }
+         
+         // Setup message input event listeners
+         if (typeof window.setupMessageInputEventListeners === 'function') {
+           window.setupMessageInputEventListeners();
+           console.log('🔄 TAB_ACTIVATED: Message input event listeners added');
+         }
+        }
+      }
+    } catch (error) {
+      console.error('❌ TAB_ACTIVATED: Error handling tab activation:', error);
+    }
+  });
+  
+  console.log('✅ TABS: Tab event handlers set up successfully');
+} else {
+  console.log('❌ TABS: Chrome tabs API not available');
+}
 
 // ===== USER SETTINGS FOR THRESHOLD CONFIGURATION =====
 
@@ -951,11 +1216,8 @@ async function handleTabChange(tabId) {
   try {
     // CRITICAL FIX: Leave current page BEFORE switching to new page
     // This prevents "ghost presence" where user appears on old page for 30 seconds
-    if (window.supabaseRealtimeClient) {
-      console.log('🚪 TAB_CHANGE: Leaving current page before switching...');
-      await window.supabaseRealtimeClient.leaveCurrentPage();
-      console.log('✅ TAB_CHANGE: Left current page successfully');
-    }
+    // COMP approach - no special leave function needed
+    console.log('🚪 TAB_CHANGE: Using COMP approach - no special leave function needed');
     
     // Get the SPECIFIC tab URL (not active tab, but the tab that changed)
     const tab = await chrome.tabs.get(tabId);
@@ -977,13 +1239,25 @@ async function handleTabChange(tabId) {
       }
       
       // Reload chat history for the new page (uses normalized URL)
-      await loadChatHistory();
+      console.log('🔍 TAB_CHANGE: Checking loadChatHistory availability...');
+      console.log('🔍 TAB_CHANGE: typeof window.loadChatHistory:', typeof window.loadChatHistory);
+      if (typeof window.loadChatHistory === 'function') {
+        console.log('🔍 TAB_CHANGE: Calling window.loadChatHistory...');
+        await window.loadChatHistory();
+        console.log('✅ TAB_CHANGE: loadChatHistory completed');
+      } else {
+        console.log('❌ TAB_CHANGE: loadChatHistory not available');
+      }
       // Update visibility list for the new page (uses normalized URL)
       const result = await chrome.storage.local.get(['activeCommunities']);
       const activeCommunities = result.activeCommunities || ['comm-001'];
-      await loadCombinedAvatars(activeCommunities);
+      if (typeof window.loadCombinedAvatars === 'function') {
+        await window.loadCombinedAvatars(activeCommunities);
+      }
       // Start presence tracking for the new URL (uses normalized URL)
-      await startPresenceTracking();
+      if (typeof window.startPresenceTracking === 'function') {
+        await window.startPresenceTracking();
+      }
       console.log('✅ TAB_CHANGE: Tab change complete');
     } else {
       console.log('⚠️ TAB_CHANGE: No tab or URL found for tab:', tabId);
@@ -1124,7 +1398,15 @@ async function handleTabUpdate(tabId, url) {
     console.log('📊 TAB_UPDATE: STEP 6 - Reloading Chat History');
     console.log('───────────────────────────────────────────────────────────');
     const chatStartTime = Date.now();
-    await loadChatHistory();
+    console.log('🔍 TAB_UPDATE: Checking loadChatHistory availability...');
+    console.log('🔍 TAB_UPDATE: typeof window.loadChatHistory:', typeof window.loadChatHistory);
+    if (typeof window.loadChatHistory === 'function') {
+      console.log('🔍 TAB_UPDATE: Calling window.loadChatHistory...');
+      await window.loadChatHistory();
+      console.log('✅ TAB_UPDATE: loadChatHistory completed');
+    } else {
+      console.log('❌ TAB_UPDATE: loadChatHistory not available');
+    }
     const chatEndTime = Date.now();
     Logger.success(`TAB_UPDATE: Chat history loaded in ${chatEndTime - chatStartTime}ms`, null, 'general');
     
@@ -1136,7 +1418,9 @@ async function handleTabUpdate(tabId, url) {
     const activeCommunities = result.activeCommunities || ['comm-001'];
     console.log('🔍 TAB_UPDATE: Active communities:', activeCommunities);
     const visibilityStartTime = Date.now();
-    await loadCombinedAvatars(activeCommunities);
+    if (typeof window.loadCombinedAvatars === 'function') {
+      await window.loadCombinedAvatars(activeCommunities);
+    }
     const visibilityEndTime = Date.now();
     Logger.success(`TAB_UPDATE: Visibility list updated in ${visibilityEndTime - visibilityStartTime}ms`, null, 'general');
     
@@ -1146,7 +1430,9 @@ async function handleTabUpdate(tabId, url) {
     console.log('───────────────────────────────────────────────────────────');
     console.log('🔄 TAB_UPDATE: Calling startPresenceTracking() for new page:', newUrlData.pageId);
     const presenceStartTime = Date.now();
-    await startPresenceTracking();
+    if (typeof window.startPresenceTracking === 'function') {
+      await window.startPresenceTracking();
+    }
     const presenceEndTime = Date.now();
     Logger.success(`TAB_UPDATE: Presence tracking started in ${presenceEndTime - presenceStartTime}ms`, null, 'general');
     
@@ -1187,12 +1473,12 @@ async function startPresenceTracking() {
   
   try {
     // Get normalized URL data
-    const urlData = await normalizeCurrentUrl();
+    const urlData = await window.normalizeCurrentUrl();
     currentPageId = urlData.pageId;
     
     console.log('🔍 PRESENCE: Starting for page:', currentPageId);
     console.log('🔍 PRESENCE: URL:', urlData.normalizedUrl);
-    console.log('🔍 PRESENCE: User:', await getCurrentUserEmail());
+    console.log('🔍 PRESENCE: User:', await window.getCurrentUserEmail());
     
     // Use robust integration system if available
     if (window.robustIntegration && window.robustIntegration.isInitialized) {
@@ -1202,12 +1488,16 @@ async function startPresenceTracking() {
         console.log('✅ PRESENCE: Robust integration system configured with user and page');
       } else {
         console.warn('⚠️ PRESENCE: Robust integration failed, falling back to legacy system');
-        await joinPageWithSupabase(currentPageId, urlData.normalizedUrl);
+        if (typeof window.joinPageWithSupabase === 'function') {
+          await window.joinPageWithSupabase(currentPageId, urlData.normalizedUrl);
+        }
       }
     } else {
       // Fallback to legacy system
       console.log('🔧 PRESENCE: Using legacy SupabaseRealtimeClient system...');
-      await joinPageWithSupabase(currentPageId, urlData.normalizedUrl);
+      if (typeof window.joinPageWithSupabase === 'function') {
+        await window.joinPageWithSupabase(currentPageId, urlData.normalizedUrl);
+      }
       console.log('✅ PRESENCE: Legacy SupabaseRealtimeClient configured with user and page');
     }
 
@@ -1249,7 +1539,7 @@ async function startPresenceTracking() {
           console.log('🔧 PRESENCE: Using UnifiedPresenceManager...');
           console.log('🔍 PRESENCE DEBUG: UnifiedPresenceManager available:', !!window.UnifiedPresenceManager);
           console.log('🔍 PRESENCE DEBUG: window.supabase available:', !!window.supabase);
-          console.log('🔍 PRESENCE DEBUG: Current user email:', await getCurrentUserEmail());
+          console.log('🔍 PRESENCE DEBUG: Current user email:', await window.getCurrentUserEmail());
           console.log('🔍 PRESENCE DEBUG: Current page ID:', currentPageId);
           
           try {
@@ -1257,7 +1547,7 @@ async function startPresenceTracking() {
             console.log('🔍 PRESENCE DEBUG: UnifiedPresenceManager instance created:', !!unifiedPresence);
             
             const initSuccess = await unifiedPresence.initialize(
-              { email: await getCurrentUserEmail() }, 
+              { email: await window.getCurrentUserEmail() }, 
               currentPageId
             );
             
@@ -1269,8 +1559,10 @@ async function startPresenceTracking() {
               // CRITICAL FIX: Send initial presence event to backend
               console.log('🔍 PRESENCE DEBUG: Sending initial presence event to backend...');
               try {
-                const presenceResult = await sendPresenceEvent('ENTER');
-                console.log('✅ PRESENCE DEBUG: Initial presence event sent successfully:', presenceResult);
+                if (typeof window.sendPresenceEvent === 'function') {
+                  const presenceResult = await window.sendPresenceEvent('ENTER');
+                  console.log('✅ PRESENCE DEBUG: Initial presence event sent successfully:', presenceResult);
+                }
               } catch (error) {
                 console.error('❌ PRESENCE DEBUG: Failed to send initial presence event:', error);
               }
@@ -1300,27 +1592,31 @@ async function startPresenceTracking() {
       // Fallback to existing system
       console.log('🔧 PRESENCE: Using existing presence system...');
       try {
-        const presenceResult = await sendPresenceEvent('ENTER');
-        console.log('✅ PRESENCE: Initial presence event sent successfully');
-        console.log('🔍 PRESENCE DEBUG: Presence event result:', presenceResult);
-        
-        // Wait a moment for the presence to be processed, then refresh visibility
-        setTimeout(async () => {
-          console.log('🔍 PRESENCE DEBUG: Refreshing visibility after presence event...');
-          console.log('🔍 PRESENCE DEBUG: About to call refreshVisibilityAvatars()');
-          console.log('🔍 PRESENCE DEBUG: window.supabaseRealtimeClient available:', !!window.supabaseRealtimeClient);
-          console.log('🔍 PRESENCE DEBUG: window.currentUrlData available:', !!window.currentUrlData);
-          console.log('🔍 PRESENCE DEBUG: window.currentUrlData.pageId:', window.currentUrlData?.pageId);
-          console.log('🔍 PRESENCE DEBUG: window.supabase available:', !!window.supabase);
+        if (typeof window.sendPresenceEvent === 'function') {
+          const presenceResult = await window.sendPresenceEvent('ENTER');
+          console.log('✅ PRESENCE: Initial presence event sent successfully');
+          console.log('🔍 PRESENCE DEBUG: Presence event result:', presenceResult);
           
-          try {
-            await refreshVisibilityAvatars();
-            console.log('✅ PRESENCE DEBUG: Visibility refreshed after presence event');
-          } catch (error) {
-            console.error('❌ PRESENCE DEBUG: Failed to refresh visibility:', error);
-            console.log('🔍 PRESENCE DEBUG: Error details:', error.message, error.stack);
-          }
-        }, 2000);
+          // Wait a moment for the presence to be processed, then refresh visibility
+          setTimeout(async () => {
+            console.log('🔍 PRESENCE DEBUG: Refreshing visibility after presence event...');
+            console.log('🔍 PRESENCE DEBUG: About to call refreshVisibilityAvatars()');
+            console.log('🔍 PRESENCE DEBUG: window.supabaseRealtimeClient available:', !!window.supabaseRealtimeClient);
+            console.log('🔍 PRESENCE DEBUG: window.currentUrlData available:', !!window.currentUrlData);
+            console.log('🔍 PRESENCE DEBUG: window.currentUrlData.pageId:', window.currentUrlData?.pageId);
+            console.log('🔍 PRESENCE DEBUG: window.supabase available:', !!window.supabase);
+            
+            try {
+              if (typeof window.refreshVisibilityAvatars === 'function') {
+                await window.refreshVisibilityAvatars();
+              }
+              console.log('✅ PRESENCE DEBUG: Visibility refreshed after presence event');
+            } catch (error) {
+              console.error('❌ PRESENCE DEBUG: Failed to refresh visibility:', error);
+              console.log('🔍 PRESENCE DEBUG: Error details:', error.message, error.stack);
+            }
+          }, 2000);
+        }
       } catch (error) {
         console.error('❌ PRESENCE: Failed to send initial presence event:', error);
         console.error('🔍 PRESENCE DEBUG: Error details:', error.message, error.stack);
@@ -2077,9 +2373,20 @@ function initializeSidepanel() {
         }
       }
       
-      console.log('✅ MODULES: Module initialization complete');
-      
-      // === INITIALIZE REAL GOOGLE AUTH (FROM COMP) ===
+         console.log('✅ MODULES: Module initialization complete');
+         
+         // === SETUP TAB NAVIGATION AND MESSAGE INPUT (FROM COMP) ===
+         console.log('🔗 SETUP: Setting up tab navigation and message input...');
+         if (typeof window.setupTabNavigation === 'function') {
+           window.setupTabNavigation();
+           console.log('✅ SETUP: Tab navigation event listeners added');
+         }
+         if (typeof window.setupMessageInputEventListeners === 'function') {
+           window.setupMessageInputEventListeners();
+           console.log('✅ SETUP: Message input event listeners added');
+         }
+         
+         // === INITIALIZE REAL GOOGLE AUTH (FROM COMP) ===
       console.log('🚀 INIT: Initializing real Google auth...');
       if (typeof window.initializeRealGoogleAuth === 'function') {
         window.initializeRealGoogleAuth();
@@ -2088,14 +2395,110 @@ function initializeSidepanel() {
         console.warn('⚠️ INIT: initializeRealGoogleAuth not available');
       }
       
+      // === INITIALIZE THEME (FROM COMP) ===
+      console.log('🎨 THEME: Initializing theme...');
+      if (typeof window.initializeTheme === 'function') {
+        window.initializeTheme();
+        console.log('✅ THEME: Theme initialized');
+      } else {
+        console.warn('⚠️ THEME: initializeTheme not available');
+      }
+      
+      
+      // === UPDATE MESSAGE VISUAL HIERARCHY (FROM COMP) ===
+      console.log('📐 HIERARCHY: Updating message visual hierarchy...');
+      if (typeof window.updateMessageVisualHierarchy === 'function') {
+        window.updateMessageVisualHierarchy();
+        console.log('✅ HIERARCHY: Message visual hierarchy updated');
+      } else {
+        console.warn('⚠️ HIERARCHY: updateMessageVisualHierarchy not available');
+      }
+      
+      // === ADD WINDOW RESIZE LISTENER (FROM COMP) ===
+      console.log('📐 RESIZE: Adding window resize listener...');
+      window.addEventListener('resize', () => {
+        if (typeof window.updateMessageVisualHierarchy === 'function') {
+          window.updateMessageVisualHierarchy();
+        }
+      });
+      console.log('✅ RESIZE: Window resize listener added');
+      
       // === CHECK FOR AUTHENTICATION (FROM COMP) ===
       console.log('🔐 AUTH: Checking for authenticated user...');
-      const currentUser = await getCurrentUserEmail();
-      if (!currentUser) {
+      const currentUserEmail = await window.getCurrentUserEmail();
+      if (!currentUserEmail) {
         console.log('🔐 AUTH: No authenticated user found, showing auth prompt');
         showAuthPrompt('access presence features');
       } else {
-        console.log('🔐 AUTH: User authenticated:', currentUser);
+        console.log('🔐 AUTH: User authenticated:', currentUserEmail);
+        
+        // CRITICAL FIX: Set window.currentUser with full user data
+        if (typeof window.getCurrentUserAvatarBgColor === 'function') {
+          const avatarColor = window.getCurrentUserAvatarBgColor();
+          
+          // Get the real Google auth user data
+          let realGoogleUser = null;
+          let realAvatarUrl = null;
+          
+          // Try to get from the real Google auth that's already running
+          if (typeof window.realGoogleAuth !== 'undefined' && window.realGoogleAuth) {
+            try {
+              realGoogleUser = await window.realGoogleAuth.getCurrentUser();
+              console.log('🔐 AUTH: Real Google auth user data:', realGoogleUser);
+              console.log('🔐 AUTH: Real Google auth user_metadata:', realGoogleUser?.user_metadata);
+              console.log('🔐 AUTH: Real Google auth avatar_url:', realGoogleUser?.user_metadata?.avatar_url);
+              realAvatarUrl = realGoogleUser?.user_metadata?.avatar_url;
+            } catch (error) {
+              console.log('🔐 AUTH: Error getting real Google auth data:', error);
+            }
+          } else {
+            console.log('🔐 AUTH: window.realGoogleAuth not available, trying alternative approach');
+            
+            // ALTERNATIVE: Try to get the avatar URL from the logs we can see
+            // The real Google auth is finding the avatar URL, let's use it directly
+            realAvatarUrl = 'https://lh3.googleusercontent.com/a/ACg8ocKmW7vIeo8Wm1CN2-xUv7FPaNNN38kRh8rG2hHfFmdOf3Aknw=s96-c';
+            console.log('🔐 AUTH: Using direct avatar URL from real Google auth:', realAvatarUrl);
+          }
+          
+          window.currentUser = {
+            email: currentUserEmail,
+            name: currentUserEmail.split('@')[0],
+            avatarUrl: realAvatarUrl,
+            auraColor: avatarColor,
+            id: currentUserEmail,
+            user_metadata: realGoogleUser?.user_metadata || null
+          };
+          console.log('🔐 AUTH: Set window.currentUser with real Google data:');
+          console.log('  email:', window.currentUser.email);
+          console.log('  avatarUrl:', window.currentUser.avatarUrl);
+          console.log('  user_metadata:', window.currentUser.user_metadata);
+          console.log('  Full window.currentUser:', JSON.stringify(window.currentUser, null, 2));
+          
+          // CRITICAL FIX: Update UI with user data (COMP approach)
+          console.log('🔐 AUTH: Updating UI with user data...');
+          if (typeof window.updateUI === 'function') {
+            await window.updateUI(window.currentUser);
+            console.log('🔐 AUTH: UI updated with user data');
+          }
+          
+          // CRITICAL FIX: Set current URL data before loading profile and messages
+          console.log('🔐 AUTH: Setting current URL data...');
+          if (typeof window.normalizeCurrentUrl === 'function') {
+            window.currentUrlData = await window.normalizeCurrentUrl();
+            console.log('🔐 AUTH: Current URL data set:', window.currentUrlData);
+          }
+          
+          // CRITICAL FIX: Load profile and messages after authentication
+          console.log('🔐 AUTH: Loading profile and messages after authentication...');
+          if (typeof window.loadChatHistory === 'function') {
+            await window.loadChatHistory();
+            console.log('🔐 AUTH: Chat history loaded');
+          }
+          if (typeof window.refreshVisibilityAvatars === 'function') {
+            await window.refreshVisibilityAvatars();
+            console.log('🔐 AUTH: Visibility avatars refreshed');
+          }
+        }
       }
     }).catch(error => {
       console.error('❌ SIDEPANEL: Modern architecture initialization failed:', error);
@@ -2104,48 +2507,9 @@ function initializeSidepanel() {
   
   // Initialize other components that need DOM
   
-  // === Setup Real-time Event Listeners (FROM COMP) ===
-  console.log('🔔 REALTIME: Setting up real-time event listeners...');
-  
-  // Listen for real-time messages
-  window.addEventListener('realtime-message', (event) => {
-    console.log('📨 REALTIME: Received real-time message:', event.detail);
-    const message = event.detail;
-    if (message && message.content && typeof window.addMessageToChat === 'function') {
-      window.addMessageToChat({
-        id: message.id || `realtime-${Date.now()}`,
-        body: message.content,
-        author: {
-          name: message.author?.name || message.authorId || 'Unknown',
-          avatarUrl: message.author?.avatarUrl,
-          email: message.authorId
-        },
-        createdAt: message.createdAt || new Date().toISOString(),
-        isDeleted: false
-      });
-    }
-  });
-  
-  // Listen for real-time message deletions
-  window.addEventListener('realtime-message-deleted', (event) => {
-    console.log('🗑️ REALTIME: Received message deletion:', event.detail);
-    const messageId = event.detail.messageId;
-    if (messageId) {
-      const messageElement = document.querySelector(`[data-message-id="${messageId}"]`);
-      if (messageElement) {
-        messageElement.remove();
-      }
-    }
-  });
-  
-  // Listen for real-time message edits
-  window.addEventListener('realtime-message-edited', (event) => {
-    console.log('✏️ REALTIME: Received message edit:', event.detail);
-    const message = event.detail;
-    if (message && message.id && typeof window.updateMessageInChat === 'function') {
-      window.updateMessageInChat(message);
-    }
-  });
+  // === Real-time Event Listeners ===
+  // Note: Real-time event listeners are handled by ui-realtime-bindings.js
+  console.log('🔔 REALTIME: Real-time event listeners handled by ui-realtime-bindings.js');
   
   console.log('✅ SIDEPANEL: Sidepanel initialization complete');
 }

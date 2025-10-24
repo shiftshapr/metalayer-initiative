@@ -16,7 +16,7 @@ class SupabaseRealtimeClient {
       // Import Supabase client (you'll need to add this to your extension)
       // const { createClient } = await import('https://cdn.skypack.dev/@supabase/supabase-js');
       
-      this.supabase = createClient(supabaseUrl, supabaseKey);
+      this.supabase = supabase.createClient(supabaseUrl, supabaseKey);
       console.log('✅ Supabase client initialized');
       
       // Test connection

@@ -1,40 +1,6 @@
-// Avatar Background Color Configuration
-const AVATAR_BG_CONFIG = {
-    // Default background color for user's profile avatar when transparent
-    defaultBgColor: null, // Will be set dynamically based on user's name
-    
-    // User's custom background color
-    customBgColor: null,
-    
-    // Get the current background color (which should ALWAYS be the aura color)
-    getBgColor() {
-      if (this.customBgColor) {
-        return this.customBgColor;
-      }
-      
-      // If no custom color, get the current aura color from the user
-      // The background color should ALWAYS match the aura color
-      const currentUser = window.currentUser;
-      if (currentUser && currentUser.auraColor) {
-        return currentUser.auraColor;
-      }
-      
-      // Fallback to default aura color
-      // Use user's actual aura color from database, fallback to default
-      const userAuraColor = window.currentUser?.auraColor || '#aa00aa';
-      return userAuraColor;
-    },
-    
-    // Set custom background color
-    setBgColor(color) {
-      this.customBgColor = color;
-    },
-    
-    // Reset to default background color
-    resetToDefault() {
-      this.customBgColor = null;
-    }
-  };
+// Avatar Background Color Configuration - REMOVED
+// Background color is always the aura color from window.currentUser.auraColor
+// No separate background color system needed!
   
   // API client for Meta-Layer Initiative
   class MetaLayerAPI {
@@ -307,19 +273,17 @@ const AVATAR_BG_CONFIG = {
   }
   
   // Initialize API client
-  const api = new MetaLayerAPI(METALAYER_API_URL);
+  const api = new MetaLayerAPI('https://api.themetalayer.org');
   
-  // Initialize YouTube Transcription Service (from main branch)
-  const youtubeService = new YouTubeTranscriptionService();
   // Make API globally available for debugging
   window.api = api;
   
   // Initialize Loosely Coupled Auth Manager
-  const authManager = new AuthManager(); 
+  // const authManager = new AuthManager(); // DISABLED - using features/AuthManager.js instead 
   
   // === DEBUGGING: Check API connection ===
   console.log('Meta-Layer Initiative API initialized');
-  console.log('API URL:', METALAYER_API_URL);
+  console.log('API URL:', 'https://api.themetalayer.org');
   // === END DEBUGGING ===
   
   

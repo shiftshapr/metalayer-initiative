@@ -50,10 +50,10 @@ class CommunitiesModule {
 // --- Community Management Functions ---
 async function loadCommunities() {
     try {
-      debug('Loading communities...');
+      console.log('Loading communities...');
       const response = await api.getCommunities();
       const communities = response.communities || response; // Handle both formats
-      debug(`Loaded ${communities.length} communities`);
+      console.log(`Loaded ${communities.length} communities`);
       
       // Update community dropdown
       updateCommunityDropdown(communities);
@@ -112,7 +112,7 @@ async function loadCommunities() {
       }
     } catch (error) {
       console.error('Failed to load communities:', error);
-      debug(`Failed to load communities: ${error.message}`);
+      console.log(`Failed to load communities: ${error.message}`);
       
       // Fallback: show default community
       updateCommunityDropdown([{ id: 'default', name: 'Main Community' }]);
@@ -155,7 +155,7 @@ async function loadCommunities() {
   
 
   function switchCommunity(community) {
-    debug(`Switching primary community to: ${community.name}`);
+    console.log(`Switching primary community to: ${community.name}`);
     
     // Update the current community name in the header
     const currentCommunityName = document.getElementById('current-community-name');
@@ -223,7 +223,7 @@ async function loadCombinedAvatars(communityIds) {
       console.log('═══════════════════════════════════════════════════════════');
       console.log('👥 LOAD_VISIBILITY: Communities:', communityIds);
       console.log('👥 LOAD_VISIBILITY: Timestamp:', new Date().toISOString());
-      debug(`Loading combined avatars from communities: ${communityIds.join(', ')}`);
+      console.log(`Loading combined avatars from communities: ${communityIds.join(', ')}`);
       
       // Get normalized URL for visibility - SAME AS MESSAGES
       console.log('');
@@ -419,8 +419,8 @@ async function loadCombinedAvatars(communityIds) {
       
       Logger.debug(`VISIBILITY: Final combined avatars:`, allAvatars, 'general');
       Logger.debug(`VISIBILITY: Total unique avatars: ${allAvatars.length}`, null, 'general');
-      debug(`Combined avatars from ${communityIds.length} communities:`, allAvatars);
-      debug(`Total unique avatars: ${allAvatars.length}`);
+      console.log(`Combined avatars from ${communityIds.length} communities:`, allAvatars);
+      console.log(`Total unique avatars: ${allAvatars.length}`);
       
       // Enhanced logging for final avatars before passing to updateVisibleTab
       console.log('🔍 VISIBILITY: Final avatars to be processed by updateVisibleTab:');
@@ -452,7 +452,7 @@ async function loadCombinedAvatars(communityIds) {
       }
     } catch (error) {
       console.error('❌ VISIBILITY: Failed to load combined avatars:', error);
-      debug(`Failed to load combined avatars: ${error.message}`);
+      console.log(`Failed to load combined avatars: ${error.message}`);
       await updateVisibleTab([]);
     }
   }
@@ -471,13 +471,13 @@ async function loadCombinedAvatars(communityIds) {
         communityIds = result.activeCommunities || ['comm-001'];
       }
       
-      debug(`Loading avatars for communities: ${communityIds.join(', ')}`);
+      console.log(`Loading avatars for communities: ${communityIds.join(', ')}`);
       
       // Use the combined avatars function
       await loadCombinedAvatars(communityIds);
     } catch (error) {
       console.error('Failed to load avatars:', error);
-      debug(`Failed to load avatars: ${error.message}`);
+      console.log(`Failed to load avatars: ${error.message}`);
     }
   }
   

@@ -268,20 +268,20 @@ async function addMessageToChat(message) {
   
   // Check if message is deleted
   if (message.deletedAt) {
-    Logger.debug(`DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] === DELETED MESSAGE ANALYSIS ===`, null, 'general');
-    Logger.debug(`DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] Message ID: ${message.id}`, null, 'general');
-    Logger.debug(`DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] Message deletedAt: ${message.deletedAt}`, null, 'general');
-    Logger.debug(`DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] Message hasReplies: ${message.hasReplies}`, null, 'general');
-    Logger.debug(`DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] Message replyCount: ${message.replyCount}`, null, 'general');
-    Logger.debug(`DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] Full message object:`, JSON.stringify(message, null, 2), 'general');
+    Logger.debug(`DELETED_MSG_DEBUG: [BUILD v1.0] === DELETED MESSAGE ANALYSIS ===`, null, 'general');
+    Logger.debug(`DELETED_MSG_DEBUG: [BUILD v1.0] Message ID: ${message.id}`, null, 'general');
+    Logger.debug(`DELETED_MSG_DEBUG: [BUILD v1.0] Message deletedAt: ${message.deletedAt}`, null, 'general');
+    Logger.debug(`DELETED_MSG_DEBUG: [BUILD v1.0] Message hasReplies: ${message.hasReplies}`, null, 'general');
+    Logger.debug(`DELETED_MSG_DEBUG: [BUILD v1.0] Message replyCount: ${message.replyCount}`, null, 'general');
+    Logger.debug(`DELETED_MSG_DEBUG: [BUILD v1.0] Full message object:`, JSON.stringify(message, null, 2), 'general');
     
     // Only show deleted messages if they have replies
     if (!message.hasReplies) {
-      Logger.debug(`DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] SKIPPING deleted message without replies: ${message.id}`, null, 'general');
+      Logger.debug(`DELETED_MSG_DEBUG: [BUILD v1.0] SKIPPING deleted message without replies: ${message.id}`, null, 'general');
       return;
     }
     
-    Logger.debug(`DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] SHOWING deleted message WITH replies: ${message.id}`, null, 'general');
+    Logger.debug(`DELETED_MSG_DEBUG: [BUILD v1.0] SHOWING deleted message WITH replies: ${message.id}`, null, 'general');
     
     // For deleted messages, use the same structure as regular messages
     // but with "This message was deleted" as content
@@ -619,10 +619,18 @@ function getSenderInitial(name) {
   return (name || 'U').charAt(0).toUpperCase();
 }
 
+// Convert URLs to clickable links
+function convertUrlsToLinks(text) {
+  // URL regex pattern
+  if (!text) return '';
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  return text.replace(urlRegex, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
+}
+
 function getSenderAvatar(author) {
   if (!author) return getSenderInitial('Unknown');
   
-  Logger.debug(`GET_SENDER_AVATAR: [BUILD ${EXTENSION_BUILD}] Creating message avatar for:`, {
+  Logger.debug(`GET_SENDER_AVATAR: [BUILD v1.0] Creating message avatar for:`, {
     name: author.name,
     email: author.email,
     auraColor: author.auraColor
@@ -636,7 +644,7 @@ function getSenderAvatar(author) {
     const currentAuraColor = getCurrentUserAvatarBgColor();
     if (currentAuraColor) {
       author.auraColor = currentAuraColor;
-      Logger.debug(`GET_SENDER_AVATAR: [BUILD ${EXTENSION_BUILD}] Using current aura color for current user:`, currentAuraColor, 'general');
+      Logger.debug(`GET_SENDER_AVATAR: [BUILD v1.0] Using current aura color for current user:`, currentAuraColor, 'general');
     }
   } else {
     // For other users' messages, try to get the latest aura color from presence data
@@ -644,9 +652,9 @@ function getSenderAvatar(author) {
     const latestAuraColor = getLatestAuraColorFromPresence(author.email);
     if (latestAuraColor) {
       author.auraColor = latestAuraColor;
-      Logger.debug(`GET_SENDER_AVATAR: [BUILD ${EXTENSION_BUILD}] Using real-time aura color for other user:`, latestAuraColor, 'general');
+      Logger.debug(`GET_SENDER_AVATAR: [BUILD v1.0] Using real-time aura color for other user:`, latestAuraColor, 'general');
     } else {
-      Logger.debug(`GET_SENDER_AVATAR: [BUILD ${EXTENSION_BUILD}] Using stored aura color for other user:`, author.auraColor, 'general');
+      Logger.debug(`GET_SENDER_AVATAR: [BUILD v1.0] Using stored aura color for other user:`, author.auraColor, 'general');
     }
   }
   
@@ -673,7 +681,7 @@ function getSenderAvatar(author) {
     );
   }
   
-  Logger.debug(`GET_SENDER_AVATAR: [BUILD ${EXTENSION_BUILD}] Generated message avatar HTML:`, avatarHTML, 'general');
+  Logger.debug(`GET_SENDER_AVATAR: [BUILD v1.0] Generated message avatar HTML:`, avatarHTML, 'general');
   return avatarHTML;
 }
 
@@ -980,7 +988,6 @@ async function loadChatHistory(communityId = null) {
       count: activeCommunities.length 
     });
     Logger.debug(`CHAT_LOAD: Loading chat history for active communities: ${activeCommunities.join(', ')}`, null, 'general');
-    debug(`Loading chat history for active communities: ${activeCommunities.join(', ')}`);
     
     // Get normalized URL for page-specific messages - SAME AS VISIBILITY
     const urlData = await normalizeCurrentUrl();
@@ -995,7 +1002,6 @@ async function loadChatHistory(communityId = null) {
     Logger.debug(`CHAT_LOAD: urlData object:`, JSON.stringify(urlData), 'general');
     Logger.debug(`CHAT_LOAD: currentUri before loop: ${currentUri}`, null, 'general');
     Logger.debug(`CHAT_LOAD: currentUri type: ${typeof currentUri}, value: ${JSON.stringify(currentUri)}`, null, 'general');
-    debug(`Loading chat history for normalized URI: ${currentUri} (from raw: ${urlData.rawUrl})`);
     
     // Check if we're reloading the same URI unnecessarily
     if (lastLoadedUri === currentUri) {
@@ -1093,7 +1099,6 @@ async function loadChatHistory(communityId = null) {
     console.log('🔍 CHAT_LOAD: === FINAL COMBINED RESULTS ===');
     Logger.debug(`CHAT_LOAD: Total conversations from all communities: ${allConversations.length}`, null, 'general');
     console.log('🔍 CHAT_LOAD: Combined chat history from all communities:', allConversations);
-    debug(`Combined chat history from all communities: ${JSON.stringify(allConversations)}`);
     
     const chatMessages = document.querySelector('.chat-messages');
     if (!chatMessages) {
@@ -1179,23 +1184,23 @@ async function loadChatHistory(communityId = null) {
             mainThreadPost.replyCount = nonDeletedReplies.length; // Count only non-deleted replies for display
             
             // COMPREHENSIVE DELETED MESSAGE DEBUGGING
-            Logger.debug(`DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] === MAIN THREAD MESSAGE ANALYSIS ===`, null, 'general');
-            Logger.debug(`DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] Message ID: ${mainThreadPost.id}`, null, 'general');
-            Logger.debug(`DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] Message deletedAt: ${mainThreadPost.deletedAt}`, null, 'general');
-            Logger.debug(`DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] Total direct replies: ${directReplies.length}`, null, 'general');
-            Logger.debug(`DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] Non-deleted replies: ${nonDeletedReplies.length}`, null, 'general');
-            Logger.debug(`DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] hasReplies: ${mainThreadPost.hasReplies}`, null, 'general');
-            Logger.debug(`DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] replyCount: ${mainThreadPost.replyCount}`, null, 'general');
+            Logger.debug(`DELETED_MSG_DEBUG: [BUILD v1.0] === MAIN THREAD MESSAGE ANALYSIS ===`, null, 'general');
+            Logger.debug(`DELETED_MSG_DEBUG: [BUILD v1.0] Message ID: ${mainThreadPost.id}`, null, 'general');
+            Logger.debug(`DELETED_MSG_DEBUG: [BUILD v1.0] Message deletedAt: ${mainThreadPost.deletedAt}`, null, 'general');
+            Logger.debug(`DELETED_MSG_DEBUG: [BUILD v1.0] Total direct replies: ${directReplies.length}`, null, 'general');
+            Logger.debug(`DELETED_MSG_DEBUG: [BUILD v1.0] Non-deleted replies: ${nonDeletedReplies.length}`, null, 'general');
+            Logger.debug(`DELETED_MSG_DEBUG: [BUILD v1.0] hasReplies: ${mainThreadPost.hasReplies}`, null, 'general');
+            Logger.debug(`DELETED_MSG_DEBUG: [BUILD v1.0] replyCount: ${mainThreadPost.replyCount}`, null, 'general');
             if (directReplies.length > 0) {
-              Logger.debug(`DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] Direct replies details:`, directReplies.map(r => ({ id: r.id, deletedAt: r.deletedAt, body: r.body })), 'general');
+              Logger.debug(`DELETED_MSG_DEBUG: [BUILD v1.0] Direct replies details:`, directReplies.map(r => ({ id: r.id, deletedAt: r.deletedAt, body: r.body })), 'general');
             }
             
             // Check if this message should be skipped
             if (mainThreadPost.deletedAt && !mainThreadPost.hasReplies) {
-              Logger.debug(`DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] SKIPPING deleted main thread without replies: ${mainThreadPost.id}`, null, 'general');
+              Logger.debug(`DELETED_MSG_DEBUG: [BUILD v1.0] SKIPPING deleted main thread without replies: ${mainThreadPost.id}`, null, 'general');
               continue;
             } else if (mainThreadPost.deletedAt && mainThreadPost.hasReplies) {
-              Logger.debug(`DELETED_MSG_DEBUG: [BUILD ${EXTENSION_BUILD}] SHOWING deleted main thread WITH replies: ${mainThreadPost.id}`, null, 'general');
+              Logger.debug(`DELETED_MSG_DEBUG: [BUILD v1.0] SHOWING deleted main thread WITH replies: ${mainThreadPost.id}`, null, 'general');
             }
             // Calculate reaction count for this specific message
             const messageReactions = conversation.reactions ? conversation.reactions.filter(r => r.postId === mainThreadPost.id) : [];
@@ -1288,7 +1293,6 @@ async function loadChatHistory(communityId = null) {
     }
   } catch (error) {
     console.error('Failed to load chat history:', error);
-    debug(`Failed to load chat history: ${error.message}`);
   } finally {
     // Reset loading flag
     isLoadingChatHistory = false;
@@ -1299,7 +1303,6 @@ async function loadChatHistory(communityId = null) {
 
 async function handleMessageFocus(message) {
   try {
-    debug(`Focusing on message: ${message.id}`);
     
     // Clear the current chat display
     const chatMessages = document.querySelector('.chat-messages');
@@ -1419,7 +1422,6 @@ async function handleMessageFocus(message) {
     
   } catch (error) {
     console.error('Failed to focus on message:', error);
-    debug('Failed to focus on message: ' + error.message);
   }
 }
 
@@ -2128,11 +2130,9 @@ async function handleCopyLink(message) {
       });
     }
     
-    debug('Message link copied to clipboard');
     console.log('🔗 SHARE: Message link created and copied:', messageUrl);
   } catch (error) {
     console.error('🔗 SHARE: Failed to copy message link:', error);
-    debug('Failed to copy link: ' + error.message);
   }
 }
 
@@ -2714,6 +2714,73 @@ async function toggleThreadReplies(threadId, messageElement) {
   updateMessageVisualHierarchy();
 }
 
+// ===== MESSAGE INPUT EVENT LISTENERS (FROM COMP) =====
+function setupMessageInputEventListeners() {
+  console.log('💬 MESSAGE_INPUT: Setting up message input event listeners...');
+  
+  const chatInput = document.getElementById('chat-textarea');
+  if (!chatInput) {
+    console.log('❌ MESSAGE_INPUT: chat-textarea not found');
+    return;
+  }
+  
+  // Add Enter key support for sending messages
+  chatInput.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      sendChatMessage();
+    }
+  });
+  
+  console.log('✅ MESSAGE_INPUT: Message input event listeners added');
+}
+
+function sendChatMessage() {
+  console.log('🚀🚀🚀 ============================================');
+  console.log('🚀🚀🚀 SEND_CHAT_MESSAGE: ENTRY POINT');
+  console.log('🚀🚀🚀 ============================================');
+  
+  const chatInput = document.getElementById('chat-textarea');
+  if (!chatInput) {
+    console.log('❌ SEND_CHAT_MESSAGE: chat-textarea not found');
+    return;
+  }
+  
+  console.log('🚀 SEND_CHAT_MESSAGE: Chat send triggered');
+  console.log('🚀 SEND_CHAT_MESSAGE: chatInput element:', !!chatInput);
+  console.log('🚀 SEND_CHAT_MESSAGE: chatInput value:', chatInput?.value);
+  console.log('🚀 SEND_CHAT_MESSAGE: chatInput value length:', chatInput?.value?.length);
+  
+  // Check if we're in edit mode
+  if (chatInput.dataset.editingMessageId) {
+    console.log('✏️ SEND_CHAT_MESSAGE: In edit mode, skipping send');
+    return;
+  }
+  
+  let message = chatInput?.value?.trim();
+  console.log('📝 SEND_CHAT_MESSAGE: Message after trim:', message);
+  console.log('📝 SEND_CHAT_MESSAGE: Message length:', message?.length);
+  
+  if (!message) {
+    console.log('❌ SEND_CHAT_MESSAGE: No message content');
+    return;
+  }
+  
+  // Use the existing sendMessageViaSupabase function
+  if (typeof window.sendMessageViaSupabase === 'function') {
+    console.log('📡 SEND_CHAT_MESSAGE: Calling sendMessageViaSupabase...');
+    window.sendMessageViaSupabase(message).then((result) => {
+      console.log('📡 SEND_CHAT_MESSAGE: Message sent successfully:', result);
+      // Clear the input
+      chatInput.value = '';
+    }).catch((error) => {
+      console.error('❌ SEND_CHAT_MESSAGE: Failed to send message:', error);
+    });
+  } else {
+    console.log('❌ SEND_CHAT_MESSAGE: sendMessageViaSupabase not available');
+  }
+}
+
 // Export for global access
 window.CanopiModule = CanopiModule;
 window.loadChatHistory = loadChatHistory;
@@ -2722,3 +2789,6 @@ window.sendMessageViaSupabase = sendMessageViaSupabase;
 window.updateMessageInChat = updateMessageInChat;
 window.removeMessageFromChat = removeMessageFromChat;
 window.checkAndAddThreadToggle = checkAndAddThreadToggle;
+window.setupMessageInputEventListeners = setupMessageInputEventListeners;
+window.sendChatMessage = sendChatMessage;
+window.convertUrlsToLinks = convertUrlsToLinks;

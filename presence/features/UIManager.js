@@ -456,6 +456,235 @@ class UIManager {
   }
 
   /**
+   * Setup tab navigation event listeners (FROM COMP)
+   */
+  setupTabNavigation() {
+    console.log('🔗 TAB_NAVIGATION: Setting up tab navigation event listeners...');
+    
+    // Main tab switching logic
+    const mainTabs = document.querySelectorAll('.main-nav-tab');
+    const mainTabContents = document.querySelectorAll('.main-tab-content');
+    
+    mainTabs.forEach(tab => {
+      this.addEventListeners(tab, 'click', () => {
+        const targetTabId = tab.getAttribute('data-tab');
+        console.log(`🔗 TAB_NAVIGATION: Switching to main tab: ${targetTabId}`);
+
+        // Deactivate all main tabs and content
+        mainTabs.forEach(t => t.classList.remove('active'));
+        mainTabContents.forEach(c => c.classList.remove('active'));
+
+        // Activate the clicked tab and its corresponding content
+        tab.classList.add('active');
+        const targetTabContent = document.getElementById(targetTabId);
+        if (targetTabContent) {
+          targetTabContent.classList.add('active');
+          console.log(`✅ TAB_NAVIGATION: Activated content: #${targetTabId}`);
+          
+          // Initialize specific tab functionality
+          if (targetTabId === 'agent-tab') {
+            console.log('🎯 TAB_NAVIGATION: Agent tab activated! Initializing agent...');
+            try {
+              if (typeof window.initializeAgentTab === 'function') {
+                window.initializeAgentTab();
+                console.log('✅ TAB_NAVIGATION: Agent tab initialization completed successfully');
+              }
+            } catch (error) {
+              console.error('❌ TAB_NAVIGATION: Agent tab initialization failed:', error);
+            }
+          }
+        } else {
+          console.error(`❌ TAB_NAVIGATION: Target content not found: #${targetTabId}`);
+        }
+      });
+    });
+
+    // Sub-tab switching logic
+    document.querySelectorAll('.sub-nav-tab').forEach(subTab => {
+      this.addEventListeners(subTab, 'click', () => {
+        const targetSubTabId = subTab.getAttribute('data-subtab');
+        console.log(`🔗 TAB_NAVIGATION: Switching to sub-tab: ${targetSubTabId}`);
+
+        // Find the parent tab content
+        const parentMainContent = subTab.closest('.main-tab-content');
+        if (!parentMainContent) {
+          console.error("❌ TAB_NAVIGATION: Could not find parent main content for sub-tab.");
+          return;
+        }
+
+        // Deactivate all sub-tabs in this tab group
+        const subTabGroup = subTab.closest('.sidebar-nav-sub');
+        subTabGroup.querySelectorAll('.sub-nav-tab').forEach(st => {
+          st.classList.remove('active');
+        });
+        
+        // Deactivate all content panels in this tab content
+        parentMainContent.querySelectorAll('.sub-tab-content').forEach(stc => {
+          stc.classList.remove('active');
+        });
+        
+        // Activate the clicked sub-tab and its content
+        subTab.classList.add('active');
+        const targetSubTabContent = document.getElementById(targetSubTabId);
+        if (targetSubTabContent) {
+          targetSubTabContent.classList.add('active');
+          console.log(`✅ TAB_NAVIGATION: Activated sub-tab content: #${targetSubTabId}`);
+        } else {
+          console.error(`❌ TAB_NAVIGATION: Target sub-tab content not found: #${targetSubTabId}`);
+        }
+      });
+    });
+
+    console.log('✅ TAB_NAVIGATION: Tab navigation event listeners set up successfully');
+  }
+
+  /**
+   * Setup message input event listeners (FROM COMP)
+   */
+  setupMessageInputEventListeners() {
+    console.log('💬 MESSAGE_INPUT: Setting up message input event listeners...');
+    
+    const chatInput = document.getElementById('chat-textarea');
+    if (!chatInput) {
+      console.log('❌ MESSAGE_INPUT: chat-textarea not found');
+      return;
+    }
+
+    // Add auto-resize functionality to textarea
+    this.addEventListeners(chatInput, 'input', function() {
+      autoResize(this);
+    });
+    
+    // Handle window resize to recalculate max height
+    this.addEventListeners(window, 'resize', function() {
+      autoResize(chatInput);
+    });
+
+    // Add Enter key support for sending messages
+    this.addEventListeners(chatInput, 'keydown', (event) => {
+      if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        this.sendChatMessage();
+      }
+    });
+
+    console.log('✅ MESSAGE_INPUT: Message input event listeners added');
+  }
+
+  /**
+   * Send chat message (FROM COMP)
+   */
+  sendChatMessage() {
+    console.log('🚀🚀🚀 ============================================');
+    console.log('🚀🚀🚀 SEND_CHAT_MESSAGE: ENTRY POINT');
+    console.log('🚀🚀🚀 ============================================');
+    
+    const chatInput = document.getElementById('chat-textarea');
+    if (!chatInput) {
+      console.log('❌ SEND_CHAT_MESSAGE: chat-textarea not found');
+      return;
+    }
+    
+    console.log('🚀 SEND_CHAT_MESSAGE: Chat send triggered');
+    console.log('🚀 SEND_CHAT_MESSAGE: chatInput element:', !!chatInput);
+    console.log('🚀 SEND_CHAT_MESSAGE: chatInput value:', chatInput?.value);
+    console.log('🚀 SEND_CHAT_MESSAGE: chatInput value length:', chatInput?.value?.length);
+    
+    // Check if we're in edit mode
+    if (chatInput.dataset.editingMessageId) {
+      console.log('✏️ SEND_CHAT_MESSAGE: In edit mode, skipping send');
+      return;
+    }
+    
+    let message = chatInput?.value?.trim();
+    console.log('📝 SEND_CHAT_MESSAGE: Message after trim:', message);
+    console.log('📝 SEND_CHAT_MESSAGE: Message length:', message?.length);
+    
+    if (!message) {
+      console.log('❌ SEND_CHAT_MESSAGE: No message content');
+      return;
+    }
+    
+    // Use the existing sendMessageViaSupabase function
+    if (typeof window.sendMessageViaSupabase === 'function') {
+      console.log('📡 SEND_CHAT_MESSAGE: Calling sendMessageViaSupabase...');
+      window.sendMessageViaSupabase(message).then((result) => {
+        console.log('📡 SEND_CHAT_MESSAGE: Message sent successfully:', result);
+        console.log('📡 SEND_CHAT_MESSAGE: Result type:', typeof result);
+        console.log('📡 SEND_CHAT_MESSAGE: Result success:', result?.success);
+        console.log('📡 SEND_CHAT_MESSAGE: Result id:', result?.id);
+        console.log('📡 SEND_CHAT_MESSAGE: Result data:', result?.data);
+        
+        // CRITICAL: Check if message should be added to UI immediately
+        console.log('🎯 UI_UPDATE: Checking if message should be added to UI...');
+        console.log('🎯 UI_UPDATE: window.addMessageToChat available:', typeof window.addMessageToChat);
+        console.log('🎯 UI_UPDATE: window.loadChatHistory available:', typeof window.loadChatHistory);
+        
+        if (result && result.success && result.data) {
+          console.log('🎯 UI_UPDATE: Message sent successfully, adding to UI immediately...');
+          console.log('🎯 UI_UPDATE: Message data:', result.data);
+          
+          // Add message to UI immediately
+          if (typeof window.addMessageToChat === 'function') {
+            console.log('🎯 UI_UPDATE: Calling window.addMessageToChat...');
+            try {
+              window.addMessageToChat(result.data);
+              console.log('✅ UI_UPDATE: Message added to chat UI successfully');
+            } catch (error) {
+              console.error('❌ UI_UPDATE: Failed to add message to chat UI:', error);
+            }
+          } else {
+            console.log('❌ UI_UPDATE: window.addMessageToChat not available');
+            console.log('🎯 UI_UPDATE: Trying alternative - loadChatHistory...');
+            if (typeof window.loadChatHistory === 'function') {
+              console.log('🎯 UI_UPDATE: Calling window.loadChatHistory...');
+              try {
+                window.loadChatHistory();
+                console.log('✅ UI_UPDATE: Chat history reloaded');
+              } catch (error) {
+                console.error('❌ UI_UPDATE: Failed to reload chat history:', error);
+              }
+            } else {
+              console.log('❌ UI_UPDATE: No UI update methods available');
+            }
+          }
+        } else {
+          console.log('❌ UI_UPDATE: Message send failed or no data returned');
+        }
+        
+        // Clear the input
+        chatInput.value = '';
+        console.log('🎯 UI_UPDATE: Input cleared, message send process complete');
+      }).catch((error) => {
+        console.error('❌ SEND_CHAT_MESSAGE: Failed to send message:', error);
+      });
+    } else {
+      console.log('❌ SEND_CHAT_MESSAGE: sendMessageViaSupabase not available');
+    }
+  }
+
+  /**
+   * Add event listener with automatic cleanup tracking
+   */
+  addEventListeners(element, event, handler) {
+    if (!element) {
+      console.warn('UIManager: Cannot add event listener to null element');
+      return;
+    }
+    
+    // Add the event listener
+    element.addEventListener(event, handler);
+    
+    // Track for cleanup
+    if (!this.eventListeners.has(element)) {
+      this.eventListeners.set(element, []);
+    }
+    this.eventListeners.get(element).push({ event, handler });
+    
+    Logger.debug(`Added event listener: ${event} on element`, null, 'ui');
+  }
+
+  /**
    * Cleanup event listeners
    */
   cleanup() {
@@ -470,6 +699,24 @@ class UIManager {
     this.eventListeners.clear();
     this.uiCallbacks = [];
   }
+}
+
+// ===== AUTO-RESIZE FUNCTION (FROM COMP) =====
+function autoResize(textarea) {
+  if (!textarea) return;
+  
+  // Reset height to auto to get the correct scrollHeight
+  textarea.style.height = 'auto';
+  
+  // Calculate the new height
+  const maxHeight = 120; // Maximum height in pixels
+  const newHeight = Math.min(textarea.scrollHeight, maxHeight);
+  
+  // Set the new height
+  textarea.style.height = newHeight + 'px';
+  
+  // Show scrollbar if content exceeds max height
+  textarea.style.overflowY = textarea.scrollHeight > maxHeight ? 'auto' : 'hidden';
 }
 
 // ===== GLOBAL UI FUNCTIONS =====
@@ -497,10 +744,148 @@ function forceRefreshCSS() {
   }
 }
 
+// ===== TAB NAVIGATION EVENT LISTENERS (FROM COMP) =====
+function setupTabNavigation() {
+  console.log('🔗 TAB_NAV: Setting up tab navigation event listeners...');
+  
+  // Main tab navigation
+  const mainTabs = document.querySelectorAll('.main-nav-tab');
+  const mainTabContents = document.querySelectorAll('.main-tab-content');
+  
+  mainTabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      const targetTabId = tab.getAttribute('data-tab');
+      console.log(`🔗 TAB_NAV: Switching to main tab: ${targetTabId}`);
+      
+      // Deactivate all main tabs and content
+      mainTabs.forEach(t => t.classList.remove('active'));
+      mainTabContents.forEach(c => c.classList.remove('active'));
+      
+      // Activate the clicked tab and its corresponding content
+      tab.classList.add('active');
+      const targetTabContent = document.getElementById(targetTabId);
+      if (targetTabContent) {
+        targetTabContent.classList.add('active');
+        console.log(`✅ TAB_NAV: Activated tab: ${targetTabId}`);
+      } else {
+        console.error(`❌ TAB_NAV: Tab content not found: ${targetTabId}`);
+      }
+    });
+  });
+  
+  // Sub-tab navigation
+  document.querySelectorAll('.sub-nav-tab').forEach(subTab => {
+    subTab.addEventListener('click', () => {
+      const targetSubTabId = subTab.getAttribute('data-subtab');
+      console.log(`🔗 TAB_NAV: Switching to sub-tab: ${targetSubTabId}`);
+      
+      // Find the parent tab content
+      const parentMainContent = subTab.closest('.main-tab-content');
+      if (!parentMainContent) {
+        console.error("❌ TAB_NAV: Could not find parent main content for sub-tab.");
+        return;
+      }
+      
+      // Deactivate all sub-tabs and sub-content within this main tab
+      const subTabs = parentMainContent.querySelectorAll('.sub-nav-tab');
+      const subTabContents = parentMainContent.querySelectorAll('.sub-tab-content');
+      
+      subTabs.forEach(t => t.classList.remove('active'));
+      subTabContents.forEach(c => c.classList.remove('active'));
+      
+      // Activate the clicked sub-tab and its content
+      subTab.classList.add('active');
+      const targetSubTabContent = document.getElementById(targetSubTabId);
+      if (targetSubTabContent) {
+        targetSubTabContent.classList.add('active');
+        console.log(`✅ TAB_NAV: Activated sub-tab: ${targetSubTabId}`);
+      } else {
+        console.error(`❌ TAB_NAV: Sub-tab content not found: ${targetSubTabId}`);
+      }
+    });
+  });
+  
+  console.log('✅ TAB_NAV: Tab navigation event listeners added');
+}
+
+// Create UIManager instance
+const uiManager = new UIManager();
+
 // Make available globally
 window.UIManager = UIManager;
+window.uiManager = uiManager;
 window.updateVisualHierarchy = updateVisualHierarchy;
 window.debugHierarchy = debugHierarchy;
 window.forceRefreshCSS = forceRefreshCSS;
+window.autoResize = autoResize;
+window.setupTabNavigation = setupTabNavigation;
+window.setupMessageInputEventListeners = setupMessageInputEventListeners;
+
+// ===== GLOBAL FUNCTIONS (FROM COMP) =====
+function setupTabNavigation() {
+  console.log('🔗 TAB_NAVIGATION: Setting up tab navigation...');
+  if (window.uiManager && window.uiManager.setupTabNavigation) {
+    window.uiManager.setupTabNavigation();
+    console.log('✅ TAB_NAVIGATION: Tab navigation setup completed');
+  } else {
+    console.log('❌ TAB_NAVIGATION: UIManager instance not available');
+    console.log('❌ TAB_NAVIGATION: window.uiManager:', !!window.uiManager);
+    console.log('❌ TAB_NAVIGATION: setupTabNavigation method:', typeof window.uiManager?.setupTabNavigation);
+  }
+}
+
+function setupMessageInputEventListeners() {
+  console.log('💬 MESSAGE_INPUT: Setting up message input event listeners...');
+  if (window.uiManager && window.uiManager.setupMessageInputEventListeners) {
+    window.uiManager.setupMessageInputEventListeners();
+    console.log('✅ MESSAGE_INPUT: Message input event listeners setup completed');
+  } else {
+    console.log('❌ MESSAGE_INPUT: UIManager instance not available');
+    console.log('❌ MESSAGE_INPUT: window.uiManager:', !!window.uiManager);
+    console.log('❌ MESSAGE_INPUT: setupMessageInputEventListeners method:', typeof window.uiManager?.setupMessageInputEventListeners);
+  }
+}
 
 Logger.info('UIManager module loaded', null, 'ui');
+
+// ===== THEME FUNCTIONS (FROM COMP) =====
+function initializeTheme() {
+  // Load saved theme from storage or default to light
+  // Modernized: Use StateManager instead of Chrome Storage
+  getState('theme').then((theme) => {
+    const savedTheme = theme || 'light';
+    setTheme(savedTheme);
+  });
+}
+
+function setTheme(theme) {
+  const body = document.body;
+  const themeIcon = document.getElementById('theme-icon');
+  const themeText = document.getElementById('theme-text');
+  
+  if (theme === 'dark') {
+    body.setAttribute('data-theme', 'dark');
+    if (themeIcon) themeIcon.textContent = '☀️';
+    if (themeText) themeText.textContent = 'Light mode';
+  } else {
+    body.setAttribute('data-theme', 'light');
+    if (themeIcon) themeIcon.textContent = '🌙';
+    if (themeText) themeText.textContent = 'Dark mode';
+  }
+  
+  // Save theme preference
+  if (typeof window.setState === 'function') {
+    window.setState('theme', theme);
+  }
+}
+
+function toggleTheme() {
+  const currentTheme = document.body.getAttribute('data-theme') || 'light';
+  const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+  setTheme(newTheme);
+}
+
+// Make available globally
+window.initializeTheme = initializeTheme;
+window.setTheme = setTheme;
+window.toggleTheme = toggleTheme;

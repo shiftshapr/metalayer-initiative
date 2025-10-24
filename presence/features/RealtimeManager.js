@@ -181,53 +181,52 @@ async function initializeSupabaseRealtimeClient() {
     
     console.log('🚀 SUPABASE: Initializing Supabase real-time client...');
     
-    // Initialize Supabase real-time client
-    console.log('🔍 SUPABASE_DEBUG: Checking SupabaseRealtimeClient availability...');
-    console.log('🔍 SUPABASE_DEBUG: typeof SupabaseRealtimeClient:', typeof SupabaseRealtimeClient);
-    console.log('🔍 SUPABASE_DEBUG: window.SupabaseRealtimeClient:', typeof window.SupabaseRealtimeClient);
+    // COMP APPROACH: Use window.supabase.realtime directly
+    console.log('🔍 SUPABASE_DEBUG: Checking window.supabase.realtime availability...');
+    console.log('🔍 SUPABASE_DEBUG: typeof window.supabase:', typeof window.supabase);
+    console.log('🔍 SUPABASE_DEBUG: typeof window.supabase.realtime:', typeof window.supabase?.realtime);
     
-    if (typeof SupabaseRealtimeClient !== 'undefined') {
-      console.log('✅ SUPABASE_DEBUG: SupabaseRealtimeClient class found, creating instance...');
-      window.supabaseRealtimeClient = new SupabaseRealtimeClient();
-      console.log('✅ SUPABASE_DEBUG: Instance created:', !!window.supabaseRealtimeClient);
+    if (window.supabase && window.supabase.realtime) {
+      console.log('✅ SUPABASE_DEBUG: window.supabase.realtime found, using COMP approach...');
       
-      // Initialize with Supabase credentials
-      const supabaseUrl = SUPABASE_URL;
-      const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp3eG9temttbmN3endyeXZ1ZHd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk2Njg2ODQsImV4cCI6MjA3NTI0NDY4NH0.CoceGOzumiF6aYVGQSWily93snNYh9N9C4p8lrjrTyM';
-      
-      console.log('🔍 SUPABASE_DEBUG: Calling initialize method...');
-      const success = await window.supabaseRealtimeClient.initialize(supabaseUrl, supabaseKey);
-      console.log('🔍 SUPABASE_DEBUG: Initialize result:', success);
-      
-      if (success) {
-        console.log('✅ SUPABASE: Real-time client initialized successfully');
-        console.log('✅ SUPABASE: Supabase client:', window.supabaseRealtimeClient.supabase);
-        console.log('✅ SUPABASE: isInitialized:', window.supabaseRealtimeClient.isInitialized);
+      // Create SupabaseRealtimeClient instance (FROM COMP)
+      if (typeof window.SupabaseRealtimeClient !== 'undefined') {
+        console.log('✅ SUPABASE_DEBUG: SupabaseRealtimeClient class found, creating instance...');
+        window.supabaseRealtimeClient = new window.SupabaseRealtimeClient();
+        console.log('✅ SUPABASE_DEBUG: Instance created:', !!window.supabaseRealtimeClient);
         
-        // CRITICAL FIX: Ensure real-time client is properly connected
-        console.log('🔧 SUPABASE: Ensuring real-time connection...');
-        window.supabaseRealtimeClient.isConnected = true;
-        
-        // Setup event handlers
-        setupSupabaseEventHandlers();
-        
-        // CRITICAL FIX: Test the connection immediately
-        console.log('🔧 SUPABASE: Testing real-time connection...');
-        try {
-          const testResult = await window.supabaseRealtimeClient.supabase
-            .from('user_presence')
-            .select('count')
-            .limit(1);
-          console.log('✅ SUPABASE: Connection test successful:', testResult);
-        } catch (testError) {
-          console.error('❌ SUPABASE: Connection test failed:', testError);
-        }
+        // Initialize with Supabase client
+        const success = await window.supabaseRealtimeClient.initialize(window.supabase);
+        console.log('✅ SUPABASE_DEBUG: Initialize result:', success);
       } else {
-        console.error('❌ SUPABASE: Failed to initialize real-time client');
-        console.error('❌ SUPABASE: This will cause ALL real-time features to fail');
+        console.log('❌ SUPABASE_DEBUG: SupabaseRealtimeClient class not available, using fallback');
+        window.supabaseRealtimeClient = window.supabase;
+      }
+      
+      console.log('✅ SUPABASE_DEBUG: Using SupabaseRealtimeClient instance');
+      
+      // COMP APPROACH: Real-time is already available through window.supabase
+      console.log('✅ SUPABASE: Real-time client initialized successfully (COMP approach)');
+      console.log('✅ SUPABASE: Supabase client:', window.supabase);
+      console.log('✅ SUPABASE: Realtime available:', !!window.supabase.realtime);
+      
+      // CRITICAL FIX: Ensure real-time client is properly connected
+      console.log('🔧 SUPABASE: Ensuring real-time connection...');
+      window.supabaseRealtimeClient.isConnected = true;
+      
+      // Setup event handlers
+      setupSupabaseEventHandlers();
+      
+      // CRITICAL FIX: Test the connection immediately
+      console.log('🔧 SUPABASE: Testing real-time connection...');
+      try {
+        const testResult = await window.supabase.from('user_presence').select('count').limit(1);
+        console.log('✅ SUPABASE: Connection test successful:', testResult);
+      } catch (testError) {
+        console.error('❌ SUPABASE: Connection test failed:', testError);
       }
     } else {
-      console.error('❌ SUPABASE: SupabaseRealtimeClient not available');
+      console.error('❌ SUPABASE: window.supabase.realtime not available');
       console.error('❌ SUPABASE: Available window keys:', Object.keys(window).filter(k => k.toLowerCase().includes('supabase')));
     }
     
@@ -238,6 +237,11 @@ async function initializeSupabaseRealtimeClient() {
 
 // Removed duplicate initializeSupabaseRealtime() function
 // Using initializeSupabaseRealtimeClient() instead
+
+// Expose function globally
+if (typeof window !== 'undefined') {
+  window.initializeSupabaseRealtimeClient = initializeSupabaseRealtimeClient;
+}
 
 async function convertSupabaseMessageToAPIFormat(supabaseMessage) {
   console.log('🔄 CONVERT_MESSAGE: Converting Supabase message to API format');
@@ -672,6 +676,8 @@ async function sendPresenceEvent(kind, availability = null, customLabel = null) 
   console.log('🔍 PRESENCE EVENT DEBUG: Kind:', kind);
   console.log('🔍 PRESENCE EVENT DEBUG: Availability:', availability);
   console.log('🔍 PRESENCE EVENT DEBUG: Custom label:', customLabel);
+  
+  let requestBody = null;
   
   try {
     if (!currentPageId) {

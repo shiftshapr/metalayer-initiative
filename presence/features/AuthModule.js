@@ -531,11 +531,17 @@ function getCurrentUserAvatarColor() {
 
 function getUserAvatarBgColor() {
   // Get the user's custom background color for their profile avatar
-  return AVATAR_BG_CONFIG.getBgColor();
+  if (window.currentUser && window.currentUser.auraColor) {
+    return window.currentUser.auraColor;
+  }
+  return '#ffffff'; // Default white
 }
 
 function getCurrentUserAvatarBgColor() {
-  return AVATAR_BG_CONFIG.getBgColor();
+  if (window.currentUser && window.currentUser.auraColor) {
+    return window.currentUser.auraColor;
+  }
+  return '#ffffff'; // Default white
 }
 
 
@@ -618,3 +624,5 @@ window.requireAuth = requireAuth;
 window.showAuthPrompt = showAuthPrompt;
 window.createAuthPromptModal = createAuthPromptModal;
 window.initializeRealGoogleAuth = initializeRealGoogleAuth;
+window.signOut = signOut;
+window.logout = signOut; // Alias for compatibility

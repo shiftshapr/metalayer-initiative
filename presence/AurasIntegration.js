@@ -65,8 +65,9 @@ class AurasIntegration {
           this.logger.info('Using global aurasRealtimeManager');
           this.aurasRealtimeManager = window.aurasRealtimeManager;
         } else {
-          this.logger.error('AurasRealtimeManager not available in constructor or globally');
-          return false;
+          this.logger.warn('AurasRealtimeManager not available, using direct Supabase approach');
+          // COMP METHOD: Use direct Supabase approach
+          this.aurasRealtimeManager = null;
         }
       }
 

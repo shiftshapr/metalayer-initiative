@@ -381,14 +381,289 @@ function resetCustomAvatarColor() {
   }
 }
 
+// ===== PROFILE MENU FUNCTIONS (FROM COMP) =====
+function handleAvatarClick(e) {
+  const userAvatarContainer = document.getElementById('user-avatar-container');
+  const userMenu = document.getElementById('user-menu');
+  
+  console.log('👤 Profile avatar clicked!');
+  console.log('🔍 Current menu display:', userMenu.style.display);
+  e.stopPropagation();
+  
+  // Toggle menu visibility
+  if (userMenu.style.display === 'none' || userMenu.style.display === '') {
+    userMenu.style.display = 'block';
+  } else {
+    userMenu.style.display = 'none';
+  }
+}
+
+function handleClickOutside(e) {
+  const userAvatarContainer = document.getElementById('user-avatar-container');
+  const userMenu = document.getElementById('user-menu');
+  
+  if (userAvatarContainer && userMenu && !userAvatarContainer.contains(e.target) && !userMenu.contains(e.target)) {
+    console.log('🖱️ Clicked outside, hiding menu');
+    userMenu.style.display = 'none';
+  }
+}
+
+function addProfileAvatarClickHandler() {
+  const userAvatarContainer = document.getElementById('user-avatar-container');
+  const userMenu = document.getElementById('user-menu');
+  if (userAvatarContainer && userMenu) {
+    // Remove any existing click listeners to avoid duplicates
+    userAvatarContainer.removeEventListener('click', handleAvatarClick);
+    userAvatarContainer.addEventListener('click', handleAvatarClick);
+    
+    // Add click-outside listener only once
+    if (!window.clickOutsideListenerAdded) {
+      document.addEventListener('click', handleClickOutside);
+      window.clickOutsideListenerAdded = true;
+    }
+    
+    console.log('✅ Profile avatar click handler added');
+  } else {
+    console.log('❌ Profile avatar container or menu not found');
+  }
+}
+
+// ===== PROFILE MENU ITEM HANDLERS (FROM COMP) =====
+function addAuraButtonClickHandler() {
+  const auraBtn = document.getElementById('aura-btn');
+  if (auraBtn) {
+    auraBtn.addEventListener('click', (e) => {
+      console.log('🎨 Aura button clicked!');
+      e.stopPropagation(); // Prevent menu from closing
+      if (typeof window.showColorPickerModal === 'function') {
+        window.showColorPickerModal();
+      } else {
+        console.log('❌ showColorPickerModal not available');
+      }
+    });
+    console.log('✅ Aura button click handler added');
+  } else {
+    console.log('❌ Aura button not found');
+  }
+}
+
+function addThemeToggleButtonClickHandler() {
+  const themeToggleBtn = document.getElementById('theme-toggle-btn');
+  if (themeToggleBtn) {
+    themeToggleBtn.addEventListener('click', (e) => {
+      console.log('🌙 Theme toggle button clicked!');
+      e.stopPropagation(); // Prevent menu from closing
+      if (typeof window.toggleTheme === 'function') {
+        window.toggleTheme();
+      } else {
+        console.log('❌ toggleTheme not available');
+      }
+    });
+    console.log('✅ Theme toggle button click handler added');
+  } else {
+    console.log('❌ Theme toggle button not found');
+  }
+}
+
+function addLogoutButtonClickHandler() {
+  const logoutBtn = document.getElementById('logout-btn');
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', (e) => {
+      console.log('🚪 Logout button clicked!');
+      e.stopPropagation(); // Prevent menu from closing
+      if (typeof window.logout === 'function') {
+        window.logout();
+      } else {
+        console.log('❌ logout function not available');
+      }
+    });
+    console.log('✅ Logout button click handler added');
+  } else {
+    console.log('❌ Logout button not found');
+  }
+}
+
+function addAllProfileMenuHandlers() {
+  console.log('🎯 PROFILE_MENU: Adding all profile menu handlers...');
+  addAuraButtonClickHandler();
+  addThemeToggleButtonClickHandler();
+  addLogoutButtonClickHandler();
+  console.log('✅ PROFILE_MENU: All profile menu handlers added');
+}
+
+// ===== AURA COLOR MODAL (FROM COMP) =====
+function showColorPickerModal() {
+  console.log('🎨 Opening color picker modal...');
+  
+  // Check if modal already exists and is visible
+  const existingModal = document.getElementById('color-picker-modal');
+  if (existingModal) {
+    console.log('🎨 Modal already exists, showing it');
+    existingModal.style.display = 'flex';
+    return;
+  }
+  
+  // Create modal HTML
+  const modalHTML = `
+    <div class="color-picker-modal" id="color-picker-modal" style="display: flex;">
+      <div class="color-picker-content">
+        <div class="color-picker-header">
+          <h3 class="color-picker-title">Change Aura Color</h3>
+          <button class="color-picker-close" id="color-picker-close">&times;</button>
+        </div>
+        <div class="color-picker-input-group">
+          <label class="color-picker-label" for="color-input">Hex Color (without #):</label>
+          <input type="text" class="color-picker-input" id="color-input" placeholder="45B7D1" maxlength="6">
+        </div>
+        <div class="color-picker-preview">
+          <div class="color-picker-preview-circle" id="color-preview-circle">D</div>
+          <div class="color-picker-preview-text" id="color-preview-text">Preview</div>
+        </div>
+        <div class="color-picker-buttons">
+          <button class="color-picker-btn" id="color-picker-reset">Reset to Default</button>
+          <button class="color-picker-btn primary" id="color-picker-save">Save Color</button>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  // Add modal to page
+  document.body.insertAdjacentHTML('beforeend', modalHTML);
+  
+  // Wait for DOM to be ready before attaching event listeners
+  setTimeout(() => {
+    const modal = document.getElementById('color-picker-modal');
+    const colorInput = document.getElementById('color-input');
+    const previewCircle = document.getElementById('color-preview-circle');
+    const previewText = document.getElementById('color-preview-text');
+    const closeBtn = document.getElementById('color-picker-close');
+    const resetBtn = document.getElementById('color-picker-reset');
+    const saveBtn = document.getElementById('color-picker-save');
+    
+    if (!modal || !colorInput || !previewCircle || !previewText || !closeBtn || !resetBtn || !saveBtn) {
+      console.error('❌ Modal elements not found after creation');
+      return;
+    }
+    
+    // Get current color and set initial values
+    const currentColor = getCurrentUserAvatarBgColor();
+    const currentHex = currentColor.replace('#', '');
+    colorInput.value = currentHex;
+    updateColorPreview(currentHex);
+    
+    // Remove any existing event listeners to prevent duplicates
+    const newColorInput = colorInput.cloneNode(true);
+    colorInput.parentNode.replaceChild(newColorInput, colorInput);
+    
+    // Event listeners
+    newColorInput.addEventListener('input', (e) => {
+      const hex = e.target.value.replace('#', '');
+      updateColorPreview(hex);
+    });
+    
+    closeBtn.addEventListener('click', closeColorPickerModal);
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) closeColorPickerModal();
+    });
+    
+    resetBtn.addEventListener('click', () => {
+      // Get the dynamic default color (based on user's name) - use window.currentUser
+      let defaultColor = '#45B7D1'; // Fallback
+      const user = window.currentUser;
+      if (user) {
+        const name = user.user_metadata?.full_name || user.name || user.email || 'User';
+        defaultColor = getAvatarColor(name);
+      }
+      const defaultHex = defaultColor.replace('#', '');
+      newColorInput.value = defaultHex;
+      updateColorPreview(defaultHex);
+    });
+    
+    saveBtn.addEventListener('click', async () => {
+      const hex = newColorInput.value.replace('#', '');
+      if (isValidHex(hex)) {
+        console.log('🎨 Saving aura color:', '#' + hex);
+        const auraColor = '#' + hex;
+        console.log('🎨 Setting aura color:', auraColor);
+        
+        // Apply aura color to profile avatar using unified system
+        if (window.currentUser) {
+          window.currentUser.auraColor = auraColor;
+          if (typeof window.updateUI === 'function') {
+            window.updateUI(window.currentUser);
+          }
+        }
+        
+        // Save aura color to storage
+        chrome.storage.local.set({ userAvatarBgColor: auraColor });
+        
+        closeColorPickerModal();
+      } else {
+        alert('Please enter a valid 6-digit hex color (e.g., 45B7D1)');
+      }
+    });
+    
+    // Focus the input
+    newColorInput.focus();
+    newColorInput.select();
+    
+    console.log('🎨 Modal setup complete');
+  }, 50);
+}
+
+function closeColorPickerModal() {
+  const modal = document.getElementById('color-picker-modal');
+  if (modal) {
+    modal.style.display = 'none';
+  }
+}
+
+function updateColorPreview(hex) {
+  const previewCircle = document.getElementById('color-preview-circle');
+  const previewText = document.getElementById('color-preview-text');
+  
+  if (previewCircle && previewText) {
+    const color = '#' + hex;
+    previewCircle.style.backgroundColor = color;
+    previewText.textContent = color;
+  }
+}
+
+function isValidHex(hex) {
+  return /^[A-Fa-f0-9]{6}$/.test(hex);
+}
+
+function getAvatarColor(name) {
+  // Simple hash function to generate consistent colors
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const hue = Math.abs(hash) % 360;
+  return `hsl(${hue}, 70%, 50%)`;
+}
+
 // Make available globally
 window.ProfileManager = ProfileManager;
 window.getCurrentUserAvatarBgColor = getCurrentUserAvatarBgColor;
 window.getCurrentUserAvatarColor = getCurrentUserAvatarColor;
 window.setCustomAvatarColor = setCustomAvatarColor;
 window.resetCustomAvatarColor = resetCustomAvatarColor;
+window.handleAvatarClick = handleAvatarClick;
+window.handleClickOutside = handleClickOutside;
+window.addProfileAvatarClickHandler = addProfileAvatarClickHandler;
+window.addAuraButtonClickHandler = addAuraButtonClickHandler;
+window.addThemeToggleButtonClickHandler = addThemeToggleButtonClickHandler;
+window.addLogoutButtonClickHandler = addLogoutButtonClickHandler;
+window.addAllProfileMenuHandlers = addAllProfileMenuHandlers;
+window.showColorPickerModal = showColorPickerModal;
+window.closeColorPickerModal = closeColorPickerModal;
+window.updateColorPreview = updateColorPreview;
+window.isValidHex = isValidHex;
+window.getAvatarColor = getAvatarColor;
 
 Logger.info('ProfileManager module loaded', null, 'profile');
+
 
 
 

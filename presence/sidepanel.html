@@ -6,10 +6,16 @@
   <link rel="stylesheet" href="sidepanel.css">
   
   <!-- ===== CORE SYSTEM LOADING ===== -->
+  <!-- Load Configuration FIRST (sets window.SUPABASE_URL, etc.) -->
+  <script src="config.js"></script>
+  <script src="security.js"></script>
+  <script src="performance-optimizer.js"></script>
   <!-- Load LOCAL Supabase JS Library (CDN blocked by CSP) -->
   <script src="lib/supabase.min.js"></script>
   
   <!-- ===== MODULAR ARCHITECTURE ===== -->
+  <!-- CRITICAL: Load StateManager FIRST (core dependency) -->
+  <script src="StateManager.js"></script>
   <!-- Load Enhanced Logger System -->
   <script src="utils/EnhancedLogger.js"></script>
   <!-- Load Avatar Utilities -->
@@ -23,6 +29,8 @@
   
   <!-- Load Supabase Service -->
   <script src="services/SupabaseService.js"></script>
+  <!-- Load Supabase Realtime Client -->
+  <script src="SupabaseRealtimeClient.js"></script>
   <!-- Load Unified Authentication System -->
   <script src="unified-auth.js"></script>
   <!-- Load Visibility Manager -->
@@ -30,22 +38,26 @@
   <!-- Load Sidepanel Core -->
   <script src="core/SidepanelCore.js"></script>
   
-  <!-- Load Feature Modules -->
+  <!-- Load Authentication Systems FIRST -->
+  
+  <!-- Load Feature Modules in dependency order -->
   <script src="features/ProfileManager.js"></script>
+  <script src="utils/AvatarConfig.js"></script>
   <script src="features/UIManager.js"></script>
-  
-  <!-- Legacy Supabase Client removed - using new integrated system -->
-  <!-- Load Loosely Coupled Auth Manager -->
-  <script src="auth-manager.js"></script>
-  <!-- Load YouTube Transcription Service -->
-  <script src="youtube-transcription.js"></script>
-  
-  <!-- Load Real Google Auth for Actual Profile Pictures -->
-  <script src="real-google-auth.js"></script>
-  <!-- Load AuthModule for modular authentication -->
+  <script src="features/CanopiModule.js"></script>
   <script src="features/AuthModule.js"></script>
+  <script src="features/AgentModule.js"></script>
+  <script src="features/AuraColorModal.js"></script>
+  <script src="features/AuthManager.js"></script>
+  <script src="features/CommunitiesModule.js"></script>
+  <script src="features/NavigationManager.js"></script>
+  <script src="features/NotificationManager.js"></script>
+  <script src="features/PeopleModule.js"></script>
+  <script src="features/RoomsModule.js"></script>
+  <script src="features/SettingsModule.js"></script>
+  <script src="real-google-auth.js"></script>
+  
   <!-- Load Notification Manager -->
-  <script src="notification-manager.js"></script>
   <!-- Load URL Normalization Utility -->
   <script src="urlNormalization.js"></script>
   
@@ -54,6 +66,7 @@
         <!-- Removed conflicting fix files - they were causing system conflicts -->
   
   <script src="CleanRealtimeManager.js"></script>
+  <script src="features/RealtimeManager.js"></script>
 </head>
 <body>
   <!-- Main Sidebar Container -->
@@ -266,7 +279,6 @@
   <script src="security.js"></script>
   <script src="performance-optimizer.js"></script>
   <!-- Load Modernization Classes -->
-  <script src="StateManager.js"></script>
   <script src="EventBus.js"></script>
   <script src="LifecycleManager.js"></script>
   
@@ -438,18 +450,12 @@
   <script src="ReactionsIntegration.js"></script>
   
   <!-- Load Auras Real-time System -->
-  <script src="AurasRealtimeManager.js"></script>
   <script src="ui-auras-bindings.js"></script>
   <script src="AurasIntegration.js"></script>
   
   <!-- Load Architecture Tests -->
-  <script src="test-better-architecture.js"></script>
-  <script src="test-complete-system.js"></script>
   
   <!-- Load Real-time Diagnostic Tools -->
-  <script src="diagnose-realtime-propagation.js"></script>
-  <!-- Load Real-time Authentication Fix -->
-  <script src="fix-realtime-auth.js"></script>
   <!-- Bind robust realtime events to UI refresh -->
   <script src="ui-realtime-bindings.js"></script>
         </body>

@@ -276,7 +276,10 @@ async function setCustomAvatarColor(color) {
 
 
 async function resetUserAvatarBgColor() {
-  AVATAR_BG_CONFIG.resetToDefault();
+  // Reset to default aura color (no custom background color needed)
+  if (window.currentUser) {
+    window.currentUser.auraColor = '#aaaaaa'; // Default gray
+  }
   
   // Remove from chrome storage
   chrome.storage.local.remove(['userAvatarBgColor']);
