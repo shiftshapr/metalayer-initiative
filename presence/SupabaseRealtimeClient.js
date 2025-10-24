@@ -200,6 +200,67 @@ class SupabaseRealtimeClient {
       return false;
     }
   }
+
+  // Delete a message
+  async deleteMessage(messageId) {
+    try {
+      console.log('🗑️ SUPABASE_CLIENT: Deleting message:', messageId);
+      
+      if (!this.isInitialized || !this.supabase) {
+        console.error('❌ SUPABASE_CLIENT: Client not initialized');
+        return { success: false, error: 'Client not initialized' };
+      }
+
+      const { data, error } = await this.supabase
+        .from('messages')
+        .delete()
+        .eq('id', messageId)
+        .select();
+
+      if (error) {
+        console.error('❌ SUPABASE_CLIENT: Delete failed:', error);
+        return { success: false, error: error.message };
+      }
+
+      console.log('✅ SUPABASE_CLIENT: Message deleted successfully:', data);
+      return { success: true, data };
+    } catch (error) {
+      console.error('❌ SUPABASE_CLIENT: Delete error:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // Edit a message
+  async editMessage(messageId, newContent) {
+    try {
+      console.log('✏️ SUPABASE_CLIENT: Editing message:', messageId, 'with content:', newContent);
+      
+      if (!this.isInitialized || !this.supabase) {
+        console.error('❌ SUPABASE_CLIENT: Client not initialized');
+        return { success: false, error: 'Client not initialized' };
+      }
+
+      const { data, error } = await this.supabase
+        .from('messages')
+        .update({ 
+          content: newContent,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', messageId)
+        .select();
+
+      if (error) {
+        console.error('❌ SUPABASE_CLIENT: Edit failed:', error);
+        return { success: false, error: error.message };
+      }
+
+      console.log('✅ SUPABASE_CLIENT: Message edited successfully:', data);
+      return { success: true, data };
+    } catch (error) {
+      console.error('❌ SUPABASE_CLIENT: Edit error:', error);
+      return { success: false, error: error.message };
+    }
+  }
 }
 
 // Make available globally

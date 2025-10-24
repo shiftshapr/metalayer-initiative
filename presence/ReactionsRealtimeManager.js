@@ -132,7 +132,7 @@ class ReactionsRealtimeManager {
     }
     this._processedEvents.add(eventId);
 
-    this.logger.debug('Reaction change received:', payload);
+    this.logger.console.log('Reaction change received:', payload);
     this.logger.info(`Real-time ${payload.eventType} event for reaction:`, payload.new?.id || payload.old?.id);
 
     // Emit event for UI handling

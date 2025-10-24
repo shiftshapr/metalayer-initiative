@@ -7,6 +7,14 @@ let supabaseRealtimeClient = null;
 // Initialize real Google auth for actual profile pictures
 let realGoogleAuth = null;
 
+// Initialize Auth Manager (COMP METHOD)
+const authManager = new AuthManager();
+
+// Make authManager globally available (COMP METHOD)
+window.authManager = authManager;
+
+// API is initialized by APIModule.js (COMP METHOD)
+
 // Visibility refresh flag
 let isRefreshingVisibility = false;
 
@@ -252,23 +260,40 @@ async function migrateFromChromeStorage() {
   console.log('🔄 MODERN: Migrating from Chrome Storage...');
   
   try {
-    const result = await chrome.storage.local.get([
-      'userAvatarBgColor',
-      'googleUser',
-      'supabaseUser',
-      'metalayerUser',
-      'activeCommunities',
-      'primaryCommunity',
-      'currentCommunity',
-      'communities',
-      'theme',
-      'debugMode',
-      'customAvatarColor',
-      'pendingMessageContent',
-      'pendingMessageUri',
-      'pendingVisibilityContent',
-      'pendingVisibilityUri'
-    ]);
+    // Get individual state values like COMP method
+    const userAvatarBgColor = await getState('userAvatarBgColor');
+    const googleUser = await getState('googleUser');
+    const supabaseUser = await getState('supabaseUser');
+    const metalayerUser = await getState('metalayerUser');
+    const activeCommunities = await getState('activeCommunities');
+    const primaryCommunity = await getState('primaryCommunity');
+    const currentCommunity = await getState('currentCommunity');
+    const communities = await getState('communities');
+    const theme = await getState('theme');
+    const debugMode = await getState('debugMode');
+    const customAvatarColor = await getState('customAvatarColor');
+    const pendingMessageContent = await getState('pendingMessageContent');
+    const pendingMessageUri = await getState('pendingMessageUri');
+    const pendingVisibilityContent = await getState('pendingVisibilityContent');
+    const pendingVisibilityUri = await getState('pendingVisibilityUri');
+    
+    const result = {
+      userAvatarBgColor,
+      googleUser,
+      supabaseUser,
+      metalayerUser,
+      activeCommunities,
+      primaryCommunity,
+      currentCommunity,
+      communities,
+      theme,
+      debugMode,
+      customAvatarColor,
+      pendingMessageContent,
+      pendingMessageUri,
+      pendingVisibilityContent,
+      pendingVisibilityUri
+    };
     
     for (const [key, value] of Object.entries(result)) {
       if (value !== undefined && stateManager) {
@@ -293,23 +318,16 @@ async function getState(key) {
       return await stateManager.get(key);
     } catch (error) {
       console.error('❌ MODERN: Error getting state from StateManager:', error);
-      // Fallback to chrome.storage.local
-      return new Promise((resolve) => {
-        chrome.storage.local.get([key], (result) => {
-          resolve(result[key] || null);
-        });
-      });
+      // No fallback - StateManager is required
+      console.error('❌ MODERN: StateManager is required for state management');
+      return null;
     }
   } else {
-    console.log('🔄 MODERN: StateManager not available, using chrome.storage.local fallback');
-    // Fallback to chrome.storage.local
-    return new Promise((resolve) => {
-      chrome.storage.local.get([key], (result) => {
-        resolve(result[key] || null);
-      });
-    });
+    console.error('❌ MODERN: StateManager is required for state management');
+    return null;
   }
 }
+
 
 async function setState(key, value) {
   if (stateManager) {
@@ -318,12 +336,12 @@ async function setState(key, value) {
       console.log('🔄 MODERN: State updated:', key, '=', value);
     } catch (error) {
       console.error('❌ MODERN: Error setting state in StateManager:', error);
-      // Fallback to chrome.storage.local
-      chrome.storage.local.set({ [key]: value });
+      // No fallback - StateManager is required
+      console.error('❌ MODERN: StateManager is required for state management');
     }
   } else {
-    // Fallback to chrome.storage.local
-    chrome.storage.local.set({ [key]: value });
+    // No fallback - StateManager is required
+    console.error('❌ MODERN: StateManager is required for state management');
   }
 }
 
@@ -897,7 +915,7 @@ window.setLastSeenThreshold = function(days) {
   try {
     if (window.configManager) {
       window.configManager.setLastSeenThreshold(days);
-      Logger.info(`🔧 USER SETTINGS: Last seen threshold set to ${days} days`, null, 'general');
+      console.log(`🔧 USER SETTINGS: Last seen threshold set to ${days} days`, null, 'general');
       
       // Refresh visibility to apply new threshold
       if (typeof window.refreshVisibilityAvatars === 'function') {
@@ -919,7 +937,7 @@ window.getLastSeenThreshold = function() {
       const thresholdMs = window.configManager.getLastSeenThreshold();
       const days = Math.floor(thresholdMs / (24 * 60 * 60 * 1000));
       
-      Logger.info(`🔧 USER SETTINGS: Current threshold: ${days} days`, null, 'general');
+      console.log(`🔧 USER SETTINGS: Current threshold: ${days} days`, null, 'general');
       return { days, totalMs: thresholdMs };
     } else {
       console.error('❌ USER SETTINGS: ConfigManager not available');
@@ -955,15 +973,9 @@ function updateProfileAvatarWithRealTimeAura() {
     const realTimeAuraColor = getLatestAuraColorFromPresence(userEmail);
     
     if (realTimeAuraColor) {
-      Logger.debug(`PROFILE_AVATAR_UPDATE: Found real-time aura color for profile: ${realTimeAuraColor}`, null, 'general');
-      
       // Update the profile avatar with the real-time aura color
       const profileAvatar = document.querySelector('#user-avatar-container');
       if (profileAvatar) {
-        Logger.debug(`PROFILE_AVATAR_UPDATE: Found profile avatar element:`, profileAvatar, 'general');
-        Logger.debug(`PROFILE_AVATAR_UPDATE: Container innerHTML:`, profileAvatar.innerHTML, 'general');
-        Logger.debug(`PROFILE_AVATAR_UPDATE: Container has children:`, profileAvatar.children.length, 'general');
-        
         // Check if the container has any avatar element
         let avatarElement = profileAvatar.querySelector('img') || profileAvatar.querySelector('[style*="border-radius"]');
         
@@ -977,13 +989,11 @@ function updateProfileAvatarWithRealTimeAura() {
           if (auraRing) {
             // Update the aura ring color
             auraRing.style.border = `2px solid ${realTimeAuraColor}`;
-            Logger.debug(`PROFILE_AVATAR_UPDATE: Updated unified avatar aura to: ${realTimeAuraColor}`, null, 'general');
           }
         } else if (avatarElement) {
           console.log('🔍 PROFILE_AVATAR_UPDATE: Found simple avatar element');
           // Update the border on the simple avatar
           avatarElement.style.border = `2px solid ${realTimeAuraColor}`;
-          Logger.debug(`PROFILE_AVATAR_UPDATE: Updated avatar border color to: ${realTimeAuraColor}`, null, 'general');
         } else {
           console.log('🔍 PROFILE_AVATAR_UPDATE: No avatar element found in container, applying border to container');
           // Apply border directly to container as fallback
@@ -991,7 +1001,6 @@ function updateProfileAvatarWithRealTimeAura() {
           profileAvatar.style.borderWidth = '2px';
           profileAvatar.style.borderStyle = 'solid';
           profileAvatar.style.borderRadius = '50%';
-          Logger.debug(`PROFILE_AVATAR_UPDATE: Updated container border color to: ${realTimeAuraColor}`, null, 'general');
         }
       } else {
         console.log('🔍 PROFILE_AVATAR_UPDATE: Profile avatar element not found');
@@ -1075,12 +1084,17 @@ function clearContext() {
 
 async function handlePendingContent() {
   try {
-    const result = await chrome.storage.local.get([
-      'pendingMessageContent', 
-      'pendingMessageUri',
-      'pendingVisibilityContent',
-      'pendingVisibilityUri'
-    ]);
+    const pendingMessageContent = await getState('pendingMessageContent');
+    const pendingMessageUri = await getState('pendingMessageUri');
+    const pendingVisibilityContent = await getState('pendingVisibilityContent');
+    const pendingVisibilityUri = await getState('pendingVisibilityUri');
+    
+    const result = {
+      pendingMessageContent,
+      pendingMessageUri,
+      pendingVisibilityContent,
+      pendingVisibilityUri
+    };
 
     // Handle pending message content
     if (result.pendingMessageContent) {
@@ -1094,7 +1108,7 @@ async function handlePendingContent() {
         autoResize(chatInput);
         
         // Clear the pending content
-        await chrome.storage.local.remove(['pendingMessageContent', 'pendingMessageUri']);
+        await removeStateMultiple(['pendingMessageContent', 'pendingMessageUri']);
         
         console.log('Pre-populated message input with selected content');
       }
@@ -1107,7 +1121,7 @@ async function handlePendingContent() {
       console.log('Pending visibility content:', result.pendingVisibilityContent);
       
       // Clear the pending content
-      await chrome.storage.local.remove(['pendingVisibilityContent', 'pendingVisibilityUri']);
+      await removeStateMultiple(['pendingVisibilityContent', 'pendingVisibilityUri']);
       
       // Show a temporary notification
       showNotification('Visibility anchoring feature coming soon!');
@@ -1147,8 +1161,7 @@ function setupCrossProfileCommunication() {
       });
       
       // Also refresh visibility avatars
-      const result = chrome.storage.local.get(['activeCommunities']);
-      result.then(({ activeCommunities }) => {
+      getState('activeCommunities').then((activeCommunities) => {
         const communities = activeCommunities || ['comm-001'];
         loadCombinedAvatars(communities).then(() => {
           console.log('📡 AURA: Refreshed visibility avatars after cross-profile aura change');
@@ -1249,10 +1262,10 @@ async function handleTabChange(tabId) {
         console.log('❌ TAB_CHANGE: loadChatHistory not available');
       }
       // Update visibility list for the new page (uses normalized URL)
-      const result = await chrome.storage.local.get(['activeCommunities']);
-      const activeCommunities = result.activeCommunities || ['comm-001'];
+      const activeCommunities = await getState('activeCommunities');
+      const communities = activeCommunities || ['comm-001'];
       if (typeof window.loadCombinedAvatars === 'function') {
-        await window.loadCombinedAvatars(activeCommunities);
+        await window.loadCombinedAvatars(communities);
       }
       // Start presence tracking for the new URL (uses normalized URL)
       if (typeof window.startPresenceTracking === 'function') {
@@ -1343,7 +1356,7 @@ async function handleTabUpdate(tabId, url) {
         const leaveStartTime = Date.now();
         await window.supabaseRealtimeClient.leaveCurrentPage();
         const leaveEndTime = Date.now();
-        Logger.success(`TAB_UPDATE: leaveCurrentPage() completed in ${leaveEndTime - leaveStartTime}ms`, null, 'general');
+        console.log(`TAB_UPDATE: leaveCurrentPage() completed in ${leaveEndTime - leaveStartTime}ms`, null, 'general');
         console.log('✅ TAB_UPDATE: currentPage after leaving:', window.supabaseRealtimeClient.currentPage);
       } else {
         console.log('⚠️ TAB_UPDATE: No old page to leave (oldPageId is null)');
@@ -1361,7 +1374,7 @@ async function handleTabUpdate(tabId, url) {
     const normalizeStartTime = Date.now();
     const newUrlData = await window.normalizeUrl(url);
     const normalizeEndTime = Date.now();
-    Logger.success(`TAB_UPDATE: normalizeUrl() completed in ${normalizeEndTime - normalizeStartTime}ms`, null, 'general');
+    console.log(`TAB_UPDATE: normalizeUrl() completed in ${normalizeEndTime - normalizeStartTime}ms`, null, 'general');
     console.log('🔍 TAB_UPDATE: Normalized result:', JSON.stringify(newUrlData, null, 2));
     
     // === STEP 4: COMPARE PAGE IDs ===
@@ -1408,21 +1421,21 @@ async function handleTabUpdate(tabId, url) {
       console.log('❌ TAB_UPDATE: loadChatHistory not available');
     }
     const chatEndTime = Date.now();
-    Logger.success(`TAB_UPDATE: Chat history loaded in ${chatEndTime - chatStartTime}ms`, null, 'general');
+    console.log(`TAB_UPDATE: Chat history loaded in ${chatEndTime - chatStartTime}ms`, null, 'general');
     
     // === STEP 7: UPDATE VISIBILITY LIST ===
     console.log('');
     console.log('📊 TAB_UPDATE: STEP 7 - Updating Visibility List');
     console.log('───────────────────────────────────────────────────────────');
-    const result = await chrome.storage.local.get(['activeCommunities']);
-    const activeCommunities = result.activeCommunities || ['comm-001'];
-    console.log('🔍 TAB_UPDATE: Active communities:', activeCommunities);
+    const activeCommunities = await getState('activeCommunities');
+    const communities = activeCommunities || ['comm-001'];
+    console.log('🔍 TAB_UPDATE: Active communities:', communities);
     const visibilityStartTime = Date.now();
     if (typeof window.loadCombinedAvatars === 'function') {
-      await window.loadCombinedAvatars(activeCommunities);
+      await window.loadCombinedAvatars(communities);
     }
     const visibilityEndTime = Date.now();
-    Logger.success(`TAB_UPDATE: Visibility list updated in ${visibilityEndTime - visibilityStartTime}ms`, null, 'general');
+    console.log(`TAB_UPDATE: Visibility list updated in ${visibilityEndTime - visibilityStartTime}ms`, null, 'general');
     
     // === STEP 8: START PRESENCE TRACKING ===
     console.log('');
@@ -1434,7 +1447,7 @@ async function handleTabUpdate(tabId, url) {
       await window.startPresenceTracking();
     }
     const presenceEndTime = Date.now();
-    Logger.success(`TAB_UPDATE: Presence tracking started in ${presenceEndTime - presenceStartTime}ms`, null, 'general');
+    console.log(`TAB_UPDATE: Presence tracking started in ${presenceEndTime - presenceStartTime}ms`, null, 'general');
     
     // === FINAL STATE ===
     console.log('');
@@ -2348,6 +2361,80 @@ function initializeSidepanel() {
     initializeCompleteModernArchitecture().then(async () => {
       console.log('✅ SIDEPANEL: Modern architecture initialized');
       
+      // === COMP AUTH SEQUENCE (EXACT MATCH) ===
+      console.log('🔐 AUTH: Starting COMP auth sequence...');
+      
+      // Fix authManager.initialize method if missing
+      if (typeof authManager !== 'undefined' && typeof authManager.initialize !== 'function') {
+        console.log('🔧 Adding initialize method to authManager...');
+        authManager.initialize = function() {
+          console.log('🔧 AuthManager initialize called');
+          return Promise.resolve(true);
+        };
+      }
+      
+      // Try to initialize with timeout (COMP METHOD)
+      try {
+        const authReady = await Promise.race([
+          authManager.initialize(),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Auth initialization timeout')), 3000)
+          )
+        ]);
+        
+        console.log('Auth manager initialization result:', authReady);
+        
+        if (authReady) {
+          console.log('Auth Manager ready');
+          console.log('Current provider:', authManager.currentProvider?.name);
+          
+          // Set up auth state listener (COMP METHOD)
+          authManager.onAuthStateChange(async (event, data) => {
+            console.log('Auth state changed:', event, data);
+            // data IS the user object, not { user: ... }
+            await updateUI(data);
+          });
+          
+          // Check initial auth state (COMP METHOD)
+          const user = await authManager.getCurrentUser();
+          console.log('Initial user:', user);
+          
+          // Update UI with current user (COMP METHOD)
+          await updateUI(user);
+          
+          // Check for pending content from selection widget (COMP METHOD)
+          await handlePendingContent();
+          
+        } else {
+          console.log('Auth system failed to initialize');
+        }
+      } catch (error) {
+        console.error('Auth initialization failed:', error.message);
+        console.log('Forcing real authentication - no offline fallback');
+      }
+      
+      // === LOAD COMMUNITIES AND CHAT HISTORY (COMP METHOD) ===
+      try {
+        console.log('🔍 INIT: Loading communities...');
+        const result = await loadCommunities();
+        console.log('🔍 INIT: Communities loaded:', result);
+        
+        // Also load chat history for the current page
+        console.log('🔍 INIT: Setting up chat history timeout (1 second)...');
+        setTimeout(async () => {
+          try {
+            console.log('🔍 INIT: Chat history timeout executed');
+            await loadChatHistory();
+            console.log('🔍 INIT: Chat history loaded for current page');
+          } catch (error) {
+            console.error('❌ INIT: Error loading chat history:', error);
+          }
+        }, 1000); // Small delay to ensure communities are loaded first
+        
+      } catch (error) {
+        console.error('❌ INIT: Error loading communities:', error);
+      }
+      
       // === INITIALIZE MODULES (FROM COMP) ===
       console.log('🚀 MODULES: Initializing modules...');
       
@@ -2513,6 +2600,15 @@ function initializeSidepanel() {
   
   console.log('✅ SIDEPANEL: Sidepanel initialization complete');
 }
+
+// Make key functions globally available (COMP METHOD)
+window.handlePendingContent = handlePendingContent;
+window.migrateFromChromeStorage = migrateFromChromeStorage;
+
+// Make StateManager and its methods globally available (COMP METHOD)
+window.stateManager = stateManager;
+window.getState = (key) => stateManager.getState(key);
+window.setState = (key, value) => stateManager.setState(key, value);
 
 // Initialize when DOM is ready
 if (document.readyState === 'loading') {

@@ -252,14 +252,13 @@ class StateManager {
    */
   async loadPersistedState() {
     try {
-      const result = await chrome.storage.local.get([
-        'userAvatarBgColor',
-        'activeCommunities',
-        'primaryCommunity',
-        'currentCommunity',
-        'debugMode',
-        'theme'
-      ]);
+      const userAvatarBgColor = await this.getState('userAvatarBgColor');
+      const activeCommunities = await this.getState('activeCommunities');
+      const primaryCommunity = await this.getState('primaryCommunity');
+      const currentCommunity = await this.getState('currentCommunity');
+      const debugMode = await this.getState('debugMode');
+      const theme = await this.getState('theme');
+      const result = { userAvatarBgColor, activeCommunities, primaryCommunity, currentCommunity, debugMode, theme };
       
       // Load avatar color
       if (result.userAvatarBgColor) {
@@ -300,7 +299,9 @@ class StateManager {
     try {
       const storageKey = this.getStorageKey(path);
       if (storageKey) {
-        await chrome.storage.local.set({ [storageKey]: value });
+        if (typeof window.setState === 'function') {
+          await window.setState(storageKey, value);
+        }
         console.log(`💾 StateManager: Persisted ${path} to storage`);
       }
     } catch (error) {

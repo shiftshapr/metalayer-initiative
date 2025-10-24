@@ -25,7 +25,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   async function handleTabChange(tabId) {
     console.log('🔄 TAB_CHANGE: === HANDLING TAB CHANGE ===');
     console.log('🔄 TAB_CHANGE: Tab ID:', tabId);
-    debug(`Handling tab change for tab: ${tabId}`);
+    console.log(`Handling tab change for tab: ${tabId}`);
     try {
       // CRITICAL FIX: Leave current page BEFORE switching to new page
       // This prevents "ghost presence" where user appears on old page for 30 seconds
@@ -39,7 +39,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const tab = await chrome.tabs.get(tabId);
       if (tab && tab.url) {
         console.log('🔄 TAB_CHANGE: New tab URL:', tab.url);
-        debug(`New tab URL: ${tab.url}`);
+        console.log(`New tab URL: ${tab.url}`);
         
         // CRITICAL FIX: Normalize the SPECIFIC tab URL, not the active tab
         console.log('🔄 TAB_CHANGE: Normalizing SPECIFIC tab URL:', tab.url);
@@ -57,19 +57,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         // Reload chat history for the new page (uses normalized URL)
         await loadChatHistory();
         // Update visibility list for the new page (uses normalized URL)
-        const result = await chrome.storage.local.get(['activeCommunities']);
-        const activeCommunities = result.activeCommunities || ['comm-001'];
+        const activeCommunities = await window.getState('activeCommunities') || ['comm-001'];
         await loadCombinedAvatars(activeCommunities);
         // Start presence tracking for the new URL (uses normalized URL)
         await startPresenceTracking();
         console.log('✅ TAB_CHANGE: Tab change complete');
       } else {
         console.log('⚠️ TAB_CHANGE: No tab or URL found for tab:', tabId);
-        debug(`No tab or URL found for tab: ${tabId}`);
+        console.log(`No tab or URL found for tab: ${tabId}`);
       }
     } catch (error) {
       console.error('❌ TAB_CHANGE: Error handling tab change:', error);
-      debug(`Error handling tab change: ${error.message}`);
+      console.log(`Error handling tab change: ${error.message}`);
     }
   }
   
@@ -77,7 +76,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   async function handleTabClosed(tabId) {
     console.log('🔄 TAB_CLOSED: === HANDLING TAB CLOSURE ===');
     console.log('🔄 TAB_CLOSED: Tab ID:', tabId);
-    debug(`Handling tab closure for tab: ${tabId}`);
+    console.log(`Handling tab closure for tab: ${tabId}`);
     try {
       // CRITICAL FIX: Leave current page when tab is closed
       // This immediately marks user as inactive on the closed page
@@ -90,7 +89,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       console.log('✅ TAB_CLOSED: Tab closure handled successfully');
     } catch (error) {
       console.error('❌ TAB_CLOSED: Error handling tab closure:', error);
-      debug(`Error handling tab closure: ${error.message}`);
+      console.log(`Error handling tab closure: ${error.message}`);
     }
   }
   
@@ -103,7 +102,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     console.log('🔄 TAB_UPDATE: Tab ID:', tabId);
     console.log('🔄 TAB_UPDATE: New URL:', url);
     console.log('🔄 TAB_UPDATE: Timestamp:', new Date().toISOString());
-    debug(`Handling tab update for tab: ${tabId}, URL: ${url}`);
+    console.log(`Handling tab update for tab: ${tabId}, URL: ${url}`);
     
     try {
       // === STEP 1: LOG CURRENT STATE ===
@@ -147,7 +146,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           const leaveStartTime = Date.now();
           await window.supabaseRealtimeClient.leaveCurrentPage();
           const leaveEndTime = Date.now();
-          Logger.success(`TAB_UPDATE: leaveCurrentPage() completed in ${leaveEndTime - leaveStartTime}ms`, null, 'general');
+          console.log(`TAB_UPDATE: leaveCurrentPage() completed in ${leaveEndTime - leaveStartTime}ms`, null, 'general');
           console.log('✅ TAB_UPDATE: currentPage after leaving:', window.supabaseRealtimeClient.currentPage);
         } else {
           console.log('⚠️ TAB_UPDATE: No old page to leave (oldPageId is null)');
@@ -165,7 +164,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const normalizeStartTime = Date.now();
       const newUrlData = await window.normalizeUrl(url);
       const normalizeEndTime = Date.now();
-      Logger.success(`TAB_UPDATE: normalizeUrl() completed in ${normalizeEndTime - normalizeStartTime}ms`, null, 'general');
+      console.log(`TAB_UPDATE: normalizeUrl() completed in ${normalizeEndTime - normalizeStartTime}ms`, null, 'general');
       console.log('🔍 TAB_UPDATE: Normalized result:', JSON.stringify(newUrlData, null, 2));
       
       // === STEP 4: COMPARE PAGE IDs ===
@@ -204,19 +203,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const chatStartTime = Date.now();
       await loadChatHistory();
       const chatEndTime = Date.now();
-      Logger.success(`TAB_UPDATE: Chat history loaded in ${chatEndTime - chatStartTime}ms`, null, 'general');
+      console.log(`TAB_UPDATE: Chat history loaded in ${chatEndTime - chatStartTime}ms`, null, 'general');
       
       // === STEP 7: UPDATE VISIBILITY LIST ===
       console.log('');
       console.log('📊 TAB_UPDATE: STEP 7 - Updating Visibility List');
       console.log('───────────────────────────────────────────────────────────');
-      const result = await chrome.storage.local.get(['activeCommunities']);
-      const activeCommunities = result.activeCommunities || ['comm-001'];
+      const activeCommunities = await window.getState('activeCommunities') || ['comm-001'];
       console.log('🔍 TAB_UPDATE: Active communities:', activeCommunities);
       const visibilityStartTime = Date.now();
       await loadCombinedAvatars(activeCommunities);
       const visibilityEndTime = Date.now();
-      Logger.success(`TAB_UPDATE: Visibility list updated in ${visibilityEndTime - visibilityStartTime}ms`, null, 'general');
+      console.log(`TAB_UPDATE: Visibility list updated in ${visibilityEndTime - visibilityStartTime}ms`, null, 'general');
       
       // === STEP 8: START PRESENCE TRACKING ===
       console.log('');
@@ -226,7 +224,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const presenceStartTime = Date.now();
       await startPresenceTracking();
       const presenceEndTime = Date.now();
-      Logger.success(`TAB_UPDATE: Presence tracking started in ${presenceEndTime - presenceStartTime}ms`, null, 'general');
+      console.log(`TAB_UPDATE: Presence tracking started in ${presenceEndTime - presenceStartTime}ms`, null, 'general');
       
       // === FINAL STATE ===
       console.log('');
@@ -249,7 +247,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       console.error('❌ TAB_UPDATE: Error stack:', error.stack);
       console.log('═══════════════════════════════════════════════════════════');
       console.log('');
-      debug(`Error handling tab update: ${error.message}`);
+      console.log(`Error handling tab update: ${error.message}`);
     }
   }
   

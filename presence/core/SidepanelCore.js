@@ -54,7 +54,7 @@ class SidepanelCore {
       // Load Logger if not already available
       if (!window.Logger) {
         // Logger should be loaded via script tag
-        await this.loadScript('/utils/Logger.js');
+        // Logger.js removed - using console.log instead
       }
       
       this.logger = window.Logger;
@@ -177,7 +177,7 @@ class SidepanelCore {
    */
   async handleTabChange(activeInfo) {
     try {
-      this.logger.debug('CORE', 'Tab changed', { tabId: activeInfo.tabId });
+      this.logger.console.log('CORE', 'Tab changed', { tabId: activeInfo.tabId });
       
       // Get current page info
       const currentPage = await this.getCurrentPageInfo();
@@ -200,7 +200,7 @@ class SidepanelCore {
    * Handle window focus
    */
   handleWindowFocus() {
-    this.logger.debug('CORE', 'Window focused');
+    this.logger.console.log('CORE', 'Window focused');
     // Resume real-time updates if needed
   }
 
@@ -208,7 +208,7 @@ class SidepanelCore {
    * Handle window blur
    */
   handleWindowBlur() {
-    this.logger.debug('CORE', 'Window blurred');
+    this.logger.console.log('CORE', 'Window blurred');
     // Pause non-essential updates if needed
   }
 

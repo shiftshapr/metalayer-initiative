@@ -162,7 +162,9 @@ function showColorPickerModal() {
         }
         
         // Save aura color to storage and database
-        chrome.storage.local.set({ userAvatarBgColor: auraColor });
+        if (typeof window.setState === 'function') {
+          window.setState('userAvatarBgColor', auraColor);
+        }
         
         // Update UI with new aura color
         updateUserAuraInUI(auraColor);
@@ -282,7 +284,7 @@ async function resetUserAvatarBgColor() {
   }
   
   // Remove from chrome storage
-  chrome.storage.local.remove(['userAvatarBgColor']);
+  removeStateMultiple(['userAvatarBgColor']);
   
   // Refresh all avatars (profile, message, and visibility)
   await refreshAllAvatars();
@@ -310,21 +312,19 @@ async function broadcastAuraColorChange(color) {
 
 function updateUserAuraInUI(userEmail, auraColor) {
   try {
-    const timer = realtimeLogger.startTimer('aura_ui_update');
-    realtimeLogger.startFlow('aura_ui_update', { userEmail, auraColor, timestamp: Date.now() });
-    
-    realtimeLogger.aura('info', 'Starting aura color UI update', {
+    const timer = Date.now();
+    console.log('Starting aura color UI update:', {
       userEmail,
       auraColor,
       isCurrentUser: window.currentUser?.email === userEmail
     });
     
     // Update message avatars for this user
-    realtimeLogger.stepFlow('aura_ui_update', 'Updating message avatars');
+    console.log('Updating message avatars');
     const messageContainers = document.querySelectorAll('.message');
     let messageAvatarsUpdated = 0;
     
-    realtimeLogger.aura('debug', 'Found message containers', { count: messageContainers.length });
+    console.log('Found message containers:', { count: messageContainers.length });
     
     messageContainers.forEach((messageContainer, index) => {
       const avatarContainer = messageContainer.querySelector('.avatar-container');
@@ -341,7 +341,7 @@ function updateUserAuraInUI(userEmail, auraColor) {
             avatarContainer.innerHTML = newAvatarHTML;
             
             messageAvatarsUpdated++;
-            realtimeLogger.aura('debug', 'Updated message avatar', {
+            console.log('Updated message avatar:', {
               messageId,
               userEmail,
               auraColor,
@@ -352,19 +352,19 @@ function updateUserAuraInUI(userEmail, auraColor) {
       }
     });
     
-    realtimeLogger.aura('info', 'Message avatars update complete', {
+    console.log('Message avatars update complete:', {
       totalContainers: messageContainers.length,
       avatarsUpdated: messageAvatarsUpdated
     });
     
     // Update visibility avatars
-    realtimeLogger.stepFlow('aura_ui_update', 'Refreshing visibility avatars');
+    console.log('Refreshing visibility avatars');
     refreshVisibilityAvatars();
     
     // Update profile avatar if it's the current user
     const currentUser = window.currentUser || {};
     if (currentUser.email === userEmail) {
-      realtimeLogger.stepFlow('aura_ui_update', 'Updating profile avatar for current user');
+      console.log('Updating profile avatar for current user');
       const profileAvatarContainer = document.getElementById('user-avatar-container');
       if (profileAvatarContainer) {
         // Update profile avatar with new aura color
@@ -384,7 +384,7 @@ function updateUserAuraInUI(userEmail, auraColor) {
         
         // Set the HTML directly on the container
         profileAvatarContainer.innerHTML = newProfileAvatarHTML;
-        realtimeLogger.aura('info', 'Profile avatar updated using unified avatar', {
+        console.log('Profile avatar updated using unified avatar:', {
           userEmail,
           auraColor
         });
@@ -392,12 +392,11 @@ function updateUserAuraInUI(userEmail, auraColor) {
       }
     }
     
-    Logger.debug(`Aura color update complete: ${messageAvatarsUpdated} message avatars updated`, null, 'avatar');
-    realtimeLogger.endFlow('aura_ui_update', true, { messageAvatarsUpdated });
+    console.log('Aura UI update completed successfully');
   } catch (error) {
     console.error('❌ AURA_UI_UPDATE: Error updating aura in UI:', error);
-    realtimeLogger.error('AURA_UI_UPDATE', 'Error updating aura in UI', { error: error.message, stack: error.stack });
-    realtimeLogger.endFlow('aura_ui_update', false, { error: error.message });
+    console.error('AURA_UI_UPDATE: Error updating aura in UI:', error);
+    console.error('Aura UI update failed:', error.message);
   }
 }
 
@@ -409,7 +408,6 @@ function getLatestAuraColorFromPresence(userEmail) {
     if (presenceData && presenceData.active) {
       const user = presenceData.active.find(u => u.email === userEmail || u.id === userEmail || u.userId === userEmail);
       if (user && user.auraColor) {
-        Logger.debug(`GET_LATEST_AURA: Found real-time aura color for ${userEmail}: ${user.auraColor}`, null, 'general');
         return user.auraColor;
       }
     }
@@ -419,7 +417,6 @@ function getLatestAuraColorFromPresence(userEmail) {
     if (visibilityData && visibilityData.active) {
       const user = visibilityData.active.find(u => u.email === userEmail || u.id === userEmail || u.userId === userEmail);
       if (user && user.auraColor) {
-        Logger.debug(`GET_LATEST_AURA: Found visibility aura color for ${userEmail}: ${user.auraColor}`, null, 'general');
         return user.auraColor;
       }
     }
@@ -428,12 +425,10 @@ function getLatestAuraColorFromPresence(userEmail) {
     if (window.currentUser && window.currentUser.email === userEmail) {
       const storedAuraColor = window.currentUser.auraColor;
       if (storedAuraColor && storedAuraColor !== null && storedAuraColor !== 'null') {
-        Logger.debug(`GET_LATEST_AURA: Found stored aura color for current user ${userEmail}: ${storedAuraColor}`, null, 'general');
         return storedAuraColor;
       }
     }
     
-    Logger.debug(`GET_LATEST_AURA: No real-time aura color found for ${userEmail}`, null, 'general');
     return null;
   } catch (error) {
     console.error(`❌ GET_LATEST_AURA: Error getting latest aura color for ${userEmail}:`, error);

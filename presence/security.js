@@ -203,9 +203,9 @@
         // Sanitize data before storage
         const sanitizedValue = this.sanitizeJsonData(value);
         
-        await chrome.storage.local.set({
-          [key]: sanitizedValue
-        });
+        if (typeof window.setState === 'function') {
+          await window.setState(key, sanitizedValue);
+        }
         
         console.log('🔒 SECURITY: Data securely stored for key:', key);
         return true;
@@ -217,8 +217,10 @@
 
     async secureGet(key) {
       try {
-        const result = await chrome.storage.local.get([key]);
-        return result[key];
+        if (typeof window.getState === 'function') {
+          return await window.getState(key);
+        }
+        return null;
       } catch (error) {
         console.error('🔒 SECURITY: Secure retrieval failed:', error);
         return null;

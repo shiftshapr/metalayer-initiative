@@ -25,7 +25,7 @@ window.diagnoseJavaScriptErrors = function() {
     console.log('\n🔍 Checking critical functions:');
     criticalFunctions.forEach(func => {
       const available = eval(`typeof ${func} !== 'undefined'`);
-      Logger.success(`   ${func}: ${available ? 'Available' : '❌ Missing'}`, null, 'general');
+      console.log(`   ${func}: ${available ? 'Available' : '❌ Missing'}`, null, 'general');
     });
     
     // Check for uncaught errors in console
@@ -43,7 +43,7 @@ window.diagnoseJavaScriptErrors = function() {
   // Safe wrapper for all diagnostic functions
   window.safeDiagnostic = function(diagnosticFunction, ...args) {
     try {
-      Logger.debug(`Running diagnostic: ${diagnosticFunction.name}`, null, 'general');
+      console.log(`Running diagnostic: ${diagnosticFunction.name}`, null, 'general');
       return diagnosticFunction(...args);
     } catch (error) {
       console.error(`❌ Diagnostic failed: ${diagnosticFunction.name}`, error);
@@ -79,7 +79,7 @@ window.diagnoseJavaScriptErrors = function() {
       if (presenceData && presenceData.length > 0) {
         console.log('🔍 DEBUG: Found', presenceData.length, 'active users');
         presenceData.forEach((user, index) => {
-          Logger.debug(`DEBUG: User ${index + 1}:`, {
+          console.log(`DEBUG: User ${index + 1}:`, {
             id: user.id,
             userId: user.userId,
             name: user.name,

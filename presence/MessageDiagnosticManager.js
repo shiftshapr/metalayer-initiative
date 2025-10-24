@@ -23,7 +23,7 @@ class MessageDiagnosticManager {
    */
   setEnabled(enabled) {
     this.isEnabled = enabled;
-    Logger.info(this.moduleName, `Message diagnostics ${enabled ? 'enabled' : 'disabled'}`);
+    console.log(this.moduleName, `Message diagnostics ${enabled ? 'enabled' : 'disabled'}`);
   }
 
   /**
@@ -44,7 +44,7 @@ class MessageDiagnosticManager {
     };
     
     this.messageHistory.push(entry);
-    Logger.info(this.moduleName, '📤 MESSAGE_SEND:', entry);
+    console.log(this.moduleName, '📤 MESSAGE_SEND:', entry);
   }
 
   /**
@@ -64,7 +64,7 @@ class MessageDiagnosticManager {
     };
     
     this.messageHistory.push(entry);
-    Logger.info(this.moduleName, `📝 MESSAGE_PERSIST: ${success ? 'SUCCESS' : 'FAILED'}`, entry);
+    console.log(this.moduleName, `📝 MESSAGE_PERSIST: ${success ? 'SUCCESS' : 'FAILED'}`, entry);
   }
 
   /**
@@ -85,7 +85,7 @@ class MessageDiagnosticManager {
     };
     
     this.avatarHistory.push(entry);
-    Logger.info(this.moduleName, '🖼️ AVATAR_RESOLUTION:', entry);
+    console.log(this.moduleName, '🖼️ AVATAR_RESOLUTION:', entry);
   }
 
   /**
@@ -105,7 +105,7 @@ class MessageDiagnosticManager {
     };
     
     this.realtimeHistory.push(entry);
-    Logger.info(this.moduleName, '🔄 REALTIME_PROPAGATION:', entry);
+    console.log(this.moduleName, '🔄 REALTIME_PROPAGATION:', entry);
   }
 
   /**
@@ -134,7 +134,7 @@ class MessageDiagnosticManager {
       recentRealtime: this.realtimeHistory.slice(-5)
     };
 
-    Logger.info(this.moduleName, '📊 DIAGNOSTIC_REPORT:', report);
+    console.log(this.moduleName, '📊 DIAGNOSTIC_REPORT:', report);
     return report;
   }
 
@@ -145,7 +145,7 @@ class MessageDiagnosticManager {
     this.messageHistory = [];
     this.avatarHistory = [];
     this.realtimeHistory = [];
-    Logger.info(this.moduleName, '🧹 Diagnostic history cleared');
+    console.log(this.moduleName, '🧹 Diagnostic history cleared');
   }
 }
 

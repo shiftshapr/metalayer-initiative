@@ -31,13 +31,14 @@ function setupCrossProfileCommunication() {
         });
         
         // Also refresh visibility avatars
-        const result = chrome.storage.local.get(['activeCommunities']);
-        result.then(({ activeCommunities }) => {
-          const communities = activeCommunities || ['comm-001'];
-          loadCombinedAvatars(communities).then(() => {
-            console.log('📡 AURA: Refreshed visibility avatars after cross-profile aura change');
+        if (typeof window.getState === 'function') {
+          window.getState('activeCommunities').then((activeCommunities) => {
+            const communities = activeCommunities || ['comm-001'];
+            loadCombinedAvatars(communities).then(() => {
+              console.log('📡 AURA: Refreshed visibility avatars after cross-profile aura change');
+            });
           });
-        });
+        }
         
         // Force refresh of all message avatars to use current presence data
         setTimeout(() => {
@@ -86,8 +87,8 @@ function setupCrossProfileCommunication() {
       console.log('🔒 SECURITY: Security manager available');
     }
     
-    debug("DOMContentLoaded event fired.");
-    Logger.info("DOMContentLoaded event fired.", null, 'general');
+    console.log("DOMContentLoaded event fired.");
+    console.log("DOMContentLoaded event fired.", null, 'general');
   
     try {
       // === Initialize Complete Modern Architecture ===
@@ -463,21 +464,21 @@ function setupCrossProfileCommunication() {
     });
   
     // --- Now proceed with the rest of the setup ---
-    debug("Document loaded (from JS)");
-    Logger.info("Sidebar JS Loaded", null, 'general');
+    console.log("Document loaded (from JS)");
+    console.log("Sidebar JS Loaded", null, 'general');
   
     // Add debug listeners (moved from HTML)
     document.querySelectorAll('.main-nav-tab').forEach(tab => {
-      debug(`Found main tab: ${tab.textContent}`);
+      console.log(`Found main tab: ${tab.textContent}`);
       tab.addEventListener('click', () => {
-        debug(`Main tab clicked: ${tab.textContent}`);
+        console.log(`Main tab clicked: ${tab.textContent}`);
       });
     });
   
     document.querySelectorAll('.sub-nav-tab').forEach(tab => {
-      debug(`Found sub tab: ${tab.textContent}`);
+      console.log(`Found sub tab: ${tab.textContent}`);
       tab.addEventListener('click', () => {
-        debug(`Sub tab clicked: ${tab.textContent}`);
+        console.log(`Sub tab clicked: ${tab.textContent}`);
       });
     });
   
@@ -497,7 +498,7 @@ function setupCrossProfileCommunication() {
     mainTabs.forEach(tab => {
       tab.addEventListener('click', () => {
         const targetTabId = tab.getAttribute('data-tab');
-        Logger.info(`Switching to main tab: ${targetTabId}`, null, 'general');
+        console.log(`Switching to main tab: ${targetTabId}`, null, 'general');
   
         // Deactivate all main tabs and content
         mainTabs.forEach(t => t.classList.remove('active'));
@@ -508,7 +509,7 @@ function setupCrossProfileCommunication() {
         const targetTabContent = document.getElementById(targetTabId);
         if (targetTabContent) {
           targetTabContent.classList.add('active');
-          Logger.info(`Activated content: #${targetTabId}`, null, 'general');
+          console.log(`Activated content: #${targetTabId}`, null, 'general');
           
           // Initialize specific tab functionality
           if (targetTabId === 'agent-tab') {
@@ -535,7 +536,7 @@ function setupCrossProfileCommunication() {
     document.querySelectorAll('.sub-nav-tab').forEach(subTab => {
       subTab.addEventListener('click', () => {
         const targetSubTabId = subTab.getAttribute('data-subtab');
-        Logger.info(`Switching to sub-tab: ${targetSubTabId}`, null, 'general');
+        console.log(`Switching to sub-tab: ${targetSubTabId}`, null, 'general');
   
         // Find the parent tab content
         const parentMainContent = subTab.closest('.main-tab-content');
@@ -560,7 +561,7 @@ function setupCrossProfileCommunication() {
         const targetSubContent = document.getElementById(targetSubTabId);
         if (targetSubContent) {
           targetSubContent.classList.add('active');
-          Logger.info(`Activated sub-content: #${targetSubTabId}`, null, 'general');
+          console.log(`Activated sub-content: #${targetSubTabId}`, null, 'general');
         } else {
           console.error(`Sub-content #${targetSubTabId} not found!`);
         }
@@ -580,10 +581,10 @@ function setupCrossProfileCommunication() {
           // Toggle visibility
           if (communityDropdownPanel.style.display === 'block') {
             communityDropdownPanel.style.display = 'none';
-            Logger.info("Community dropdown hidden", null, 'general');
+            console.log("Community dropdown hidden", null, 'general');
           } else {
             communityDropdownPanel.style.display = 'block';
-            Logger.info("Community dropdown shown", null, 'general');
+            console.log("Community dropdown shown", null, 'general');
           }
           }
         })) {
@@ -596,7 +597,7 @@ function setupCrossProfileCommunication() {
     if (closeCommunityDropdownButton && communityDropdownPanel) {
       closeCommunityDropdownButton.addEventListener('click', () => {
         communityDropdownPanel.style.display = 'none';
-        Logger.info("Community dropdown closed via button", null, 'general');
+        console.log("Community dropdown closed via button", null, 'general');
       });
     }
   
@@ -606,7 +607,7 @@ function setupCrossProfileCommunication() {
         if (!communityDropdownPanel.contains(event.target) && 
             !communityDropdownTrigger.contains(event.target)) {
           communityDropdownPanel.style.display = 'none';
-          Logger.info("Community dropdown closed via outside click", null, 'general');
+          console.log("Community dropdown closed via outside click", null, 'general');
         }
       }
     });
@@ -614,7 +615,7 @@ function setupCrossProfileCommunication() {
     // --- Sidebar Close Button ---
     if (closeSidebarButton) {
       closeSidebarButton.addEventListener('click', () => {
-        Logger.info("Close sidebar button clicked", null, 'general');
+        console.log("Close sidebar button clicked", null, 'general');
         // For Chrome side panel, we can't close it from within the panel itself
         // You would need to send a message to background.js
       });
@@ -629,13 +630,13 @@ function setupCrossProfileCommunication() {
         if (modalName) modalName.textContent = name || 'N/A';
         if (modalStatus) modalStatus.textContent = status || 'Unknown';
         modal.style.display = 'flex';
-        Logger.info(`Modal opened for ${name}`, null, 'general');
+        console.log(`Modal opened for ${name}`, null, 'general');
       }
   
       // Function to close the modal
       function closeModal() {
         modal.style.display = 'none';
-        Logger.info("Modal closed", null, 'general');
+        console.log("Modal closed", null, 'general');
       }
   
       closeModalButton.addEventListener('click', closeModal);
@@ -697,7 +698,7 @@ function setupCrossProfileCommunication() {
     // Magic Link button removed from HTML, so no event listener needed
     if (logoutBtn) {
       logoutBtn.addEventListener('click', () => {
-        debug('Logout button clicked');
+        console.log('Logout button clicked');
         signOut();
         // Close the user menu after logout
         if (userMenu) userMenu.style.display = 'none';
@@ -706,7 +707,7 @@ function setupCrossProfileCommunication() {
     
     if (themeToggleBtn) {
       themeToggleBtn.addEventListener('click', () => {
-        debug('Theme toggle button clicked');
+        console.log('Theme toggle button clicked');
         toggleTheme();
       });
     }
@@ -840,14 +841,15 @@ function setupCrossProfileCommunication() {
         
         if (message) {
           console.log('✅ SEND_CHAT_MESSAGE: Message validation passed');
-          debug(`Sending message: ${message}`);
+          console.log(`Sending message: ${message}`);
           console.log('Sending message:', message);
           
           try {
             console.log('🔍 SEND_CHAT_MESSAGE: === STEP 1: GETTING USER AND COMMUNITY ===');
             // Get current user and primary community - use window.currentUser for user
-            const result = await chrome.storage.local.get(['primaryCommunity', 'currentCommunity']);
-            console.log('🔍 SEND_CHAT_MESSAGE: Chrome storage result:', result);
+            const primaryCommunity = await window.getState('primaryCommunity');
+            const currentCommunity = await window.getState('currentCommunity');
+            console.log('🔍 SEND_CHAT_MESSAGE: StateManager result:', { primaryCommunity, currentCommunity });
             
             const user = window.currentUser;
             console.log('🔍 SEND_CHAT_MESSAGE: User from window.currentUser:', user);
@@ -858,8 +860,8 @@ function setupCrossProfileCommunication() {
             const communityId = result.primaryCommunity || result.currentCommunity || 'comm-001';
             console.log('🔍 SEND_CHAT_MESSAGE: Community ID:', communityId);
             
-            Logger.debug(`MESSAGE_SEND: User object structure:`, user, 'general');
-            Logger.debug(`MESSAGE_SEND: User has id: ${!!user?.id}, email: ${!!user?.email}`, null, 'general');
+            console.log(`MESSAGE_SEND: User object structure:`, user, 'general');
+            console.log(`MESSAGE_SEND: User has id: ${!!user?.id}, email: ${!!user?.email}`, null, 'general');
             
             console.log('🔍 SEND_CHAT_MESSAGE: User validation check...');
             console.log('🔍 SEND_CHAT_MESSAGE: user exists:', !!user);
@@ -876,7 +878,7 @@ function setupCrossProfileCommunication() {
                 console.log('🔍 SEND_CHAT_MESSAGE: urlData:', urlData);
                 const currentUri = urlData.normalizedUrl;
                 console.log('🔍 SEND_CHAT_MESSAGE: currentUri:', currentUri);
-                debug(`Current page URI: ${currentUri}`);
+                console.log(`Current page URI: ${currentUri}`);
                 
                 console.log('🔍 SEND_CHAT_MESSAGE: === STEP 3: CHECKING FOR OPTIONAL CONTENT ===');
                 // Check if this is a message with selected content
@@ -905,7 +907,7 @@ function setupCrossProfileCommunication() {
                   parentId = chatInput.dataset.replyTo;
                   threadId = chatInput.dataset.replyToConversation; // Use the conversation ID as thread ID
                   console.log('🔍 SEND_CHAT_MESSAGE: Reply detected:', { parentId, threadId });
-                  debug(`Reply detected: parentId=${parentId}, threadId=${threadId}`);
+                  console.log(`Reply detected: parentId=${parentId}, threadId=${threadId}`);
                   console.log('Reply detected:', { parentId, threadId });
                   // Clear the reply data
                   delete chatInput.dataset.replyTo;
@@ -927,8 +929,8 @@ function setupCrossProfileCommunication() {
                 // Use email for user identification (consistent with presence API)
                 const userEmail = await getCurrentUserEmail();
                 console.log('🔍 SEND_CHAT_MESSAGE: userEmail:', userEmail);
-                Logger.debug(`CHAT_SEND: Sending message for user ${userEmail} in community ${communityId} on URI ${currentUri}`, null, 'general');
-                Logger.debug(`CHAT_SEND: Message content: "${message}"`, null, 'general');
+                console.log(`CHAT_SEND: Sending message for user ${userEmail} in community ${communityId} on URI ${currentUri}`, null, 'general');
+                console.log(`CHAT_SEND: Message content: "${message}"`, null, 'general');
                 
                 console.log('🔍 SEND_CHAT_MESSAGE: === STEP 6: SENDING VIA SUPABASE ===');
                 // Send message via Supabase real-time ONLY
@@ -954,13 +956,13 @@ function setupCrossProfileCommunication() {
               success ? null : new Error('No message ID returned from Supabase')
             );
           }
-                  Logger.success(`CHAT_SEND: Message sent via Supabase real-time`, null, 'general');
+                  console.log(`CHAT_SEND: Message sent via Supabase real-time`, null, 'general');
                 } catch (error) {
                   console.log('📡 MESSAGE_CREATE: ❌ Supabase real-time send failed:', error);
                   console.log('📡 MESSAGE_CREATE: ❌ Error type:', typeof error);
                   console.log('📡 MESSAGE_CREATE: ❌ Error message:', error?.message);
                   console.log('📡 MESSAGE_CREATE: ❌ Error stack:', error?.stack);
-                  Logger.error(`CHAT_SEND: Failed to send message via Supabase`, error, 'general');
+                  console.error(`CHAT_SEND: Failed to send message via Supabase`, error, 'general');
                 }
                 
                 console.log('🔍 SEND_CHAT_MESSAGE: === STEP 7: BUILDING NEW POST OBJECT ===');
@@ -1036,12 +1038,12 @@ function setupCrossProfileCommunication() {
                   }
                   
                   // Reset last loaded URI to force reload on next loadChatHistory call
-                  Logger.debug(`CHAT_SEND: Resetting lastLoadedUri from ${lastLoadedUri} to null`, null, 'general');
+                  console.log(`CHAT_SEND: Resetting lastLoadedUri from ${lastLoadedUri} to null`, null, 'general');
                   lastLoadedUri = null;
                   
                   // Update last message count
                   lastMessageCount = document.querySelectorAll('.message').length;
-                  Logger.debug(`CHAT_SEND: Updated last message count to ${lastMessageCount}`, null, 'general');
+                  console.log(`CHAT_SEND: Updated last message count to ${lastMessageCount}`, null, 'general');
                   
                   // CRITICAL FIX: DO NOT call loadChatHistory() here!
                   // The message is already added to UI via addMessageToChat() above.
@@ -1049,7 +1051,7 @@ function setupCrossProfileCommunication() {
                   // Calling it will CLEAR the UI and reload messages from the backend API, which doesn't have
                   // the Supabase message we just sent, making it appear like the message failed to send.
                   // Real-time subscriptions will handle propagation to other users.
-                  Logger.debug(`CHAT_SEND: Message added to UI, real-time sync will handle propagation`, null, 'general');
+                  console.log(`CHAT_SEND: Message added to UI, real-time sync will handle propagation`, null, 'general');
                   console.log('🚫 CHAT_SEND: NOT calling loadChatHistory() - would clear Supabase message from UI');
                   console.log('✅ CHAT_SEND: Message successfully added and will propagate via real-time');
                   
@@ -1096,10 +1098,10 @@ function setupCrossProfileCommunication() {
                   }
                 
                 // Clear input and reset height
-                Logger.debug(`CHAT_CLEAR: [BUILD ${EXTENSION_BUILD}] Clearing input field and resetting styling`, null, 'general');
-                Logger.debug(`CHAT_CLEAR: [BUILD ${EXTENSION_BUILD}] Input field current height:`, chatInput.style.height, 'general');
-                Logger.debug(`CHAT_CLEAR: [BUILD ${EXTENSION_BUILD}] Input field computed height:`, window.getComputedStyle(chatInput).height, 'general');
-                Logger.debug(`CHAT_CLEAR: [BUILD ${EXTENSION_BUILD}] Input field value before clear:`, chatInput.value, 'general');
+                console.log(`CHAT_CLEAR: [BUILD ${EXTENSION_BUILD}] Clearing input field and resetting styling`, null, 'general');
+                console.log(`CHAT_CLEAR: [BUILD ${EXTENSION_BUILD}] Input field current height:`, chatInput.style.height, 'general');
+                console.log(`CHAT_CLEAR: [BUILD ${EXTENSION_BUILD}] Input field computed height:`, window.getComputedStyle(chatInput).height, 'general');
+                console.log(`CHAT_CLEAR: [BUILD ${EXTENSION_BUILD}] Input field value before clear:`, chatInput.value, 'general');
                 
                 // Clear the input value
                 chatInput.value = '';
@@ -1108,7 +1110,7 @@ function setupCrossProfileCommunication() {
                 const contextBar = document.getElementById('context-bar');
                 if (contextBar) {
                   contextBar.style.display = 'none';
-                  Logger.debug(`CHAT_CLEAR: Context bar hidden`, null, 'general');
+                  console.log(`CHAT_CLEAR: Context bar hidden`, null, 'general');
                 }
                 chatInput.placeholder = 'Start thread in Public Square';
                 chatInput.style.borderColor = '';
@@ -1119,27 +1121,27 @@ function setupCrossProfileCommunication() {
                 chatInput.style.maxHeight = 'none';
                 chatInput.style.minHeight = 'auto';
                 chatInput.style.overflowY = 'hidden';
-                Logger.debug(`CHAT_CLEAR: Input field height set to auto`, null, 'general');
+                console.log(`CHAT_CLEAR: Input field height set to auto`, null, 'general');
                 
                 // Force a reflow and then set to natural height
                 chatInput.offsetHeight; // Force reflow
                 chatInput.style.height = 'auto';
                 chatInput.style.maxHeight = '120px'; // Allow expansion up to 120px
                 chatInput.style.minHeight = '40px'; // Minimum reasonable height
-                Logger.debug(`CHAT_CLEAR: [BUILD ${EXTENSION_BUILD}] Input field cleared and styling reset`, null, 'general');
-                Logger.debug(`CHAT_CLEAR: [BUILD ${EXTENSION_BUILD}] Final input field height:`, chatInput.style.height, 'general');
-                Logger.debug(`CHAT_CLEAR: [BUILD ${EXTENSION_BUILD}] Final computed height:`, window.getComputedStyle(chatInput).height, 'general');
-                Logger.debug(`CHAT_CLEAR: [BUILD ${EXTENSION_BUILD}] Input field value after clear:`, chatInput.value, 'general');
-                Logger.debug(`CHAT_CLEAR: [BUILD ${EXTENSION_BUILD}] Message field reset completed successfully`, null, 'general');
+                console.log(`CHAT_CLEAR: [BUILD ${EXTENSION_BUILD}] Input field cleared and styling reset`, null, 'general');
+                console.log(`CHAT_CLEAR: [BUILD ${EXTENSION_BUILD}] Final input field height:`, chatInput.style.height, 'general');
+                console.log(`CHAT_CLEAR: [BUILD ${EXTENSION_BUILD}] Final computed height:`, window.getComputedStyle(chatInput).height, 'general');
+                console.log(`CHAT_CLEAR: [BUILD ${EXTENSION_BUILD}] Input field value after clear:`, chatInput.value, 'general');
+                console.log(`CHAT_CLEAR: [BUILD ${EXTENSION_BUILD}] Message field reset completed successfully`, null, 'general');
               } catch (error) {
-                debug(`Failed to send message: ${error.message}`);
+                console.log(`Failed to send message: ${error.message}`);
                 console.error('Failed to send message:', error);
               }
     } else {
-              debug('No user found for sending message');
+              console.log('No user found for sending message');
             }
           } catch (error) {
-            debug(`Failed to send message: ${error.message}`);
+            console.log(`Failed to send message: ${error.message}`);
             console.error('Failed to send message:', error);
           }
         }
@@ -1166,7 +1168,7 @@ function setupCrossProfileCommunication() {
         requireAuth('interact with AI agents', () => {
           const message = agentInput?.value;
           if (message) {
-            debug(`Sending to agent: ${message}`);
+            console.log(`Sending to agent: ${message}`);
             console.log('Sending to agent:', message);
             // TODO: Implement actual agent interaction
             agentInput.value = '';
@@ -1178,7 +1180,7 @@ function setupCrossProfileCommunication() {
     // --- Add Friend Functionality ---
     function addFriend(userId, userName) {
       requireAuth('add friends', () => {
-        debug(`Adding friend: ${userName} (${userId})`);
+        console.log(`Adding friend: ${userName} (${userId})`);
         // TODO: Implement actual friend adding
       });
     }
@@ -1216,8 +1218,8 @@ function setupCrossProfileCommunication() {
     window.openUserProfile = openUserProfile;
   
     // Direct authentication already happened above - no need to repeat
-    Logger.info("Sidebar setup complete", null, 'general');
-    debug("Sidebar setup complete (from JS)");
+    console.log("Sidebar setup complete", null, 'general');
+    console.log("Sidebar setup complete (from JS)");
   });
   
   

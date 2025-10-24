@@ -13,7 +13,7 @@ class AvatarUtils {
    * @returns {Object} {avatarUrl, source, userName}
    */
   static getAvatarUrl(user, context = 'visibility') {
-    Logger.avatar(`Getting avatar for ${user.user_email || user.email} in context: ${context}`);
+    console.log(`Getting avatar for ${user.user_email || user.email} in context: ${context}`);
     
     let avatarUrl = null;
     let userName = user.user_email?.split('@')[0] || user.email?.split('@')[0] || 'user';
@@ -25,14 +25,14 @@ class AvatarUtils {
       if (user.avatar_url && !user.avatar_url.includes('default-user')) {
         avatarUrl = user.avatar_url;
         avatarSource = 'user_presence_table';
-        Logger.avatar(`✅ SD1 FIX: Using avatar_url from user object (user_presence): ${avatarUrl}`);
+        console.log(`✅ SD1 FIX: Using avatar_url from user object (user_presence): ${avatarUrl}`);
       }
       
       // SD1 FIX: PRIORITY 1.5 - Check if user object has avatarUrl (camelCase) - for profile avatars
       if (!avatarUrl && user.avatarUrl && !user.avatarUrl.includes('default-user')) {
         avatarUrl = user.avatarUrl;
         avatarSource = 'user_object_avatarUrl';
-        Logger.avatar(`✅ SD1 FIX: Using avatarUrl from user object (profile): ${avatarUrl}`);
+        console.log(`✅ SD1 FIX: Using avatarUrl from user object (profile): ${avatarUrl}`);
       }
       
       // PRIORITY 2: For current user, use user_metadata (same as profile avatar system)
@@ -42,18 +42,18 @@ class AvatarUtils {
           avatarUrl = currentUser.user_metadata.avatar_url;
           userName = currentUser.user_metadata.full_name || userName;
           avatarSource = 'current_user_metadata';
-          Logger.avatar(`✅ Using current user metadata for ${user.user_email || user.email} - avatarUrl: ${avatarUrl}`);
+          console.log(`✅ Using current user metadata for ${user.user_email || user.email} - avatarUrl: ${avatarUrl}`);
         }
       }
       
       // PRIORITY 3: For other users, use visibility data (same as profile avatar system)
       if (!avatarUrl) {
-        Logger.avatar(`🔍 SD1 AVATAR DEBUG: Checking visibility data for ${user.user_email || user.email}`);
-        Logger.avatar(`🔍 SD1 AVATAR DEBUG: currentVisibilityDataUnfiltered exists: ${!!window.currentVisibilityDataUnfiltered}`);
+        console.log(`🔍 SD1 AVATAR DEBUG: Checking visibility data for ${user.user_email || user.email}`);
+        console.log(`🔍 SD1 AVATAR DEBUG: currentVisibilityDataUnfiltered exists: ${!!window.currentVisibilityDataUnfiltered}`);
         
         if (window.currentVisibilityDataUnfiltered && window.currentVisibilityDataUnfiltered.active) {
-          Logger.avatar(`🔍 SD1 AVATAR DEBUG: visibility data active array length: ${window.currentVisibilityDataUnfiltered.active.length}`);
-          Logger.avatar(`🔍 SD1 AVATAR DEBUG: visibility data users:`, window.currentVisibilityDataUnfiltered.active.map(u => ({
+          console.log(`🔍 SD1 AVATAR DEBUG: visibility data active array length: ${window.currentVisibilityDataUnfiltered.active.length}`);
+          console.log(`🔍 SD1 AVATAR DEBUG: visibility data users:`, window.currentVisibilityDataUnfiltered.active.map(u => ({
             email: u.email,
             userId: u.userId,
             id: u.id,
@@ -66,21 +66,21 @@ class AvatarUtils {
                  u.id === (user.user_email || user.email)
           );
           
-          Logger.avatar(`🔍 SD1 AVATAR DEBUG: userInVisibility found: ${!!userInVisibility}`);
+          console.log(`🔍 SD1 AVATAR DEBUG: userInVisibility found: ${!!userInVisibility}`);
           if (userInVisibility) {
-            Logger.avatar(`🔍 SD1 AVATAR DEBUG: userInVisibility details:`, userInVisibility);
+            console.log(`🔍 SD1 AVATAR DEBUG: userInVisibility details:`, userInVisibility);
           }
           
           if (userInVisibility && userInVisibility.avatarUrl) {
             avatarUrl = userInVisibility.avatarUrl;
             userName = userInVisibility.name || userName;
             avatarSource = 'visibility_data';
-            Logger.avatar(`✅ Found REAL avatar in visibility data for ${user.user_email || user.email} - avatarUrl: ${avatarUrl}`);
+            console.log(`✅ Found REAL avatar in visibility data for ${user.user_email || user.email} - avatarUrl: ${avatarUrl}`);
           } else {
-            Logger.avatar(`ℹ️ User ${user.user_email || user.email} not found in visibility data`);
+            console.log(`ℹ️ User ${user.user_email || user.email} not found in visibility data`);
           }
         } else {
-          Logger.avatar(`ℹ️ No unfiltered visibility data available`);
+          console.log(`ℹ️ No unfiltered visibility data available`);
         }
         
         // PRIORITY 3.5: Check if current user has real avatar in window.currentUser
@@ -88,32 +88,32 @@ class AvatarUtils {
           if (window.currentUser.avatarUrl && !window.currentUser.avatarUrl.includes('default-user')) {
             avatarUrl = window.currentUser.avatarUrl;
             avatarSource = 'window_currentUser';
-            Logger.avatar(`✅ Using window.currentUser avatar for ${user.user_email || user.email} - avatarUrl: ${avatarUrl}`);
+            console.log(`✅ Using window.currentUser avatar for ${user.user_email || user.email} - avatarUrl: ${avatarUrl}`);
           }
         }
       }
     } catch (error) {
-      Logger.error(`Exception processing avatar for ${user.user_email || user.email}`, error, 'avatar');
+      console.error(`Exception processing avatar for ${user.user_email || user.email}`, error, 'avatar');
     }
 
     // CRITICAL FIX: Enhanced avatar URL validation and fallback
     if (!avatarUrl || avatarUrl.trim() === '') {
-      Logger.avatar(`⚠️ No avatar URL found, using generic for ${user.user_email || user.email}`);
+      console.log(`⚠️ No avatar URL found, using generic for ${user.user_email || user.email}`);
       avatarUrl = `https://lh3.googleusercontent.com/a/default-user=s96-c`;
       avatarSource = 'generic-fallback';
     } else if (avatarUrl.includes('default-user')) {
-      Logger.avatar(`⚠️ Avatar URL contains default-user, treating as generic for ${user.user_email || user.email}`);
+      console.log(`⚠️ Avatar URL contains default-user, treating as generic for ${user.user_email || user.email}`);
       avatarSource = 'generic-fallback';
     } else if (!avatarUrl.startsWith('http://') && !avatarUrl.startsWith('https://')) {
-      Logger.avatar(`⚠️ Invalid avatar URL format, using generic for ${user.user_email || user.email}: ${avatarUrl}`);
+      console.log(`⚠️ Invalid avatar URL format, using generic for ${user.user_email || user.email}: ${avatarUrl}`);
       avatarUrl = `https://lh3.googleusercontent.com/a/default-user=s96-c`;
       avatarSource = 'generic-fallback';
     } else {
       // SD1 FIX: Ensure we don't treat real avatars as generic
-      Logger.avatar(`✅ SD1 FIX: Using REAL avatar for ${user.user_email || user.email}: ${avatarUrl}`);
+      console.log(`✅ SD1 FIX: Using REAL avatar for ${user.user_email || user.email}: ${avatarUrl}`);
     }
 
-    Logger.avatar(`Avatar result: ${user.user_email || user.email} - avatarUrl: ${avatarUrl}, source: ${avatarSource}, name: ${userName}`);
+    console.log(`Avatar result: ${user.user_email || user.email} - avatarUrl: ${avatarUrl}, source: ${avatarSource}, name: ${userName}`);
 
     return {
       avatarUrl,
@@ -131,7 +131,7 @@ class AvatarUtils {
    * @returns {string} HTML string
    */
   static createUnifiedAvatar(user, context = 'visibility', options = {}) {
-    Logger.avatar(`Creating unified avatar for ${user.user_email || user.email} in context: ${context}`);
+    console.log(`Creating unified avatar for ${user.user_email || user.email} in context: ${context}`);
 
     const avatarData = this.getAvatarUrl(user, context);
     const {
@@ -146,7 +146,7 @@ class AvatarUtils {
     const size = options.size || (context === 'profile' ? 32 : 24);
     const showStatus = options.showStatus !== false;
 
-    Logger.avatar(`Avatar details: auraColor=${auraColor}, showAura=${showAura}, size=${size}, showStatus=${showStatus}`);
+    console.log(`Avatar details: auraColor=${auraColor}, showAura=${showAura}, size=${size}, showStatus=${showStatus}`);
 
     // Status dot color based on activity
     const statusDotColor = user.is_active ? '#22c55e' : '#6b7280';
@@ -165,7 +165,7 @@ class AvatarUtils {
     
     html += `</div>`;
 
-    Logger.avatar(`Generated unified avatar HTML for ${userName} (${avatarSource})`);
+    console.log(`Generated unified avatar HTML for ${userName} (${avatarSource})`);
     
     return html;
   }
@@ -178,18 +178,18 @@ class AvatarUtils {
    * @param {Object} options - Additional options
    */
   static updateAvatarInDOM(selector, user, context = 'visibility', options = {}) {
-    Logger.avatar(`Updating avatar in DOM: ${selector}`);
+    console.log(`Updating avatar in DOM: ${selector}`);
     
     const container = document.querySelector(selector);
     if (!container) {
-      Logger.warn(`Avatar container not found: ${selector}`, null, 'avatar');
+      console.warn(`Avatar container not found: ${selector}`, null, 'avatar');
       return false;
     }
 
     const avatarHTML = this.createUnifiedAvatar(user, context, options);
     container.innerHTML = avatarHTML;
     
-    Logger.avatar(`✅ Avatar updated in DOM: ${selector}`);
+    console.log(`✅ Avatar updated in DOM: ${selector}`);
     return true;
   }
 
@@ -221,7 +221,7 @@ class AvatarUtils {
    * @returns {Array} Array of avatar data
    */
   static batchUpdateAvatars(users, context = 'visibility', options = {}) {
-    Logger.avatar(`Batch updating ${users.length} avatars in context: ${context}`);
+    console.log(`Batch updating ${users.length} avatars in context: ${context}`);
     
     const results = users.map(user => {
       const avatarData = this.getAvatarUrl(user, context);
@@ -232,7 +232,7 @@ class AvatarUtils {
       };
     });
 
-    Logger.avatar(`✅ Batch avatar update complete: ${results.length} avatars processed`);
+    console.log(`✅ Batch avatar update complete: ${results.length} avatars processed`);
     return results;
   }
 
@@ -266,5 +266,5 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = AvatarUtils;
 }
 
-Logger.success('AvatarUtils initialized');
+console.log('AvatarUtils initialized');
 

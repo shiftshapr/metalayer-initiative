@@ -132,7 +132,7 @@ class VisibilityRealtimeManager {
     }
     this._processedEvents.add(eventId);
 
-    this.logger.debug('Visibility change received:', payload);
+    this.logger.console.log('Visibility change received:', payload);
     this.logger.info(`Real-time ${payload.eventType} event for visibility:`, payload.new?.id || payload.old?.id);
 
     // Emit event for UI handling

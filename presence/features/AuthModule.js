@@ -118,7 +118,7 @@ async function requireAuth(action, callback) {
     const currentUser = window.currentUser;
     
     console.log('[AUTH] requireAuth called for:', action, 'currentUser:', currentUser);
-    debug(`requireAuth called for: ${action}, currentUser: ${currentUser ? 'exists' : 'null'}`);
+    console.log(`requireAuth called for: ${action}, currentUser: ${currentUser ? 'exists' : 'null'}`);
     
     if (!currentUser) {
       console.log('No user found, showing auth prompt');
@@ -162,7 +162,7 @@ function showAuthPrompt(action) {
   } else {
     console.error('Auth prompt modal not found!');
   }
-  debug(`Auth required for: ${action} (provider: ${providerName})`);
+  console.log(`Auth required for: ${action} (provider: ${providerName})`);
 }
 
 function createAuthPromptModal() {
@@ -337,37 +337,37 @@ async function testRealtimeAfterAuth(pageId) {
 
 async function signInWithGoogle() {
   try {
-    debug('Attempting Google sign-in for REAL profile pictures...');
+    console.log('Attempting Google sign-in for REAL profile pictures...');
     
     // Use real Google auth for actual profile pictures
     if (realGoogleAuth) {
       const result = await realGoogleAuth.signInWithGoogle();
-      debug('Real Google sign-in successful:', result);
+      console.log('Real Google sign-in successful:', result);
       
       // Update UI with the authenticated user
       if (result && result.user) {
         // CRITICAL FIX: Authenticate with Supabase after Google auth
         await authenticateWithSupabase(result.user);
         await updateUI(result.user);
-        debug(`User authenticated with REAL profile picture: ${result.user.email}`);
+        console.log(`User authenticated with REAL profile picture: ${result.user.email}`);
         console.log('🔍 REAL_GOOGLE_AUTH: Real avatar URL:', result.user.user_metadata?.avatar_url);
       }
     } else {
       // Fallback to AuthManager
       const result = await authManager.signIn('google');
-      debug('Google sign-in successful (fallback):', result);
+      console.log('Google sign-in successful (fallback):', result);
       
       // Update UI with the authenticated user
       if (result && result.user) {
         // CRITICAL FIX: Authenticate with Supabase after Google auth
         await authenticateWithSupabase(result.user);
         await updateUI(result.user);
-        debug(`User authenticated (fallback): ${result.user.email}`);
+        console.log(`User authenticated (fallback): ${result.user.email}`);
       }
     }
   } catch (error) {
     console.error('Google sign-in failed:', error);
-    debug(`Google sign-in error: ${error.message}`);
+    console.log(`Google sign-in error: ${error.message}`);
     
     // Show error to user
     const statusElement = document.getElementById('magic-link-status');
@@ -388,14 +388,14 @@ async function sendMagicLink() {
     }
 
     document.getElementById('magic-link-status').textContent = 'Sending magic link...';
-    debug(`Attempting magic link sign-in for: ${email}`);
+    console.log(`Attempting magic link sign-in for: ${email}`);
     
     const result = await authManager.signIn('magic_link', email);
     
     if (result && result.user) {
       document.getElementById('magic-link-status').textContent = 'Magic link sent! Check your email.';
       await updateUI(result.user);
-      debug(`Magic link successful: ${result.user.email}`);
+      console.log(`Magic link successful: ${result.user.email}`);
     } else {
       document.getElementById('magic-link-status').textContent = 'Magic link sent! Check your email.';
     }
@@ -403,18 +403,18 @@ async function sendMagicLink() {
   } catch (error) {
     console.error('Magic link sign-in failed:', error);
     document.getElementById('magic-link-status').textContent = `Error: ${error.message}`;
-    debug(`Magic link error: ${error.message}`);
+    console.log(`Magic link error: ${error.message}`);
   }
 }
 
 async function signOut() {
   try {
-    debug('Attempting sign-out...');
+    console.log('Attempting sign-out...');
     await authManager.signOut();
-    debug('Sign-out successful');
+    console.log('Sign-out successful');
   } catch (error) {
     console.error('Sign-out failed:', error);
-    debug(`Sign-out error: ${error.message}`);
+    console.log(`Sign-out error: ${error.message}`);
   }
 }
 

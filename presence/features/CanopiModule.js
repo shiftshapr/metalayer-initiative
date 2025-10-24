@@ -186,8 +186,8 @@ async function addMessageToChat(message) {
       communityName = message.conversation.communityName;
     } else if (message.conversation.communityId) {
       // Fallback to looking up by communityId
-      const result = await chrome.storage.local.get(['communities']);
-      const communities = result.communities || [];
+      const communitiesData = await getState('communities');
+      const communities = communitiesData || [];
       const community = communities.find(c => c.id === message.conversation.communityId);
       communityName = community ? community.name : '';
     }
@@ -268,20 +268,12 @@ async function addMessageToChat(message) {
   
   // Check if message is deleted
   if (message.deletedAt) {
-    Logger.debug(`DELETED_MSG_DEBUG: [BUILD v1.0] === DELETED MESSAGE ANALYSIS ===`, null, 'general');
-    Logger.debug(`DELETED_MSG_DEBUG: [BUILD v1.0] Message ID: ${message.id}`, null, 'general');
-    Logger.debug(`DELETED_MSG_DEBUG: [BUILD v1.0] Message deletedAt: ${message.deletedAt}`, null, 'general');
-    Logger.debug(`DELETED_MSG_DEBUG: [BUILD v1.0] Message hasReplies: ${message.hasReplies}`, null, 'general');
-    Logger.debug(`DELETED_MSG_DEBUG: [BUILD v1.0] Message replyCount: ${message.replyCount}`, null, 'general');
-    Logger.debug(`DELETED_MSG_DEBUG: [BUILD v1.0] Full message object:`, JSON.stringify(message, null, 2), 'general');
+    console.log(`DELETED_MSG_DEBUG: [BUILD v1.0] === DELETED MESSAGE ANALYSIS ===`, null, 'general');
     
     // Only show deleted messages if they have replies
     if (!message.hasReplies) {
-      Logger.debug(`DELETED_MSG_DEBUG: [BUILD v1.0] SKIPPING deleted message without replies: ${message.id}`, null, 'general');
       return;
     }
-    
-    Logger.debug(`DELETED_MSG_DEBUG: [BUILD v1.0] SHOWING deleted message WITH replies: ${message.id}`, null, 'general');
     
     // For deleted messages, use the same structure as regular messages
     // but with "This message was deleted" as content
@@ -630,12 +622,6 @@ function convertUrlsToLinks(text) {
 function getSenderAvatar(author) {
   if (!author) return getSenderInitial('Unknown');
   
-  Logger.debug(`GET_SENDER_AVATAR: [BUILD v1.0] Creating message avatar for:`, {
-    name: author.name,
-    email: author.email,
-    auraColor: author.auraColor
-  }, 'general');
-  
   // Always try to get the latest aura color from presence data
   // This ensures cross-profile updates work correctly for ALL users
   const currentUserEmail = getCurrentUserEmail();
@@ -644,18 +630,15 @@ function getSenderAvatar(author) {
     const currentAuraColor = getCurrentUserAvatarBgColor();
     if (currentAuraColor) {
       author.auraColor = currentAuraColor;
-      Logger.debug(`GET_SENDER_AVATAR: [BUILD v1.0] Using current aura color for current user:`, currentAuraColor, 'general');
-    }
+      }
   } else {
     // For other users' messages, try to get the latest aura color from presence data
     // This ensures real-time aura updates for all users
     const latestAuraColor = getLatestAuraColorFromPresence(author.email);
     if (latestAuraColor) {
       author.auraColor = latestAuraColor;
-      Logger.debug(`GET_SENDER_AVATAR: [BUILD v1.0] Using real-time aura color for other user:`, latestAuraColor, 'general');
-    } else {
-      Logger.debug(`GET_SENDER_AVATAR: [BUILD v1.0] Using stored aura color for other user:`, author.auraColor, 'general');
-    }
+      } else {
+      }
   }
   
   // Use unified avatar system for consistency
@@ -681,7 +664,6 @@ function getSenderAvatar(author) {
     );
   }
   
-  Logger.debug(`GET_SENDER_AVATAR: [BUILD v1.0] Generated message avatar HTML:`, avatarHTML, 'general');
   return avatarHTML;
 }
 
@@ -716,14 +698,11 @@ async function refreshMessageAvatarsWithCurrentPresence() {
         const userEmail = user.email || user.userId || user.id;
         if (userEmail && user.auraColor) {
           auraColorMap[userEmail] = user.auraColor;
-          Logger.debug(`MESSAGE_AVATAR: Updated aura for ${userEmail}: ${user.auraColor}`, null, 'general');
-        }
+          }
       });
       
       // Find all message containers and re-render their avatars with updated aura colors
       const messageContainers = document.querySelectorAll('.message');
-      Logger.debug(`MESSAGE_AVATAR: Found ${messageContainers.length} message containers to update`, null, 'general');
-      
       messageContainers.forEach(messageContainer => {
         const avatarContainer = messageContainer.querySelector('.avatar-container');
         if (avatarContainer) {
@@ -737,8 +716,6 @@ async function refreshMessageAvatarsWithCurrentPresence() {
               const userEmail = author.email;
               
               if (userEmail && auraColorMap[userEmail]) {
-                Logger.debug(`MESSAGE_AVATAR: Re-rendering avatar for ${userEmail} with aura ${auraColorMap[userEmail]}`, null, 'general');
-                
                 // Update the author's aura color
                 author.auraColor = auraColorMap[userEmail];
                 
@@ -746,8 +723,7 @@ async function refreshMessageAvatarsWithCurrentPresence() {
                 const newAvatarHTML = getSenderAvatar(author);
                 avatarContainer.innerHTML = newAvatarHTML;
                 
-                Logger.debug(`MESSAGE_AVATAR: Re-rendered avatar for ${userEmail}`, null, 'general');
-              }
+                }
             }
           }
         }
@@ -765,8 +741,8 @@ async function refreshMessageAvatarsWithCurrentPresence() {
 // CHROME EXTENSION WEBSOCKET FIX: Send WebSocket message via background service worker
 // SUPABASE REAL-TIME: Send message via Supabase real-time
 async function sendSupabaseMessage(message) {
-  const timer = realtimeLogger.startTimer('supabase_send');
-  realtimeLogger.startFlow('supabase_send', { messageType: message.type, timestamp: Date.now() });
+  const timer = Date.now();
+  console.log('Starting Supabase send flow:', { messageType: message.type, timestamp: Date.now() });
   
   try {
     if (!window.aurasIntegration || !window.aurasIntegration.isInitialized) {
@@ -774,7 +750,7 @@ async function sendSupabaseMessage(message) {
       return false;
     }
     
-    realtimeLogger.supabase('info', 'Sending message via Supabase real-time', {
+    console.log('Sending message via Supabase real-time:', {
       type: message.type,
       hasContent: !!message.content,
       hasUserEmail: !!message.userEmail,
@@ -782,7 +758,7 @@ async function sendSupabaseMessage(message) {
       timestamp: message.timestamp
     });
     
-    realtimeLogger.stepFlow('supabase_send', 'Preparing Supabase real-time message');
+    console.log('Preparing Supabase real-time message');
     
     let success = false;
     
@@ -811,31 +787,28 @@ async function sendSupabaseMessage(message) {
         return false;
     }
     
-    realtimeLogger.stepFlow('supabase_send', 'Received response from Supabase');
+    console.log('Received response from Supabase');
     
     if (success) {
-      realtimeLogger.supabase('info', 'Message sent successfully via Supabase', {
+      console.log('Message sent successfully via Supabase:', {
         messageType: message.type,
-        responseTime: realtimeLogger.endTimer(timer)
+        responseTime: Date.now() - timer
       });
-      realtimeLogger.endFlow('supabase_send', true, { success });
       return true;
     } else {
-      realtimeLogger.supabase('error', 'Failed to send message via Supabase', {
+      console.error('Failed to send message via Supabase:', {
         messageType: message.type,
-        responseTime: realtimeLogger.endTimer(timer)
+        responseTime: Date.now() - timer
       });
-      realtimeLogger.endFlow('supabase_send', false, { success });
       return false;
     }
   } catch (error) {
-    realtimeLogger.supabase('error', 'Error sending message via Supabase', {
+    console.error('Error sending message via Supabase:', {
       messageType: message.type,
       error: error.message,
       stack: error.stack,
-      responseTime: realtimeLogger.endTimer(timer)
+      responseTime: Date.now() - timer
     });
-    realtimeLogger.endFlow('supabase_send', false, { error: error.message });
     return false;
   }
 }
@@ -979,15 +952,16 @@ async function loadChatHistory(communityId = null) {
   
   try {
     // Get user's active communities
-    const result = await chrome.storage.local.get(['activeCommunities', 'primaryCommunity', 'currentCommunity']);
-    const activeCommunities = result.activeCommunities || [result.primaryCommunity || result.currentCommunity || 'comm-001'];
+    const activeCommunitiesData = await getState('activeCommunities');
+    const primaryCommunity = await getState('primaryCommunity');
+    const currentCommunity = await getState('currentCommunity');
+    const activeCommunities = activeCommunitiesData || [primaryCommunity || currentCommunity || 'comm-001'];
     
     // MODERN LOGGING: Structured logging for chat loading
     window.logger?.info('CHAT', 'Loading chat history for active communities', { 
       communities: activeCommunities,
       count: activeCommunities.length 
     });
-    Logger.debug(`CHAT_LOAD: Loading chat history for active communities: ${activeCommunities.join(', ')}`, null, 'general');
     
     // Get normalized URL for page-specific messages - SAME AS VISIBILITY
     const urlData = await normalizeCurrentUrl();
@@ -998,16 +972,11 @@ async function loadChatHistory(communityId = null) {
       rawUrl: urlData.rawUrl,
       communities: activeCommunities
     });
-    Logger.debug(`CHAT_LOAD: Loading chat history for normalized URI: ${currentUri} (from raw: ${urlData.rawUrl})`, null, 'general');
-    Logger.debug(`CHAT_LOAD: urlData object:`, JSON.stringify(urlData), 'general');
-    Logger.debug(`CHAT_LOAD: currentUri before loop: ${currentUri}`, null, 'general');
-    Logger.debug(`CHAT_LOAD: currentUri type: ${typeof currentUri}, value: ${JSON.stringify(currentUri)}`, null, 'general');
+    console.log('CHAT_LOAD: Loading chat history for active communities');
+    console.log('CHAT_LOAD: Processing URI and communities');
     
     // Check if we're reloading the same URI unnecessarily
     if (lastLoadedUri === currentUri) {
-      Logger.debug(`CHAT_LOAD: Same URI detected - checking if messages are still visible`, null, 'general');
-      Logger.debug(`CHAT_LOAD: Last loaded URI: ${lastLoadedUri}, Current URI: ${currentUri}`, null, 'general');
-      
       // CRITICAL FIX: Check if messages are still visible in the DOM
       const chatMessages = document.querySelector('.chat-messages');
       if (chatMessages) {
@@ -1015,24 +984,18 @@ async function loadChatHistory(communityId = null) {
         const hasPlaceholder = chatMessages.innerHTML.includes('No messages yet');
         
         if (visibleMessages.length > 0) {
-          Logger.debug(`CHAT_LOAD: Messages are still visible (${visibleMessages.length} messages), skipping reload`, null, 'general');
+          console.log('CHAT_LOAD: Messages are still visible, skipping reload');
           return;
         } else if (!hasPlaceholder) {
-          Logger.debug(`CHAT_LOAD: No visible messages but no placeholder - messages may have been cleared, reloading`, null, 'general');
           // Continue with reload to restore messages
         } else {
-          Logger.debug(`CHAT_LOAD: Placeholder text present, skipping reload`, null, 'general');
           return;
         }
       } else {
-        Logger.debug(`CHAT_LOAD: No chat messages element found, continuing with reload`, null, 'general');
-      }
+        }
     }
     
     // Messages arrive via Supabase real-time
-    
-    Logger.debug(`CHAT_LOAD: URI changed - reloading chat history`, null, 'general');
-    Logger.debug(`CHAT_LOAD: Last loaded URI: ${lastLoadedUri}, Current URI: ${currentUri}`, null, 'general');
     
     // Add a longer delay to ensure server has processed any recent messages
     await new Promise(resolve => setTimeout(resolve, 500));
@@ -1042,33 +1005,24 @@ async function loadChatHistory(communityId = null) {
     
     // Load messages from all active communities
     const allConversations = [];
-    const communitiesResult = await chrome.storage.local.get(['communities']);
-    const communities = communitiesResult.communities || [];
+    const communitiesData = await getState('communities');
+    const communities = communitiesData || [];
     
     for (const communityId of activeCommunities) {
       try {
-        Logger.debug(`CHAT_LOAD: === LOADING MESSAGES FOR COMMUNITY ${communityId} ===`, null, 'general');
-        Logger.debug(`CHAT_LOAD: Requesting chat history for community ${communityId} with URI: ${currentUri}`, null, 'general');
-        Logger.debug(`CHAT_LOAD: currentUri type: ${typeof currentUri}, value: ${JSON.stringify(currentUri)}`, null, 'general');
-        Logger.debug(`CHAT_LOAD: About to call api.getChatHistory with communityId=${communityId}, threadId=null, uri=${currentUri}`, null, 'general');
-        Logger.debug(`CHAT_LOAD: currentUri in loop: ${currentUri}`, null, 'general');
-        
+        console.log('CHAT_LOAD: Requesting chat history from API');
         // Load initial chat history via API, then real-time updates will handle new messages
         const response = await api.getChatHistory(communityId, null, currentUri);
         
-        Logger.debug(`CHAT_LOAD: === API RESPONSE FOR COMMUNITY ${communityId} ===`, null, 'general');
-        Logger.debug(`CHAT_LOAD: Response object:`, JSON.stringify(response, null, 2), 'general');
-        Logger.debug(`CHAT_LOAD: Has conversations: ${!!response.conversations}`, null, 'general');
-        Logger.debug(`CHAT_LOAD: Conversations count: ${response.conversations ? response.conversations.length : 0}`, null, 'general');
-        
+        console.log('CHAT_LOAD: API response received');
         if (response.conversations && response.conversations.length > 0) {
-          Logger.success(`CHAT_LOAD: Found ${response.conversations.length} conversations for community ${communityId}`, null, 'general');
+          console.log(`CHAT_LOAD: Found ${response.conversations.length} conversations for community ${communityId}`);
           response.conversations.forEach((conv, index) => {
-            Logger.debug(`CHAT_LOAD: Conversation ${index + 1}:`, {
+            console.log(`CHAT_LOAD: Conversation ${index + 1}:`, {
               id: conv.id,
-              messageCount: conv.messages ? conv.messages.length : 0,
-              firstMessage: conv.messages && conv.messages.length > 0 ? conv.messages[0].body.substring(0, 50) : 'N/A'
-            }, 'general');
+              posts: conv.posts?.length || 0,
+              communityId: conv.communityId || 'N/A'
+            });
           });
           
           // Find community name
@@ -1082,7 +1036,7 @@ async function loadChatHistory(communityId = null) {
             communityName: communityName
           }));
           allConversations.push(...conversationsWithCommunity);
-          Logger.success(`CHAT_LOAD: Added ${conversationsWithCommunity.length} conversations from ${communityName}`, null, 'general');
+          console.log(`CHAT_LOAD: Added ${conversationsWithCommunity.length} conversations from ${communityName}`);
         } else {
           console.warn(`⚠️ CHAT_LOAD: No conversations found for community ${communityId} - Empty or no messages on this page`);
         }
@@ -1097,7 +1051,6 @@ async function loadChatHistory(communityId = null) {
     }
     
     console.log('🔍 CHAT_LOAD: === FINAL COMBINED RESULTS ===');
-    Logger.debug(`CHAT_LOAD: Total conversations from all communities: ${allConversations.length}`, null, 'general');
     console.log('🔍 CHAT_LOAD: Combined chat history from all communities:', allConversations);
     
     const chatMessages = document.querySelector('.chat-messages');
@@ -1109,7 +1062,6 @@ async function loadChatHistory(communityId = null) {
     
     // Log current messages before clearing
     const currentMessages = chatMessages.querySelectorAll('.message');
-    Logger.debug(`CHAT_LOAD: Current messages before clearing: ${currentMessages.length}`, null, 'general');
     console.log('🔍 CHAT_LOAD: Current message IDs:', Array.from(currentMessages).map(m => m.getAttribute('data-message-id')));
     
     // CRITICAL FIX: Don't clear real-time messages - merge them instead
@@ -1144,8 +1096,6 @@ async function loadChatHistory(communityId = null) {
       chatMessages.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 20px;">No messages yet. Start a conversation!</p>';
       return;
     }
-    
-    Logger.debug(`CHAT_LOAD: Processing ${allConversations.length} conversations for display`, null, 'general');
     
     // Handle combined conversations from all communities
     if (allConversations.length > 0) {
@@ -1184,24 +1134,15 @@ async function loadChatHistory(communityId = null) {
             mainThreadPost.replyCount = nonDeletedReplies.length; // Count only non-deleted replies for display
             
             // COMPREHENSIVE DELETED MESSAGE DEBUGGING
-            Logger.debug(`DELETED_MSG_DEBUG: [BUILD v1.0] === MAIN THREAD MESSAGE ANALYSIS ===`, null, 'general');
-            Logger.debug(`DELETED_MSG_DEBUG: [BUILD v1.0] Message ID: ${mainThreadPost.id}`, null, 'general');
-            Logger.debug(`DELETED_MSG_DEBUG: [BUILD v1.0] Message deletedAt: ${mainThreadPost.deletedAt}`, null, 'general');
-            Logger.debug(`DELETED_MSG_DEBUG: [BUILD v1.0] Total direct replies: ${directReplies.length}`, null, 'general');
-            Logger.debug(`DELETED_MSG_DEBUG: [BUILD v1.0] Non-deleted replies: ${nonDeletedReplies.length}`, null, 'general');
-            Logger.debug(`DELETED_MSG_DEBUG: [BUILD v1.0] hasReplies: ${mainThreadPost.hasReplies}`, null, 'general');
-            Logger.debug(`DELETED_MSG_DEBUG: [BUILD v1.0] replyCount: ${mainThreadPost.replyCount}`, null, 'general');
             if (directReplies.length > 0) {
-              Logger.debug(`DELETED_MSG_DEBUG: [BUILD v1.0] Direct replies details:`, directReplies.map(r => ({ id: r.id, deletedAt: r.deletedAt, body: r.body })), 'general');
+              console.log('DELETED_MSG_DEBUG: Found direct replies for deleted message');
             }
             
             // Check if this message should be skipped
             if (mainThreadPost.deletedAt && !mainThreadPost.hasReplies) {
-              Logger.debug(`DELETED_MSG_DEBUG: [BUILD v1.0] SKIPPING deleted main thread without replies: ${mainThreadPost.id}`, null, 'general');
               continue;
             } else if (mainThreadPost.deletedAt && mainThreadPost.hasReplies) {
-              Logger.debug(`DELETED_MSG_DEBUG: [BUILD v1.0] SHOWING deleted main thread WITH replies: ${mainThreadPost.id}`, null, 'general');
-            }
+              }
             // Calculate reaction count for this specific message
             const messageReactions = conversation.reactions ? conversation.reactions.filter(r => r.postId === mainThreadPost.id) : [];
             mainThreadPost.reactionCount = messageReactions.length;
@@ -1912,23 +1853,14 @@ function formatMessageTime(createdAt) {
 }
 
 async function getMessageActionMenu(message) {
-  Logger.debug(`MESSAGE_OPTIONS_DEBUG: Getting action menu for message ${message.id}`, null, 'general');
-  Logger.debug(`MESSAGE_OPTIONS_DEBUG: Message author: ${message.authorId}, createdAt: ${message.createdAt}`, null, 'general');
-  Logger.debug(`MESSAGE_OPTIONS_DEBUG: Message author object:`, message.author, 'general');
-  
   const now = new Date();
   const messageDate = new Date(message.createdAt);
   const diffMs = now - messageDate;
   const diffMinutes = Math.floor(diffMs / (1000 * 60));
   const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
   
-  Logger.debug(`MESSAGE_OPTIONS_DEBUG: Time diff - minutes: ${diffMinutes}, hours: ${diffHours}`, null, 'general');
-  
   // Get current user to check ownership - use window.currentUser from direct auth
   const currentUser = window.currentUser;
-  
-  Logger.debug(`MESSAGE_OPTIONS_DEBUG: Current user from window.currentUser:`, currentUser, 'general');
-  Logger.debug(`MESSAGE_OPTIONS_DEBUG: Current user email: ${currentUser ? currentUser.email : 'none'}`, null, 'general');
   
   // Use email for user identification - NO UUIDs
   let isOwner = false;
@@ -1936,14 +1868,12 @@ async function getMessageActionMenu(message) {
     // Compare by email - the message should have author email
     const authorEmail = message.authorEmail || (message.author && message.author.email);
     isOwner = (authorEmail === currentUser.email);
-    Logger.debug(`MESSAGE_OPTIONS_DEBUG: Is owner check - author email: ${authorEmail}, current user email: ${currentUser.email}, isOwner: ${isOwner}`, null, 'general');
-  }
+    }
   
   // Check if user can edit/delete (only if they own the message)
   const canEdit = isOwner && diffHours < 1; // Can edit within 1 hour
   const canDelete = isOwner; // User can only delete their own messages
   
-  Logger.debug(`MESSAGE_OPTIONS_DEBUG: Permissions - canEdit: ${canEdit}, canDelete: ${canDelete}`, null, 'general');
   const silentEdit = diffMinutes <= 5; // Silent edit within 5 minutes
   
   return `
@@ -2393,50 +2323,46 @@ async function loadMessageReactions(messageId, reactionBtn) {
     // Find the parent message div (not the button itself)
     const messageDiv = reactionBtn.closest('.message');
     if (messageDiv) {
-      Logger.debug(`Message div found:`, messageDiv, 'general');
-      Logger.debug(`Message div dataset:`, messageDiv.dataset, 'general');
       const reactionsData = messageDiv.dataset.reactions;
-      Logger.info(`📊 Stored reactions data:`, reactionsData, 'general');
+      console.log(`📊 Stored reactions data:`, reactionsData, 'general');
       if (reactionsData) {
         reactions = JSON.parse(reactionsData);
       }
     } else {
-      Logger.error(`No message div found for reaction button`, null, 'general');
+      console.error(`No message div found for reaction button`, null, 'general');
     }
     
     // Fallback to API call if no conversation data
     if (reactions.length === 0) {
-      Logger.debug(`No stored reactions, calling API for message ${messageId}`, null, 'general');
       // NO POLLING - Reactions arrive via Supabase real-time subscription
       // Real-time reactions are handled by handleReactionChange()
       reactions = []; // Empty for now, will be populated by real-time events
-      Logger.debug(`API returned reactions:`, reactions, 'realtime');
-    }
+      }
     
     const countSpan = reactionBtn.querySelector('.icon-count');
     
     if (reactions && reactions.length > 0) {
-      Logger.info(`📊 Found ${reactions.length} reactions`, null, 'general');
+      console.log(`📊 Found ${reactions.length} reactions`);
       
       // Update count
       if (countSpan) {
         countSpan.textContent = reactions.length;
         countSpan.style.display = 'inline';
-        Logger.info(`📊 Updated count to: ${reactions.length}`, null, 'general');
+        console.log(`📊 Updated count to: ${reactions.length}`);
       }
       
       // Check if current user has reacted - use window.currentUser
       const currentUser = window.currentUser;
-      Logger.info(`👤 Current user:`, currentUser, 'general');
+      console.log(`👤 Current user:`, currentUser);
       
       if (currentUser) {
         // Generate the same UUID that the server uses
         const serverUserId = currentUser.id; // Use the user ID from the database
-        Logger.info(`🆔 Generated server user ID: ${serverUserId}`, null, 'general');
+        console.log(`🆔 Generated server user ID: ${serverUserId}`);
         
         // Find user reaction by ID or email (fallback for existing data)
-        Logger.info(`   Current user email: ${currentUser.email}`, null, 'general');
-        Logger.info(`   All reaction user IDs:`, reactions.map(r => r.userId), 'general');
+        console.log(`   Current user email: ${currentUser.email}`);
+        console.log(`   All reaction user IDs:`, reactions.map(r => r.userId));
         
         const userReaction = reactions.find(r => 
           r.userId === serverUserId || 
@@ -2444,8 +2370,7 @@ async function loadMessageReactions(messageId, reactionBtn) {
           r.user.email === currentUser.email
         );
         
-        Logger.debug(`Looking for user reaction. Found:`, userReaction, 'general');
-        Logger.debug(`All reactions:`, reactions.map(r => ({ userId: r.userId, emoji: r.emoji, kind: r.kind })), 'general');
+        console.log('REACTION_DEBUG: User reaction found');
         
         if (userReaction) {
           // Show the actual emoji from the database
@@ -2456,13 +2381,13 @@ async function loadMessageReactions(messageId, reactionBtn) {
           reactionBtn.innerHTML = `${emoji}${countText ? `<span class="icon-count">${countText}</span>` : ''}`;
           reactionBtn.dataset.reaction = emoji;
         } else {
-          Logger.error(`No user reaction found`, null, 'general');
+          console.error(`No user reaction found`);
         }
       } else {
-        Logger.error(`No current user found`, null, 'general');
+        console.error(`No current user found`);
       }
     } else {
-      Logger.info(`📊 No reactions found, setting default state`, null, 'general');
+      console.log(`📊 No reactions found, setting default state`);
       // No reactions, hide count and set default state
       if (countSpan) {
         countSpan.textContent = '';

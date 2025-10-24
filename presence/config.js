@@ -126,25 +126,23 @@
       
       console.log(`🔧 CONFIG: Last seen threshold updated: ${days} days`);
       
-      // Store in Chrome storage for persistence
-      if (typeof chrome !== 'undefined' && chrome.storage) {
-        chrome.storage.local.set({
-          lastSeenThresholdDays: days
-        });
+      // Store in StateManager for persistence
+      if (typeof window.setState === 'function') {
+        window.setState('lastSeenThresholdDays', days);
       }
     }
 
     // Load user settings from Chrome storage
     async loadUserSettings() {
-      if (typeof chrome !== 'undefined' && chrome.storage) {
+      if (typeof window.getState === 'function') {
         try {
-          const result = await chrome.storage.local.get(['lastSeenThresholdDays']);
+          const result = await window.getState('lastSeenThresholdDays');
           
-          if (result.lastSeenThresholdDays !== undefined) {
-            this.activeConfig.lastSeenThresholdDays = result.lastSeenThresholdDays;
+          if (result !== undefined && result !== null) {
+            this.activeConfig.lastSeenThresholdDays = result;
             
-            console.log('🔧 CONFIG: User settings loaded from storage:', {
-              days: result.lastSeenThresholdDays
+            console.log('🔧 CONFIG: User settings loaded from StateManager:', {
+              days: result
             });
           }
         } catch (error) {

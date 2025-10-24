@@ -21,7 +21,7 @@ class UIManager {
     this.uiCallbacks = [];
     this.eventListeners = new Map();
     
-    Logger.info('UIManager initialized', null, 'ui');
+    console.log('UIManager initialized', null, 'ui');
     this.initializeUI();
   }
 
@@ -29,7 +29,7 @@ class UIManager {
    * Initialize UI components and event listeners
    */
   initializeUI() {
-    Logger.debug('Initializing UI components', null, 'ui');
+    console.log('Initializing UI components', null, 'ui');
     
     this.setupTabNavigation();
     this.setupEventListeners();
@@ -41,7 +41,7 @@ class UIManager {
    * Setup tab navigation
    */
   setupTabNavigation() {
-    Logger.debug('Setting up tab navigation', null, 'ui');
+    console.log('Setting up tab navigation', null, 'ui');
     
     const tabs = document.querySelectorAll('.tab-button');
     tabs.forEach(tab => {
@@ -58,7 +58,7 @@ class UIManager {
    * Setup global event listeners
    */
   setupEventListeners() {
-    Logger.debug('Setting up event listeners', null, 'ui');
+    console.log('Setting up event listeners', null, 'ui');
     
     // Listen for visibility updates
     document.addEventListener('visibilityUpdated', (event) => {
@@ -80,7 +80,7 @@ class UIManager {
    * Initialize modal components
    */
   initializeModals() {
-    Logger.debug('Initializing modals', null, 'ui');
+    console.log('Initializing modals', null, 'ui');
     
     // Create auth prompt modal if it doesn't exist
     if (!document.getElementById('auth-prompt-modal')) {
@@ -97,7 +97,7 @@ class UIManager {
    * Switch to specified tab
    */
   switchTab(tabId) {
-    Logger.ui(`Switching to tab: ${tabId}`, null);
+    console.log(`Switching to tab: ${tabId}`, null);
     
     // Update tab buttons
     const tabButtons = document.querySelectorAll('.tab-button');
@@ -125,7 +125,7 @@ class UIManager {
    * Handle visibility updates
    */
   handleVisibilityUpdate(visibilityData) {
-    Logger.ui('Handling visibility update', visibilityData);
+    console.log('Handling visibility update', visibilityData);
     
     this.updateVisibilityDisplay(visibilityData);
   }
@@ -137,7 +137,7 @@ class UIManager {
     const visibilityTab = document.getElementById('visibility-tab');
     if (!visibilityTab) return;
     
-    Logger.ui('Updating visibility display', {
+    console.log('Updating visibility display', {
       userCount: visibilityData?.users?.length || 0
     });
     
@@ -158,7 +158,7 @@ class UIManager {
     const userListContainer = document.getElementById('user-list');
     if (!userListContainer) return;
     
-    Logger.ui(`Updating user list with ${users.length} users`, null);
+    console.log(`Updating user list with ${users.length} users`, null);
     
     if (users.length === 0) {
       userListContainer.innerHTML = '<p class="no-users">No other users currently visible</p>';
@@ -237,7 +237,7 @@ class UIManager {
    * Handle profile updates
    */
   handleProfileUpdate(profileData) {
-    Logger.ui('Handling profile update', profileData);
+    console.log('Handling profile update', profileData);
     
     // Update any profile-related UI elements
     this.updateProfileElements(profileData);
@@ -261,7 +261,7 @@ class UIManager {
    * Handle error events
    */
   handleError(errorData) {
-    Logger.ui('Handling error', errorData);
+    console.log('Handling error', errorData);
     
     this.showError(errorData.message || 'An error occurred', errorData.details);
   }
@@ -270,7 +270,7 @@ class UIManager {
    * Show error message
    */
   showError(message, details = null) {
-    Logger.error(`UI Error: ${message}`, details, 'ui');
+    console.error(`UI Error: ${message}`, details, 'ui');
     
     const errorModal = document.getElementById('error-modal');
     if (errorModal) {
@@ -317,7 +317,7 @@ class UIManager {
     if (document.body) {
       document.body.appendChild(modal);
     } else {
-      Logger.warn('Document body not available, deferring error modal creation', null, 'ui');
+      console.warn('Document body not available, deferring error modal creation', null, 'ui');
       // Defer modal creation until DOM is ready
       if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', () => {
@@ -372,7 +372,7 @@ class UIManager {
     if (document.body) {
       document.body.appendChild(modal);
     } else {
-      Logger.warn('Document body not available, deferring modal creation', null, 'ui');
+      console.warn('Document body not available, deferring modal creation', null, 'ui');
       // Defer modal creation until DOM is ready
       if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', () => {
@@ -388,14 +388,14 @@ class UIManager {
    * Update UI state
    */
   updateUIState() {
-    Logger.debug('Updating UI state', this.uiState, 'ui');
+    console.log('Updating UI state', this.uiState, 'ui');
     
     // Notify callbacks
     this.uiCallbacks.forEach(callback => {
       try {
         callback(this.uiState);
       } catch (error) {
-        Logger.error('UI callback error', error, 'ui');
+        console.error('UI callback error', error, 'ui');
       }
     });
   }
@@ -404,7 +404,7 @@ class UIManager {
    * Show loading state
    */
   showLoading(message = 'Loading...') {
-    Logger.ui(`Showing loading: ${message}`, null);
+    console.log(`Showing loading: ${message}`, null);
     
     this.uiState.isLoading = true;
     this.updateUIState();
@@ -421,7 +421,7 @@ class UIManager {
    * Hide loading state
    */
   hideLoading() {
-    Logger.ui('Hiding loading', null);
+    console.log('Hiding loading', null);
     
     this.uiState.isLoading = false;
     this.updateUIState();
@@ -681,14 +681,14 @@ class UIManager {
     }
     this.eventListeners.get(element).push({ event, handler });
     
-    Logger.debug(`Added event listener: ${event} on element`, null, 'ui');
+    console.log(`Added event listener: ${event} on element`, null, 'ui');
   }
 
   /**
    * Cleanup event listeners
    */
   cleanup() {
-    Logger.debug('Cleaning up UI manager', null, 'ui');
+    console.log('Cleaning up UI manager', null, 'ui');
     
     this.eventListeners.forEach((listeners, element) => {
       listeners.forEach(({ event, handler }) => {
@@ -846,16 +846,24 @@ function setupMessageInputEventListeners() {
   }
 }
 
-Logger.info('UIManager module loaded', null, 'ui');
+console.log('UIManager module loaded', null, 'ui');
 
 // ===== THEME FUNCTIONS (FROM COMP) =====
 function initializeTheme() {
   // Load saved theme from storage or default to light
   // Modernized: Use StateManager instead of Chrome Storage
-  getState('theme').then((theme) => {
-    const savedTheme = theme || 'light';
-    setTheme(savedTheme);
-  });
+  if (typeof window.getState === 'function') {
+    window.getState('theme').then((theme) => {
+      const savedTheme = theme || 'light';
+      setTheme(savedTheme);
+    }).catch(() => {
+      // Fallback to light theme if getState fails
+      setTheme('light');
+    });
+  } else {
+    // Fallback to light theme if getState is not available
+    setTheme('light');
+  }
 }
 
 function setTheme(theme) {

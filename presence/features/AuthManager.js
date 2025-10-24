@@ -15,15 +15,42 @@ class AuthManager {
     this.authState = 'unknown';
     this.authCallbacks = [];
     
-    Logger.info('AuthManager initialized', null, 'auth');
+    console.log('AuthManager initialized', null, 'auth');
     this.initializeAuthHandlers();
+  }
+
+  /**
+   * Initialize AuthManager (COMP METHOD)
+   */
+  async initialize() {
+    console.log('🔧 AuthManager initialize called');
+    return Promise.resolve(true);
+  }
+
+  /**
+   * Sign in with provider (COMP METHOD)
+   */
+  async signIn(provider, email = null) {
+    console.log('🔧 AuthManager signIn called with provider:', provider);
+    if (provider === 'google') {
+      // Use real Google auth
+      if (window.realGoogleAuth) {
+        return await window.realGoogleAuth.signInWithGoogle();
+      }
+    } else if (provider === 'magic_link' && email) {
+      // Use magic link auth
+      if (window.realGoogleAuth) {
+        return await window.realGoogleAuth.signInWithMagicLink(email);
+      }
+    }
+    return null;
   }
 
   /**
    * Initialize authentication event handlers
    */
   initializeAuthHandlers() {
-    Logger.debug('Setting up authentication handlers', null, 'auth');
+    console.log('Setting up authentication handlers', null, 'auth');
     
     // Listen for authentication state changes
     document.addEventListener('authStateChanged', (event) => {
@@ -40,7 +67,7 @@ class AuthManager {
    * Handle authentication state changes
    */
   handleAuthStateChange(detail) {
-    Logger.auth('Authentication state changed', detail);
+    console.log('Authentication state changed:', detail);
     
     this.authState = detail.state;
     this.currentUser = detail.user;
@@ -50,7 +77,7 @@ class AuthManager {
       try {
         callback(detail);
       } catch (error) {
-        Logger.error('Auth callback error', error, 'auth');
+        console.error('Auth callback error', error, 'auth');
       }
     });
     
@@ -62,7 +89,7 @@ class AuthManager {
    * Handle user profile updates
    */
   handleUserUpdate(user) {
-    Logger.auth('User profile updated', user);
+    console.log('User profile updated:', user);
     
     if (this.currentUser && this.currentUser.email === user.email) {
       this.currentUser = { ...this.currentUser, ...user };
@@ -74,23 +101,23 @@ class AuthManager {
    * Require authentication for an action
    */
   async requireAuth(action, callback) {
-    Logger.auth(`Requiring authentication for: ${action}`, null);
+    console.log(`Requiring authentication for: ${action}`);
     
     try {
       // Check if user is authenticated
       if (this.isAuthenticated()) {
-        Logger.auth('User is authenticated, proceeding', null);
+        console.log('User is authenticated, proceeding');
         if (callback) {
           await callback();
         }
         return true;
       } else {
-        Logger.auth('User not authenticated, showing prompt', null);
+        console.log('User not authenticated, showing prompt');
         this.showAuthPrompt(action);
         return false;
       }
     } catch (error) {
-      Logger.error('Authentication check failed', error, 'auth');
+      console.error('Authentication check failed', error, 'auth');
       return false;
     }
   }
@@ -113,11 +140,11 @@ class AuthManager {
    * Show authentication prompt modal
    */
   showAuthPrompt(action) {
-    Logger.auth(`Showing auth prompt for: ${action}`, null);
+    console.log(`Showing auth prompt for: ${action}`);
     
     const authPrompt = document.getElementById('auth-prompt-modal');
     if (!authPrompt) {
-      Logger.warn('Auth prompt modal not found, creating...', null, 'auth');
+      console.warn('Auth prompt modal not found, creating...', null, 'auth');
       this.createAuthPromptModal();
     }
     
@@ -143,7 +170,7 @@ class AuthManager {
    * Create authentication prompt modal
    */
   createAuthPromptModal() {
-    Logger.debug('Creating authentication prompt modal', null, 'auth');
+    console.log('Creating authentication prompt modal', null, 'auth');
     
     const modal = document.createElement('div');
     modal.id = 'auth-prompt-modal';
@@ -184,7 +211,7 @@ class AuthManager {
     const googleBtn = document.getElementById('auth-prompt-google');
     if (googleBtn) {
       googleBtn.addEventListener('click', () => {
-        Logger.auth('Google sign-in requested', null);
+        console.log('Google sign-in requested');
         this.handleGoogleSignIn();
       });
     }
@@ -193,7 +220,7 @@ class AuthManager {
     const magicBtn = document.getElementById('auth-prompt-magic');
     if (magicBtn) {
       magicBtn.addEventListener('click', () => {
-        Logger.auth('Magic link sign-in requested', null);
+        console.log('Magic link sign-in requested');
         this.handleMagicLinkSignIn();
       });
     }
@@ -202,7 +229,7 @@ class AuthManager {
     const cancelBtn = document.getElementById('auth-prompt-cancel');
     if (cancelBtn) {
       cancelBtn.addEventListener('click', () => {
-        Logger.auth('Auth prompt cancelled', null);
+        console.log('Auth prompt cancelled');
         this.hideAuthPrompt();
       });
     }
@@ -219,7 +246,7 @@ class AuthManager {
    * Handle Google sign-in
    */
   handleGoogleSignIn() {
-    Logger.auth('Initiating Google sign-in', null);
+    console.log('Initiating Google sign-in');
     
     // Dispatch event for main app to handle
     document.dispatchEvent(new CustomEvent('authGoogleSignIn', {
@@ -233,7 +260,7 @@ class AuthManager {
    * Handle Magic Link sign-in
    */
   handleMagicLinkSignIn() {
-    Logger.auth('Initiating Magic Link sign-in', null);
+    console.log('Initiating Magic Link sign-in');
     
     // Dispatch event for main app to handle
     document.dispatchEvent(new CustomEvent('authMagicLinkSignIn', {
@@ -257,7 +284,7 @@ class AuthManager {
    * Update authentication UI based on current state
    */
   updateAuthUI() {
-    Logger.debug('Updating authentication UI', { 
+    console.log('Updating authentication UI', { 
       authState: this.authState, 
       hasUser: !!this.currentUser 
     }, 'auth');
@@ -292,11 +319,11 @@ class AuthManager {
    */
   updateUserProfile(updates) {
     if (!this.currentUser) {
-      Logger.warn('Cannot update profile: no current user', null, 'auth');
+      console.warn('Cannot update profile: no current user', null, 'auth');
       return false;
     }
     
-    Logger.auth('Updating user profile', updates);
+    console.log('Updating user profile:', updates);
     
     this.currentUser = { ...this.currentUser, ...updates };
     
@@ -312,7 +339,7 @@ class AuthManager {
    * Sign out current user
    */
   signOut() {
-    Logger.auth('Signing out user', null);
+    console.log('Signing out user');
     
     this.currentUser = null;
     this.authState = 'SIGNED_OUT';
@@ -343,7 +370,7 @@ class AuthManager {
 // Make available globally
 window.AuthManager = AuthManager;
 
-Logger.info('AuthManager module loaded', null, 'auth');
+console.log('AuthManager module loaded', null, 'auth');
 
 
 

@@ -65,12 +65,12 @@ async function loadCommunities() {
         const primaryCommunity = communities[0].id; // First community is primary
         
         // Store active communities and primary community
-        chrome.storage.local.set({ 
-          activeCommunities: activeCommunities,
-          primaryCommunity: primaryCommunity,
-          currentCommunity: primaryCommunity, // For backward compatibility
-          communities: communities // Store communities for name lookup
-        });
+        if (typeof window.setState === 'function') {
+          window.setState('activeCommunities', activeCommunities);
+          window.setState('primaryCommunity', primaryCommunity);
+          window.setState('currentCommunity', primaryCommunity); // For backward compatibility
+          window.setState('communities', communities); // Store communities for name lookup
+        }
         
         // Normalize the current URL ONCE at startup
         const initialUrlData = await normalizeCurrentUrl();
@@ -91,7 +91,7 @@ async function loadCommunities() {
               break;
             }
           } catch (error) {
-            Logger.debug(`INIT: Authentication not ready, attempt ${authAttempts + 1}/${maxAuthAttempts}... (${error.message})`, null, 'general');
+            console.log('COMMUNITIES: Error loading community data');
           }
           await new Promise(resolve => setTimeout(resolve, 500)); // Wait 500ms
           authAttempts++;
@@ -197,9 +197,9 @@ async function loadCommunities() {
   
   async function getPrimaryCommunityName() {
     try {
-      const result = await chrome.storage.local.get(['primaryCommunity', 'communities']);
-      const primaryCommunityId = result.primaryCommunity;
-      const communities = result.communities;
+      const primaryCommunityId = await getState('primaryCommunity');
+      const communitiesData = await getState('communities');
+      const communities = communitiesData || [];
       
       if (primaryCommunityId && communities) {
         const primaryCommunity = communities.find(c => c.id === primaryCommunityId);
@@ -246,7 +246,7 @@ async function loadCombinedAvatars(communityIds) {
         // Load initial presence data via API, then real-time updates will handle changes
         const urlResponse = await api.getPresenceByUrl(currentUri, communityIds);
         const apiEndTime = Date.now();
-        Logger.success(`LOAD_VISIBILITY: API responded in ${apiEndTime - apiStartTime}ms`, null, 'general');
+        console.log(`LOAD_VISIBILITY: API responded in ${apiEndTime - apiStartTime}ms`, null, 'general');
         console.log('🔍 LOAD_VISIBILITY: Response structure:', {
           hasActive: !!urlResponse?.active,
           activeCount: urlResponse?.active?.length || 0,
@@ -262,7 +262,7 @@ async function loadCombinedAvatars(communityIds) {
           
           // Enhanced logging for each active user
           urlResponse.active.forEach((user, index) => {
-            Logger.info(`👤 LOAD_VISIBILITY: User ${index + 1}/${urlResponse.active.length}:`, {
+            console.log(`👤 LOAD_VISIBILITY: User ${index + 1}/${urlResponse.active.length}:`, {
               email: user.email,
               name: user.name,
               isActive: user.isActive,
@@ -360,48 +360,29 @@ async function loadCombinedAvatars(communityIds) {
         const communityId = communityIds[index];
         let avatars;
         
-        Logger.debug(`VISIBILITY: Processing response for community ${communityId}:`, response, 'general');
-        Logger.debug(`VISIBILITY: Response keys:`, response ? Object.keys(response) : 'null', 'general');
-        Logger.debug(`VISIBILITY: Response type:`, typeof response, 'general');
-        Logger.debug(`VISIBILITY: Is array:`, Array.isArray(response), 'general');
+        console.log('COMMUNITIES: Loading avatars for community');
         
         // Handle different response formats
         if (response && response.avatars && Array.isArray(response.avatars)) {
           avatars = response.avatars;
-          Logger.debug(`VISIBILITY: Found ${avatars.length} avatars in response.avatars for ${communityId}`, null, 'general');
-        } else if (response && response.active && Array.isArray(response.active)) {
+          } else if (response && response.active && Array.isArray(response.active)) {
           avatars = response.active;
-          Logger.debug(`VISIBILITY: Found ${avatars.length} avatars in response.active for ${communityId}`, null, 'general');
-        } else if (Array.isArray(response)) {
+          } else if (Array.isArray(response)) {
           avatars = response;
-          Logger.debug(`VISIBILITY: Found ${avatars.length} avatars in direct array for ${communityId}`, null, 'general');
-        } else if (response && typeof response === 'object') {
+          } else if (response && typeof response === 'object') {
           // Check for other possible structures
-          Logger.debug(`VISIBILITY: Checking other object structures for ${communityId}`, null, 'general');
           if (response.users && Array.isArray(response.users)) {
             avatars = response.users;
-            Logger.debug(`VISIBILITY: Found ${avatars.length} avatars in response.users for ${communityId}`, null, 'general');
-          } else {
+            } else {
             avatars = [];
-            Logger.debug(`VISIBILITY: No avatars found in object for ${communityId}, available keys:`, Object.keys(response), 'general');
+            console.log( 'general');
           }
         } else {
           avatars = [];
-          Logger.debug(`VISIBILITY: No avatars found for ${communityId}, response format:`, typeof response, 'general');
-        }
+          }
         
         // Add community info to each avatar and deduplicate
         avatars.forEach((avatar, avatarIndex) => {
-          Logger.debug(`VISIBILITY: Processing avatar ${avatarIndex + 1} from ${communityId}:`, {
-            id: avatar.id,
-            userId: avatar.userId,
-            name: avatar.name,
-            handle: avatar.handle,
-            email: avatar.email || avatar.userId || avatar.id,
-            avatarUrl: avatar.avatarUrl,
-            auraColor: avatar.auraColor
-          }, 'general');
-          
           const userKey = `${avatar.userId || avatar.id}`;
           if (!seenUsers.has(userKey)) {
             seenUsers.add(userKey);
@@ -410,32 +391,20 @@ async function loadCombinedAvatars(communityIds) {
               communityId: communityId,
               communityName: avatar.communityName || `Community ${communityId}`
             });
-            Logger.success(`VISIBILITY: Added unique avatar: ${avatar.name || avatar.handle || 'Unknown'} (${userKey}) from ${communityId}`, null, 'general');
+            console.log(`VISIBILITY: Added unique avatar: ${avatar.name || avatar.handle || 'Unknown'} (${userKey}) from ${communityId}`, null, 'general');
           } else {
-            Logger.info(`⏭️ VISIBILITY: Skipped duplicate avatar: ${avatar.name || avatar.handle || 'Unknown'} (${userKey}) from ${communityId}`, null, 'general');
+            console.log(`⏭️ VISIBILITY: Skipped duplicate avatar: ${avatar.name || avatar.handle || 'Unknown'} (${userKey}) from ${communityId}`, null, 'general');
           }
         });
       });
       
-      Logger.debug(`VISIBILITY: Final combined avatars:`, allAvatars, 'general');
-      Logger.debug(`VISIBILITY: Total unique avatars: ${allAvatars.length}`, null, 'general');
       console.log(`Combined avatars from ${communityIds.length} communities:`, allAvatars);
       console.log(`Total unique avatars: ${allAvatars.length}`);
       
       // Enhanced logging for final avatars before passing to updateVisibleTab
       console.log('🔍 VISIBILITY: Final avatars to be processed by updateVisibleTab:');
       allAvatars.forEach((avatar, index) => {
-        Logger.debug(`VISIBILITY: Final avatar ${index + 1}:`, {
-          id: avatar.id,
-          userId: avatar.userId,
-          name: avatar.name,
-          handle: avatar.handle,
-          email: avatar.email,
-          avatarUrl: avatar.avatarUrl,
-          auraColor: avatar.auraColor,
-          communityId: avatar.communityId
-        }, 'general');
-      });
+        });
       
       // Update the visible tab with combined avatar data
       await updateVisibleTab(allAvatars);
@@ -467,7 +436,8 @@ async function loadCombinedAvatars(communityIds) {
       
       // If no community IDs provided, get from storage
       if (!communityIds || communityIds.length === 0) {
-        const result = await chrome.storage.local.get(['activeCommunities']);
+        const activeCommunities = await getState('activeCommunities');
+        const result = { activeCommunities };
         communityIds = result.activeCommunities || ['comm-001'];
       }
       
@@ -535,4 +505,5 @@ async function loadMessageReplies(messageId, conversationId, communityId = null)
 
 // Export for global access
 window.CommunitiesModule = CommunitiesModule;
+window.loadCommunities = loadCommunities;
 window.loadCombinedAvatars = loadCombinedAvatars;

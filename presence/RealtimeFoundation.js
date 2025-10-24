@@ -105,7 +105,7 @@ class RealtimeFoundation {
   emit(eventName, data) {
     const event = new CustomEvent(eventName, { detail: data });
     this.eventBus.dispatchEvent(event);
-    this.logger.debug(`Event emitted: ${eventName}`, data);
+    this.logger.console.log(`Event emitted: ${eventName}`, data);
   }
 
   /**
@@ -113,7 +113,7 @@ class RealtimeFoundation {
    */
   on(eventName, callback) {
     this.eventBus.addEventListener(eventName, callback);
-    this.logger.debug(`Event listener added: ${eventName}`);
+    this.logger.console.log(`Event listener added: ${eventName}`);
   }
 
   /**
@@ -121,7 +121,7 @@ class RealtimeFoundation {
    */
   off(eventName, callback) {
     this.eventBus.removeEventListener(eventName, callback);
-    this.logger.debug(`Event listener removed: ${eventName}`);
+    this.logger.console.log(`Event listener removed: ${eventName}`);
   }
 
   /**

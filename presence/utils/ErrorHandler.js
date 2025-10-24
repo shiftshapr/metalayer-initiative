@@ -18,7 +18,7 @@ class ErrorHandler {
     const errorMessage = error instanceof Error ? error.message : error;
     const errorStack = error instanceof Error ? error.stack : null;
     
-    Logger.error(`Error in ${context}: ${errorMessage}`, {
+    console.error(`Error in ${context}: ${errorMessage}`, {
       context,
       error: errorMessage,
       stack: errorStack,
@@ -142,7 +142,7 @@ class ErrorHandler {
    */
   static clearErrorHistory() {
     window.errorHistory = [];
-    Logger.info('Error history cleared');
+    console.log('Error history cleared');
   }
 
   /**
@@ -191,7 +191,7 @@ class ErrorHandler {
     const errorMessage = error.message || 'Unknown Supabase error';
     const errorCode = error.code || 'UNKNOWN';
     
-    Logger.error(`Supabase error in ${context}: ${errorMessage} (Code: ${errorCode})`, {
+    console.error(`Supabase error in ${context}: ${errorMessage} (Code: ${errorCode})`, {
       context,
       error: errorMessage,
       code: errorCode,
@@ -222,7 +222,7 @@ class ErrorHandler {
     const errorMessage = error.message || 'Network error';
     const status = error.status || 'UNKNOWN';
     
-    Logger.error(`Network error in ${context}: ${errorMessage} (Status: ${status})`, {
+    console.error(`Network error in ${context}: ${errorMessage} (Status: ${status})`, {
       context,
       error: errorMessage,
       status,
@@ -252,7 +252,7 @@ class ErrorHandler {
     try {
       return domOperation();
     } catch (error) {
-      Logger.error(`DOM operation failed in ${context}: ${error.message}`, {
+      console.error(`DOM operation failed in ${context}: ${error.message}`, {
         context,
         error: error.message,
         stack: error.stack
@@ -273,7 +273,7 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = ErrorHandler;
 }
 
-// Logger.success('ErrorHandler initialized');
+// console.log('ErrorHandler initialized');
 
 
 

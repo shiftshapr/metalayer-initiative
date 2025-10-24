@@ -133,7 +133,7 @@ async function initializeNotificationSettings() {
           const notificationType = e.target.dataset.notificationType;
           const enabled = e.target.checked;
           
-          Logger.info(`🔔 SETTINGS: ${notificationType} ${enabled ? 'enabled' : 'disabled'}`, null, 'general');
+          console.log(`🔔 SETTINGS: ${notificationType} ${enabled ? 'enabled' : 'disabled'}`, null, 'general');
           
           await window.notificationManager.setEnabled(notificationType, enabled);
         });
@@ -310,7 +310,8 @@ function initializeNotificationIcon() {
     async initialize() {
       try {
         // Load existing notifications from storage
-        const result = await chrome.storage.local.get([this.storageKey]);
+        const storageData = await getState(this.storageKey);
+        const result = { [this.storageKey]: storageData };
         this.notifications = result[this.storageKey] || [];
         console.log('🔔 HISTORY: Loaded', this.notifications.length, 'notifications from storage');
       } catch (error) {
@@ -399,7 +400,9 @@ function initializeNotificationIcon() {
     
     async saveNotifications() {
       try {
-        await chrome.storage.local.set({ [this.storageKey]: this.notifications });
+        if (typeof window.setState === 'function') {
+          await window.setState(this.storageKey, this.notifications);
+        }
       } catch (error) {
         console.error('🔔 HISTORY: Error saving notifications:', error);
       }
@@ -614,14 +617,16 @@ function initializeEnhancedNotifications() {
           originalShowNotification(message);
         }
         
-        // Add to notification history
-        window.notificationHistory.addNotification({
-          type: type,
-          title: type === 'info' ? 'Notification' : type.charAt(0).toUpperCase() + type.slice(1),
-          message: message,
-          url: url,
-          target: target
-        });
+        // Add to notification history if available
+        if (window.notificationHistory && window.notificationHistory.addNotification) {
+          window.notificationHistory.addNotification({
+            type: type,
+            title: type === 'info' ? 'Notification' : type.charAt(0).toUpperCase() + type.slice(1),
+            message: message,
+            url: url,
+            target: target
+          });
+        }
       };
       
       // Enhanced WebSocket message handling

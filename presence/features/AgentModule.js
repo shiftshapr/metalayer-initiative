@@ -57,7 +57,7 @@ let cachedChunks = [];
 
 // --- Agent Functions ---
 async function testAgent(message) {
-  Logger.info("🤖 testAgent called with message:", message, 'general');
+  console.log("🤖 testAgent called with message:", message);
   if (!message.trim()) return;
   
   // Add user message to output
@@ -65,7 +65,7 @@ async function testAgent(message) {
   
   // Show loading
   const loadingId = addMessageToAgentOutput('Agent', 'Thinking...', false, true);
-  Logger.info("🤖 Loading message added with ID:", loadingId, 'general');
+  console.log("🤖 Loading message added with ID:", loadingId);
   
   try {
     // Check if we have page content, if not try to load it
@@ -195,10 +195,10 @@ You can still ask me general questions about the video based on the title and de
 }
 
 async function callDeepSeekAPI(userMessage) {
-  Logger.info("🤖 callDeepSeekAPI called with message:", userMessage, 'general');
+  console.log("🤖 callDeepSeekAPI called with message:", userMessage);
   // Find relevant content chunks using RAG
   const relevantChunks = findRelevantChunks(userMessage);
-  Logger.info("🤖 Found relevant chunks:", relevantChunks.length, 'general');
+  console.log("🤖 Found relevant chunks:", relevantChunks.length);
   
   // Prepare context for the AI
   const context = {
@@ -233,12 +233,12 @@ Is there a specific topic or question I can assist you with directly?`;
     metadata: pageContentCache.metadata
   };
 
-  Logger.info("🤖 Making fetch request to:", AGENT_API_URL, 'general');
-  Logger.info("🤖 Request payload:", {
+  console.log("🤖 Making fetch request to:", AGENT_API_URL);
+  console.log("🤖 Request payload:", {
     message: userMessage,
     context: context,
     pageContent: limitedPageContent
-  }, 'general');
+  });
   
   const response = await fetch(AGENT_API_URL, {
     method: 'POST',
@@ -252,7 +252,7 @@ Is there a specific topic or question I can assist you with directly?`;
     })
   });
   
-  Logger.info("🤖 API response status:", response.status, response.statusText, 'general');
+  console.log("🤖 API response status:", response.status, response.statusText);
   
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
@@ -493,7 +493,7 @@ function updateAgentWelcomeWithPageInfo(pageData) {
     suggestionButtons.forEach(button => {
       button.addEventListener('click', () => {
         const question = button.getAttribute('data-question');
-        Logger.info("Suggestion button clicked:", question, 'general');
+        console.log("Suggestion button clicked:", question);
         testAgent(question);
       });
     });
@@ -501,29 +501,29 @@ function updateAgentWelcomeWithPageInfo(pageData) {
 }
 
 function initializeAgentTab() {
-  Logger.info("=== INITIALIZING AGENT TAB ===", null, 'general');
-  Logger.debug("Current URL:", window.location.href, 'general');
-  Logger.debug("Document ready state:", document.readyState, 'general');
+  console.log("=== INITIALIZING AGENT TAB ===");
+  console.log("Current URL:", window.location.href);
+  console.log("Document ready state:", document.readyState);
   
   // Load page content for the agent
-  Logger.info("📄 Loading page content...", null, 'general');
+  console.log("📄 Loading page content...");
   loadPageContent();
   
   // Get agent element references
-  Logger.debug("Getting agent element references...", null, 'general');
+  console.log("Getting agent element references...");
   const agentInput = document.getElementById('agent-input');
   const agentSendButton = document.getElementById('agent-send-btn');
   const agentOutput = document.getElementById('agent-output');
   const agentClearButton = document.getElementById('agent-clear-btn');
   const agentRefreshButton = document.getElementById('agent-refresh-btn');
   
-  Logger.debug("Agent elements found:", {
+  console.log("Agent elements found:", {
     agentInput: !!agentInput,
     agentSendButton: !!agentSendButton,
     agentOutput: !!agentOutput,
     agentClearButton: !!agentClearButton,
     agentRefreshButton: !!agentRefreshButton
-  }, 'general');
+  });
   
   // Check if elements exist
   if (!agentInput) console.error("❌ agent-input element not found!");
@@ -534,7 +534,7 @@ function initializeAgentTab() {
   
   // Initialize agent output if not already done
   if (agentOutput && !agentOutput.querySelector('.agent-welcome')) {
-    Logger.info("Setting up agent output...", null, 'general');
+    console.log("Setting up agent output...");
     agentOutput.innerHTML = `
       <div class="agent-welcome">
         <h4>🤖 AI Agent Ready</h4>
@@ -554,16 +554,16 @@ function initializeAgentTab() {
     suggestionButtons.forEach(button => {
       button.addEventListener('click', () => {
         const question = button.getAttribute('data-question');
-        Logger.info("Suggestion button clicked:", question, 'general');
+        console.log("Suggestion button clicked:", question);
         testAgent(question);
     });
   });
-    Logger.info("Agent welcome message set up!", null, 'general');
+    console.log("Agent welcome message set up!");
   }
   
   // Set up send button if not already done
   if (agentSendButton && !agentSendButton.hasAttribute('data-initialized')) {
-    Logger.info("🔘 Setting up send button...", null, 'general');
+    console.log("🔘 Setting up send button...");
     agentSendButton.addEventListener('click', () => {
       console.log('🔘 Send button clicked!');
       const message = agentInput.value.trim();
@@ -576,9 +576,9 @@ function initializeAgentTab() {
       }
     });
     agentSendButton.setAttribute('data-initialized', 'true');
-    Logger.success("Send button event listener attached", null, 'general');
+    console.log("Send button event listener attached");
   } else if (agentSendButton) {
-    Logger.info("ℹ️ Send button already initialized", null, 'general');
+    console.log("ℹ️ Send button already initialized");
   }
   
   // Set up input field if not already done
@@ -660,21 +660,21 @@ function initializeAgentTab() {
 
 // Debug function for testing agent functionality
 function debugAgentTab() {
-  Logger.debug("DEBUG: Agent Tab Status", null, 'general');
-  Logger.debug("Current tab:", document.querySelector('.main-nav-tab.active')?.getAttribute('data-tab'), 'general');
-  Logger.debug("Agent tab element:", document.getElementById('agent-tab'), 'general');
-  Logger.debug("Agent tab visible:", document.getElementById('agent-tab')?.classList.contains('active'), 'general');
-  Logger.debug("Agent input:", document.getElementById('agent-input'), 'general');
-  Logger.debug("Agent output:", document.getElementById('agent-output'), 'general');
-  Logger.debug("Agent send button:", document.getElementById('agent-send-btn'), 'general');
-  Logger.debug("YouTube service:", typeof youtubeService, 'general');
-  Logger.debug("AGENT_API_URL:", AGENT_API_URL, 'general');
+  console.log("DEBUG: Agent Tab Status");
+  console.log("Current tab:", document.querySelector('.main-nav-tab.active')?.getAttribute('data-tab'), 'general');
+  console.log("Agent tab element:", document.getElementById('agent-tab'), 'general');
+  console.log("Agent tab visible:", document.getElementById('agent-tab')?.classList.contains('active'), 'general');
+  console.log("Agent input:", document.getElementById('agent-input'), 'general');
+  console.log("Agent output:", document.getElementById('agent-output'), 'general');
+  console.log("Agent send button:", document.getElementById('agent-send-btn'), 'general');
+  console.log("YouTube service:", typeof youtubeService, 'general');
+  console.log("AGENT_API_URL:", AGENT_API_URL, 'general');
   
   // Test if we can manually initialize
   try {
-    Logger.info("🧪 Testing manual initialization...", null, 'general');
+    console.log("🧪 Testing manual initialization...");
     initializeAgentTab();
-    Logger.success("Manual initialization successful", null, 'general');
+    console.log("Manual initialization successful");
   } catch (error) {
     console.error("❌ Manual initialization failed:", error);
   }
@@ -685,17 +685,17 @@ window.debugAgentTab = debugAgentTab;
 
 // Alternative simple debug function
 window.debugAgent = function() {
-  Logger.debug("Simple Agent Debug:", null, 'general');
-  Logger.info("Agent tab element:", document.getElementById('agent-tab'), 'general');
-  Logger.info("Agent input:", document.getElementById('agent-input'), 'general');
-  Logger.info("Agent output:", document.getElementById('agent-output'), 'general');
-  Logger.info("Current active tab:", document.querySelector('.main-nav-tab.active')?.getAttribute('data-tab'), 'general');
-  Logger.info("Agent tab visible:", document.getElementById('agent-tab')?.classList.contains('active'), 'general');
+  console.log("Simple Agent Debug:");
+  console.log("Agent tab element:", document.getElementById('agent-tab'));
+  console.log("Agent input:", document.getElementById('agent-input'));
+  console.log("Agent output:", document.getElementById('agent-output'));
+  console.log("Current active tab:", document.querySelector('.main-nav-tab.active')?.getAttribute('data-tab'));
+  console.log("Agent tab visible:", document.getElementById('agent-tab')?.classList.contains('active'));
   
   // Try to manually switch to agent tab
   const agentTab = document.querySelector('[data-tab="agent-tab"]');
   if (agentTab) {
-    Logger.debug("Found agent tab button, clicking...", null, 'general');
+    console.log("Found agent tab button, clicking...");
     agentTab.click();
   } else {
     console.error("❌ Agent tab button not found!");

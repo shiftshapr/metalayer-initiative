@@ -15,7 +15,7 @@ class ProfileManager {
     this.avatarCache = new Map();
     this.updateCallbacks = [];
     
-    Logger.info('ProfileManager initialized', null, 'profile');
+    console.log('ProfileManager initialized', null, 'profile');
     this.initializeProfileHandlers();
   }
 
@@ -23,8 +23,6 @@ class ProfileManager {
    * Initialize profile event handlers
    */
   initializeProfileHandlers() {
-    Logger.debug('Setting up profile handlers', null, 'profile');
-    
     // Listen for user updates
     document.addEventListener('userUpdated', (event) => {
       this.handleUserUpdate(event.detail);
@@ -45,7 +43,7 @@ class ProfileManager {
    * Handle user profile updates
    */
   handleUserUpdate(user) {
-    Logger.profile('User profile updated', user);
+    console.log('User profile updated', user);
     
     this.profileData = user;
     this.updateProfileUI();
@@ -55,7 +53,7 @@ class ProfileManager {
       try {
         callback(user);
       } catch (error) {
-        Logger.error('Profile callback error', error, 'profile');
+        console.error('Profile callback error', error, 'profile');
       }
     });
   }
@@ -64,7 +62,7 @@ class ProfileManager {
    * Handle avatar updates
    */
   handleAvatarUpdate(avatarData) {
-    Logger.profile('Avatar updated', avatarData);
+    console.log('Avatar updated', avatarData);
     
     if (this.profileData) {
       this.profileData.avatarUrl = avatarData.avatarUrl;
@@ -77,8 +75,6 @@ class ProfileManager {
    * Handle authentication UI updates
    */
   handleAuthUIUpdate(authData) {
-    Logger.debug('Auth UI update received', authData, 'profile');
-    
     if (authData.isAuthenticated && authData.user) {
       this.profileData = authData.user;
       this.updateProfileUI();
@@ -92,11 +88,11 @@ class ProfileManager {
    */
   updateProfileUI() {
     if (!this.profileData) {
-      Logger.warn('No profile data available for UI update', null, 'profile');
+      console.warn('No profile data available for UI update', null, 'profile');
       return;
     }
     
-    Logger.profile('Updating profile UI', {
+    console.log('Updating profile UI', {
       user: this.profileData.email,
       hasAvatar: !!this.profileData.avatarUrl
     });
@@ -106,7 +102,7 @@ class ProfileManager {
       this.updateUserAvatar();
       this.updateUserMenu();
     } catch (error) {
-      Logger.error('Profile UI update failed', error, 'profile');
+      console.error('Profile UI update failed', error, 'profile');
     }
   }
 
@@ -119,14 +115,12 @@ class ProfileManager {
     
     if (userInfoDiv) {
       userInfoDiv.style.display = 'flex';
-      Logger.debug('User info div displayed', null, 'profile');
-    }
+      }
     
     if (userMenuName) {
       const displayName = this.profileData.name || this.profileData.email;
       userMenuName.textContent = displayName;
-      Logger.debug(`User menu name set to: ${displayName}`, null, 'profile');
-    }
+      }
   }
 
   /**
@@ -136,11 +130,11 @@ class ProfileManager {
     const userAvatarContainer = document.getElementById('user-avatar-container');
     
     if (!userAvatarContainer) {
-      Logger.warn('User avatar container not found', null, 'profile');
+      console.warn('User avatar container not found', null, 'profile');
       return;
     }
     
-    Logger.profile('Updating user avatar', {
+    console.log('Updating user avatar', {
       avatarUrl: this.profileData.avatarUrl,
       auraColor: this.profileData.auraColor
     });
@@ -155,13 +149,13 @@ class ProfileManager {
         });
         
         userAvatarContainer.innerHTML = avatarHTML;
-        Logger.profile('Avatar updated using AvatarUtils', null);
+        console.log('Avatar updated using AvatarUtils', null);
       } else {
-        Logger.warn('AvatarUtils not available, using fallback', null, 'profile');
+        console.warn('AvatarUtils not available, using fallback', null, 'profile');
         this.createFallbackAvatar();
       }
     } catch (error) {
-      Logger.error('Avatar update failed', error, 'profile');
+      console.error('Avatar update failed', error, 'profile');
       this.createFallbackAvatar();
     }
   }
@@ -183,7 +177,7 @@ class ProfileManager {
     `;
     
     userAvatarContainer.innerHTML = fallbackHTML;
-    Logger.profile('Fallback avatar created', null);
+    console.log('Fallback avatar created', null);
   }
 
   /**
@@ -205,7 +199,7 @@ class ProfileManager {
    * Clear profile UI when user signs out
    */
   clearProfileUI() {
-    Logger.profile('Clearing profile UI', null);
+    console.log('Clearing profile UI', null);
     
     const userInfoDiv = document.getElementById('user-info');
     if (userInfoDiv) {
@@ -225,11 +219,11 @@ class ProfileManager {
    */
   updateAuraColor(color) {
     if (!this.profileData) {
-      Logger.warn('Cannot update aura color: no profile data', null, 'profile');
+      console.warn('Cannot update aura color: no profile data', null, 'profile');
       return false;
     }
     
-    Logger.profile('Updating aura color', { 
+    console.log('Updating aura color', { 
       oldColor: this.profileData.auraColor, 
       newColor: color 
     });
@@ -254,10 +248,10 @@ class ProfileManager {
    * Refresh profile avatar with latest data
    */
   refreshProfileAvatar() {
-    Logger.profile('Refreshing profile avatar', null);
+    console.log('Refreshing profile avatar', null);
     
     if (!this.profileData) {
-      Logger.warn('No profile data for avatar refresh', null, 'profile');
+      console.warn('No profile data for avatar refresh', null, 'profile');
       return;
     }
     
@@ -268,7 +262,7 @@ class ProfileManager {
       );
       
       if (userInVisibility && userInVisibility.avatarUrl) {
-        Logger.profile('Found updated avatar in visibility data', {
+        console.log('Found updated avatar in visibility data', {
           oldAvatar: this.profileData.avatarUrl,
           newAvatar: userInVisibility.avatarUrl
         });
@@ -327,8 +321,7 @@ class ProfileManager {
    */
   clearAvatarCache() {
     this.avatarCache.clear();
-    Logger.debug('Avatar cache cleared', null, 'profile');
-  }
+    }
 
   /**
    * Get profile status for debugging
@@ -595,7 +588,9 @@ function showColorPickerModal() {
         }
         
         // Save aura color to storage
-        chrome.storage.local.set({ userAvatarBgColor: auraColor });
+        if (typeof window.setState === 'function') {
+          window.setState('userAvatarBgColor', auraColor);
+        }
         
         closeColorPickerModal();
       } else {
@@ -662,7 +657,7 @@ window.updateColorPreview = updateColorPreview;
 window.isValidHex = isValidHex;
 window.getAvatarColor = getAvatarColor;
 
-Logger.info('ProfileManager module loaded', null, 'profile');
+console.log('ProfileManager module loaded', null, 'profile');
 
 
 

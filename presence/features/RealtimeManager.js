@@ -161,7 +161,7 @@ async function initializeSupabaseRealtimeClient() {
             resolve(false);
           } else {
             if (attempts % 10 === 0) {
-              Logger.info(`⏳ SUPABASE LIBRARY: Waiting... (attempt ${attempts}/${maxAttempts})`, null, 'general');
+              console.log(`⏳ SUPABASE LIBRARY: Waiting... (attempt ${attempts}/${maxAttempts})`, null, 'general');
             }
             setTimeout(checkSupabase, 100);
           }
@@ -359,8 +359,8 @@ async function convertSupabaseMessageToAPIFormat(supabaseMessage) {
 }
 
 async function sendSupabaseMessage(message) {
-  const timer = realtimeLogger.startTimer('supabase_send');
-  realtimeLogger.startFlow('supabase_send', { messageType: message.type, timestamp: Date.now() });
+  const timer = console.log('supabase_send');
+  console.log('supabase_send', { messageType: message.type, timestamp: Date.now() });
   
   try {
     if (!window.aurasIntegration || !window.aurasIntegration.isInitialized) {
@@ -368,7 +368,7 @@ async function sendSupabaseMessage(message) {
       return false;
     }
     
-    realtimeLogger.supabase('info', 'Sending message via Supabase real-time', {
+    console.log('info', 'Sending message via Supabase real-time', {
       type: message.type,
       hasContent: !!message.content,
       hasUserEmail: !!message.userEmail,
@@ -376,7 +376,7 @@ async function sendSupabaseMessage(message) {
       timestamp: message.timestamp
     });
     
-    realtimeLogger.stepFlow('supabase_send', 'Preparing Supabase real-time message');
+    console.log('supabase_send', 'Preparing Supabase real-time message');
     
     let success = false;
     
@@ -405,31 +405,31 @@ async function sendSupabaseMessage(message) {
         return false;
     }
     
-    realtimeLogger.stepFlow('supabase_send', 'Received response from Supabase');
+    console.log('supabase_send', 'Received response from Supabase');
     
     if (success) {
-      realtimeLogger.supabase('info', 'Message sent successfully via Supabase', {
+      console.log('info', 'Message sent successfully via Supabase', {
         messageType: message.type,
-        responseTime: realtimeLogger.endTimer(timer)
+        responseTime: console.log(timer)
       });
-      realtimeLogger.endFlow('supabase_send', true, { success });
+      console.log('supabase_send', true, { success });
       return true;
     } else {
-      realtimeLogger.supabase('error', 'Failed to send message via Supabase', {
+      console.log('error', 'Failed to send message via Supabase', {
         messageType: message.type,
-        responseTime: realtimeLogger.endTimer(timer)
+        responseTime: console.log(timer)
       });
-      realtimeLogger.endFlow('supabase_send', false, { success });
+      console.log('supabase_send', false, { success });
       return false;
     }
   } catch (error) {
-    realtimeLogger.supabase('error', 'Error sending message via Supabase', {
+    console.log('error', 'Error sending message via Supabase', {
       messageType: message.type,
       error: error.message,
       stack: error.stack,
-      responseTime: realtimeLogger.endTimer(timer)
+      responseTime: console.log(timer)
     });
-    realtimeLogger.endFlow('supabase_send', false, { error: error.message });
+    console.log('supabase_send', false, { error: error.message });
     return false;
   }
 }
@@ -725,7 +725,7 @@ async function sendPresenceEvent(kind, availability = null, customLabel = null) 
     if (response.ok) {
       const responseData = await response.json();
       console.log('🔍 PRESENCE EVENT DEBUG: Response data:', responseData);
-      Logger.success(`PRESENCE: ${kind} event sent successfully`, null, 'general');
+      console.log(`PRESENCE: ${kind} event sent successfully`, null, 'general');
       
            // CHROME EXTENSION WEBSOCKET FIX: Send via background service worker
            await sendSupabaseMessage({
@@ -737,7 +737,7 @@ async function sendPresenceEvent(kind, availability = null, customLabel = null) 
              userEmail: userEmail,
              timestamp: Date.now()
            });
-           Logger.info(`👥 WEBSOCKET: ${kind} event broadcast via background service worker`, null, 'general');
+           console.log(`👥 WEBSOCKET: ${kind} event broadcast via background service worker`, null, 'general');
     } else {
       console.warn(`❌ PRESENCE: Failed to send ${kind} event:`, response.status);
       const errorText = await response.text();

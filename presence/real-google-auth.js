@@ -95,7 +95,10 @@ class RealGoogleAuth {
         user: user
       };
       
-      await chrome.storage.local.set({ supabaseUser: user, supabaseSession: session });
+      if (typeof window.setState === 'function') {
+        await window.setState('supabaseUser', user);
+        await window.setState('supabaseSession', session);
+      }
       console.log('🔍 REAL_GOOGLE_AUTH: Google OAuth successful with REAL profile picture');
       
       return { user: user, session: session };
@@ -126,12 +129,15 @@ class RealGoogleAuth {
         console.log('🔍 REAL_GOOGLE_AUTH: Real avatar URL:', user.user_metadata?.avatar_url);
         
         // Store for future use
-        await chrome.storage.local.set({ supabaseUser: user });
+        if (typeof window.setState === 'function') {
+          await window.setState('supabaseUser', user);
+        }
         return user;
       }
       
       // SECOND: Check for stored session
-      const result = await chrome.storage.local.get(['supabaseUser']);
+      const supabaseUser = await getState('supabaseUser');
+      const result = { supabaseUser };
       if (result.supabaseUser) {
         console.log('🔍 REAL_GOOGLE_AUTH: Found stored user with real avatar:', result.supabaseUser.email);
         console.log('🔍 REAL_GOOGLE_AUTH: Stored avatar URL:', result.supabaseUser.user_metadata?.avatar_url);
@@ -156,7 +162,7 @@ class RealGoogleAuth {
       if (error) throw error;
       
       // Clear stored session
-      await chrome.storage.local.remove(['supabaseUser', 'supabaseSession']);
+      await removeStateMultiple(['supabaseUser', 'supabaseSession']);
       console.log('🔍 REAL_GOOGLE_AUTH: Signed out successfully');
     } catch (error) {
       console.error('🔍 REAL_GOOGLE_AUTH: Sign out failed:', error);
