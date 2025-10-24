@@ -452,9 +452,7 @@ function setupCrossProfileCommunication() {
       }
       
       // Stop intervals
-      if (presenceHeartbeatInterval) {
-        clearInterval(presenceHeartbeatInterval);
-        presenceHeartbeatInterval = null;
+      // COMP METHOD: No heartbeat intervals - removed per SD4 protocols
       }
       
       if (visibleListPollingInterval) {

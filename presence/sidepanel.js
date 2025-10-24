@@ -77,7 +77,7 @@ async function initializeCompleteModernArchitecture() {
       presenceData: null,
       chatData: [],
       messagePollingInterval: null,
-      presenceHeartbeatInterval: null,
+      // COMP METHOD: No heartbeat intervals - removed per SD4 protocols
       isInitialized: false
     });
     

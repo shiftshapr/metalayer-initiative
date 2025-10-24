@@ -265,7 +265,6 @@ enum ReactionKind {
 
 enum PresenceEventKind {
   ENTER
-  HEARTBEAT
   EXIT
   AVAILABILITY
 }
