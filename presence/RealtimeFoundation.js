@@ -113,7 +113,7 @@ class RealtimeFoundation {
    */
   on(eventName, callback) {
     this.eventBus.addEventListener(eventName, callback);
-    this.logger.console.log(`Event listener added: ${eventName}`);
+    console.log(`Event listener added: ${eventName}`);
   }
 
   /**

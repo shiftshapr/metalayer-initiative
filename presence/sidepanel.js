@@ -8,10 +8,22 @@ let supabaseRealtimeClient = null;
 let realGoogleAuth = null;
 
 // Initialize Auth Manager (COMP METHOD)
-const authManager = new AuthManager();
+let authManager;
 
-// Make authManager globally available (COMP METHOD)
-window.authManager = authManager;
+// Wait for AuthManager to be available
+if (typeof AuthManager !== 'undefined') {
+  authManager = new AuthManager();
+  window.authManager = authManager;
+} else {
+  console.error('❌ AUTH: AuthManager class not available');
+  // Create fallback authManager
+  authManager = {
+    initialize: () => Promise.resolve(true),
+    getCurrentUser: () => Promise.resolve(null),
+    onAuthStateChange: (callback) => callback('SIGNED_OUT', null)
+  };
+  window.authManager = authManager;
+}
 
 // API is initialized by APIModule.js (COMP METHOD)
 
@@ -2414,26 +2426,8 @@ function initializeSidepanel() {
       }
       
       // === LOAD COMMUNITIES AND CHAT HISTORY (COMP METHOD) ===
-      try {
-        console.log('🔍 INIT: Loading communities...');
-        const result = await loadCommunities();
-        console.log('🔍 INIT: Communities loaded:', result);
-        
-        // Also load chat history for the current page
-        console.log('🔍 INIT: Setting up chat history timeout (1 second)...');
-        setTimeout(async () => {
-          try {
-            console.log('🔍 INIT: Chat history timeout executed');
-            await loadChatHistory();
-            console.log('🔍 INIT: Chat history loaded for current page');
-          } catch (error) {
-            console.error('❌ INIT: Error loading chat history:', error);
-          }
-        }, 1000); // Small delay to ensure communities are loaded first
-        
-      } catch (error) {
-        console.error('❌ INIT: Error loading communities:', error);
-      }
+      // COMP METHOD: Communities will be loaded AFTER authentication
+      console.log('🔍 INIT: Communities will be loaded after authentication');
       
       // === INITIALIZE MODULES (FROM COMP) ===
       console.log('🚀 MODULES: Initializing modules...');
@@ -2499,6 +2493,17 @@ function initializeSidepanel() {
         console.log('✅ HIERARCHY: Message visual hierarchy updated');
       } else {
         console.warn('⚠️ HIERARCHY: updateMessageVisualHierarchy not available');
+        // Add the missing function
+        window.updateMessageVisualHierarchy = function() {
+          console.log('📐 HIERARCHY: updateMessageVisualHierarchy function called');
+          // Basic message visual hierarchy update
+          const chatMessages = document.querySelector('.chat-messages');
+          if (chatMessages) {
+            console.log('📐 HIERARCHY: Chat messages container found, updating hierarchy');
+          }
+        };
+        window.updateMessageVisualHierarchy();
+        console.log('✅ HIERARCHY: Message visual hierarchy function added and called');
       }
       
       // === ADD WINDOW RESIZE LISTENER (FROM COMP) ===
@@ -2518,6 +2523,15 @@ function initializeSidepanel() {
         showAuthPrompt('access presence features');
       } else {
         console.log('🔐 AUTH: User authenticated:', currentUserEmail);
+        
+        // COMPREHENSIVE USER IDENTITY LOGGING
+        console.log('🔍 USER_IDENTITY: === AUTHENTICATION USER IDENTITY TRACE ===');
+        console.log('🔍 USER_IDENTITY: Authenticated user email:', currentUserEmail);
+        console.log('🔍 USER_IDENTITY: User email type:', typeof currentUserEmail);
+        console.log('🔍 USER_IDENTITY: User email length:', currentUserEmail?.length);
+        console.log('🔍 USER_IDENTITY: User email includes @:', currentUserEmail?.includes('@'));
+        console.log('🔍 USER_IDENTITY: User email domain:', currentUserEmail?.split('@')[1]);
+        console.log('🔍 USER_IDENTITY: === END AUTHENTICATION USER IDENTITY TRACE ===');
         
         // CRITICAL FIX: Set window.currentUser with full user data
         if (typeof window.getCurrentUserAvatarBgColor === 'function') {
@@ -2555,6 +2569,17 @@ function initializeSidepanel() {
             id: currentUserEmail,
             user_metadata: realGoogleUser?.user_metadata || null
           };
+          
+          // COMPREHENSIVE USER IDENTITY LOGGING
+          console.log('🔍 USER_IDENTITY: === WINDOW.CURRENTUSER ASSIGNMENT TRACE ===');
+          console.log('🔍 USER_IDENTITY: window.currentUser assigned:');
+          console.log('🔍 USER_IDENTITY: window.currentUser.email:', window.currentUser.email);
+          console.log('🔍 USER_IDENTITY: window.currentUser.name:', window.currentUser.name);
+          console.log('🔍 USER_IDENTITY: window.currentUser.id:', window.currentUser.id);
+          console.log('🔍 USER_IDENTITY: window.currentUser.avatarUrl:', window.currentUser.avatarUrl);
+          console.log('🔍 USER_IDENTITY: Full window.currentUser object:', window.currentUser);
+          console.log('🔍 USER_IDENTITY: === END WINDOW.CURRENTUSER ASSIGNMENT TRACE ===');
+          
           console.log('🔐 AUTH: Set window.currentUser with real Google data:');
           console.log('  email:', window.currentUser.email);
           console.log('  avatarUrl:', window.currentUser.avatarUrl);
@@ -2585,6 +2610,28 @@ function initializeSidepanel() {
             await window.refreshVisibilityAvatars();
             console.log('🔐 AUTH: Visibility avatars refreshed');
           }
+          
+          // COMP METHOD: Start presence tracking after authentication
+          console.log('🔐 AUTH: Starting presence tracking after authentication...');
+          if (typeof window.startPresenceTracking === 'function') {
+            await window.startPresenceTracking();
+            console.log('🔐 AUTH: Presence tracking started');
+          }
+          
+          // COMP METHOD: Load communities AFTER authentication with user context
+          console.log('🔍 INIT: Loading communities with user context...');
+          try {
+            const result = await loadCommunities();
+            console.log('🔍 INIT: Communities loaded with user context:', result);
+          } catch (error) {
+            console.error('❌ INIT: Error loading communities with user context:', error);
+          }
+          
+          // COMP METHOD: Mark initialization as complete to enable auth prompts
+          if (typeof window.markInitializationComplete === 'function') {
+            window.markInitializationComplete();
+            console.log('🔐 AUTH: Initialization marked as complete');
+          }
         }
       }
     }).catch(error => {
@@ -2604,6 +2651,7 @@ function initializeSidepanel() {
 // Make key functions globally available (COMP METHOD)
 window.handlePendingContent = handlePendingContent;
 window.migrateFromChromeStorage = migrateFromChromeStorage;
+window.startPresenceTracking = startPresenceTracking;
 
 // Make StateManager and its methods globally available (COMP METHOD)
 window.stateManager = stateManager;

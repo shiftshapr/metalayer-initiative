@@ -50,10 +50,19 @@ class CommunitiesModule {
 // --- Community Management Functions ---
 async function loadCommunities() {
     try {
+      console.log('🔍 USER_IDENTITY: === COMMUNITIES USER IDENTITY TRACE ===');
+      console.log('🔍 USER_IDENTITY: Current user context before loading communities:');
+      console.log('🔍 USER_IDENTITY: window.currentUser:', window.currentUser);
+      console.log('🔍 USER_IDENTITY: window.currentUser?.email:', window.currentUser?.email);
+      console.log('🔍 USER_IDENTITY: window.currentUser?.name:', window.currentUser?.name);
+      console.log('🔍 USER_IDENTITY: window.currentUser?.id:', window.currentUser?.id);
+      
       console.log('Loading communities...');
       const response = await api.getCommunities();
       const communities = response.communities || response; // Handle both formats
-      console.log(`Loaded ${communities.length} communities`);
+      console.log(`🔍 USER_IDENTITY: Loaded ${communities.length} communities`);
+      console.log('🔍 USER_IDENTITY: Communities data:', communities);
+      console.log('🔍 USER_IDENTITY: === END COMMUNITIES USER IDENTITY TRACE ===');
       
       // Update community dropdown
       updateCommunityDropdown(communities);

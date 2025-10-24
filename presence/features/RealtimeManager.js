@@ -21,7 +21,14 @@ class RealtimeManager {
     this.log('INFO', 'Initializing RealtimeManager...');
     
     try {
-      // TODO: Initialize real-time systems here
+      // Initialize AurasIntegration if available
+      if (window.aurasIntegration && typeof window.aurasIntegration.initialize === 'function') {
+        this.log('INFO', 'Initializing AurasIntegration...');
+        await window.aurasIntegration.initialize();
+        this.log('INFO', 'AurasIntegration initialized successfully');
+      } else {
+        this.log('WARN', 'AurasIntegration not available for initialization');
+      }
       
       this.isInitialized = true;
       this.log('INFO', 'RealtimeManager initialized successfully');

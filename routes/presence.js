@@ -67,8 +67,8 @@ router.post('/event', authenticateUser, async (req, res) => {
     return res.status(400).json({ error: 'pageId and kind are required' });
   }
 
-  if (!['ENTER', 'HEARTBEAT', 'EXIT', 'AVAILABILITY'].includes(kind)) {
-    return res.status(400).json({ error: 'Invalid kind. Must be ENTER, HEARTBEAT, EXIT, or AVAILABILITY' });
+  if (!['ENTER', 'EXIT', 'AVAILABILITY'].includes(kind)) {
+    return res.status(400).json({ error: 'Invalid kind. Must be ENTER, EXIT, or AVAILABILITY' });
   }
 
   if (availability && !['AVAILABLE', 'BUSY', 'AWAY', 'CUSTOM'].includes(availability)) {

@@ -2706,6 +2706,75 @@ function sendChatMessage() {
   }
 }
 
+// Function to update visual hierarchy of messages - TOP-line approach with vertical lines
+function updateMessageVisualHierarchy() {
+  const chatMessages = document.querySelector('.chat-messages');
+  if (!chatMessages) return;
+  
+  const allMessages = chatMessages.querySelectorAll('.message');
+  const conversationGroups = {};
+  
+  // Group messages by conversation
+  allMessages.forEach(message => {
+    const conversationId = message.dataset.conversationId;
+    if (!conversationGroups[conversationId]) {
+      conversationGroups[conversationId] = [];
+    }
+    conversationGroups[conversationId].push(message);
+  });
+  
+  // Update visual hierarchy for each conversation
+  Object.values(conversationGroups).forEach(messages => {
+    const threadStarter = messages.find(msg => !msg.classList.contains('message-reply'));
+    const replies = messages.filter(msg => msg.classList.contains('message-reply') && msg.classList.contains('visible'));
+    
+    if (threadStarter && replies.length > 0) {
+      // Add has-replies class to thread starter for vertical line
+      threadStarter.classList.add('has-replies');
+      
+      // Calculate vertical line height
+      setTimeout(() => {
+        updateVerticalLineHeight(threadStarter, replies);
+      }, 10);
+    } else if (threadStarter) {
+      threadStarter.classList.remove('has-replies');
+    }
+    
+    // Remove any old inline styles that might interfere
+    allMessages.forEach(msg => {
+      msg.style.borderBottom = '';
+      msg.style.setProperty('--short-line-width', '');
+      msg.style.setProperty('--reply-line-width', '');
+    });
+  });
+}
+
+// Function to calculate and set the height of the vertical line
+function updateVerticalLineHeight(threadStarter, replies) {
+  if (!threadStarter || replies.length === 0) return;
+  
+  const lastReply = replies[replies.length - 1];
+  if (!lastReply) return;
+  
+  // Get the position of the thread starter and last reply
+  const threadStarterRect = threadStarter.getBoundingClientRect();
+  const lastReplyRect = lastReply.getBoundingClientRect();
+  
+  // Calculate the height from bottom of avatar (32px from top) to last reply bottom
+  const avatarBottom = threadStarterRect.top + 32; // 32px is avatar height
+  const height = lastReplyRect.bottom - avatarBottom;
+  
+  console.log('🔍 Vertical line calculation:', {
+    threadStarterTop: threadStarterRect.top,
+    avatarBottom: avatarBottom,
+    lastReplyBottom: lastReplyRect.bottom,
+    height
+  });
+  
+  // Set the height on the thread starter's ::after pseudo-element
+  threadStarter.style.setProperty('--vertical-line-height', `${height}px`);
+}
+
 // Export for global access
 window.CanopiModule = CanopiModule;
 window.loadChatHistory = loadChatHistory;
@@ -2717,3 +2786,4 @@ window.checkAndAddThreadToggle = checkAndAddThreadToggle;
 window.setupMessageInputEventListeners = setupMessageInputEventListeners;
 window.sendChatMessage = sendChatMessage;
 window.convertUrlsToLinks = convertUrlsToLinks;
+window.updateMessageVisualHierarchy = updateMessageVisualHierarchy;

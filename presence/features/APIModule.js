@@ -18,13 +18,44 @@ class MetaLayerAPI {
   async request(endpoint, options = {}) {
     const url = `${this.baseURL}${endpoint}`;
     
-    // Get current user info to send in headers - use AuthManager
-    const user = await window.authManager.getCurrentUser();
+    // COMP METHOD: Get current user info to send in headers
+    let user = null;
+    try {
+      console.log('🔍 USER_IDENTITY: === API USER IDENTITY TRACE ===');
+      console.log('🔍 USER_IDENTITY: window.currentUser:', window.currentUser);
+      console.log('🔍 USER_IDENTITY: window.currentUser?.email:', window.currentUser?.email);
+      console.log('🔍 USER_IDENTITY: window.authManager:', typeof window.authManager);
+      console.log('🔍 USER_IDENTITY: window.getCurrentUserEmail:', typeof window.getCurrentUserEmail);
+      
+      // First try to get from window.currentUser (set by authentication)
+      if (window.currentUser && window.currentUser.email) {
+        user = window.currentUser;
+        console.log('🔍 USER_IDENTITY: ✅ Using window.currentUser for authentication:', user.email);
+        console.log('🔍 USER_IDENTITY: ✅ User name:', user.name);
+        console.log('🔍 USER_IDENTITY: ✅ User avatar:', user.avatarUrl);
+      } else if (window.authManager && typeof window.authManager.getCurrentUser === 'function') {
+        user = await window.authManager.getCurrentUser();
+        console.log('🔍 USER_IDENTITY: ✅ Using authManager for authentication:', user?.email);
+      } else if (typeof window.getCurrentUserEmail === 'function') {
+        const email = await window.getCurrentUserEmail();
+        if (email) {
+          user = { email: email };
+          console.log('🔍 USER_IDENTITY: ✅ Using getCurrentUserEmail for authentication:', email);
+        }
+      } else {
+        console.log('🔍 USER_IDENTITY: ❌ No user authentication available');
+      }
+      
+      console.log('🔍 USER_IDENTITY: Final user object for API:', user);
+      console.log('🔍 USER_IDENTITY: === END API USER IDENTITY TRACE ===');
+    } catch (error) {
+      console.log('🔍 USER_IDENTITY: ❌ Error getting user authentication:', error);
+    }
     
     const config = {
       headers: {
         'Content-Type': 'application/json',
-        ...(user && {
+        ...(user && user.email && {
           'X-User-Email': user.email,
           'X-User-Name': user.name || user.user_metadata?.full_name,
           'X-User-Avatar': user.user_metadata?.avatar_url || user.picture
@@ -66,13 +97,24 @@ class MetaLayerAPI {
       params.append('communityIds', communityIds.join(','));
     }
     
-    // Get current user for authentication
-    let user = await window.authManager.getCurrentUser();
-    if (!user && typeof window.realGoogleAuth !== 'undefined' && window.realGoogleAuth.getCurrentUser) {
-      user = await window.realGoogleAuth.getCurrentUser();
-      console.log('🔍 API: Using realGoogleAuth user for authentication:', user?.email);
-    } else {
-      console.log('🔍 API: Using user for authentication:', user?.email);
+    // COMP METHOD: Use the same user detection logic as the main request method
+    let user = null;
+    try {
+      // First try to get from window.currentUser (set by authentication)
+      if (window.currentUser && window.currentUser.email) {
+        user = window.currentUser;
+        console.log('🔍 API: Using window.currentUser for authentication:', user.email);
+      } else if (window.authManager && typeof window.authManager.getCurrentUser === 'function') {
+        user = await window.authManager.getCurrentUser();
+        console.log('🔍 API: Using authManager for authentication:', user?.email);
+      } else if (typeof window.realGoogleAuth !== 'undefined' && window.realGoogleAuth.getCurrentUser) {
+        user = await window.realGoogleAuth.getCurrentUser();
+        console.log('🔍 API: Using realGoogleAuth for authentication:', user?.email);
+      } else {
+        console.log('🔍 API: No user authentication available');
+      }
+    } catch (error) {
+      console.log('🔍 API: Error getting user authentication:', error);
     }
     
     const response = await this.request(`/v1/presence/url?${params.toString()}`, { user });
@@ -84,13 +126,24 @@ class MetaLayerAPI {
     console.log('🔍 API: getPresenceByCommunities called with communities:', communityIds);
     const params = new URLSearchParams({ communityIds: communityIds.join(',') });
     
-    // Get current user for authentication
-    let user = await window.authManager.getCurrentUser();
-    if (!user && typeof window.realGoogleAuth !== 'undefined' && window.realGoogleAuth.getCurrentUser) {
-      user = await window.realGoogleAuth.getCurrentUser();
-      console.log('🔍 API: Using realGoogleAuth user for authentication:', user?.email);
-    } else {
-      console.log('🔍 API: Using user for authentication:', user?.email);
+    // COMP METHOD: Use the same user detection logic as the main request method
+    let user = null;
+    try {
+      // First try to get from window.currentUser (set by authentication)
+      if (window.currentUser && window.currentUser.email) {
+        user = window.currentUser;
+        console.log('🔍 API: Using window.currentUser for authentication:', user.email);
+      } else if (window.authManager && typeof window.authManager.getCurrentUser === 'function') {
+        user = await window.authManager.getCurrentUser();
+        console.log('🔍 API: Using authManager for authentication:', user?.email);
+      } else if (typeof window.realGoogleAuth !== 'undefined' && window.realGoogleAuth.getCurrentUser) {
+        user = await window.realGoogleAuth.getCurrentUser();
+        console.log('🔍 API: Using realGoogleAuth for authentication:', user?.email);
+      } else {
+        console.log('🔍 API: No user authentication available');
+      }
+    } catch (error) {
+      console.log('🔍 API: Error getting user authentication:', error);
     }
     
     const response = await this.request(`/v1/presence/communities?${params.toString()}`, { user });

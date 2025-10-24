@@ -3,6 +3,9 @@
  * Handles all authentication functionality
  */
 
+// COMP METHOD: Track initialization state to prevent premature auth prompts
+let isInitializing = true;
+
 class AuthModule {
   constructor() {
     this.logLevel = 'INFO';
@@ -476,7 +479,9 @@ async function getCurrentUserId() {
 async function getCurrentUserEmail() {
   try {
     // FIRST: Try real Google auth for actual profile pictures
-    if (realGoogleAuth) {
+    // COMP METHOD: Check if realGoogleAuth is available and initialized
+    if (realGoogleAuth && typeof realGoogleAuth.getCurrentUser === 'function') {
+      console.log('[AUTH] Calling realGoogleAuth.getCurrentUser()...');
       const user = await realGoogleAuth.getCurrentUser();
       console.log('[AUTH] Real Google Auth returned user:', user);
       
@@ -484,7 +489,11 @@ async function getCurrentUserEmail() {
         console.log('[AUTH] Found authenticated user with REAL profile picture:', user.email);
         console.log('[AUTH] Real avatar URL:', user.user_metadata?.avatar_url);
         return user.email;
+      } else {
+        console.log('[AUTH] Real Google Auth returned null or no email');
       }
+    } else {
+      console.log('[AUTH] realGoogleAuth not available or not initialized');
     }
     
     // SECOND: Fallback to AuthManager
@@ -498,9 +507,13 @@ async function getCurrentUserEmail() {
     
     console.error('[AUTH] No authenticated user found via any method');
     
-    // Show authentication prompt for proper OAuth flow
-    console.log('[AUTH] No user found, showing authentication prompt...');
-    showAuthPrompt('access presence features');
+    // COMP METHOD: Only show auth prompt after initialization is complete
+    if (!isInitializing) {
+      console.log('[AUTH] No user found, showing authentication prompt...');
+      showAuthPrompt('access presence features');
+    } else {
+      console.log('[AUTH] No user found, but not showing auth prompt during initialization');
+    }
     
     // Return null instead of throwing error to allow graceful handling
     return null;
@@ -616,6 +629,12 @@ async function completeOTPForRealtime(otpCode) {
 }
 
 
+// COMP METHOD: Mark initialization as complete
+function markInitializationComplete() {
+  isInitializing = false;
+  console.log('[AUTH] Initialization complete - auth prompts will now be shown when needed');
+}
+
 // Export for global access
 window.AuthModule = AuthModule;
 window.getCurrentUserEmail = getCurrentUserEmail;
@@ -624,5 +643,6 @@ window.requireAuth = requireAuth;
 window.showAuthPrompt = showAuthPrompt;
 window.createAuthPromptModal = createAuthPromptModal;
 window.initializeRealGoogleAuth = initializeRealGoogleAuth;
+window.markInitializationComplete = markInitializationComplete;
 window.signOut = signOut;
 window.logout = signOut; // Alias for compatibility

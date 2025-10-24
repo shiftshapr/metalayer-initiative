@@ -853,13 +853,17 @@ function initializeTheme() {
   // Load saved theme from storage or default to light
   // Modernized: Use StateManager instead of Chrome Storage
   if (typeof window.getState === 'function') {
-    window.getState('theme').then((theme) => {
-      const savedTheme = theme || 'light';
-      setTheme(savedTheme);
-    }).catch(() => {
-      // Fallback to light theme if getState fails
+    try {
+      window.getState('theme').then((theme) => {
+        const savedTheme = theme || 'light';
+        setTheme(savedTheme);
+      }).catch(() => {
+        setTheme('light');
+      });
+    } catch (error) {
+      console.log('Theme initialization failed, using default:', error);
       setTheme('light');
-    });
+    }
   } else {
     // Fallback to light theme if getState is not available
     setTheme('light');

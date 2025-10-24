@@ -6,16 +6,32 @@ let selectedByUser = {}; // e.g. { "user-abc123": "comm-002" }
 // Get communities that the current user is a member of
 exports.getCommunities = (req, res) => {
   // Get user ID from query parameter or headers
-  const userId = req.query.userId || req.headers['x-user-id'];
+  const userId = req.query.userId || req.headers['x-user-id'] || req.headers['x-user-email'];
+  
+  console.log('🔍 COMMUNITIES DEBUG: Received request');
+  console.log('🔍 COMMUNITIES DEBUG: Query params:', req.query);
+  console.log('🔍 COMMUNITIES DEBUG: Headers:', req.headers);
+  console.log('🔍 COMMUNITIES DEBUG: Extracted userId:', userId);
   
   // Mock user memberships - in real app, this would come from database
   const userMemberships = {
     'themetalayer@gmail.com': ['comm-001', 'comm-002'],
+    'daveroom@gmail.com': ['comm-001', 'comm-002'],
     'user-123': ['comm-001'],
     'user-456': ['comm-002']
   };
   
-  const userCommunities = userMemberships[userId] || ['comm-001']; // Default to Public Square
+  // Auto-register new users to public community (comm-001)
+  let userCommunities = userMemberships[userId];
+  if (!userCommunities && userId) {
+    // New user detected - add them to public community
+    console.log(`🆕 NEW USER: Auto-registering ${userId} to public community`);
+    userMemberships[userId] = ['comm-001']; // Add to Public Square
+    userCommunities = ['comm-001'];
+  } else if (!userCommunities) {
+    // Fallback for users without ID
+    userCommunities = ['comm-001']; // Default to Public Square
+  }
   
   const allCommunities = [
     { 

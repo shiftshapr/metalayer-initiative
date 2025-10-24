@@ -22,7 +22,7 @@ class PresenceService {
     }
   }
 
-  // Record a presence event (ENTER, HEARTBEAT, EXIT, AVAILABILITY)
+  // Record a presence event (ENTER, EXIT, AVAILABILITY)
   async recordPresenceEvent(userId, pageId, kind, availability = null, customLabel = null, pageUrl = null) {
     try {
       // First, ensure the page exists
@@ -79,10 +79,8 @@ class PresenceService {
         throw new Error(`Page ${pageId} not found and no URL provided for creation`);
       }
 
-      // Log heartbeat events for tracking
-      if (kind === 'HEARTBEAT') {
-        console.log(`💓 HEARTBEAT: ${userId} on ${pageId}`);
-      } else if (kind === 'EXIT') {
+      // Log presence events for tracking
+      if (kind === 'EXIT') {
         console.log(`🚪 EXIT: ${userId} from ${pageId}`);
       }
 
@@ -126,6 +124,60 @@ class PresenceService {
         }
       });
       
+      // CRITICAL FIX: Also record in Supabase user_presence table for real-time queries
+      if (this.supabase) {
+        try {
+          console.log(`🔍 DATABASE_SYNC: Recording presence event in Supabase user_presence table`);
+          console.log(`🔍 DATABASE_SYNC: User: ${userId}, Page: ${pageId}, Kind: ${kind}`);
+          
+          // Get user data for Supabase record
+          const user = await this.prisma.appUser.findUnique({
+            where: { id: userId },
+            select: {
+              email: true,
+              name: true,
+              handle: true,
+              avatarUrl: true,
+              auraColor: true
+            }
+          });
+          
+          if (user) {
+            // Determine if user is active based on event kind
+            const isActive = kind === 'ENTER';
+            
+            // Upsert into Supabase user_presence table
+            const { data: supabaseData, error: supabaseError } = await this.supabase
+              .from('user_presence')
+              .upsert({
+                user_email: user.email,
+                page_id: pageId,
+                page_url: pageUrl || page.canonicalUrl,
+                is_active: isActive,
+                last_seen: new Date().toISOString(),
+                enter_time: kind === 'ENTER' ? new Date().toISOString() : null,
+                aura_color: user.auraColor || '#45B7D1',
+                availability: availability,
+                custom_label: customLabel
+              }, {
+                onConflict: 'user_email,page_id'
+              });
+            
+            if (supabaseError) {
+              console.error('❌ DATABASE_SYNC: Error recording in Supabase:', supabaseError);
+            } else {
+              console.log(`✅ DATABASE_SYNC: Successfully recorded in Supabase user_presence table`);
+            }
+          } else {
+            console.error('❌ DATABASE_SYNC: User not found in database:', userId);
+          }
+        } catch (syncError) {
+          console.error('❌ DATABASE_SYNC: Failed to sync to Supabase:', syncError);
+        }
+      } else {
+        console.error('❌ DATABASE_SYNC: Supabase client not initialized');
+      }
+      
       // Convert BigInt id to string for JSON serialization
       const serializedEvent = {
         ...presenceEvent,
@@ -157,7 +209,7 @@ class PresenceService {
     }
   }
 
-  // Get active users on a specific page (users with recent HEARTBEAT or ENTER events)
+  // Get active users on a specific page (users with recent ENTER events)
   // ENHANCED: Now also returns recently inactive users for "Last seen" display
   async getActiveUsers(pageId, communityId = null, minutesThreshold = 5, currentUserId = null) {
     try {
@@ -519,110 +571,8 @@ class PresenceService {
     }
   }
 
-  // Process heartbeat timeouts and create EXIT events for inactive users
-  async processHeartbeatTimeouts(minutesThreshold = 15, heartbeatMissThreshold = 5) {
-    try {
-      console.log(`🔍 HEARTBEAT TIMEOUT: Starting with ${minutesThreshold}min threshold, ${heartbeatMissThreshold} missed heartbeats`);
-      
-      const thresholdTime = new Date(Date.now() - minutesThreshold * 60 * 1000);
-      const heartbeatCheckTime = new Date(Date.now() - 5 * 60 * 1000); // Check heartbeats in last 5 minutes
-      console.log(`🔍 HEARTBEAT TIMEOUT: Checking ENTER events after ${thresholdTime.toISOString()}, heartbeats after ${heartbeatCheckTime.toISOString()}`);
-      
-      // Find users who have ENTER events in the last 15 minutes
-      const enterEvents = await this.prisma.presenceEvent.findMany({
-        where: {
-          kind: 'ENTER',
-          createdAt: {
-            gte: thresholdTime
-          }
-        },
-        select: {
-          userId: true,
-          pageId: true,
-          createdAt: true
-        },
-        orderBy: {
-          createdAt: 'desc'
-        }
-      });
-
-      console.log(`🔍 HEARTBEAT TIMEOUT: Found ${enterEvents.length} ENTER events in time window`);
-
-      // Group by user+page and find the most recent ENTER event for each
-      const userPageMap = new Map();
-      enterEvents.forEach(event => {
-        const key = `${event.userId}-${event.pageId}`;
-        if (!userPageMap.has(key) || event.createdAt > userPageMap.get(key).createdAt) {
-          userPageMap.set(key, event);
-        }
-      });
-
-      console.log(`🔍 HEARTBEAT TIMEOUT: Processing ${userPageMap.size} unique user/page combinations`);
-
-      // Check for users who need EXIT events (missed heartbeats)
-      const exitEvents = [];
-      for (const [key, event] of userPageMap) {
-        console.log(`🔍 HEARTBEAT TIMEOUT: Checking user ${event.userId} on page ${event.pageId}`);
-        
-        // Count recent heartbeats for this user/page combination (last 5 minutes)
-        const recentHeartbeats = await this.prisma.presenceEvent.count({
-          where: {
-            userId: event.userId,
-            pageId: event.pageId,
-            kind: 'HEARTBEAT',
-            createdAt: {
-              gte: heartbeatCheckTime
-            }
-          }
-        });
-
-        console.log(`🔍 HEARTBEAT TIMEOUT: User ${event.userId} has ${recentHeartbeats} recent heartbeats (need ${heartbeatMissThreshold})`);
-
-        // If user has fewer heartbeats than the threshold, create EXIT
-        if (recentHeartbeats < heartbeatMissThreshold) {
-          console.log(`🚪 EXIT PROCESSING: Creating EXIT for user ${event.userId} (missed ${heartbeatMissThreshold - recentHeartbeats} heartbeats)`);
-          exitEvents.push({
-            userId: event.userId,
-            pageId: event.pageId,
-            kind: 'EXIT',
-            availability: null,
-            customLabel: `Heartbeat timeout (missed ${heartbeatMissThreshold - recentHeartbeats} heartbeats)`
-          });
-        } else {
-          console.log(`🔍 HEARTBEAT TIMEOUT: User ${event.userId} is still active (${recentHeartbeats} heartbeats)`);
-        }
-      }
-
-      // Create EXIT events for inactive users (delete existing first)
-      if (exitEvents.length > 0) {
-        console.log(`🔍 HEARTBEAT TIMEOUT: Creating ${exitEvents.length} EXIT events`);
-        for (const exitEvent of exitEvents) {
-          // Delete any existing EXIT event for this user/page
-          await this.prisma.presenceEvent.deleteMany({
-            where: {
-              userId: exitEvent.userId,
-              pageId: exitEvent.pageId,
-              kind: 'EXIT'
-            }
-          });
-          
-          // Create the new EXIT event
-          await this.prisma.presenceEvent.create({
-            data: exitEvent
-          });
-          console.log(`🔍 HEARTBEAT TIMEOUT: Created EXIT event for user ${exitEvent.userId}`);
-        }
-      } else {
-        console.log(`🔍 HEARTBEAT TIMEOUT: No EXIT events needed - all users are active`);
-      }
-
-      console.log(`🔍 HEARTBEAT TIMEOUT: Completed - created ${exitEvents.length} EXIT events`);
-      return exitEvents.length;
-    } catch (error) {
-      console.error('Error processing heartbeat timeouts:', error);
-      throw new Error('Failed to process heartbeat timeouts');
-    }
-  }
+  // REMOVED: Heartbeat timeout processing - not used in COMP
+  // COMP uses pure Supabase realtime, no heartbeat system needed
 
   // Clean up old presence events (should be called periodically)
   async cleanupOldPresenceEvents(daysToKeep = 7) {
