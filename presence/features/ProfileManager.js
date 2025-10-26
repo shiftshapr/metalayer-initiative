@@ -17,6 +17,29 @@ class ProfileManager {
     
     console.log('ProfileManager initialized', null, 'profile');
     this.initializeProfileHandlers();
+    this.loadAuraColorFromStorage();
+  }
+
+  /**
+   * Load aura color from storage and apply to currentUser
+   */
+  async loadAuraColorFromStorage() {
+    try {
+      if (typeof window.getState === 'function') {
+        const storedColor = await window.getState('userAvatarBgColor');
+        if (storedColor && storedColor !== '#ffffff' && window.currentUser) {
+          console.log('🔧 PROFILE_MANAGER: Loading aura color from storage:', storedColor);
+          window.currentUser.auraColor = storedColor;
+          
+          // Update profile data if it exists
+          if (this.profileData) {
+            this.profileData.auraColor = storedColor;
+          }
+        }
+      }
+    } catch (error) {
+      console.log('🔧 PROFILE_MANAGER: Could not load aura color from storage:', error);
+    }
   }
 
   /**
@@ -37,6 +60,394 @@ class ProfileManager {
     document.addEventListener('authUIUpdate', (event) => {
       this.handleAuthUIUpdate(event.detail);
     });
+    
+    // COMP METHOD: Initialize profile menu and aura modal fixes
+    this.initializeProfileMenuAndAuraModal();
+  }
+
+  /**
+   * COMP METHOD: Initialize profile menu and aura modal with error handling
+   */
+  initializeProfileMenuAndAuraModal() {
+    console.log('🔧 PROFILE MANAGER: COMP METHOD - Initializing profile menu and aura modal...');
+    
+    // Wait for DOM to be ready
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => this.setupProfileMenuAndAuraModal());
+    } else {
+      this.setupProfileMenuAndAuraModal();
+    }
+  }
+
+  /**
+   * COMP METHOD: Setup profile menu and aura modal
+   */
+  setupProfileMenuAndAuraModal() {
+    console.log('🔧 PROFILE MANAGER: COMP METHOD - Setting up profile menu and aura modal...');
+    
+    // Find or create user avatar container
+    let userAvatarContainer = document.getElementById('user-avatar-container');
+    if (!userAvatarContainer) {
+      console.log('🔧 PROFILE MANAGER: COMP METHOD - Creating user avatar container...');
+      userAvatarContainer = document.createElement('div');
+      userAvatarContainer.id = 'user-avatar-container';
+      userAvatarContainer.className = 'user-avatar-container';
+      userAvatarContainer.style.cssText = `
+        position: relative;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px;
+        border-radius: 8px;
+        background: #f5f5f5;
+        margin: 8px;
+      `;
+      
+      // Add to sidebar
+      const sidebar = document.querySelector('.sidebar, .sidepanel, #sidebar, #sidepanel') || document.body;
+      sidebar.appendChild(userAvatarContainer);
+    }
+    
+    // Create user avatar if it doesn't exist
+    let userAvatar = userAvatarContainer.querySelector('.user-avatar');
+    if (!userAvatar) {
+      console.log('🔧 PROFILE MANAGER: COMP METHOD - Creating user avatar...');
+      userAvatar = document.createElement('div');
+      userAvatar.className = 'user-avatar';
+      userAvatar.style.cssText = `
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: #007bff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: bold;
+        font-size: 14px;
+      `;
+      
+      const currentUser = window.currentUser || { name: 'User', email: 'user@example.com' };
+      userAvatar.textContent = currentUser.name.charAt(0).toUpperCase();
+      userAvatarContainer.appendChild(userAvatar);
+    }
+    
+    // Add click handler
+    userAvatarContainer.onclick = (e) => {
+      e.stopPropagation();
+      console.log('🔧 PROFILE MANAGER: COMP METHOD - Profile avatar clicked');
+      this.toggleUserMenu();
+    };
+    
+    console.log('✅ PROFILE MANAGER: COMP METHOD - Profile menu and aura modal setup complete');
+  }
+
+  /**
+   * COMP METHOD: Toggle user menu
+   */
+  toggleUserMenu() {
+    console.log('🔧 PROFILE MANAGER: COMP METHOD - Toggling user menu...');
+    
+    let userMenu = document.getElementById('user-menu');
+    if (!userMenu) {
+      this.createUserMenu();
+    } else {
+      const isVisible = userMenu.style.display !== 'none';
+      userMenu.style.display = isVisible ? 'none' : 'block';
+      console.log('🔧 PROFILE MANAGER: COMP METHOD - Menu toggled:', !isVisible);
+    }
+  }
+
+  /**
+   * COMP METHOD: Create user menu
+   */
+  createUserMenu() {
+    console.log('🔧 PROFILE MANAGER: COMP METHOD - Creating user menu...');
+    
+    const userMenu = document.createElement('div');
+    userMenu.id = 'user-menu';
+    userMenu.className = 'user-menu';
+    userMenu.style.cssText = `
+      position: absolute;
+      top: 100%;
+      right: 0;
+      background: white;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      z-index: 1000;
+      min-width: 200px;
+      display: block;
+    `;
+    
+    const currentUser = window.currentUser || { name: 'User', email: 'user@example.com' };
+    
+    userMenu.innerHTML = `
+      <div class="user-menu-header" style="padding: 12px; border-bottom: 1px solid #eee;">
+        <div class="user-info" style="display: flex; align-items: center; gap: 8px;">
+          <div class="user-avatar-small" style="width: 24px; height: 24px; border-radius: 50%; background: #007bff; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 12px;">
+            ${currentUser.name.charAt(0).toUpperCase()}
+          </div>
+          <div>
+            <div class="user-name" style="font-weight: bold; font-size: 14px;">${currentUser.name}</div>
+            <div class="user-email" style="font-size: 12px; color: #666;">${currentUser.email}</div>
+          </div>
+        </div>
+      </div>
+      <div class="user-menu-actions" style="padding: 8px 0;">
+        <button class="menu-action" id="aura-color-btn" style="width: 100%; padding: 8px 12px; border: none; background: none; text-align: left; cursor: pointer; display: flex; align-items: center; gap: 8px;">
+          <span>🎨</span>
+          <span>Change Aura Color</span>
+        </button>
+        <button class="menu-action" id="theme-toggle-btn" style="width: 100%; padding: 8px 12px; border: none; background: none; text-align: left; cursor: pointer; display: flex; align-items: center; gap: 8px;">
+          <span>🌙</span>
+          <span>Toggle Theme</span>
+        </button>
+        <button class="menu-action" id="logout-btn" style="width: 100%; padding: 8px 12px; border: none; background: none; text-align: left; cursor: pointer; display: flex; align-items: center; gap: 8px; color: #d32f2f;">
+          <span>🚪</span>
+          <span>Sign Out</span>
+        </button>
+      </div>
+    `;
+    
+    // Add to avatar container
+    const userAvatarContainer = document.getElementById('user-avatar-container');
+    if (userAvatarContainer) {
+      userAvatarContainer.appendChild(userMenu);
+    }
+    
+    // Add event listeners
+    this.addUserMenuEventListeners();
+    
+    console.log('✅ PROFILE MANAGER: COMP METHOD - User menu created');
+  }
+
+  /**
+   * COMP METHOD: Add user menu event listeners
+   */
+  addUserMenuEventListeners() {
+    console.log('🔧 PROFILE MANAGER: COMP METHOD - Adding event listeners...');
+    
+    // Aura color button
+    const auraColorBtn = document.getElementById('aura-color-btn');
+    if (auraColorBtn) {
+      auraColorBtn.onclick = (e) => {
+        e.preventDefault();
+        console.log('🔧 PROFILE MANAGER: COMP METHOD - Aura color button clicked');
+        this.hideUserMenu();
+        this.showColorPickerModal();
+      };
+    }
+    
+    // Theme toggle button
+    const themeToggleBtn = document.getElementById('theme-toggle-btn');
+    if (themeToggleBtn) {
+      themeToggleBtn.onclick = (e) => {
+        e.preventDefault();
+        console.log('🔧 PROFILE MANAGER: COMP METHOD - Theme toggle button clicked');
+        this.hideUserMenu();
+        this.toggleTheme();
+      };
+    }
+    
+    // Logout button
+    const logoutBtn = document.getElementById('logout-btn');
+    if (logoutBtn) {
+      logoutBtn.onclick = (e) => {
+        e.preventDefault();
+        console.log('🔧 PROFILE MANAGER: COMP METHOD - Logout button clicked');
+        this.hideUserMenu();
+        this.performLogout();
+      };
+    }
+    
+    console.log('✅ PROFILE MANAGER: COMP METHOD - Event listeners added');
+  }
+
+  /**
+   * COMP METHOD: Hide user menu
+   */
+  hideUserMenu() {
+    const userMenu = document.getElementById('user-menu');
+    if (userMenu) {
+      userMenu.style.display = 'none';
+    }
+  }
+
+  /**
+   * COMP METHOD: Show color picker modal
+   */
+  showColorPickerModal() {
+    console.log('🔧 PROFILE MANAGER: COMP METHOD - Showing color picker modal...');
+    
+    // Check if modal already exists
+    let modal = document.getElementById('color-picker-modal');
+    if (modal) {
+      modal.style.display = 'flex';
+      return;
+    }
+    
+    // Create modal
+    modal = document.createElement('div');
+    modal.id = 'color-picker-modal';
+    modal.className = 'color-picker-modal';
+    modal.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10000;
+    `;
+    
+    // COMP METHOD: Get current user's database aura color
+    const currentAuraColor = this.getCurrentUserAuraColor();
+    const currentColorHex = currentAuraColor.replace('#', '');
+    const displayColor = currentAuraColor || '#45B7D1';
+    
+    console.log('🔧 AURA_MODAL: Current database aura color:', currentAuraColor);
+    console.log('🔧 AURA_MODAL: Using color for modal:', displayColor);
+
+    modal.innerHTML = `
+      <div class="color-picker-content" style="background: white; border-radius: 12px; padding: 24px; max-width: 400px; width: 90%; box-shadow: 0 8px 32px rgba(0,0,0,0.2);">
+        <div class="color-picker-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+          <h3 style="margin: 0; font-size: 18px; font-weight: 600;">Change Aura Color</h3>
+          <button id="color-picker-close" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #666;">&times;</button>
+        </div>
+        <div class="color-picker-input-group" style="margin-bottom: 20px;">
+          <label style="display: block; margin-bottom: 8px; font-weight: 500;">Hex Color (without #):</label>
+          <input type="text" id="color-input" placeholder="${currentColorHex}" value="${currentColorHex}" maxlength="6" 
+                 style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 16px;">
+        </div>
+        <div class="color-picker-preview" style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px; padding: 12px; background: #f5f5f5; border-radius: 8px;">
+          <div id="color-preview-circle" style="width: 40px; height: 40px; border-radius: 50%; background: ${displayColor}; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold;">D</div>
+          <div id="color-preview-text" style="font-weight: 500;">Current: ${displayColor}</div>
+        </div>
+        <div class="color-picker-buttons" style="display: flex; gap: 12px;">
+          <button id="color-picker-reset" style="flex: 1; padding: 12px; border: 1px solid #ddd; background: white; border-radius: 6px; cursor: pointer;">Reset to Default</button>
+          <button id="color-picker-save" style="flex: 1; padding: 12px; border: none; background: #007bff; color: white; border-radius: 6px; cursor: pointer;">Save Color</button>
+        </div>
+      </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Add event listeners
+    this.addColorPickerEventListeners();
+    
+    console.log('✅ PROFILE MANAGER: COMP METHOD - Color picker modal created');
+  }
+
+  /**
+   * COMP METHOD: Add color picker event listeners
+   */
+  addColorPickerEventListeners() {
+    const colorInput = document.getElementById('color-input');
+    const previewCircle = document.getElementById('color-preview-circle');
+    const previewText = document.getElementById('color-preview-text');
+    const closeBtn = document.getElementById('color-picker-close');
+    const resetBtn = document.getElementById('color-picker-reset');
+    const saveBtn = document.getElementById('color-picker-save');
+    const modal = document.getElementById('color-picker-modal');
+    
+    // Color input handler
+    if (colorInput) {
+      colorInput.oninput = (e) => {
+        const color = e.target.value;
+        if (color.length === 6) {
+          previewCircle.style.background = '#' + color;
+          previewText.textContent = 'Preview';
+        }
+      };
+    }
+    
+    // Close button
+    if (closeBtn) {
+      closeBtn.onclick = () => {
+        modal.style.display = 'none';
+      };
+    }
+    
+    // Reset button
+    if (resetBtn) {
+      resetBtn.onclick = () => {
+        const currentColor = getCurrentUserAuraColor();
+        const currentHex = currentColor.replace('#', '');
+        colorInput.value = currentHex;
+        previewCircle.style.background = currentColor;
+        previewText.textContent = `Current: ${currentColor}`;
+      };
+    }
+    
+    // Save button
+    if (saveBtn) {
+      saveBtn.onclick = () => {
+        const color = colorInput.value;
+        if (color.length === 6) {
+          console.log('🔧 PROFILE MANAGER: COMP METHOD - Saving aura color:', color);
+          // Store aura color locally
+          chrome.storage.local.set({ userAuraColor: '#' + color });
+          modal.style.display = 'none';
+        } else {
+          alert('Please enter a valid 6-digit hex color');
+        }
+      };
+    }
+    
+    // Click outside to close
+    if (modal) {
+      modal.onclick = (e) => {
+        if (e.target === modal) {
+          modal.style.display = 'none';
+        }
+      };
+    }
+  }
+
+  /**
+   * COMP METHOD: Toggle theme
+   */
+  toggleTheme() {
+    console.log('🔧 PROFILE MANAGER: COMP METHOD - Toggling theme');
+    const body = document.body;
+    const isDark = body.classList.contains('dark-theme');
+    
+    if (isDark) {
+      body.classList.remove('dark-theme');
+      localStorage.setItem('theme', 'light');
+      console.log('✅ PROFILE MANAGER: COMP METHOD - Switched to light theme');
+    } else {
+      body.classList.add('dark-theme');
+      localStorage.setItem('theme', 'dark');
+      console.log('✅ PROFILE MANAGER: COMP METHOD - Switched to dark theme');
+    }
+  }
+
+  /**
+   * COMP METHOD: Perform logout
+   */
+  performLogout() {
+    console.log('🔧 PROFILE MANAGER: COMP METHOD - Performing logout');
+    try {
+      // Clear user data
+      window.currentUser = null;
+      window.supabaseUser = null;
+      
+      // Clear storage
+      chrome.storage.local.clear();
+      
+      // Reload the extension
+      window.location.reload();
+      
+      console.log('✅ PROFILE MANAGER: COMP METHOD - Logout completed');
+    } catch (error) {
+      console.error('❌ PROFILE MANAGER: COMP METHOD - Error during logout:', error);
+    }
   }
 
   /**
@@ -44,6 +455,14 @@ class ProfileManager {
    */
   handleUserUpdate(user) {
     console.log('User profile updated', user);
+    
+    // SD1 CRITICAL DEBUG: Log what user data is being set for profile avatar
+    console.log('🔍 SD1 PROFILE DEBUG: === PROFILE MANAGER USER UPDATE ===');
+    console.log('🔍 SD1 PROFILE DEBUG: User email:', user?.email);
+    console.log('🔍 SD1 PROFILE DEBUG: User name:', user?.name);
+    console.log('🔍 SD1 PROFILE DEBUG: User avatarUrl:', user?.avatarUrl);
+    console.log('🔍 SD1 PROFILE DEBUG: Full user object:', user);
+    console.log('🔍 SD1 PROFILE DEBUG: === END PROFILE MANAGER USER UPDATE ===');
     
     this.profileData = user;
     this.updateProfileUI();
@@ -76,6 +495,14 @@ class ProfileManager {
    */
   handleAuthUIUpdate(authData) {
     if (authData.isAuthenticated && authData.user) {
+      // SD1 CRITICAL DEBUG: Log what user data is being set for profile avatar
+      console.log('🔍 SD1 PROFILE DEBUG: === PROFILE MANAGER AUTH UPDATE ===');
+      console.log('🔍 SD1 PROFILE DEBUG: Auth user email:', authData.user?.email);
+      console.log('🔍 SD1 PROFILE DEBUG: Auth user name:', authData.user?.name);
+      console.log('🔍 SD1 PROFILE DEBUG: Auth user avatarUrl:', authData.user?.avatarUrl);
+      console.log('🔍 SD1 PROFILE DEBUG: Full auth user object:', authData.user);
+      console.log('🔍 SD1 PROFILE DEBUG: === END PROFILE MANAGER AUTH UPDATE ===');
+      
       this.profileData = authData.user;
       this.updateProfileUI();
     } else {
@@ -126,7 +553,7 @@ class ProfileManager {
   /**
    * Update user avatar display
    */
-  updateUserAvatar() {
+  async updateUserAvatar() {
     const userAvatarContainer = document.getElementById('user-avatar-container');
     
     if (!userAvatarContainer) {
@@ -142,7 +569,7 @@ class ProfileManager {
     try {
       // Use AvatarUtils for consistent avatar creation
       if (window.AvatarUtils) {
-        const avatarHTML = window.AvatarUtils.createUnifiedAvatar(this.profileData, {
+        const avatarHTML = await window.AvatarUtils.createUnifiedAvatar(this.profileData, {
           context: 'profile',
           showAura: true,
           size: 32
@@ -340,11 +767,83 @@ class ProfileManager {
 }
 
 // ===== GLOBAL AVATAR FUNCTIONS =====
-function getCurrentUserAvatarBgColor() {
-  if (window.currentUser && window.currentUser.auraColor) {
+// COMP METHOD: Get current user's database aura color for modal
+function getCurrentUserAuraColor() {
+  console.log('🔍 AURA_MODAL: Getting current user aura color from database');
+  
+  // First try to get from current user object
+  if (window.currentUser && window.currentUser.auraColor && window.currentUser.auraColor !== '#45B7D1') {
+    console.log(`✅ AURA_MODAL: Found database aura color in currentUser: ${window.currentUser.auraColor}`);
     return window.currentUser.auraColor;
   }
-  return '#ffffff'; // Default white
+  
+  // Try to get from visibility data
+  if (window.currentVisibilityData && window.currentVisibilityData.active) {
+    const currentUserEmail = window.currentUser?.email;
+    if (currentUserEmail) {
+      const userData = window.currentVisibilityData.active.find(u => u.email === currentUserEmail);
+      if (userData && userData.auraColor && userData.auraColor !== '#45B7D1') {
+        console.log(`✅ AURA_MODAL: Found database aura color in visibility data: ${userData.auraColor}`);
+        return userData.auraColor;
+      }
+    }
+  }
+  
+  // Try to get from unfiltered visibility data
+  if (window.currentVisibilityDataUnfiltered && window.currentVisibilityDataUnfiltered.active) {
+    const currentUserEmail = window.currentUser?.email;
+    if (currentUserEmail) {
+      const userData = window.currentVisibilityDataUnfiltered.active.find(u => u.email === currentUserEmail);
+      if (userData && userData.auraColor && userData.auraColor !== '#45B7D1') {
+        console.log(`✅ AURA_MODAL: Found database aura color in unfiltered visibility data: ${userData.auraColor}`);
+        return userData.auraColor;
+      }
+    }
+  }
+  
+  // Fallback to default
+  console.log('⚠️ AURA_MODAL: No database aura color found, using default');
+  return '#45B7D1';
+}
+
+// COMP METHOD: Get aura color from database, never use hardcoded colors
+function getCurrentUserAvatarBgColor() {
+  console.log('🔍 AURA_FIX: Getting current user aura color from database');
+  
+  // First, try to get from currentUser if it has a real database color
+  if (window.currentUser && window.currentUser.auraColor && window.currentUser.auraColor !== '#45B7D1') {
+    console.log(`✅ AURA_FIX: Found database aura color in currentUser: ${window.currentUser.auraColor}`);
+    return window.currentUser.auraColor;
+  }
+  
+  // Try to get from visibility data (database)
+  if (window.currentVisibilityData && window.currentVisibilityData.active) {
+    const currentUserEmail = window.currentUser?.email;
+    if (currentUserEmail) {
+      const userData = window.currentVisibilityData.active.find(u => u.email === currentUserEmail);
+      if (userData && userData.auraColor && userData.auraColor !== '#45B7D1') {
+        console.log(`✅ AURA_FIX: Found database aura color in visibility data: ${userData.auraColor}`);
+        return userData.auraColor;
+      }
+    }
+  }
+  
+  // Try to load from storage if not in database
+  if (typeof window.getState === 'function') {
+    try {
+      const storedColor = window.getState('userAvatarBgColor');
+      if (storedColor && storedColor !== '#ffffff' && storedColor !== '#45B7D1') {
+        console.log('🔧 AURA_FIX: Loading aura color from storage:', storedColor);
+        return storedColor;
+      }
+    } catch (error) {
+      console.log('🔧 AURA_FIX: Could not load aura color from storage:', error);
+    }
+  }
+  
+  // COMP METHOD: Never use hardcoded colors - use white fallback
+  console.log('⚠️ AURA_FIX: No database aura color found, using white fallback (no hardcoded colors)');
+  return '#ffffff';
 }
 
 function getCurrentUserAvatarColor() {
@@ -395,10 +894,15 @@ function handleClickOutside(e) {
   const userAvatarContainer = document.getElementById('user-avatar-container');
   const userMenu = document.getElementById('user-menu');
   
-  if (userAvatarContainer && userMenu && !userAvatarContainer.contains(e.target) && !userMenu.contains(e.target)) {
-    console.log('🖱️ Clicked outside, hiding menu');
-    userMenu.style.display = 'none';
-  }
+  // Add a small delay to prevent immediate closing
+  setTimeout(() => {
+    if (userAvatarContainer && userMenu && userMenu.style.display !== 'none') {
+      if (!userAvatarContainer.contains(e.target) && !userMenu.contains(e.target)) {
+        console.log('🖱️ Clicked outside, hiding menu');
+        userMenu.style.display = 'none';
+      }
+    }
+  }, 100);
 }
 
 function addProfileAvatarClickHandler() {
@@ -444,15 +948,32 @@ function addThemeToggleButtonClickHandler() {
   const themeToggleBtn = document.getElementById('theme-toggle-btn');
   if (themeToggleBtn) {
     themeToggleBtn.addEventListener('click', (e) => {
-      console.log('🌙 Theme toggle button clicked!');
+      console.log('🌙 COMP METHOD: Theme toggle button clicked!');
       e.stopPropagation(); // Prevent menu from closing
       if (typeof window.toggleTheme === 'function') {
         window.toggleTheme();
       } else {
-        console.log('❌ toggleTheme not available');
+        console.log('❌ toggleTheme not available, creating COMP method toggle');
+        // COMP METHOD: Create theme toggle if not available
+        window.toggleTheme = function() {
+          console.log('🔧 THEME_TOGGLE: Toggling theme');
+          const body = document.body;
+          const isDark = body.classList.contains('dark-theme');
+          
+          if (isDark) {
+            body.classList.remove('dark-theme');
+            localStorage.setItem('theme', 'light');
+            console.log('✅ THEME_TOGGLE: Switched to light theme');
+          } else {
+            body.classList.add('dark-theme');
+            localStorage.setItem('theme', 'dark');
+            console.log('✅ THEME_TOGGLE: Switched to dark theme');
+          }
+        };
+        window.toggleTheme();
       }
     });
-    console.log('✅ Theme toggle button click handler added');
+    console.log('✅ COMP METHOD: Theme toggle button click handler added');
   } else {
     console.log('❌ Theme toggle button not found');
   }
@@ -462,15 +983,37 @@ function addLogoutButtonClickHandler() {
   const logoutBtn = document.getElementById('logout-btn');
   if (logoutBtn) {
     logoutBtn.addEventListener('click', (e) => {
-      console.log('🚪 Logout button clicked!');
+      console.log('🚪 COMP METHOD: Logout button clicked!');
       e.stopPropagation(); // Prevent menu from closing
       if (typeof window.logout === 'function') {
         window.logout();
+      } else if (typeof window.performLogout === 'function') {
+        window.performLogout();
       } else {
-        console.log('❌ logout function not available');
+        console.log('❌ logout function not available, creating COMP method logout');
+        // COMP METHOD: Create logout function if not available
+        window.performLogout = async function() {
+          console.log('🔧 LOGOUT: Performing logout');
+          try {
+            // Clear user data
+            window.currentUser = null;
+            window.supabaseUser = null;
+            
+            // Clear storage
+            await chrome.storage.local.clear();
+            
+            // Reload the extension
+            window.location.reload();
+            
+            console.log('✅ LOGOUT: Logout completed');
+          } catch (error) {
+            console.error('❌ LOGOUT: Error during logout:', error);
+          }
+        };
+        window.performLogout();
       }
     });
-    console.log('✅ Logout button click handler added');
+    console.log('✅ COMP METHOD: Logout button click handler added');
   } else {
     console.log('❌ Logout button not found');
   }
@@ -640,6 +1183,7 @@ function getAvatarColor(name) {
 
 // Make available globally
 window.ProfileManager = ProfileManager;
+window.getCurrentUserAuraColor = getCurrentUserAuraColor;
 window.getCurrentUserAvatarBgColor = getCurrentUserAvatarBgColor;
 window.getCurrentUserAvatarColor = getCurrentUserAvatarColor;
 window.setCustomAvatarColor = setCustomAvatarColor;

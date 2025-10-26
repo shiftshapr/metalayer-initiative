@@ -9,7 +9,7 @@
       this.allowedDomains = [
         'app.themetalayer.org',
         'staging.themetalayer.org',
-        'localhost',
+        '216.238.91.120',
         '127.0.0.1'
       ];
       

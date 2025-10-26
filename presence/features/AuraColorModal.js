@@ -48,12 +48,12 @@ class AuraColorModal {
 // TODO: Move these functions from sidepanel.js:
 
 function showColorPickerModal() {
-  console.log('🎨 Opening color picker modal...');
+  console.log('🎨 COMP METHOD: Opening color picker modal...');
   
   // Check if modal already exists and is visible
   const existingModal = document.getElementById('color-picker-modal');
   if (existingModal) {
-    console.log('🎨 Modal already exists, showing it');
+    console.log('🎨 COMP METHOD: Modal already exists, showing it');
     existingModal.style.display = 'flex';
     return;
   }

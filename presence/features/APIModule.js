@@ -176,22 +176,98 @@ class MetaLayerAPI {
   }
 
   async getChatHistory(communityId, threadId = null, uri = null) {
-    const params = new URLSearchParams();
-    if (communityId) params.append('communityId', communityId);
-    if (threadId) params.append('threadId', threadId);
-    if (uri) params.append('uri', uri);
+    // Use Supabase directly instead of backend API (COMP method)
+    console.log(`CHAT_API: getChatHistory called with communityId=${communityId}, threadId=${threadId}, uri=${uri}`, null, 'general');
+    console.log(`CHAT_API: uri type: ${typeof uri}, value: ${JSON.stringify(uri)}`, null, 'general');
     
-    return this.request(`/chat/history?${params.toString()}`);
+    if (!communityId) {
+      console.error('❌ CHAT_API: communityId is required');
+      return { conversations: [], messages: [] };
+    }
+    
+    // Use Supabase directly instead of backend API
+    if (!window.supabase || !window.supabase.from) {
+      console.error('❌ CHAT_API: No Supabase client available');
+      return { conversations: [], messages: [] };
+    }
+    
+    try {
+      // Get pageId from URI if provided
+      let pageId = null;
+      if (uri) {
+        // Use the same URL normalization logic as the backend
+        const normalizedUrl = await window.normalizeUrl(uri);
+        pageId = normalizedUrl.pageId;
+      }
+      
+      console.log(`🔍 CHAT_API: Querying Supabase messages table for pageId: ${pageId}`);
+      
+      // Query Supabase messages table directly
+      let query = window.supabase.from('messages').select('*');
+      if (pageId) {
+        query = query.eq('page_id', pageId);
+      }
+      if (communityId) {
+        query = query.eq('community_id', communityId);
+      }
+      const { data: messages, error: messagesError } = await query.order('created_at', { ascending: true });
+      
+      if (messagesError) {
+        console.error('❌ CHAT_API: Supabase query failed:', messagesError);
+        return { conversations: [], messages: [] };
+      }
+      
+      console.log(`🔍 CHAT_API: Found ${messages?.length || 0} messages in Supabase`);
+      
+      // Convert Supabase messages to API format
+      const msgs = messages?.map(msg => ({
+        id: msg.id,
+        body: msg.content, // Use content field, not body
+        authorId: msg.user_email,
+        conversationId: `conv-${communityId}-${pageId}`,
+        createdAt: msg.created_at,
+        updatedAt: msg.updated_at,
+        parentId: msg.parent_id || null, // Use actual parentId from database
+        author: {
+          id: msg.user_email,
+          name: msg.user_email,
+          handle: msg.user_email.split('@')[0],
+          avatarUrl: null,
+          email: msg.user_email,
+          auraColor: window.currentUser?.auraColor || '#aa00aa'
+        },
+        conversation: {
+          id: `conv-${communityId}-${pageId}`,
+          communityId: communityId
+        }
+      })) || [];
+      
+      console.log(`🔍 CHAT_API: Converted ${msgs.length} messages`);
+      
+      // Transform messages into conversation format expected by frontend
+      const conversations = [{
+        id: `conv-${communityId}-${pageId}`,
+        communityId: communityId,
+        posts: msgs
+      }];
+      
+      return { conversations, messages: msgs };
+    } catch (error) {
+      console.error('❌ CHAT_API: Error in getChatHistory:', error);
+      return { conversations: [], messages: [] };
+    }
   }
 
   async deleteMessage(messageId) {
-    return this.request(`/chat/message/${messageId}`, { method: 'DELETE' });
+    // COMP METHOD: Use exact same endpoint as COMP
+    return this.request(`/v1/posts/${messageId}`, { method: 'DELETE' });
   }
 
-  async editMessage(messageId, content) {
-    return this.request(`/chat/message/${messageId}`, {
+  async editMessage(messageId, newContent) {
+    // Use new Canopi 2 post system
+    return this.request(`/v1/posts/${messageId}`, {
       method: 'PUT',
-      body: JSON.stringify({ content })
+      body: JSON.stringify({ body: newContent })
     });
   }
 

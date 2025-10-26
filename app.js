@@ -9,7 +9,7 @@ const app = express();
 
 // CORS configuration for extension
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://localhost:3001'],
+  origin: ['http://216.238.91.120:3000', 'http://216.238.91.120:3001'],
   credentials: true
 }));
 
@@ -41,7 +41,7 @@ passport.deserializeUser((obj, done) => {
 passport.use(new GoogleStrategy({
   clientID: process.env.GOOGLE_CLIENT_ID || 'GOOGLE_CLIENT_ID',
   clientSecret: process.env.GOOGLE_CLIENT_SECRET || 'GOOGLE_CLIENT_SECRET',
-  callbackURL: process.env.GOOGLE_CALLBACK_URL || 'http://localhost:3001/auth/google/callback',
+  callbackURL: process.env.GOOGLE_CALLBACK_URL || 'http://216.238.91.120:3001/auth/google/callback',
 }, (accessToken, refreshToken, profile, done) => {
   // Here you would look up or create the user in your DB
   return done(null, profile);
@@ -55,6 +55,7 @@ app.use('/avatars', require('./routes/avatars'));
 app.use('/chat', require('./routes/chat'));
 app.use('/v1/presence', require('./routes/presence')); // CRITICAL FIX: Register presence routes
 app.use('/v1/users', require('./routes/users')); // CRITICAL FIX: Register users routes
+app.use('/v1/reactions', require('./routes/reactions')); // CRITICAL FIX: Register reactions routes
 app.use(require('./routes/interaction'));
 app.use('/policy/enforce', require('./routes/policy'));
 // X-Owlz dynamic NFT endpoints

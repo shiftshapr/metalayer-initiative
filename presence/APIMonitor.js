@@ -261,3 +261,4 @@ document.addEventListener('keydown', (e) => {
 console.log('✅ APIMonitor: Monitor loaded');
 console.log('📋 APIMonitor: Press Ctrl+Shift+M to show/hide monitor');
 console.log('📋 APIMonitor: Use window.apiMonitor.showDashboard() to show monitor');
+

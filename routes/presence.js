@@ -133,7 +133,7 @@ router.get('/communities', authenticateUser, async (req, res) => {
   const communityIdArray = communityIds.split(',').map(id => id.trim());
 
   try {
-    const activeUsers = await presenceService.getActiveUsersForCommunities(
+    const activeUsers = await presenceService.getActiveUsersByCommunities(
       communityIdArray,
       parseFloat(minutes), // Use parseFloat instead of parseInt to preserve decimal values
       currentUserId

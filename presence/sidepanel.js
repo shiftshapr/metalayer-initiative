@@ -1,3 +1,31 @@
+// COMP METHOD: API Endpoint Redirection (CRITICAL FIX)
+// Override fetch to redirect all API calls to VPS
+const originalFetch = window.fetch;
+window.fetch = function(url, options = {}) {
+  let modifiedUrl = url;
+  
+      // Redirect all API calls from production to VPS
+      if (typeof url === 'string' && url.includes('api.themetalayer.org')) {
+        modifiedUrl = url.replace('https://api.themetalayer.org', 'http://216.238.91.120:3002');
+        console.log(`🔍 COMP_API_FIX: Redirecting ${url} to ${modifiedUrl}`);
+      }
+  
+  return originalFetch.call(this, modifiedUrl, options);
+};
+
+// Also override XMLHttpRequest for older code
+const originalXHROpen = XMLHttpRequest.prototype.open;
+XMLHttpRequest.prototype.open = function(method, url, ...args) {
+      if (typeof url === 'string' && url.includes('api.themetalayer.org')) {
+        const modifiedUrl = url.replace('https://api.themetalayer.org', 'http://216.238.91.120:3002');
+        console.log(`🔍 COMP_API_FIX: XHR Redirecting ${url} to ${modifiedUrl}`);
+        return originalXHROpen.call(this, method, modifiedUrl, ...args);
+      }
+  return originalXHROpen.call(this, method, url, ...args);
+};
+
+console.log('✅ COMP_API_FIX: All API calls redirected to VPS:216.238.91.120:3002');
+
 // Initialize all modern architecture components (FROM COMP)
 let stateManager = null;
 let eventBus = null;
@@ -390,6 +418,99 @@ async function setupModernCrossProfileCommunication() {
 
 
 
+// ===== MISSING FUNCTION: updateVisibleTab =====
+async function updateVisibleTab(avatars) {
+  console.log('🔍 VISIBILITY: updateVisibleTab called with avatars:', JSON.stringify(avatars, null, 2));
+  
+  // CRITICAL FIX: Add current user to visibility list if not already present
+  if (window.currentUser && window.currentUser.email) {
+    const currentUserEmail = window.currentUser.email;
+    const isCurrentUserInList = avatars.some(avatar => avatar.email === currentUserEmail);
+    
+    if (!isCurrentUserInList) {
+      console.log('🔍 VISIBILITY: Adding current user to visibility list');
+      const currentUserAvatar = {
+        email: currentUserEmail,
+        name: window.currentUser.name || currentUserEmail.split('@')[0],
+        avatarUrl: window.currentUser.avatarUrl, // Use the real Google avatar URL
+        auraColor: window.currentUser.auraColor || '#aaaaaa',
+        status: 'online',
+        enterTime: new Date().toISOString()
+      };
+      avatars.unshift(currentUserAvatar); // Add to beginning of list
+    }
+  }
+  
+  // Store visibility data globally for real-time aura color access
+  window.currentVisibilityData = { active: avatars };
+  window.currentVisibilityDataUnfiltered = { active: avatars };
+  console.log('🔄 VISIBILITY: Stored visibility data globally for real-time aura access');
+  
+  const visibleTab = document.getElementById('canopi-visible');
+  if (!visibleTab) {
+    console.log('❌ VISIBILITY: visibleTab element not found');
+    return;
+  }
+  
+  console.log('🔍 VISIBILITY: Updating visible tab with', avatars.length, 'avatars');
+  
+  // Get current user email for filtering
+  const currentUserEmail = window.currentUser ? window.currentUser.email : null;
+  console.log('🔍 VISIBILITY: Current user email:', currentUserEmail);
+  
+  // Filter out ONLY the current user - show all other users
+  const usersWithAvatars = avatars.filter(avatar => {
+    const isCurrentUser = avatar.email === currentUserEmail || 
+                        avatar.userId === currentUserEmail ||
+                        avatar.name === currentUserEmail?.split('@')[0];
+    
+    if (isCurrentUser) {
+      console.log('🔍 VISIBILITY: 🚫 FILTERING OUT current user from their own visibility list');
+      return false;
+    }
+    
+    return true;
+  });
+  
+  console.log('🔍 VISIBILITY: Showing', usersWithAvatars.length, 'users with real avatars (filtered from', avatars.length, 'total)');
+  
+  // Create the visible users UI
+  visibleTab.innerHTML = `
+    <div class="visible-users">
+      <div class="visible-header" style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px; padding: 8px; background: var(--background-secondary); border-radius: 6px;">
+        <div class="visible-count" style="font-weight: bold; color: var(--text-primary);">
+          ${usersWithAvatars.length} visible
+        </div>
+        <input type="text" id="visible-search" placeholder="Search users..." style="flex: 1; padding: 4px 8px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--background-primary); color: var(--text-primary); font-size: 12px;">
+        <button id="go-invisible-btn" style="padding: 4px 8px; background: var(--accent-color); color: white; border: none; border-radius: 4px; font-size: 12px; cursor: pointer;">Go Invisible</button>
+      </div>
+      <ul class="item-list">
+        ${usersWithAvatars.map(avatar => `
+          <li class="item" style="display: flex; align-items: center; gap: 8px; padding: 8px; border-bottom: 1px solid var(--border-color);">
+            <div class="avatar-container" style="position: relative;">
+              <img src="${avatar.avatarUrl || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(avatar.name || avatar.email) + '&background=random'}" 
+                   alt="${avatar.name || avatar.email}" 
+                   style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover; border: 2px solid ${avatar.auraColor || '#aaaaaa'};">
+            </div>
+            <div class="user-info" style="flex: 1;">
+              <div class="user-name" style="font-weight: bold; color: var(--text-primary); font-size: 12px;">${avatar.name || avatar.email}</div>
+              <div class="user-status" style="color: var(--text-secondary); font-size: 10px;">
+                ${avatar.isActive ? formatTimeDisplay(avatar.enterTime) : (avatar.lastSeen ? formatLastSeenDisplay(avatar.lastSeen) : 'offline')}
+              </div>
+            </div>
+          </li>
+        `).join('')}
+      </ul>
+    </div>
+  `;
+  
+  console.log('✅ VISIBILITY: Visible tab updated successfully');
+}
+
+// ===== COMP METHOD: Message handling moved to CanopiModule.js =====
+// The addMessageToChat function has been moved to CanopiModule.js
+// to follow proper modular architecture principles
+
 // Make updateVisibleTab globally accessible
 window.updateVisibleTab = updateVisibleTab;
 
@@ -444,7 +565,7 @@ async function refreshVisibilityAvatars() {
           try {
             // Use AvatarUtils for consistent avatar URL fetching
             if (window.AvatarUtils) {
-              const avatarData = window.AvatarUtils.getAvatarUrl(user, 'visibility');
+              const avatarData = await window.AvatarUtils.getAvatarUrl(user, 'visibility');
               avatarUrl = avatarData.avatarUrl;
               userName = avatarData.userName;
               avatarSource = avatarData.source;
@@ -509,15 +630,10 @@ async function getCurrentPageUri() {
     const uri = tab && tab.url ? tab.url : null;
     console.log('Current page URI:', uri);
     
-    // CRITICAL FIX: If we're on a Chrome internal page, try to get the actual website URL
+    // COMP METHOD: Chrome internal pages work normally (like COMP)
     if (uri && (uri.startsWith('chrome://') || uri.startsWith('chrome-extension://'))) {
-      console.log('🔍 PAGE_ID: Detected Chrome internal page, trying to get actual website URL...');
-      
-      // Try to get the URL from the content script or use a default
-      // For now, let's use google.com as a test
-      const testUrl = 'https://www.google.com';
-      console.log('🔍 PAGE_ID: Using test URL for Chrome internal page:', testUrl);
-      return testUrl;
+      console.log('🔍 PAGE_ID: Detected Chrome internal page, using normal processing');
+      // Continue with normal processing like COMP method
     }
     
     return uri;
@@ -577,12 +693,28 @@ async function updateUI(user) {
   if (user) {
     console.log('[UPDATE_UI] User is authenticated, updating UI...');
     // Store current user globally for aura color access
+    // SD2 COMP MIMETIC FIX: Get avatar from StateManager that's already working
+    let avatarUrl = user.avatarUrl || user.user_metadata?.avatar_url;
+    if (!avatarUrl) {
+      // Try to get from StateManager
+      const storedUser = window.getState ? window.getState('supabaseUser') : null;
+      const storedSession = window.getState ? window.getState('supabaseSession') : null;
+      
+      if (storedUser && storedUser.picture) {
+        avatarUrl = storedUser.picture;
+        console.log('🔐 UPDATE_UI: Using avatar from supabaseUser:', avatarUrl);
+      } else if (storedSession && storedSession.user && storedSession.user.picture) {
+        avatarUrl = storedSession.user.picture;
+        console.log('🔐 UPDATE_UI: Using avatar from supabaseSession:', avatarUrl);
+      }
+    }
+    
     window.currentUser = {
       email: user.email,
       name: user.user_metadata?.full_name || user.email,
       id: user.id,
       auraColor: user.auraColor || null,
-      avatarUrl: user.avatarUrl || user.user_metadata?.avatar_url,
+      avatarUrl: avatarUrl,
       communityId: 'comm-001'
     };
     
@@ -595,7 +727,9 @@ async function updateUI(user) {
     
     console.log('[UPDATE_UI] Setting userMenuName text');
     if (userMenuName) {
-      userMenuName.textContent = user.user_metadata?.full_name || user.email;
+      // COMP METHOD: Display user name instead of email
+      const displayName = user.user_metadata?.full_name || user.name || user.email?.split('@')[0] || 'User';
+      userMenuName.textContent = displayName;
       console.log('[UPDATE_UI] userMenuName.textContent set to:', userMenuName.textContent);
     }
     
@@ -605,11 +739,23 @@ async function updateUI(user) {
       // IMPORTANT: Get the user's aura color using the same logic as message avatars
       let userAuraColor = null;
       
-      // First try to get from stored aura color (same as message avatars)
-      if (user.auraColor && user.auraColor !== null && user.auraColor !== 'null') {
+      // COMP METHOD: Get database aura color first, not stored white color
+      // Try to get from visibility data (database colors)
+      if (window.currentVisibilityDataUnfiltered && window.currentVisibilityDataUnfiltered.active) {
+        const userInVisibility = window.currentVisibilityDataUnfiltered.active.find(
+          u => u.email === user.email || u.userId === user.email
+        );
+        if (userInVisibility && userInVisibility.auraColor && userInVisibility.auraColor !== '#45B7D1') {
+          userAuraColor = userInVisibility.auraColor;
+          console.log(`PROFILE_AVATAR: Using database aura color: ${userAuraColor}`);
+        }
+      }
+      
+      // Fallback to stored aura color only if no database color found
+      if (!userAuraColor && user.auraColor && user.auraColor !== null && user.auraColor !== 'null' && user.auraColor !== '#ffffff') {
         userAuraColor = user.auraColor;
         console.log(`PROFILE_AVATAR: Using stored aura color: ${userAuraColor}`);
-      } else {
+      } else if (!userAuraColor) {
       // Try to get from real-time presence data (same as message avatars)
       try {
         userAuraColor = getLatestAuraColorFromPresence(user.email);
@@ -679,14 +825,14 @@ async function updateUI(user) {
       // CRITICAL: USE SAME SIZE AS VISIBILITY/MESSAGE AVATARS (32px) FOR CONSISTENCY
       try {
         if (typeof window.AvatarUtils !== 'undefined' && window.AvatarUtils.createUnifiedAvatar) {
-          const avatarHTML = window.AvatarUtils.createUnifiedAvatar(userData, {
+          const avatarHTML = await window.AvatarUtils.createUnifiedAvatar(userData, {
             size: 32,  // MUST MATCH visibility (32px) and message (32px)
             showStatus: false,  // No status dot on profile avatar
             showAura: true,     // Show aura color
             context: 'profile'
           });
           
-          console.log('[UPDATE_UI] Setting avatar HTML using createUnifiedAvatar() - UNIFIED RENDERING');
+          console.log('[UPDATE_UI] Setting avatar HTML using AvatarUtils.createUnifiedAvatar() - UNIFIED RENDERING');
           userAvatarContainer.innerHTML = avatarHTML;
         } else {
           console.error('[UPDATE_UI] AvatarUtils.createUnifiedAvatar not available, using fallback');
@@ -1271,7 +1417,19 @@ async function handleTabChange(tabId) {
         await window.loadChatHistory();
         console.log('✅ TAB_CHANGE: loadChatHistory completed');
       } else {
-        console.log('❌ TAB_CHANGE: loadChatHistory not available');
+        console.log('❌ TAB_CHANGE: loadChatHistory not available, trying direct call...');
+        // Try calling it directly in case it exists but isn't on window
+        try {
+          if (typeof loadChatHistory === 'function') {
+            console.log('🔍 TAB_CHANGE: Found loadChatHistory as direct function');
+            await loadChatHistory();
+            console.log('✅ TAB_CHANGE: loadChatHistory completed via direct call');
+          } else {
+            console.log('❌ TAB_CHANGE: loadChatHistory not found anywhere');
+          }
+        } catch (error) {
+          console.log('❌ TAB_CHANGE: Error calling loadChatHistory:', error);
+        }
       }
       // Update visibility list for the new page (uses normalized URL)
       const activeCommunities = await getState('activeCommunities');
@@ -1622,7 +1780,7 @@ async function startPresenceTracking() {
           console.log('✅ PRESENCE: Initial presence event sent successfully');
           console.log('🔍 PRESENCE DEBUG: Presence event result:', presenceResult);
           
-          // Wait a moment for the presence to be processed, then refresh visibility
+          // COMP METHOD: Wait for presence to be processed, then refresh visibility (EXACT COMP TIMING)
           setTimeout(async () => {
             console.log('🔍 PRESENCE DEBUG: Refreshing visibility after presence event...');
             console.log('🔍 PRESENCE DEBUG: About to call refreshVisibilityAvatars()');
@@ -1640,7 +1798,7 @@ async function startPresenceTracking() {
               console.error('❌ PRESENCE DEBUG: Failed to refresh visibility:', error);
               console.log('🔍 PRESENCE DEBUG: Error details:', error.message, error.stack);
             }
-          }, 2000);
+          }, 2000); // COMP METHOD: Use exact COMP timing (2 seconds)
         }
       } catch (error) {
         console.error('❌ PRESENCE: Failed to send initial presence event:', error);
@@ -1752,7 +1910,7 @@ async function startPresenceTracking() {
         const testPresencePayload = {
           eventType: 'INSERT',
           new: {
-            user_email: 'test@example.com',
+            user_email: window.currentUser?.email || 'user@example.com',
             page_url: window.currentUrlData?.normalizedUrl || 'test-page',
             aura_color: '#ff0000',
             is_active: true
@@ -2115,7 +2273,7 @@ async function startPresenceTracking() {
         // Update the page's CSP dynamically
         const meta = document.createElement('meta');
         meta.httpEquiv = 'Content-Security-Policy';
-        meta.content = `script-src 'self'; object-src 'self'; connect-src 'self' ${supabaseUrl} ${supabaseWsUrl} http://localhost:3001 ws://localhost:3001 http://216.238.91.120:3002 ws://216.238.91.120:3002 https://app.themetalayer.org https://api.themetalayer.org https://www.googleapis.com wss://echo.websocket.org https://www.youtube.com;`;
+        meta.content = `script-src 'self'; object-src 'self'; connect-src 'self' ${supabaseUrl} ${supabaseWsUrl} http://216.238.91.120:3001 ws://216.238.91.120:3001 http://216.238.91.120:3002 ws://216.238.91.120:3002 https://app.themetalayer.org https://api.themetalayer.org https://www.googleapis.com wss://echo.websocket.org https://www.youtube.com;`;
         
         // Remove existing CSP meta tag if any
         const existingMeta = document.querySelector('meta[http-equiv="Content-Security-Policy"]');
@@ -2541,25 +2699,27 @@ function initializeSidepanel() {
           let realGoogleUser = null;
           let realAvatarUrl = null;
           
-          // Try to get from the real Google auth that's already running
-          if (typeof window.realGoogleAuth !== 'undefined' && window.realGoogleAuth) {
-            try {
-              realGoogleUser = await window.realGoogleAuth.getCurrentUser();
-              console.log('🔐 AUTH: Real Google auth user data:', realGoogleUser);
-              console.log('🔐 AUTH: Real Google auth user_metadata:', realGoogleUser?.user_metadata);
-              console.log('🔐 AUTH: Real Google auth avatar_url:', realGoogleUser?.user_metadata?.avatar_url);
-              realAvatarUrl = realGoogleUser?.user_metadata?.avatar_url;
-            } catch (error) {
-              console.log('🔐 AUTH: Error getting real Google auth data:', error);
-            }
-          } else {
-            console.log('🔐 AUTH: window.realGoogleAuth not available, trying alternative approach');
-            
-            // ALTERNATIVE: Try to get the avatar URL from the logs we can see
-            // The real Google auth is finding the avatar URL, let's use it directly
-            realAvatarUrl = 'https://lh3.googleusercontent.com/a/ACg8ocKmW7vIeo8Wm1CN2-xUv7FPaNNN38kRh8rG2hHfFmdOf3Aknw=s96-c';
-            console.log('🔐 AUTH: Using direct avatar URL from real Google auth:', realAvatarUrl);
-          }
+        // SD2 COMP MIMETIC FIX: Get the ACTUAL Google profile picture from StateManager
+        console.log('🔐 AUTH: Getting ACTUAL Google profile picture from StateManager');
+        const storedUser = window.getState ? window.getState('supabaseUser') : null;
+        const storedSession = window.getState ? window.getState('supabaseSession') : null;
+        
+        console.log('🔐 AUTH: storedUser:', storedUser);
+        console.log('🔐 AUTH: storedSession:', storedSession);
+        console.log('🔐 AUTH: window.getState available:', !!window.getState);
+        
+        if (storedUser && storedUser.picture) {
+          realAvatarUrl = storedUser.picture;
+          console.log('🔐 AUTH: Using ACTUAL Google profile picture from supabaseUser:', realAvatarUrl);
+        } else if (storedSession && storedSession.user && storedSession.user.picture) {
+          realAvatarUrl = storedSession.user.picture;
+          console.log('🔐 AUTH: Using ACTUAL Google profile picture from supabaseSession:', realAvatarUrl);
+        } else {
+          console.log('🔐 AUTH: No stored user picture found, using fallback');
+          console.log('🔐 AUTH: storedUser.picture:', storedUser?.picture);
+          console.log('🔐 AUTH: storedSession.user.picture:', storedSession?.user?.picture);
+          realAvatarUrl = "https://www.gravatar.com/avatar/ZGF2ZXJvb21AZ21haWwuY29t?d=identicon&s=200";
+        }
           
           window.currentUser = {
             email: currentUserEmail,
@@ -2657,6 +2817,79 @@ window.startPresenceTracking = startPresenceTracking;
 window.stateManager = stateManager;
 window.getState = (key) => stateManager.getState(key);
 window.setState = (key, value) => stateManager.setState(key, value);
+
+// COMP METHOD: Format time display for active users (Online for X mins)
+function formatTimeDisplay(enterTime) {
+  if (!enterTime) return 'Now';
+  
+  const now = new Date();
+  const enterTimeDate = new Date(enterTime);
+  const diffMs = now - enterTimeDate;
+  const diffSeconds = Math.floor(diffMs / 1000);
+  const diffMinutes = Math.floor(diffSeconds / 60);
+  const diffHours = Math.floor(diffMinutes / 60);
+  const diffDays = Math.floor(diffHours / 24);
+  
+  // If the difference is negative, it means the timestamp is in the future
+  if (diffMs < 0) {
+    return 'Now';
+  }
+  
+  if (diffSeconds < 60) {
+    return 'Now'; // Don't show seconds, show "Now"
+  } else if (diffMinutes < 60) {
+    return `Online for ${diffMinutes} minute${diffMinutes === 1 ? '' : 's'}`;
+  } else if (diffHours < 24) {
+    return `Online for ${diffHours} hour${diffHours === 1 ? '' : 's'}`;
+  } else if (diffDays < 30) { // 1 month threshold
+    return `Online for ${diffDays} day${diffDays === 1 ? '' : 's'}`;
+  } else {
+    return 'Last seen over a month ago'; // Don't show after 1 month
+  }
+}
+
+// COMP METHOD: Format last seen display for inactive users (Last seen X ago)
+function formatLastSeenDisplay(lastSeen) {
+  if (!lastSeen) return 'Last seen unknown';
+  
+  const now = new Date();
+  const lastSeenDate = new Date(lastSeen);
+  const diffMs = now - lastSeenDate;
+  const diffSeconds = Math.floor(diffMs / 1000);
+  const diffMinutes = Math.floor(diffSeconds / 60);
+  const diffHours = Math.floor(diffMinutes / 60);
+  const diffDays = Math.floor(diffHours / 24);
+  
+  // If the difference is negative, it means the timestamp is in the future
+  if (diffMs < 0) {
+    return 'Last seen just now';
+  }
+  
+  if (diffSeconds < 60) {
+    return `Last seen ${diffSeconds} second${diffSeconds === 1 ? '' : 's'} ago`;
+  } else if (diffMinutes < 60) {
+    return `Last seen ${diffMinutes} minute${diffMinutes === 1 ? '' : 's'} ago`;
+  } else if (diffHours < 24) {
+    return `Last seen ${diffHours} hour${diffHours === 1 ? '' : 's'} ago`;
+  } else {
+    return `Last seen ${diffDays} day${diffDays === 1 ? '' : 's'} ago`;
+  }
+}
+
+// Initialize ProfileManager
+let profileManager = null;
+if (typeof ProfileManager !== 'undefined') {
+  profileManager = new ProfileManager();
+  console.log('✅ ProfileManager initialized');
+  
+  // Set up profile menu and aura modal
+  if (profileManager.setupProfileMenuAndAuraModal) {
+    profileManager.setupProfileMenuAndAuraModal();
+    console.log('✅ ProfileManager: Profile menu and aura modal set up');
+  }
+} else {
+  console.log('⚠️ ProfileManager not available');
+}
 
 // Initialize when DOM is ready
 if (document.readyState === 'loading') {

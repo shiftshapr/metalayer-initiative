@@ -87,7 +87,7 @@ const AuthModal = ({ isOpen, onLogin, onClose }) => {
   const tryPopupMethod = () => {
     // Use popup method directly (most reliable for extensions)
     const popup = window.open(
-      'http://localhost:3001/auth/google',
+      'http://216.238.91.120:3001/auth/google',
       'googleAuth',
       'width=500,height=600,scrollbars=yes,resizable=yes'
     );
@@ -128,7 +128,7 @@ const AuthModal = ({ isOpen, onLogin, onClose }) => {
   };
 
   const checkAuthWithBackend = () => {
-    fetch('http://localhost:3001/auth/me', { 
+    fetch('http://216.238.91.120:3001/auth/me', { 
       credentials: 'include',
       headers: {
         'Content-Type': 'application/json',

@@ -24,9 +24,24 @@
       if (typeof window.addMessageToChat !== 'function') return;
       if (window.__addMessageToChatWrapped) return;
       const originalAdd = window.addMessageToChat.bind(window);
+      // Store original function globally for bypassing wrapper
+      window.addMessageToChat.__originalAdd = originalAdd;
       window.addMessageToChat = (post) => {
         try {
           if (!post || !post.id) return originalAdd(post);
+          
+          // COMP METHOD FIX: Allow initial message loading by checking if this is a real-time message
+          // Real-time messages have a specific structure that initial loading doesn't have
+          const isRealtimeMessage = post.__realtime || post.__fromRealtime;
+          
+          if (!isRealtimeMessage) {
+            // This is initial message loading - bypass deduplication
+            console.log('🔍 WRAPPER: Initial message loading, bypassing deduplication for:', post.id);
+            const res = originalAdd(post);
+            return res;
+          }
+          
+          // This is a real-time message - apply deduplication
           const existing = document.querySelector(`.message[data-message-id="${post.id}"]`);
           if (existing || isRecentAdd(post.id)) {
             const bodyEl = getOrCreateBodyElement(existing || null);
@@ -91,7 +106,7 @@
 
       return {
         id: id,
-        parentId: null,
+        parentId: record.parent_id || null,
         conversationId: `conv-${communityId}-${pageId}`,
         authorId: userEmail,
         body: content,
@@ -294,18 +309,70 @@
       }
     }
 
-    // CleanRealtimeManager emits these CustomEvents on window
-    window.addEventListener('realtime-message', (e) => {
-      console.log('📩 UI REALTIME: event realtime-message', e.detail);
-      addMessageToUIFromPayload(e.detail);
+    // COMP METHOD: Use exact COMP real-time event handling
+    window.addEventListener('realtime-message', (event) => {
+      console.log('📨 REALTIME: Received real-time message:', event.detail);
+      const message = event.detail;
+      if (message && message.content) {
+        // Add the message to the chat UI using COMP method
+        if (typeof window.addMessageToChat === 'function') {
+          window.addMessageToChat({
+            id: message.id || `realtime-${Date.now()}`,
+            body: message.content,
+            author: {
+              name: message.author?.name || message.authorId || 'Unknown',
+              avatarUrl: message.author?.avatarUrl,
+              email: message.authorId
+            },
+            createdAt: message.createdAt || new Date().toISOString(),
+            isDeleted: false
+          });
+        } else {
+          console.error('❌ REALTIME: window.addMessageToChat not available');
+        }
+      }
     });
-    window.addEventListener('realtime-message-edited', (e) => {
-      console.log('✏️ UI REALTIME: event realtime-message-edited', e.detail);
-      editMessageInUIFromPayload(e.detail);
+    
+    window.addEventListener('realtime-message-deleted', (event) => {
+      console.log('🗑️ REALTIME: Received message deletion:', event.detail);
+      console.log('🗑️ REALTIME: Event detail keys:', Object.keys(event.detail));
+      
+      // Try different possible field names for the message ID
+      const messageId = event.detail.messageId || event.detail.id;
+      console.log('🗑️ REALTIME: Using message ID:', messageId);
+      
+      if (messageId) {
+        // Remove the message from the chat UI
+        const messageElement = document.querySelector(`[data-message-id="${messageId}"]`);
+        if (messageElement) {
+          console.log('✅ REALTIME: Message element found, removing from DOM');
+          messageElement.remove();
+        } else {
+          console.log('⚠️ REALTIME: Message element not found for deletion with ID:', messageId);
+          console.log('⚠️ REALTIME: Available message elements:', document.querySelectorAll('[data-message-id]').length);
+          // List all available message IDs for debugging
+          const allMessages = document.querySelectorAll('[data-message-id]');
+          const messageIds = Array.from(allMessages).map(el => el.getAttribute('data-message-id'));
+          console.log('⚠️ REALTIME: Available message IDs:', messageIds);
+        }
+      } else {
+        console.log('❌ REALTIME: No message ID found in deletion event');
+      }
     });
-    window.addEventListener('realtime-message-deleted', (e) => {
-      console.log('🗑️ UI REALTIME: event realtime-message-deleted', e.detail);
-      deleteMessageInUIFromPayload(e.detail);
+    
+    window.addEventListener('realtime-message-edited', (event) => {
+      console.log('✏️ REALTIME: Received message edit:', event.detail);
+      const message = event.detail;
+      if (message && message.id) {
+        // Update the message in the chat UI
+        const messageElement = document.querySelector(`[data-message-id="${message.id}"]`);
+        if (messageElement) {
+          const bodyElement = messageElement.querySelector('.message-content');
+          if (bodyElement) {
+            bodyElement.textContent = message.content;
+          }
+        }
+      }
     });
 
     console.log('✅ UI REALTIME BINDINGS: ready');

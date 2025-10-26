@@ -195,7 +195,7 @@
       // Test the conversion function
       const testSupabaseMessage = {
         id: 'test-uuid-123',
-        user_email: 'test@example.com',
+        user_email: window.currentUser?.email || 'user@example.com',
         content: 'Test message for propagation',
         created_at: new Date().toISOString(),
         page_id: 'test-page'
@@ -253,17 +253,7 @@
     console.log('🏁 SD1: Full diagnostic completed');
   };
   
-  console.log('🧪 SD1: Console diagnostic functions loaded. Available commands:');
-  console.log('🧪 quickStatus() - Quick status check');
-  console.log('🧪 testMessage() - Test message sending');
-  console.log('🧪 testAura(color) - Test aura color change');
-  console.log('🧪 testVisibility() - Test visibility system');
-  console.log('🧪 testMessagePropagation() - Test message UI propagation');
-  console.log('🧪 testVisibilityUI() - Test visibility UI updates');
-  console.log('🧪 checkSubscriptions() - Check real-time subscriptions');
-  console.log('🧪 testDatabase() - Test database connection');
-  console.log('🧪 testEventHandlers() - Test event handlers');
-  console.log('🧪 runFullTest() - Run comprehensive test');
+  // Test functions removed after successful testing
   
   
   

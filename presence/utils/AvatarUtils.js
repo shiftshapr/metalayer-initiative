@@ -12,7 +12,7 @@ class AvatarUtils {
    * @param {string} context - Context ('profile', 'visibility', 'message')
    * @returns {Object} {avatarUrl, source, userName}
    */
-  static getAvatarUrl(user, context = 'visibility') {
+  static async getAvatarUrl(user, context = 'visibility') {
     console.log(`Getting avatar for ${user.user_email || user.email} in context: ${context}`);
     
     let avatarUrl = null;
@@ -78,6 +78,36 @@ class AvatarUtils {
             console.log(`✅ Found REAL avatar in visibility data for ${user.user_email || user.email} - avatarUrl: ${avatarUrl}`);
           } else {
             console.log(`ℹ️ User ${user.user_email || user.email} not found in visibility data`);
+            
+            // COMP METHOD: Try to get avatar from database directly for remote users
+            try {
+              if (window.supabase && window.supabase.from) {
+                const userEmail = user.user_email || user.email;
+                
+                // Query database for user avatar data
+                if (userEmail) {
+                  const { data: userData, error } = await window.supabase
+                    .from('user_presence')
+                    .select('avatar_url, user_name, aura_color')
+                    .eq('user_email', userEmail)
+                    .order('updated_at', { ascending: false })
+                    .limit(1);
+                  
+                  if (!error && userData && userData.length > 0 && userData[0].avatar_url) {
+                    avatarUrl = userData[0].avatar_url;
+                    userName = userData[0].user_name || userName;
+                    avatarSource = 'database_direct';
+                    console.log(`✅ Found avatar in database for ${userEmail} - avatarUrl: ${avatarUrl}`);
+                  } else if (error) {
+                    console.log(`⚠️ Database query failed for ${userEmail}:`, error.message);
+                  }
+                } else {
+                  console.log(`⚠️ Skipping database lookup for test email: ${userEmail}`);
+                }
+              }
+            } catch (dbError) {
+              console.log(`⚠️ Database lookup failed for ${user.user_email || user.email}:`, dbError);
+            }
           }
         } else {
           console.log(`ℹ️ No unfiltered visibility data available`);
@@ -130,10 +160,10 @@ class AvatarUtils {
    * @param {Object} options - Additional options
    * @returns {string} HTML string
    */
-  static createUnifiedAvatar(user, context = 'visibility', options = {}) {
+  static async createUnifiedAvatar(user, context = 'visibility', options = {}) {
     console.log(`Creating unified avatar for ${user.user_email || user.email} in context: ${context}`);
 
-    const avatarData = this.getAvatarUrl(user, context);
+    const avatarData = await this.getAvatarUrl(user, context);
     const {
       avatarUrl,
       source: avatarSource,
@@ -177,7 +207,7 @@ class AvatarUtils {
    * @param {string} context - Context
    * @param {Object} options - Additional options
    */
-  static updateAvatarInDOM(selector, user, context = 'visibility', options = {}) {
+  static async updateAvatarInDOM(selector, user, context = 'visibility', options = {}) {
     console.log(`Updating avatar in DOM: ${selector}`);
     
     const container = document.querySelector(selector);
@@ -186,7 +216,7 @@ class AvatarUtils {
       return false;
     }
 
-    const avatarHTML = this.createUnifiedAvatar(user, context, options);
+    const avatarHTML = await this.createUnifiedAvatar(user, context, options);
     container.innerHTML = avatarHTML;
     
     console.log(`✅ Avatar updated in DOM: ${selector}`);
@@ -220,17 +250,17 @@ class AvatarUtils {
    * @param {Object} options - Additional options
    * @returns {Array} Array of avatar data
    */
-  static batchUpdateAvatars(users, context = 'visibility', options = {}) {
+  static async batchUpdateAvatars(users, context = 'visibility', options = {}) {
     console.log(`Batch updating ${users.length} avatars in context: ${context}`);
     
-    const results = users.map(user => {
-      const avatarData = this.getAvatarUrl(user, context);
+    const results = await Promise.all(users.map(async user => {
+      const avatarData = await this.getAvatarUrl(user, context);
       return {
         ...user,
         ...avatarData,
-        avatarHTML: this.createUnifiedAvatar(user, context, options)
+        avatarHTML: await this.createUnifiedAvatar(user, context, options)
       };
-    });
+    }));
 
     console.log(`✅ Batch avatar update complete: ${results.length} avatars processed`);
     return results;

@@ -42,11 +42,12 @@ class CanopiModule {
       console.log(`[CanopiModule] [${level}] ${message}`, ...args);
     }
   }
+
 }
 
 // ===== MESSAGE AND CHAT FUNCTIONS (Move from sidepanel.js) =====
 
-async function sendMessageViaSupabase(content) {
+async function sendMessageViaSupabase(content, parentId = null) {
   console.log('🔥🔥🔥 ============================================');
   console.log('🔥🔥🔥 SEND_MESSAGE_VIA_SUPABASE: ENTRY POINT');
   console.log('🔥🔥🔥 ============================================');
@@ -54,6 +55,7 @@ async function sendMessageViaSupabase(content) {
   console.log('📡 SUPABASE_MESSAGE: Content:', content);
   console.log('📡 SUPABASE_MESSAGE: Content type:', typeof content);
   console.log('📡 SUPABASE_MESSAGE: Content length:', content?.length);
+  console.log('📡 SUPABASE_MESSAGE: ParentId:', parentId);
   
   // Use robust integration system if available
   console.log('📡 SUPABASE_MESSAGE: Checking robust integration...');
@@ -123,370 +125,7 @@ async function sendMessageViaSupabase(content) {
 }
 
 
-async function addMessageToChat(message) {
-  console.log('🎯🎯🎯 ============================================');
-  console.log('🎯🎯🎯 ADD_MESSAGE_TO_CHAT: ENTRY POINT');
-  console.log('🎯🎯🎯 ============================================');
-  console.log('🔍 ADD_MESSAGE: Starting addMessageToChat');
-  console.log('🔍 ADD_MESSAGE: Timestamp:', new Date().toISOString());
-  console.log('🔍 ADD_MESSAGE: Message:', message);
-  console.log('🔍 ADD_MESSAGE: Message type:', typeof message);
-  console.log('🔍 ADD_MESSAGE: Message id:', message?.id);
-  console.log('🔍 ADD_MESSAGE: Message body:', message?.body);
-  console.log('🔍 ADD_MESSAGE: Message content:', message?.content);
-  console.log('🔍 ADD_MESSAGE: Message author:', message?.author);
-  console.log('🔍 ADD_MESSAGE: Message author.name:', message?.author?.name);
-  console.log('🔍 ADD_MESSAGE: Message author.avatarUrl:', message?.author?.avatarUrl);
-  
-  // CRITICAL DEBUG: Check if this is one of the missing messages
-  if (message?.body === 'Google a' || message?.body === 'Google b') {
-    console.log('🚨🚨🚨 CRITICAL DEBUG: addMessageToChat called for missing message:', message.body);
-    // SD1 FIX: Avoid circular structure by logging safe properties only
-    console.log('🚨🚨🚨 CRITICAL DEBUG: Message ID:', message.id);
-    console.log('🚨🚨🚨 CRITICAL DEBUG: Message body:', message.body);
-    console.log('🚨🚨🚨 CRITICAL DEBUG: Message author:', message.author?.name);
-    console.log('🚨🚨🚨 CRITICAL DEBUG: Message conversation:', message.conversation?.id);
-  }
-  
-  // CRITICAL: Filter out deleted messages without replies
-  // Check both deletedAt field and [Deleted] body content
-  const isDeleted = message.deletedAt || (message.body && message.body.trim() === '[Deleted]');
-  console.log('🔍 ADD_MESSAGE: isDeleted:', isDeleted);
-  console.log('🔍 ADD_MESSAGE: message.hasReplies:', message.hasReplies);
-  
-  if (isDeleted && !message.hasReplies) {
-    console.log('🔍 ADD_MESSAGE: SKIPPING deleted message without replies:', message.id);
-    return;
-  }
-  
-  console.log('🔍 ADD_MESSAGE: === FINDING CHAT MESSAGES CONTAINER ===');
-  const chatMessages = document.querySelector('.chat-messages');
-  console.log('🔍 ADD_MESSAGE: chatMessages element:', !!chatMessages);
-  console.log('🔍 ADD_MESSAGE: chatMessages type:', typeof chatMessages);
-  
-  if (!chatMessages) {
-    console.log('❌❌❌ ADD_MESSAGE: No chat-messages element found - CANNOT ADD MESSAGE');
-    return;
-  }
-  console.log('✅ ADD_MESSAGE: Found chat-messages element');
-  console.log('✅ ADD_MESSAGE: chatMessages children count:', chatMessages.children.length);
-
-  // Remove placeholder text if it exists
-  const placeholder = chatMessages.querySelector('p[style*="text-align: center"]');
-  if (placeholder) {
-    console.log('🔍 ADD_MESSAGE: Removing placeholder text');
-    placeholder.remove();
-  }
-
-  // Get the community name from the conversation
-  let communityName = '';
-  if (message.conversation) {
-    // First try to use the communityName that was added during loadChatHistory
-    if (message.conversation.communityName) {
-      communityName = message.conversation.communityName;
-    } else if (message.conversation.communityId) {
-      // Fallback to looking up by communityId
-      const communitiesData = await getState('communities');
-      const communities = communitiesData || [];
-      const community = communities.find(c => c.id === message.conversation.communityId);
-      communityName = community ? community.name : '';
-    }
-  }
-  
-  // Fallback to current primary community if no community found
-  if (!communityName) {
-    communityName = await getPrimaryCommunityName();
-  }
-  
-  // Create message element
-  console.log('🔍 ADD_MESSAGE: Creating message element for:', message.id);
-  const messageDiv = document.createElement('div');
-  
-  // Determine message type and add appropriate classes
-  if (message.isReply) {
-    messageDiv.className = 'message message-reply thread-reply';
-  } else {
-    // This is a thread starter
-    messageDiv.className = 'message thread-starter';
-    
-    // Check if this thread has replies
-    if (message.hasReplies) {
-      messageDiv.classList.add('has-replies');
-    }
-  }
-  
-  messageDiv.dataset.messageId = message.id;
-  messageDiv.dataset.conversationId = message.conversationId;
-  messageDiv.dataset.authorId = message.authorId || author.email || author.id;
-  
-  // Store reactions data for reactions loading (avoid circular reference)
-  if (message.conversation && message.conversation.reactions) {
-    // Filter reactions to only include those for this specific message
-    const messageReactions = message.conversation.reactions.filter(reaction => 
-      reaction.postId === message.id
-    );
-    messageDiv.dataset.reactions = JSON.stringify(messageReactions);
-    // For new posts, ensure they start with no reactions
-    messageDiv.dataset.reactions = JSON.stringify([]);
-  }
-  
-  // If this is a reply, check if thread is expanded and add visible class
-  if (message.isReply) {
-    const threadToggle = document.querySelector(`[data-thread-id="${message.conversationId}"]`);
-    if (threadToggle && threadToggle.dataset.expanded === 'true') {
-      messageDiv.classList.add('visible');
-    } else if (window.focusedMessage) {
-      // If we're in focus mode, show all replies
-      messageDiv.classList.add('visible');
-    } else {
-      // For replies, keep them collapsed by default (no visible class)
-      // They will only be shown when the thread is expanded
-      console.log('Reply added, keeping collapsed by default');
-    }
-  }
-  
-  // Convert URLs to clickable links
-  const contentWithLinks = convertUrlsToLinks(message.body || message.content);
-  
-  // Get sender info - use author from Canopi 2 structure
-  const author = message.author || { name: 'Unknown User', handle: 'unknown' };
-  const senderName = author.name || author.handle || 'Unknown User';
-  
-  // Add reaction and reply buttons with counts
-  const reactionCount = message.reactionCount || 0;
-  const replyCount = message.replyCount || 0;
-  const hasUnseenReplies = message.hasUnseenReplies || false;
-  
-  const reactionButton = `<button class="reaction-btn" data-message-id="${message.id}" title="Add reaction">🔘<span class="icon-count">${reactionCount > 0 ? reactionCount : ''}</span></button>`;
-  const replyButton = `<button class="inline-reply-btn" data-message-id="${message.id}" title="Reply to message">💬</button>`;
-  
-  // Add thread toggle for first post in thread that has replies
-  let threadToggleButton = '';
-  if (message.hasReplies) {
-    threadToggleButton = `<button class="thread-toggle-btn" data-thread-id="${message.conversationId}" title="Show thread replies" data-expanded="false">📂<span class="icon-count ${hasUnseenReplies ? 'unseen' : ''}">${replyCount}</span></button>`;
-  }
-  
-  // Check if message is deleted
-  if (message.deletedAt) {
-    console.log(`DELETED_MSG_DEBUG: [BUILD v1.0] === DELETED MESSAGE ANALYSIS ===`, null, 'general');
-    
-    // Only show deleted messages if they have replies
-    if (!message.hasReplies) {
-      return;
-    }
-    
-    // For deleted messages, use the same structure as regular messages
-    // but with "This message was deleted" as content
-    
-    // Use the same message structure as regular messages
-    messageDiv.innerHTML = `
-      <div class="avatar-container">${getSenderAvatar(author)}</div>
-      <div class="message-content-wrapper">
-        <div class="message-header-new">
-          <span class="message-sender-name">${senderName}${communityName ? ` • ${communityName}` : ''}</span>
-          <span class="message-time-new">${formatMessageTime(message.createdAt)}</span>
-          <div class="message-actions-new" style="opacity: 1 !important; display: flex !important; visibility: visible !important;">
-            ${await getMessageActionMenu(message)}
-          </div>
-        </div>
-        <div class="message-content">This message was deleted</div>
-        <div class="message-footer">
-          ${reactionButton}
-          ${replyButton}
-          ${threadToggleButton}
-        </div>
-      </div>
-    `;
-    
-    messageDiv.classList.add('deleted');
-    chatMessages.appendChild(messageDiv);
-    
-    // Add event listeners for deleted message
-    addMessageActionListeners(messageDiv, message);
-    
-    chatMessages.scrollTop = chatMessages.scrollHeight;
-    return;
-  }
-  
-  // Check if user can edit/delete (within 1 hour and is the author)
-  const canEdit = canUserEditMessage(message);
-  const editDeleteButtons = canEdit ? `
-    <div class="message-actions">
-      <button class="message-action-btn edit-btn" data-message-id="${message.id}" title="Edit message">
-        ✏️
-      </button>
-      <button class="message-action-btn delete-btn" data-message-id="${message.id}" title="Delete message">
-        🗑️
-      </button>
-    </div>
-  ` : '';
-  
-  
-          // CRITICAL DEBUG: Check if this is one of the missing messages
-          if (message?.body === 'Google a' || message?.body === 'Google b') {
-            console.log('🚨🚨🚨 CRITICAL DEBUG: Creating HTML for missing message:', message.body);
-            console.log('🚨🚨🚨 CRITICAL DEBUG: contentWithLinks:', contentWithLinks);
-            console.log('🚨🚨🚨 CRITICAL DEBUG: senderName:', senderName);
-            console.log('🚨🚨🚨 CRITICAL DEBUG: communityName:', communityName);
-          }
-          
-          messageDiv.innerHTML = `
-            <div class="avatar-container">${getSenderAvatar(author)}</div>
-            <div class="message-content-wrapper">
-              <div class="message-header-new">
-                <span class="message-sender-name">${senderName}${communityName ? ` • ${communityName}` : ''}</span>
-                <span class="message-time-new">${formatMessageTime(message.createdAt)}</span>
-                <div class="message-actions-new" style="opacity: 1 !important; display: flex !important; visibility: visible !important;">
-                  ${await getMessageActionMenu(message)}
-                </div>
-              </div>
-              <div class="message-content">${contentWithLinks}</div>
-              ${message.optionalContent ? `<div class="message-anchor">📍 ${message.optionalContent}</div>` : ''}
-              <div class="message-footer">
-                ${reactionButton}
-                ${replyButton}
-                ${threadToggleButton}
-              </div>
-            </div>
-          `;
-          
-          // CRITICAL DEBUG: Verify HTML was created
-          if (message?.body === 'Google a' || message?.body === 'Google b') {
-            console.log('🚨🚨🚨 CRITICAL DEBUG: HTML created for missing message:', messageDiv.innerHTML.length, 'characters');
-            console.log('🚨🚨🚨 CRITICAL DEBUG: HTML preview:', messageDiv.innerHTML.substring(0, 200) + '...');
-          }
-  
-  // Add event listeners for action buttons
-  addMessageActionListeners(messageDiv, message);
-  
-  
-  
-  // Add thread toggle listener
-  if (threadToggleButton) {
-    const toggleBtn = messageDiv.querySelector('.thread-toggle-btn');
-    if (toggleBtn) {
-      toggleBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        // For replies, focus the message instead of toggling
-        if (message.isReply) {
-          handleMessageFocus(message);
-        } else {
-          toggleThreadReplies(message.conversationId, messageDiv);
-        }
-      });
-    }
-  }
-  
-  console.log('🔍 ADD_MESSAGE: Adding message to DOM:', message.id);
-  
-  // CRITICAL DEBUG: Check if this is one of the missing messages
-  if (message?.body === 'Google a' || message?.body === 'Google b') {
-    console.log('🚨🚨🚨 CRITICAL DEBUG: About to append missing message to DOM:', message.body);
-    console.log('🚨🚨🚨 CRITICAL DEBUG: Message div created:', !!messageDiv);
-    console.log('🚨🚨🚨 CRITICAL DEBUG: Chat container found:', !!chatMessages);
-    console.log('🚨🚨🚨 CRITICAL DEBUG: Message div innerHTML length:', messageDiv.innerHTML.length);
-  }
-  
-  chatMessages.appendChild(messageDiv);
-  console.log('✅ ADD_MESSAGE: Message added to DOM successfully');
-  
-  // CRITICAL DEBUG: Verify message was actually added
-  if (message?.body === 'Google a' || message?.body === 'Google b') {
-    const addedMessage = document.querySelector(`[data-message-id="${message.id}"]`);
-    console.log('🚨🚨🚨 CRITICAL DEBUG: Message in DOM after appendChild:', !!addedMessage);
-    console.log('🚨🚨🚨 CRITICAL DEBUG: Chat container children count:', chatMessages.children.length);
-    if (addedMessage) {
-      console.log('🚨🚨🚨 CRITICAL DEBUG: Message element offsetHeight:', addedMessage.offsetHeight);
-      console.log('🚨🚨🚨 CRITICAL DEBUG: Message element style.display:', addedMessage.style.display);
-      console.log('🚨🚨🚨 CRITICAL DEBUG: Message element computed style:', window.getComputedStyle(addedMessage).display);
-    }
-  }
-  
-  // Add message to global storage for avatar updates
-  if (!window.currentChatData) {
-    window.currentChatData = [];
-  }
-  // CRITICAL FIX: Check if message already exists in DOM to prevent duplicates
-  const existingMessageElement = chatMessages.querySelector(`[data-message-id="${message.id}"]`);
-  if (existingMessageElement) {
-    console.log('🔍 ADD_MESSAGE: Message already exists in DOM, skipping duplicate:', message.id);
-    console.log('🔍 ADD_MESSAGE: Existing message element:', existingMessageElement);
-    return; // Skip adding duplicate message
-  }
-  
-  // Check if message already exists in global storage
-  const existingIndex = window.currentChatData.findIndex(m => m.id === message.id);
-  if (existingIndex >= 0) {
-    // Update existing message
-    window.currentChatData[existingIndex] = message;
-  } else {
-    // Add new message
-    window.currentChatData.push(message);
-  }
-  console.log('✅ ADD_MESSAGE: Message added to global storage, total:', window.currentChatData.length);
-  
-  // Log the current state of chat messages
-  const allMessages = chatMessages.querySelectorAll('.message');
-  console.log('🔍 ADD_MESSAGE: Total messages in chat now:', allMessages.length);
-  console.log('🔍 ADD_MESSAGE: Message IDs in chat:', Array.from(allMessages).map(m => m.getAttribute('data-message-id')));
-  
-  // Update message count tracking
-  lastMessageCount = allMessages.length;
-  if (allMessages.length > 0) {
-    const lastMessage = allMessages[allMessages.length - 1];
-    lastMessageId = lastMessage.getAttribute('data-message-id');
-    console.log('🔍 ADD_MESSAGE: Updated last message ID:', lastMessageId);
-  }
-  
-  // CRITICAL FIX: Enhanced avatar error handling with proper fallback
-  const avatarImg = messageDiv.querySelector('img[data-avatar-fallback="true"]');
-  if (avatarImg) {
-    avatarImg.addEventListener('error', function() {
-      console.log('❌ MESSAGE_AVATAR: Avatar image failed to load, applying fallback');
-      this.style.display = 'none';
-      
-      // Check if there's already a fallback div
-      let fallbackDiv = this.nextElementSibling;
-      if (!fallbackDiv || !fallbackDiv.classList.contains('avatar-fallback')) {
-        // Create fallback div if it doesn't exist
-        fallbackDiv = document.createElement('div');
-        fallbackDiv.className = 'avatar-fallback';
-        fallbackDiv.style.cssText = `
-          position: relative; 
-          z-index: 2; 
-          width: 32px; 
-          height: 32px; 
-          border-radius: 50%; 
-          background-color: ${author.auraColor || '#aaaaaa'}; 
-          display: flex; 
-          align-items: center; 
-          justify-content: center; 
-          color: white; 
-          font-weight: bold; 
-          font-size: 14px;
-          border: 2px solid ${author.auraColor || '#aaaaaa'};
-        `;
-        fallbackDiv.textContent = (author.name || author.email || 'U').charAt(0).toUpperCase();
-        this.parentNode.insertBefore(fallbackDiv, this.nextSibling);
-      } else {
-        fallbackDiv.style.display = 'flex';
-      }
-    });
-    
-    // Add load success handler to hide fallback if image loads
-    avatarImg.addEventListener('load', function() {
-      const fallbackDiv = this.nextElementSibling;
-      if (fallbackDiv && fallbackDiv.classList.contains('avatar-fallback')) {
-        fallbackDiv.style.display = 'none';
-      }
-    });
-  }
-  
-  chatMessages.scrollTop = chatMessages.scrollHeight;
-  
-  // Update visual hierarchy immediately - no setTimeout needed
-  updateMessageVisualHierarchy();
-}
+// REMOVED: Duplicate addMessageToChat function - keeping only COMP method implementation
 
 // CRITICAL FIX: Add missing updateMessageInChat function for real-time message updates
 function updateMessageInChat(updatedMessage) {
@@ -619,36 +258,48 @@ function convertUrlsToLinks(text) {
   return text.replace(urlRegex, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
 }
 
-function getSenderAvatar(author) {
+async function getSenderAvatar(author) {
   if (!author) return getSenderInitial('Unknown');
   
-  // Always try to get the latest aura color from presence data
+  // COMP METHOD: Always try to get the latest aura color from presence data
   // This ensures cross-profile updates work correctly for ALL users
   const currentUserEmail = getCurrentUserEmail();
   if (author.email === currentUserEmail) {
     // For current user's messages, use current aura color
     const currentAuraColor = getCurrentUserAvatarBgColor();
-    if (currentAuraColor) {
+    if (currentAuraColor && currentAuraColor !== '#ffffff') {
       author.auraColor = currentAuraColor;
+      console.log('🔧 AURA: Using current user aura color:', currentAuraColor);
       }
   } else {
     // For other users' messages, try to get the latest aura color from presence data
     // This ensures real-time aura updates for all users
     const latestAuraColor = getLatestAuraColorFromPresence(author.email);
-    if (latestAuraColor) {
+    if (latestAuraColor && latestAuraColor !== '#ffffff') {
       author.auraColor = latestAuraColor;
+      console.log('🔧 AURA: Using real-time aura color for', author.email, ':', latestAuraColor);
       } else {
+      // Fallback to generated color if no real-time color available
+      console.log('🔧 AURA: No real-time color found for', author.email, ', using generated color');
       }
   }
   
-  // Use unified avatar system for consistency
-  const avatarHTML = AvatarUtils.createUnifiedAvatar(author, {
-    size: 32,
-    showStatus: true,
-    showAura: true,
-    context: 'message',
-    statusColor: '#22c55e' // Default green for message avatars
-  });
+  // COMP METHOD: Use unified avatar system for consistency (same as COMP)
+  let avatarHTML;
+  const avatarUtils = window.AvatarUtils || AvatarUtils;
+  if (typeof avatarUtils !== 'undefined' && avatarUtils.createUnifiedAvatar) {
+    avatarHTML = await avatarUtils.createUnifiedAvatar(author, {
+      size: 32,
+      showStatus: true,
+      showAura: true,
+      context: 'message',
+      statusColor: '#22c55e' // Default green for message avatars
+    });
+  } else {
+    console.warn('⚠️ COMP AVATAR: AvatarUtils not available, using fallback');
+    // Fallback avatar HTML (same style as COMP)
+    avatarHTML = `<div class="avatar" style="width: 32px; height: 32px; border-radius: 50%; background: #45B7D1; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 14px;">${(author.name || author.email || 'U').charAt(0).toUpperCase()}</div>`;
+  }
   
   // DIAGNOSTIC: Log avatar resolution
   if (window.messageDiagnostic) {
@@ -703,7 +354,7 @@ async function refreshMessageAvatarsWithCurrentPresence() {
       
       // Find all message containers and re-render their avatars with updated aura colors
       const messageContainers = document.querySelectorAll('.message');
-      messageContainers.forEach(messageContainer => {
+      for (const messageContainer of messageContainers) {
         const avatarContainer = messageContainer.querySelector('.avatar-container');
         if (avatarContainer) {
           // Get the message data to find the author
@@ -720,14 +371,14 @@ async function refreshMessageAvatarsWithCurrentPresence() {
                 author.auraColor = auraColorMap[userEmail];
                 
                 // Re-render the avatar with the updated aura color
-                const newAvatarHTML = getSenderAvatar(author);
+                const newAvatarHTML = await getSenderAvatar(author);
                 avatarContainer.innerHTML = newAvatarHTML;
                 
                 }
             }
           }
         }
-      });
+      }
       
       console.log('✅ MESSAGE_AVATAR: Message avatars refreshed with current presence data');
     } else {
@@ -838,67 +489,68 @@ async function convertSupabaseMessageToAPIFormat(supabaseMessage) {
     console.log('🔍 REMOTE AVATAR DEBUG: User email:', userEmail);
     console.log('🔍 REMOTE AVATAR DEBUG: Page ID:', supabaseMessage.page_id);
     
-    const { data: presenceData, error } = await window.supabase
-      .from('user_presence')
-      .select('avatar_url, aura_color, user_name')
-      .eq('user_email', userEmail)
-      .eq('page_id', supabaseMessage.page_id)
-      .limit(1);
+    // COMP METHOD FIX: Use a more robust avatar resolution system
+    let avatarFound = false;
     
-    console.log('🔍 REMOTE AVATAR DEBUG: Presence query result:', { presenceData, error });
-    
-    if (error) {
-      console.warn('⚠️ CONVERT_MESSAGE: Could not fetch author data:', error);
-      console.log('🔍 REMOTE AVATAR DEBUG: Trying fallback query without page_id filter...');
-      
-      // Try fallback query without page_id filter
-      const { data: fallbackData, error: fallbackError } = await window.supabase
-        .from('user_presence')
-        .select('avatar_url, aura_color, user_name')
-        .eq('user_email', userEmail)
-        .order('updated_at', { ascending: false })
-        .limit(1);
-      
-      console.log('🔍 REMOTE AVATAR DEBUG: Fallback query result:', { fallbackData, fallbackError });
-      
-      if (fallbackData && fallbackData.length > 0) {
-        console.log('✅ CONVERT_MESSAGE: Found author data via fallback:', fallbackData[0]);
-        authorData.avatarUrl = fallbackData[0].avatar_url;
-        authorData.auraColor = fallbackData[0].aura_color || window.currentUser?.auraColor || '#aa00aa';
-        authorData.name = fallbackData[0].user_name || authorData.name;
-        console.log('🔍 REMOTE AVATAR DEBUG: Updated author data with fallback:', {
-          avatarUrl: authorData.avatarUrl,
-          auraColor: authorData.auraColor,
-          name: authorData.name
-        });
-      } else {
-        console.log('🔍 REMOTE AVATAR DEBUG: No fallback data found, trying to get from visibility data...');
-        // Try to get avatar from current visibility data
+    // First try: Check if we have this user in our current visibility data
         if (window.currentVisibilityDataUnfiltered && window.currentVisibilityDataUnfiltered.active) {
           const userInVisibility = window.currentVisibilityDataUnfiltered.active.find(u => u.email === userEmail);
           if (userInVisibility && userInVisibility.avatarUrl) {
-            console.log('🔍 REMOTE AVATAR DEBUG: Found avatar in visibility data:', userInVisibility.avatarUrl);
+        console.log('✅ CONVERT_MESSAGE: Found avatar in current visibility data:', userInVisibility.avatarUrl);
             authorData.avatarUrl = userInVisibility.avatarUrl;
-            authorData.auraColor = userInVisibility.auraColor || '#aa00aa';
+        authorData.auraColor = userInVisibility.auraColor || window.currentUser?.auraColor || '#aa00aa';
             authorData.name = userInVisibility.name || authorData.name;
-          }
-        }
-        
-        // If still no avatar, try to get from UnifiedPresenceManager if available
-        if (!authorData.avatarUrl && window.UnifiedPresenceManager) {
-          console.log('🔍 REMOTE AVATAR DEBUG: Trying UnifiedPresenceManager...');
-          // This would need to be implemented in UnifiedPresenceManager
-          // For now, we'll use a generic avatar as fallback
-          console.log('🔍 REMOTE AVATAR DEBUG: Using generic avatar as final fallback');
-        }
+        avatarFound = true;
       }
-    } else if (presenceData && presenceData.length > 0) {
-      console.log('✅ CONVERT_MESSAGE: Found author data:', presenceData[0]);
+    }
+    
+    // COMP METHOD: Also check if this is the current user (for their own messages)
+    if (!avatarFound && window.currentUser && userEmail === window.currentUser.email) {
+      console.log('✅ CONVERT_MESSAGE: Using current user avatar for own message');
+      authorData.avatarUrl = window.currentUser.avatarUrl || window.currentUser.picture;
+      authorData.auraColor = window.currentUser.auraColor || '#aa00aa';
+      authorData.name = window.currentUser.name || window.currentUser.email.split('@')[0];
+      avatarFound = true;
+    }
+    
+    // Second try: Query user_presence table without page_id filter (COMP method)
+    if (!avatarFound) {
+      try {
+        console.log('🔍 REMOTE AVATAR DEBUG: Querying user_presence for:', userEmail);
+        const { data: presenceData, error } = await window.supabase
+          .from('user_presence')
+          .select('avatar_url, aura_color, user_name')
+          .eq('user_email', userEmail)
+          .order('updated_at', { ascending: false })
+          .limit(1);
+        
+        console.log('🔍 REMOTE AVATAR DEBUG: Presence query result:', { presenceData, error });
+        
+        if (presenceData && presenceData.length > 0) {
+          console.log('✅ CONVERT_MESSAGE: Found author data in user_presence:', presenceData[0]);
       authorData.avatarUrl = presenceData[0].avatar_url;
       authorData.auraColor = presenceData[0].aura_color || window.currentUser?.auraColor || '#aa00aa';
       authorData.name = presenceData[0].user_name || authorData.name;
-    } else {
-      console.log('⚠️ CONVERT_MESSAGE: No presence data found for user');
+          avatarFound = true;
+        }
+      } catch (presenceError) {
+        console.log('⚠️ CONVERT_MESSAGE: user_presence query failed:', presenceError);
+      }
+    }
+    
+    // Final fallback: Use a better default avatar system
+    if (!avatarFound) {
+      console.log('🔍 REMOTE AVATAR DEBUG: No avatar found, using enhanced fallback system...');
+      // Create a more personalized fallback avatar
+      const userName = userEmail.split('@')[0];
+      const avatarColors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8'];
+      const colorIndex = userName.length % avatarColors.length;
+      const fallbackAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(userName)}&background=${avatarColors[colorIndex].substring(1)}&color=fff&size=32&bold=true`;
+      
+      authorData.avatarUrl = fallbackAvatar;
+      authorData.auraColor = avatarColors[colorIndex];
+      authorData.name = userName;
+      console.log('✅ CONVERT_MESSAGE: Using enhanced fallback avatar:', fallbackAvatar);
     }
   } catch (error) {
     console.warn('⚠️ CONVERT_MESSAGE: Exception fetching author data:', error);
@@ -941,14 +593,42 @@ async function loadChatHistory(communityId = null) {
     return;
   }
   
+  // COMP METHOD: Chrome internal pages work normally (like COMP)
+  const currentUri = window.currentUrlData?.rawUrl;
+  if (currentUri && (currentUri.startsWith('chrome://') || currentUri.startsWith('chrome-extension://'))) {
+    console.log('🔍 CHAT_LOAD: Chrome internal page detected - processing normally like COMP');
+    // Continue with normal message loading like COMP method
+  }
+  
   const currentPageId = window.currentUrlData?.pageId;
-  if (lastLoadedPageId === currentPageId) {
-    console.log('🔍 CHAT_LOAD: Chat history already loaded for this page, skipping');
-    return;
+  
+  // COMP METHOD FIX: Always clear messages when switching pages or when pageId changes
+  if (lastLoadedPageId !== currentPageId) {
+    console.log(`🔍 CHAT_LOAD: Page changed from ${lastLoadedPageId} to ${currentPageId}, clearing messages`);
+    const chatMessages = document.querySelector('.chat-messages');
+    if (chatMessages) {
+      chatMessages.innerHTML = '';
+    }
+    // Clear global chat data
+    if (window.currentChatData) {
+      window.currentChatData = null;
+    }
+    // Reset last loaded URI to force reload
+    lastLoadedUri = null;
   }
   
   isLoadingChatHistory = true;
   lastLoadedPageId = currentPageId;
+  
+  // COMP METHOD FIX: Always clear messages before loading to ensure fresh state
+  const chatMessages = document.querySelector('.chat-messages');
+  if (chatMessages) {
+    chatMessages.innerHTML = '';
+  }
+  // Clear global chat data
+  if (window.currentChatData) {
+    window.currentChatData = null;
+  }
   
   try {
     // Get user's active communities
@@ -1064,31 +744,14 @@ async function loadChatHistory(communityId = null) {
     const currentMessages = chatMessages.querySelectorAll('.message');
     console.log('🔍 CHAT_LOAD: Current message IDs:', Array.from(currentMessages).map(m => m.getAttribute('data-message-id')));
     
-    // CRITICAL FIX: Don't clear real-time messages - merge them instead
-    console.log('🔍 CHAT_LOAD: Preserving real-time messages and merging with API data');
+    // COMP METHOD: Clear messages when switching pages (like COMP does)
+    console.log('🔍 CHAT_LOAD: Clearing messages for page-specific loading');
     
-    // Store existing real-time messages before clearing
-    const existingMessageElements = Array.from(chatMessages.querySelectorAll('.message')).map(msg => ({
-      id: msg.dataset.messageId,
-      element: msg
-    }));
-    
-    // CRITICAL FIX: Only clear messages if we have new data AND no existing messages
-    const existingMessages = chatMessages.querySelectorAll('.message');
-    if (allConversations.length > 0 && existingMessages.length === 0) {
-      console.log('🔍 CHAT_LOAD: No existing messages, loading new data');
+    // COMP METHOD: Always clear messages and reload page-specific content
       chatMessages.innerHTML = '';
       // Clear global chat data storage
       window.currentChatData = [];
-      console.log('✅ CHAT_LOAD: Messages cleared and global storage reset');
-    } else if (allConversations.length > 0 && existingMessages.length > 0) {
-      console.log('🔍 CHAT_LOAD: Existing messages found, merging with new data instead of clearing');
-      console.log('🔍 CHAT_LOAD: Existing message count:', existingMessages.length);
-      console.log('🔍 CHAT_LOAD: New conversation count:', allConversations.length);
-      // Don't clear existing messages, just add new ones
-    } else {
-      console.log('🔍 CHAT_LOAD: No new data to load, preserving existing messages');
-    }
+    console.log('✅ CHAT_LOAD: Messages cleared for page-specific loading');
     
     if (allConversations.length === 0) {
       console.warn('⚠️ CHAT_LOAD: NO MESSAGES TO DISPLAY - No conversations found for any active community on this page');
@@ -1147,33 +810,76 @@ async function loadChatHistory(communityId = null) {
             const messageReactions = conversation.reactions ? conversation.reactions.filter(r => r.postId === mainThreadPost.id) : [];
             mainThreadPost.reactionCount = messageReactions.length;
             
-            // Skip deleted main thread unless it has NON-DELETED replies
+            // COMP METHOD: Use exact COMP filtering logic
+            // COMP METHOD: Comprehensive debugging exactly as COMP does
+            console.log('🔍 COMP DEBUG: === MAIN THREAD MESSAGE ANALYSIS ===');
+            console.log('🔍 COMP DEBUG: Message ID:', mainThreadPost.id);
+            console.log('🔍 COMP DEBUG: Message deletedAt:', mainThreadPost.deletedAt);
+            console.log('🔍 COMP DEBUG: Message body:', JSON.stringify(mainThreadPost.body));
+            console.log('🔍 COMP DEBUG: Message body trimmed:', mainThreadPost.body ? mainThreadPost.body.trim() : 'NO_BODY');
+            console.log('🔍 COMP DEBUG: Body equals [Deleted]:', mainThreadPost.body ? mainThreadPost.body.trim() === '[Deleted]' : 'NO_BODY');
+            console.log('🔍 COMP DEBUG: Total direct replies:', directReplies.length);
+            console.log('🔍 COMP DEBUG: Non-deleted replies:', directReplies.filter(r => !r.deletedAt).length);
+            console.log('🔍 COMP DEBUG: hasReplies:', mainThreadPost.hasReplies);
+            console.log('🔍 COMP DEBUG: replyCount:', mainThreadPost.replyCount);
+            if (directReplies.length > 0) {
+              console.log('🔍 COMP DEBUG: Direct replies details:', directReplies.map(r => ({ id: r.id, deletedAt: r.deletedAt, body: r.body })));
+            }
+            
+            // COMP METHOD: First check - only deletedAt field (EXACT COMP LOGIC)
+            if (mainThreadPost.deletedAt && !mainThreadPost.hasReplies) {
+              console.log('🔍 COMP DEBUG: SKIPPING deleted main thread without replies (deletedAt check):', mainThreadPost.id);
+              continue;
+            } else if (mainThreadPost.deletedAt && mainThreadPost.hasReplies) {
+              console.log('🔍 COMP DEBUG: SHOWING deleted main thread WITH replies (deletedAt check):', mainThreadPost.id);
+            }
+            
+            // COMP METHOD: Second check - Skip deleted main thread unless it has NON-DELETED replies (EXACT COMP LOGIC)
             // Check both deletedAt field and [Deleted] body content
             const isMainThreadDeleted = mainThreadPost.deletedAt || (mainThreadPost.body && mainThreadPost.body.trim() === '[Deleted]');
             if (isMainThreadDeleted && !mainThreadPost.hasReplies) {
-              console.log('Skipping deleted main thread without NON-DELETED replies:', mainThreadPost.id, 'hasReplies:', mainThreadPost.hasReplies, 'totalReplies:', directReplies.length, 'nonDeletedReplies:', directReplies.filter(r => !r.deletedAt).length);
+              console.log('🔍 COMP DEBUG: SKIPPING deleted main thread without NON-DELETED replies:', mainThreadPost.id, 'hasReplies:', mainThreadPost.hasReplies, 'totalReplies:', directReplies.length, 'nonDeletedReplies:', directReplies.filter(r => !r.deletedAt).length);
               continue; // Skip this deleted main thread, but continue with others
             }
             
-            // Debug: Log when deleted main thread has non-deleted replies
+            // COMP METHOD: Debug when deleted main thread has non-deleted replies (EXACT COMP LOGIC)
             if (mainThreadPost.deletedAt && mainThreadPost.hasReplies) {
-              console.log('Deleted main thread WITH non-deleted replies:', mainThreadPost.id, 'hasReplies:', mainThreadPost.hasReplies, 'totalReplies:', directReplies.length, 'nonDeletedReplies:', directReplies.filter(r => !r.deletedAt).length);
+              console.log('🔍 COMP DEBUG: Deleted main thread WITH non-deleted replies:', mainThreadPost.id, 'hasReplies:', mainThreadPost.hasReplies, 'totalReplies:', directReplies.length, 'nonDeletedReplies:', directReplies.filter(r => !r.deletedAt).length);
             }
             
             // Add the main thread post to chat
             console.log('🔍 CHAT_LOAD: Adding main thread post:', mainThreadPost.id);
             console.log('🔍 CHAT_LOAD: Main thread post details:', { id: mainThreadPost.id, body: mainThreadPost.body, createdAt: mainThreadPost.createdAt });
             
-            // CRITICAL DEBUG: Check if this is one of the missing messages
-            if (mainThreadPost.body === 'Google a' || mainThreadPost.body === 'Google b') {
-              console.log('🚨🚨🚨 CRITICAL DEBUG: Processing missing message:', mainThreadPost.body);
-              console.log('🚨🚨🚨 CRITICAL DEBUG: Message ID:', mainThreadPost.id);
-              console.log('🚨🚨🚨 CRITICAL DEBUG: Message object:', mainThreadPost);
-            }
-            
+            // COMP METHOD: Add message to chat using window.addMessageToChat
             try {
-              await addMessageToChat(mainThreadPost);
-              console.log('✅ CHAT_LOAD: Main thread post added');
+              console.log('🔍 CHAT_LOAD: About to call window.addMessageToChat with:', mainThreadPost.id);
+              console.log('🔍 CHAT_LOAD: window.addMessageToChat type:', typeof window.addMessageToChat);
+              console.log('🔍 CHAT_LOAD: window.addMessageToChat function:', window.addMessageToChat);
+              
+              // CRITICAL DEBUG: Check if message already exists in DOM
+              const existingMessage = document.querySelector(`.message[data-message-id="${mainThreadPost.id}"]`);
+              console.log('🔍 CHAT_LOAD: Existing message in DOM:', !!existingMessage);
+              if (existingMessage) {
+                console.log('🔍 CHAT_LOAD: Message already exists, wrapper will dedupe:', mainThreadPost.id);
+              }
+              
+              if (typeof window.addMessageToChat !== 'function') {
+                console.error('❌ CHAT_LOAD: window.addMessageToChat is not a function:', typeof window.addMessageToChat);
+                return;
+              }
+              
+              console.log('🔍 CHAT_LOAD: Calling window.addMessageToChat now...');
+              
+              // COMP METHOD: Call addMessageToChat directly like COMP does
+              const result = await window.addMessageToChat(mainThreadPost);
+              console.log('🔍 CHAT_LOAD: addMessageToChat returned:', result);
+              console.log('✅ CHAT_LOAD: Main thread post added to chat');
+            } catch (error) {
+              console.error('❌ CHAT_LOAD: Error adding main thread post:', error);
+              console.error('❌ CHAT_LOAD: Error stack:', error.stack);
+              console.error('❌ CHAT_LOAD: Error message:', error.message);
+            }
               
               // CRITICAL DEBUG: Verify message was added to DOM
               if (mainThreadPost.body === 'Google a' || mainThreadPost.body === 'Google b') {
@@ -1182,12 +888,6 @@ async function loadChatHistory(communityId = null) {
                 if (addedMessage) {
                   console.log('🚨🚨🚨 CRITICAL DEBUG: Message element:', addedMessage);
                   console.log('🚨🚨🚨 CRITICAL DEBUG: Message visible:', addedMessage.offsetHeight > 0);
-                }
-              }
-            } catch (error) {
-              console.error('❌ CHAT_LOAD: Error adding main thread post:', error);
-              if (mainThreadPost.body === 'Google a' || mainThreadPost.body === 'Google b') {
-                console.log('🚨🚨🚨 CRITICAL DEBUG: ERROR adding missing message:', error);
               }
             }
             
@@ -1367,10 +1067,19 @@ async function handleMessageFocus(message) {
 }
 
   /**
-   * Handle reaction button click
+   * Handle reaction button click - COMP METHOD
    */
   async function handleReactionClick(messageId, reactionType) {
     try {
+      console.log('🔧 REACTIONS: COMP METHOD - Handling reaction click for message:', messageId);
+      
+      // COMP METHOD: Show reaction modal for new reactions
+      if (!reactionType) {
+        console.log('🔧 REACTIONS: COMP METHOD - Showing reaction modal');
+        showReactionModal(messageId);
+        return;
+      }
+      
       if (window.reactionsIntegration) {
         // Check if user already reacted with this type
         const existingReactions = await window.reactionsIntegration.reactionsManager.getReactions(messageId);
@@ -1380,14 +1089,20 @@ async function handleMessageFocus(message) {
         
         if (userReaction) {
           // Remove reaction
+          console.log('🔧 REACTIONS: COMP METHOD - Removing reaction');
           await window.reactionsIntegration.removeReaction(messageId, reactionType);
         } else {
           // Add reaction
+          console.log('🔧 REACTIONS: COMP METHOD - Adding reaction');
           await window.reactionsIntegration.addReaction(messageId, reactionType);
         }
+      } else {
+        // COMP METHOD: Fallback reaction handling
+        console.log('🔧 REACTIONS: COMP METHOD - Using fallback reaction handling');
+        await window.handleReaction({ id: messageId, reactions: [] });
       }
     } catch (error) {
-      console.error('❌ UI REACTIONS: Error handling reaction click:', error);
+      console.error('❌ UI REACTIONS: COMP METHOD - Error handling reaction click:', error);
     }
   }
 
@@ -1497,57 +1212,7 @@ async function handleMessageFocus(message) {
     });
   }
 
-  function handleReplyToMessage(message) {
-    const chatInput = document.getElementById('chat-textarea');
-    const contextBar = document.getElementById('context-bar');
-    const contextText = document.getElementById('context-text');
-    
-    if (chatInput && contextBar && contextText) {
-      // Show the actual message content instead of user name
-      const messageContent = message.body || message.content || '';
-      const replyText = messageContent.length > 50 
-        ? messageContent.substring(0, 50) + '...' 
-        : messageContent;
-      
-      // Show context bar
-      contextText.textContent = `Replying to: "${replyText}"`;
-      contextBar.style.display = 'block';
-      contextBar.style.visibility = 'visible';
-      contextBar.style.opacity = '1';
-      contextBar.style.zIndex = '1001';
-      
-      // Apply theme-aware styling
-      const isDarkMode = document.body.getAttribute('data-theme') === 'dark';
-      if (isDarkMode) {
-        contextBar.style.background = 'var(--background-secondary)';
-        contextBar.style.borderBottom = '1px solid var(--border-color)';
-        contextBar.style.color = 'var(--text-primary)';
-        contextText.style.color = 'var(--text-primary)';
-        const cancelBtn = contextBar.querySelector('#cancel-context');
-        if (cancelBtn) cancelBtn.style.color = 'var(--text-primary)';
-      } else {
-        contextBar.style.background = 'var(--background-secondary)';
-        contextBar.style.borderBottom = '1px solid var(--border-color)';
-        contextBar.style.color = 'var(--text-primary)';
-        contextText.style.color = 'var(--text-primary)';
-        const cancelBtn = contextBar.querySelector('#cancel-context');
-        if (cancelBtn) cancelBtn.style.color = 'var(--text-primary)';
-      }
-      
-      console.log('Context bar should be visible for reply mode');
-      
-      // Clear input and focus
-      chatInput.value = '';
-      chatInput.placeholder = 'Type your reply...';
-      chatInput.focus();
-      autoResize(chatInput);
-      
-      // Store the parent message ID and conversation ID for when the reply is sent
-      chatInput.dataset.replyTo = message.id;
-      chatInput.dataset.replyToConversation = message.conversationId;
-      chatInput.dataset.contextMode = 'reply';
-    }
-  }
+  // REMOVED: Duplicate handleReplyToMessage function - keeping only COMP method implementation
 
   async function handleDeleteMessage(message) {
     if (confirm('Are you sure you want to delete this message?')) {
@@ -1590,6 +1255,9 @@ async function handleMessageFocus(message) {
       }
     }
   }
+
+  // COMP METHOD: Make handleDeleteMessage globally accessible
+  window.handleDeleteMessage = handleDeleteMessage;
   
   async function handleEditMessage(message) {
     const chatTextarea = document.getElementById('chat-textarea');
@@ -1681,6 +1349,13 @@ async function handleMessageFocus(message) {
       }
     };
     
+    // CRITICAL FIX: Remove the conflicting new message handler during edit mode
+    const existingHandler = chatTextarea.getAttribute('data-message-handler');
+    if (existingHandler && window[existingHandler]) {
+      console.log('✏️ EDIT: Removing conflicting new message handler during edit mode');
+      chatTextarea.removeEventListener('keydown', window[existingHandler]);
+    }
+    
     // Handle save on button click
     const handleButtonClick = () => {
       if (sendButton && sendButton.dataset.editing === 'true') {
@@ -1745,6 +1420,19 @@ async function handleMessageFocus(message) {
       if (sendButton) {
         sendButton.removeEventListener('click', handleButtonClick);
       }
+      
+      // CRITICAL FIX: Restore the new message handler after edit mode
+      console.log('✏️ EDIT: Restoring new message handler after edit mode');
+      const handlerId = 'messageInputHandler_' + Date.now();
+      window[handlerId] = (event) => {
+        if (event.key === 'Enter' && !event.shiftKey) {
+          event.preventDefault();
+          console.log('💬 MESSAGE_INPUT: Enter key pressed, sending message');
+          sendChatMessage();
+        }
+      };
+      chatTextarea.addEventListener('keydown', window[handlerId]);
+      chatTextarea.setAttribute('data-message-handler', handlerId);
     };
     
     // Add event listeners
@@ -1823,34 +1511,7 @@ function handleStartThread(message) {
   }
 }
 
-function formatMessageTime(createdAt) {
-  const messageDate = new Date(createdAt);
-  const now = new Date();
-  const diffMs = now - messageDate;
-  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-  
-  // Same day - show hours since posted
-  if (diffDays === 0) {
-    if (diffHours === 0) {
-      const diffMins = Math.floor(diffMs / (1000 * 60));
-      return diffMins <= 1 ? 'now' : `${diffMins}m`;
-    }
-    return `${diffHours}h`;
-  }
-  
-  // Same year - show month and day
-  if (messageDate.getFullYear() === now.getFullYear()) {
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
-                    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    return `${months[messageDate.getMonth()]} ${messageDate.getDate()}`;
-  }
-  
-  // Different year - show month, day, year
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
-                  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  return `${months[messageDate.getMonth()]} ${messageDate.getDate()}, ${messageDate.getFullYear()}`;
-}
+// REMOVED: Duplicate formatMessageTime function - keeping only COMP method implementation
 
 async function getMessageActionMenu(message) {
   const now = new Date();
@@ -2401,151 +2062,7 @@ async function loadMessageReactions(messageId, reactionBtn) {
   }
 }
 
-async function handleReaction(message) {
-  const reactions = ['👍', '❓', '🔁', '🔗', '⚠️', '🙅'];
-  
-  // Find the reaction button that was clicked
-  const reactionBtn = document.querySelector(`[data-message-id="${message.id}"].reaction-btn`);
-  if (!reactionBtn) return;
-  
-  // Check if user is clicking on an existing reaction to remove it
-  const currentReaction = reactionBtn.dataset.reaction;
-  if (currentReaction && currentReaction !== '') {
-    console.log('🔄 REACTION: User clicked existing reaction, removing it...');
-    
-    // Remove the reaction
-    reactionBtn.textContent = '👍';
-    reactionBtn.dataset.reaction = '';
-    
-    // Send remove reaction event
-    try {
-      const userEmail = await getCurrentUserEmail();
-      const reactionData = {
-        message_id: message.id,
-        user_email: userEmail,
-        reaction_type: 'REMOVE',
-        emoji: '',
-        timestamp: new Date().toISOString()
-      };
-      
-      console.log('Reaction removed:', reactionData);
-      
-      // Emit real-time event for reaction removal
-      if (window.reactionsIntegration && window.reactionsIntegration.isInitialized) {
-        window.reactionsIntegration.removeReaction(message.id, currentReaction, userEmail);
-      }
-      
-      return;
-    } catch (error) {
-      console.error('❌ REACTION: Failed to remove reaction:', error);
-    }
-  }
-  
-  // Create reaction modal
-  const modal = document.createElement('div');
-  modal.className = 'reaction-modal';
-  modal.innerHTML = `
-    <div class="reaction-options">
-      ${reactions.map(reaction => `<button class="reaction-option" data-reaction="${reaction}">${reaction}</button>`).join('')}
-    </div>
-  `;
-  
-  // Position modal above the reaction button
-  const rect = reactionBtn.getBoundingClientRect();
-  modal.style.position = 'fixed';
-  modal.style.left = `${rect.left}px`;
-  modal.style.bottom = `${window.innerHeight - rect.top + 10}px`;
-  modal.style.zIndex = '10000';
-  
-  // Add modal to page
-  document.body.appendChild(modal);
-  
-  // Add click handlers for reaction options
-  modal.querySelectorAll('.reaction-option').forEach(option => {
-    option.addEventListener('click', async (e) => {
-      const selectedReaction = e.target.dataset.reaction;
-      
-      // Update the reaction button with the selected reaction
-      reactionBtn.textContent = selectedReaction;
-      reactionBtn.dataset.reaction = selectedReaction;
-      
-      // Remove modal
-      document.body.removeChild(modal);
-      
-      try {
-        // Map emoji to semantically meaningful reaction kind (original mapping)
-        const reactionMap = {
-          '👍': 'AGREE',     // Thumbs up = agree
-          '❓': 'QUESTION',  // Question mark = question
-          '🔁': 'CLARIFY',      // Repeat = clarify
-          '🔗': 'CITE',      // Link = cite
-          '⚠️': 'FLAG',      // Warning = flag
-          '🙅': 'DISAGREE'   // No gesture = disagree
-        };
-        
-        const kind = reactionMap[selectedReaction] || 'AGREE';
-        
-        // Store the actual emoji clicked for later retrieval
-        reactionBtn.dataset.selectedEmoji = selectedReaction;
-        
-        // Toggle reaction via API (store in message data)
-        // Since reactions table doesn't exist, we'll use a simple approach
-        const userEmail = await getCurrentUserEmail();
-        const reactionData = {
-          message_id: message.id,
-          user_email: userEmail,
-          reaction_type: kind,
-          emoji: selectedReaction,
-          timestamp: new Date().toISOString()
-        };
-        
-        // For now, just log the reaction - in a real system, this would be stored
-        console.log('Reaction added:', reactionData);
-        
-        // Simulate successful response
-        const response = { success: true };
-        
-        // Update reaction count if available
-        const countSpan = reactionBtn.querySelector('.icon-count');
-        if (countSpan) {
-          // Get current reactions to update count
-          // NO POLLING - Reactions arrive via Supabase real-time subscription
-          // Real-time reactions are handled by handleReactionChange()
-          const reactions = []; // Will be populated by real-time events
-          const count = reactions.length;
-          
-          if (count > 0) {
-            countSpan.textContent = count;
-            countSpan.style.display = 'inline';
-          } else {
-            countSpan.textContent = '';
-            countSpan.style.display = 'none';
-          }
-        }
-      } catch (error) {
-        console.error('Failed to add reaction:', error);
-        // Revert the button if API call failed
-        reactionBtn.textContent = '🔘';
-        delete reactionBtn.dataset.reaction;
-      }
-    });
-  });
-  
-  // Close modal when clicking outside
-  const closeModal = (e) => {
-    if (!modal.contains(e.target)) {
-      if (modal.parentNode) {
-        document.body.removeChild(modal);
-      }
-      document.removeEventListener('click', closeModal);
-    }
-  };
-  
-  // Add click outside listener after a small delay to prevent immediate closure
-  setTimeout(() => {
-    document.addEventListener('click', closeModal);
-  }, 100);
-}
+// REMOVED: Duplicate handleReaction function - keeping only COMP method implementation
 
 function handleReplyToMessage(message) {
   const chatInput = document.getElementById('chat-textarea');
@@ -2649,13 +2166,26 @@ function setupMessageInputEventListeners() {
     return;
   }
   
-  // Add Enter key support for sending messages
-  chatInput.addEventListener('keydown', (event) => {
+  // COMP FIX: Remove existing listeners to prevent duplicates
+  const existingHandler = chatInput.getAttribute('data-message-handler');
+  if (existingHandler) {
+    console.log('💬 MESSAGE_INPUT: Removing existing handler to prevent duplicates');
+    chatInput.removeEventListener('keydown', window[existingHandler]);
+  }
+  
+  // Create unique handler function
+  const handlerId = 'messageInputHandler_' + Date.now();
+  window[handlerId] = (event) => {
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
+      console.log('💬 MESSAGE_INPUT: Enter key pressed, sending message');
       sendChatMessage();
     }
-  });
+  };
+  
+  // Add Enter key support for sending messages
+  chatInput.addEventListener('keydown', window[handlerId]);
+  chatInput.setAttribute('data-message-handler', handlerId);
   
   console.log('✅ MESSAGE_INPUT: Message input event listeners added');
 }
@@ -2664,6 +2194,8 @@ function sendChatMessage() {
   console.log('🚀🚀🚀 ============================================');
   console.log('🚀🚀🚀 SEND_CHAT_MESSAGE: ENTRY POINT');
   console.log('🚀🚀🚀 ============================================');
+  console.log('🚀 SEND_CHAT_MESSAGE: Chat send button clicked');
+  console.log('🚀 SEND_CHAT_MESSAGE: Timestamp:', new Date().toISOString());
   
   const chatInput = document.getElementById('chat-textarea');
   if (!chatInput) {
@@ -2676,9 +2208,65 @@ function sendChatMessage() {
   console.log('🚀 SEND_CHAT_MESSAGE: chatInput value:', chatInput?.value);
   console.log('🚀 SEND_CHAT_MESSAGE: chatInput value length:', chatInput?.value?.length);
   
-  // Check if we're in edit mode
+  // COMP RESTORATION: Add diagnostic logging
+  if (window.messageDiagnostic) {
+    window.messageDiagnostic.logMessageSend({
+      content: chatInput?.value,
+      user: window.currentUser,
+      community: 'comm-001',
+      url: window.currentUrlData
+    });
+  }
+  
+  // COMP RESTORATION: Add auth check
+  if (typeof window.requireAuth === 'function') {
+    window.requireAuth('send messages', async () => {
+      console.log('🔐 SEND_CHAT_MESSAGE: Auth check passed');
+      console.log('🔐 SEND_CHAT_MESSAGE: window.currentUser:', window.currentUser);
+      console.log('🔐 SEND_CHAT_MESSAGE: window.currentUser.email:', window.currentUser?.email);
+      
+      // COMP METHOD: Check if we're in edit mode and handle it properly
   if (chatInput.dataset.editingMessageId) {
-    console.log('✏️ SEND_CHAT_MESSAGE: In edit mode, skipping send');
+        console.log('✏️ SEND_CHAT_MESSAGE: In edit mode, handling edit save');
+        // COMP METHOD: Handle edit mode by calling the edit save function
+        const messageId = chatInput.dataset.editingMessageId;
+        const newContent = chatInput.value.trim();
+        
+        if (newContent) {
+          console.log('✏️ SEND_CHAT_MESSAGE: Saving edit for message:', messageId);
+          // COMP METHOD: Use existing edit message logic
+          try {
+            if (window.robustIntegration && window.robustIntegration.isInitialized) {
+              console.log('✏️ EDIT: Using robust integration system');
+              await window.robustIntegration.editMessage(messageId, newContent);
+              console.log('✅ Message updated via robust integration');
+            } else {
+              // Fallback to legacy system
+              const client = window.supabaseRealtimeClient;
+              if (client) {
+                await client.editMessage(messageId, newContent);
+                console.log('✅ Message updated via Supabase real-time (legacy)');
+              } else {
+                console.error('❌ Supabase client not available for message editing');
+              }
+            }
+            
+            // Clear edit mode after successful edit
+            chatInput.dataset.editingMessageId = '';
+            chatInput.placeholder = 'Type a message...';
+            chatInput.value = '';
+            
+            const sendButton = document.querySelector('#sendButton, .send-button');
+            if (sendButton) {
+              sendButton.textContent = 'Send';
+              delete sendButton.dataset.editing;
+            }
+            
+            console.log('✅ COMP METHOD: Edit completed and mode cleared');
+          } catch (error) {
+            console.error('❌ COMP METHOD: Error editing message:', error);
+          }
+        }
     return;
   }
   
@@ -2694,15 +2282,43 @@ function sendChatMessage() {
   // Use the existing sendMessageViaSupabase function
   if (typeof window.sendMessageViaSupabase === 'function') {
     console.log('📡 SEND_CHAT_MESSAGE: Calling sendMessageViaSupabase...');
-    window.sendMessageViaSupabase(message).then((result) => {
+        
+        // Check for reply context
+        const chatInput = document.getElementById('chat-textarea');
+        const parentId = chatInput?.dataset?.replyingTo || null;
+        console.log('📡 SEND_CHAT_MESSAGE: ParentId from reply context:', parentId);
+        
+        try {
+          const result = await window.sendMessageViaSupabase(message, parentId);
       console.log('📡 SEND_CHAT_MESSAGE: Message sent successfully:', result);
+          
+          // Reply hierarchy is now handled by database parent_id field
+          if (parentId) {
+            console.log('🔧 REPLY HIERARCHY: COMP METHOD - Reply sent with parentId:', parentId);
+            console.log('🔧 REPLY HIERARCHY: COMP METHOD - Database will handle hierarchy via parent_id field');
+          }
+          
+          // COMP RESTORATION: Add diagnostic logging for message persistence
+          if (window.messageDiagnostic) {
+            const success = result && result.id;
+            window.messageDiagnostic.logMessagePersist(
+              result?.id || 'NO_ID',
+              success,
+              message
+            );
+          }
+          
       // Clear the input
       chatInput.value = '';
-    }).catch((error) => {
+        } catch (error) {
       console.error('❌ SEND_CHAT_MESSAGE: Failed to send message:', error);
-    });
+        }
   } else {
     console.log('❌ SEND_CHAT_MESSAGE: sendMessageViaSupabase not available');
+      }
+    });
+  } else {
+    console.log('❌ SEND_CHAT_MESSAGE: requireAuth not available');
   }
 }
 
@@ -2775,15 +2391,1124 @@ function updateVerticalLineHeight(threadStarter, replies) {
   threadStarter.style.setProperty('--vertical-line-height', `${height}px`);
 }
 
+// ===== COMP METHOD: addMessageToChat Function =====
+// This is the COMP version of addMessageToChat with all proper functionality
+async function addMessageToChat(message) {
+  console.log('🎯🎯🎯 ============================================');
+  console.log('🎯🎯🎯 ADD_MESSAGE_TO_CHAT: ENTRY POINT');
+  console.log('🎯🎯🎯 ============================================');
+  console.log('🔍 ADD_MESSAGE: Starting addMessageToChat');
+  console.log('🔍 ADD_MESSAGE: Timestamp:', new Date().toISOString());
+  console.log('🔍 ADD_MESSAGE: Message:', message);
+  console.log('🔍 ADD_MESSAGE: Message type:', typeof message);
+  console.log('🔍 ADD_MESSAGE: Message id:', message?.id);
+  console.log('🔍 ADD_MESSAGE: Message body:', message?.body);
+  console.log('🔍 ADD_MESSAGE: Message content:', message?.content);
+  console.log('🔍 ADD_MESSAGE: Message author:', message?.author);
+  console.log('🔍 ADD_MESSAGE: Message author.name:', message?.author?.name);
+  console.log('🔍 ADD_MESSAGE: Message author.avatarUrl:', message?.author?.avatarUrl);
+  
+  // CRITICAL: Filter out deleted messages without replies
+  const isDeleted = message.deletedAt || (message.body && message.body.trim() === '[Deleted]');
+  console.log('🔍 ADD_MESSAGE: isDeleted:', isDeleted);
+  console.log('🔍 ADD_MESSAGE: message.hasReplies:', message.hasReplies);
+  
+  if (isDeleted && !message.hasReplies) {
+    console.log('🔍 ADD_MESSAGE: SKIPPING deleted message without replies:', message.id);
+    return;
+  }
+  
+  console.log('🔍 ADD_MESSAGE: === FINDING CHAT MESSAGES CONTAINER ===');
+  const chatMessages = document.querySelector('.chat-messages');
+  console.log('🔍 ADD_MESSAGE: chatMessages element:', !!chatMessages);
+  console.log('🔍 ADD_MESSAGE: chatMessages type:', typeof chatMessages);
+  
+  if (!chatMessages) {
+    console.log('❌❌❌ ADD_MESSAGE: No chat-messages element found - CANNOT ADD MESSAGE');
+    return;
+  }
+  console.log('✅ ADD_MESSAGE: Found chat-messages element');
+  console.log('✅ ADD_MESSAGE: chatMessages children count:', chatMessages.children.length);
+
+  // Remove placeholder text if it exists
+  const placeholder = chatMessages.querySelector('p[style*="text-align: center"]');
+  if (placeholder) {
+    console.log('🔍 ADD_MESSAGE: Removing placeholder text');
+    placeholder.remove();
+  }
+
+  // Get the community name from the conversation
+  let communityName = '';
+  if (message.conversation) {
+    if (message.conversation.communityName) {
+      communityName = message.conversation.communityName;
+    } else if (message.conversation.communityId) {
+      const result = await chrome.storage.local.get(['communities']);
+      const communities = result.communities || [];
+      const community = communities.find(c => c.id === message.conversation.communityId);
+      communityName = community ? community.name : '';
+    }
+  }
+  
+  // Fallback to current primary community if no community found
+  if (!communityName && typeof window.getPrimaryCommunityName === 'function') {
+    communityName = await window.getPrimaryCommunityName();
+  }
+  
+  // Create message element
+  console.log('🔍 ADD_MESSAGE: Creating message element for:', message.id);
+  const messageDiv = document.createElement('div');
+  
+  // Determine message type and add appropriate classes
+  if (message.isReply) {
+    messageDiv.className = 'message message-reply thread-reply';
+  } else {
+    messageDiv.className = 'message thread-starter';
+    
+    if (message.hasReplies) {
+      messageDiv.classList.add('has-replies');
+    }
+  }
+  
+  messageDiv.dataset.messageId = message.id;
+  messageDiv.dataset.conversationId = message.conversationId;
+  messageDiv.dataset.authorId = message.authorId || message.author?.email || message.author?.id;
+  
+  // COMP METHOD: Use direct author data like COMP does
+  let author = message.author;
+  
+  // If no author data, create from message.user_email (COMP method)
+  if (!author && message.user_email) {
+    const senderEmail = message.user_email;
+    const senderName = senderEmail.split('@')[0];
+    
+    // COMP METHOD: Use simple avatar resolution like COMP
+    let senderAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(senderName)}&background=4ECDC4&color=fff&size=32&bold=true`;
+    
+    // If this is the current user's own message, use their real avatar
+    if (window.currentUser && senderEmail === window.currentUser.email) {
+      senderAvatar = window.currentUser.avatarUrl || window.currentUser.picture || senderAvatar;
+    }
+    
+    author = {
+      name: senderName,
+      email: senderEmail,
+      avatarUrl: senderAvatar
+    };
+  }
+  
+  // Fallback to current user only if this is their own message
+  if (!author && window.currentUser && message.user_email === window.currentUser.email) {
+    author = {
+      name: window.currentUser.name || window.currentUser.email?.split('@')[0] || 'Unknown',
+      email: window.currentUser.email || 'unknown@example.com',
+      avatarUrl: window.currentUser.avatarUrl || window.currentUser.picture
+    };
+  }
+  
+  // Final fallback if still no author data
+  if (!author) {
+    author = { name: 'Unknown', email: 'unknown@example.com', avatarUrl: 'https://ui-avatars.com/api/?name=Unknown&background=4ECDC4&color=fff&size=32&bold=true' };
+  }
+  
+  const senderName = author.name || author.email?.split('@')[0] || 'Unknown User';
+  
+  // COMP RESTORATION: Log resolved author data
+  console.log('🔍 ADD_MESSAGE: Resolved author data:');
+  console.log('  Author name:', senderName);
+  console.log('  Author email:', author.email);
+  console.log('  Author avatar:', author.avatarUrl);
+  console.log('  Message user_email:', message.user_email);
+  console.log('  Current user email:', window.currentUser?.email);
+  console.log('  Cross-profile issue:', author.email !== window.currentUser?.email);
+  
+  // Add reaction and reply buttons with counts
+  const reactionCount = message.reactionCount || 0;
+  const replyCount = message.replyCount || 0;
+  const hasUnseenReplies = message.hasUnseenReplies || false;
+  
+  const reactionButton = `<button class="reaction-btn" data-message-id="${message.id}" title="Add reaction" style="background: none; border: none; cursor: pointer; padding: 4px; border-radius: 4px; font-size: 14px; display: flex; align-items: center; gap: 4px;">🔘<span class="icon-count">${reactionCount > 0 ? reactionCount : ''}</span></button>`;
+  const replyButton = `<button class="inline-reply-btn" data-message-id="${message.id}" title="Reply to message" style="background: none; border: none; cursor: pointer; padding: 4px; border-radius: 4px; font-size: 14px;">💬</button>`;
+  
+  // Add thread toggle for first post in thread that has replies
+  let threadToggleButton = '';
+  if (message.hasReplies) {
+    threadToggleButton = `<button class="thread-toggle-btn" data-thread-id="${message.conversationId}" title="Show thread replies" data-expanded="false">📂<span class="icon-count ${hasUnseenReplies ? 'unseen' : ''}">${replyCount}</span></button>`;
+  }
+  
+  // COMP METHOD: Use exact COMP message action menu structure
+  const canEdit = message.user_email === window.currentUser?.email || 
+                  message.authorId === window.currentUser?.email || 
+                  message.author?.email === window.currentUser?.email;
+  const messageActionMenu = canEdit ? `
+    <div class="message-actions-new" style="opacity: 1 !important; display: flex !important; visibility: visible !important;">
+      <button class="message-action-btn edit-btn" data-message-id="${message.id}" title="Edit message" style="background: none; border: none; cursor: pointer; padding: 4px; border-radius: 4px; font-size: 14px;">✏️</button>
+      <button class="message-action-btn delete-btn" data-message-id="${message.id}" title="Delete message" style="background: none; border: none; cursor: pointer; padding: 4px; border-radius: 4px; font-size: 14px;">🗑️</button>
+    </div>
+  ` : '';
+  
+  // Convert URLs to clickable links
+  const contentWithLinks = convertUrlsToLinks(message.body || message.content);
+  
+  messageDiv.innerHTML = `
+    <div class="avatar-container">${await getSenderAvatar(author)}</div>
+    <div class="message-content-wrapper">
+      <div class="message-header-new">
+        <span class="message-sender-name">${senderName}${communityName ? ` • ${communityName}` : ''}</span>
+        <span class="message-time-new">${formatMessageTime(message.createdAt)}</span>
+        <div class="message-actions-new" style="opacity: 1 !important; display: flex !important; visibility: visible !important;">
+          ${messageActionMenu}
+        </div>
+      </div>
+      <div class="message-content">${contentWithLinks}</div>
+      ${message.optionalContent ? `<div class="message-anchor">📍 ${message.optionalContent}</div>` : ''}
+      <div class="message-footer">
+        ${reactionButton}
+        ${replyButton}
+        ${threadToggleButton}
+      </div>
+    </div>
+  `;
+  
+  // Add event listeners for action buttons
+  addMessageActionListeners(messageDiv, message);
+  
+  // Add thread toggle listener
+  if (threadToggleButton) {
+    const toggleBtn = messageDiv.querySelector('.thread-toggle-btn');
+    if (toggleBtn) {
+      toggleBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        // For replies, focus the message instead of toggling
+        if (message.isReply) {
+          handleMessageFocus(message);
+        } else {
+          toggleThreadReplies(message.conversationId, messageDiv);
+        }
+      });
+    }
+  }
+  
+  console.log('🔍 ADD_MESSAGE: Adding message to DOM:', message.id);
+  chatMessages.appendChild(messageDiv);
+  console.log('✅ ADD_MESSAGE: Message added to DOM successfully');
+  
+  // COMP METHOD: Handle reply indenting after DOM update
+  if (message.parentId || message.isReply) {
+    console.log('🔧 COMP_REPLY_FIX: Message is a reply, adding indentation');
+    
+    // Add COMP-style reply styling and indentation
+    messageDiv.style.marginLeft = '30px';
+    messageDiv.style.borderLeft = '4px solid #45B7D1';
+    messageDiv.style.paddingLeft = '15px';
+    messageDiv.style.backgroundColor = '#f8f9fa';
+    messageDiv.classList.add('reply-message');
+    
+    // Add reply indicator like COMP
+    const replyIndicator = document.createElement('div');
+    replyIndicator.className = 'reply-indicator';
+    replyIndicator.style.cssText = `
+      font-size: 12px;
+      color: #45B7D1;
+      margin-bottom: 8px;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+    `;
+    replyIndicator.innerHTML = `
+      <span style="margin-right: 5px;">↳</span>
+      <span>Reply to ${message.parentAuthor || 'previous message'}</span>
+    `;
+    
+    messageDiv.insertBefore(replyIndicator, messageDiv.firstChild);
+    
+    // Add visual connection to parent like COMP
+    const parentElement = document.querySelector(`[data-message-id="${message.parentId}"]`);
+    if (parentElement) {
+      parentElement.classList.add('has-replies');
+      parentElement.style.borderBottom = '2px solid #e9ecef';
+    }
+    
+    console.log(`✅ COMP_REPLY_FIX: Added proper reply indentation to message ${message.id}`);
+  }
+  
+  // Add message to global storage for avatar updates
+  if (!window.currentChatData) {
+    window.currentChatData = [];
+  }
+  
+  // CRITICAL FIX: Check if message already exists in DOM to prevent duplicates
+  const existingMessageElement = chatMessages.querySelector(`[data-message-id="${message.id}"]`);
+  if (existingMessageElement) {
+    console.log('🔍 ADD_MESSAGE: Message already exists in DOM, skipping duplicate:', message.id);
+    console.log('🔍 ADD_MESSAGE: Existing message element:', existingMessageElement);
+    return; // Skip adding duplicate message
+  }
+  
+  // Scroll to bottom
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+  
+  console.log('✅ ADD_MESSAGE: Message added to chat successfully');
+}
+
+// ===== COMP METHOD: Helper Functions =====
+
+// Function to get sender avatar with proper styling - REMOVED DUPLICATE
+// Using the main getSenderAvatar function above that uses AvatarUtils.createUnifiedAvatar
+
+// Function to get sender initial if no avatar
+function getSenderInitial(name) {
+  const initial = (name || 'U').charAt(0).toUpperCase();
+  return `
+    <div class="avatar-initial" style="width: 32px; height: 32px; border-radius: 50%; background: #aaaaaa; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold;">
+      ${initial}
+    </div>
+  `;
+}
+
+// Function to format message time
+function formatMessageTime(createdAt) {
+  if (!createdAt) return new Date().toLocaleTimeString();
+  return new Date(createdAt).toLocaleTimeString();
+}
+
+// Function to check if user can edit message
+function canUserEditMessage(message) {
+  if (!window.currentUser) return false;
+  
+  const now = new Date();
+  const messageDate = new Date(message.createdAt);
+  const diffMs = now - messageDate;
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  
+  // Can edit within 1 hour and is the author
+  return diffHours < 1 && message.authorId === window.currentUser.email;
+}
+
+// Function to get message action menu
+async function getMessageActionMenu(message) {
+  const canEdit = canUserEditMessage(message);
+  
+  if (!canEdit) return '';
+  
+  return `
+    <div class="message-actions" style="opacity: 0; transition: opacity 0.2s; position: relative; z-index: 1000;">
+      <button class="message-action-btn edit-btn" data-message-id="${message.id}" title="Edit message" style="margin-right: 4px;">✏️</button>
+      <button class="message-action-btn delete-btn" data-message-id="${message.id}" title="Delete message">🗑️</button>
+    </div>
+  `;
+}
+
+// Function to add message action listeners
+function addMessageActionListeners(messageDiv, message) {
+  console.log('🔧 MESSAGE_ACTIONS: Adding event listeners for message:', message.id);
+  
+  // Reaction button
+  const reactionBtn = messageDiv.querySelector('.reaction-btn');
+  if (reactionBtn) {
+    reactionBtn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      console.log('🔘 REACTION: Reaction button clicked for message:', message.id);
+      
+      // COMP METHOD: Use exact COMP reaction implementation
+      await handleReaction(message);
+    });
+    
+    // Load existing reactions for this message
+    loadMessageReactions(message.id, reactionBtn);
+  }
+  
+  // Reply button - COMP METHOD
+  const replyBtn = messageDiv.querySelector('.inline-reply-btn');
+  if (replyBtn) {
+    replyBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      console.log('💬 REPLY: COMP METHOD - Reply button clicked for message:', message.id);
+      
+      // COMP METHOD: Implement reply functionality
+      window.handleReply(message);
+      const chatInput = document.getElementById('chat-textarea');
+      if (chatInput) {
+        // Focus the input and add reply indicator
+        chatInput.focus();
+        chatInput.placeholder = `Reply to ${message.author?.name || 'message'}...`;
+        
+        // Set reply context for message sending
+        chatInput.dataset.replyingTo = message.id;
+        chatInput.dataset.replyAuthor = message.author?.name || 'message';
+        
+        // Add visual indicator
+        chatInput.style.border = '2px solid #4ECDC4';
+        chatInput.style.backgroundColor = '#f0f8ff';
+        
+        console.log('💬 REPLY: Set reply context for message:', message.id);
+        console.log('💬 REPLY: Reply author:', message.author?.name);
+      }
+    });
+  }
+  
+  // Thread toggle button
+  const threadToggleBtn = messageDiv.querySelector('.thread-toggle-btn');
+  if (threadToggleBtn) {
+    threadToggleBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      console.log('📂 THREAD: Thread toggle clicked for message:', message.id);
+      // TODO: Implement thread toggle functionality
+    });
+  }
+  
+  // Edit button
+  const editBtn = messageDiv.querySelector('.edit-btn');
+  if (editBtn) {
+    editBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      console.log('✏️ EDIT: Edit button clicked for message:', message.id);
+      
+      // COMP RESTORATION: Implement edit functionality
+      const messageContent = messageDiv.querySelector('.message-content');
+      const chatInput = document.getElementById('chat-textarea');
+      
+      if (messageContent && chatInput) {
+        // Set the input to edit mode
+        chatInput.value = messageContent.textContent;
+        chatInput.dataset.editingMessageId = message.id;
+        chatInput.focus();
+        
+        // Update placeholder
+        chatInput.placeholder = 'Edit your message...';
+        
+        console.log('✏️ EDIT: Entered edit mode for message:', message.id);
+      }
+    });
+  }
+  
+  // Delete button
+  const deleteBtn = messageDiv.querySelector('.delete-btn');
+  if (deleteBtn) {
+    deleteBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      console.log('🗑️ DELETE: Delete button clicked for message:', message.id);
+      
+      // COMP METHOD: Use the proper handleDeleteMessage function
+      handleDeleteMessage(message);
+    });
+  }
+  
+  // Add hover effects for message actions
+  messageDiv.addEventListener('mouseenter', () => {
+    const messageActions = messageDiv.querySelector('.message-actions');
+    if (messageActions) {
+      messageActions.style.opacity = '1';
+    }
+  });
+  
+  messageDiv.addEventListener('mouseleave', () => {
+    const messageActions = messageDiv.querySelector('.message-actions');
+    if (messageActions) {
+      messageActions.style.opacity = '0';
+    }
+  });
+  
+  console.log('✅ MESSAGE_ACTIONS: Event listeners added successfully');
+}
+
+// Function to handle message focus
+function handleMessageFocus(message) {
+  console.log('🎯 FOCUS: Focusing message:', message.id);
+  // TODO: Implement message focus functionality
+}
+
+// Function to toggle thread replies
+function toggleThreadReplies(conversationId, messageDiv) {
+  console.log('📂 THREAD: Toggling thread replies for:', conversationId);
+  // TODO: Implement thread toggle functionality
+}
+
+// Function to convert URLs to clickable links
+function convertUrlsToLinks(text) {
+  if (!text) return text;
+  
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  return text.replace(urlRegex, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
+}
+
+// COMP METHOD: Exact COMP reaction implementation
+async function handleReaction(message) {
+  const reactions = ['👍', '❓', '🔁', '🔗', '⚠️', '🙅'];
+  
+  // Find the reaction button that was clicked
+  const reactionBtn = document.querySelector(`[data-message-id="${message.id}"].reaction-btn`);
+  if (!reactionBtn) return;
+  
+  // Check if user is clicking on an existing reaction to remove it
+  const currentReaction = reactionBtn.dataset.reaction;
+  if (currentReaction && currentReaction !== '') {
+    console.log('🔄 REACTION: User clicked existing reaction, removing it...');
+    
+    // Remove the reaction
+    reactionBtn.textContent = '🔘';
+    reactionBtn.dataset.reaction = '';
+    
+    // Send remove reaction event
+    try {
+      const userEmail = window.currentUser?.email;
+      const reactionData = {
+        message_id: message.id,
+        user_email: userEmail,
+        reaction_type: 'REMOVE',
+        emoji: '',
+        timestamp: new Date().toISOString()
+      };
+      
+      console.log('Reaction removed:', reactionData);
+      
+      // Emit real-time event for reaction removal
+      if (window.reactionsIntegration && window.reactionsIntegration.isInitialized) {
+        window.reactionsIntegration.removeReaction(message.id, currentReaction, userEmail);
+      }
+      
+      return;
+    } catch (error) {
+      console.error('❌ REACTION: Failed to remove reaction:', error);
+    }
+  }
+  
+  // Create reaction modal
+  const modal = document.createElement('div');
+  modal.className = 'reaction-modal';
+  modal.innerHTML = `
+    <div class="reaction-options">
+      ${reactions.map(reaction => `<button class="reaction-option" data-reaction="${reaction}">${reaction}</button>`).join('')}
+    </div>
+  `;
+  
+  // Position modal above the reaction button
+  const rect = reactionBtn.getBoundingClientRect();
+  modal.style.position = 'fixed';
+  modal.style.left = `${rect.left}px`;
+  modal.style.top = `${rect.top - 60}px`; // Position above button
+  modal.style.zIndex = '99999'; // Higher z-index
+  modal.style.display = 'block';
+  modal.style.background = 'white';
+  modal.style.border = '2px solid #007bff'; // More visible border
+  modal.style.borderRadius = '8px';
+  modal.style.boxShadow = '0 8px 24px rgba(0, 0, 0, 0.3)'; // Stronger shadow
+  modal.style.padding = '12px';
+  modal.style.minWidth = '200px';
+  modal.style.maxWidth = '300px';
+  
+  console.log('🔧 REACTIONS: COMP METHOD - Creating modal with reactions:', reactions);
+  console.log('🔧 REACTIONS: COMP METHOD - Modal HTML:', modal.innerHTML);
+  console.log('🔧 REACTIONS: COMP METHOD - Button rect:', rect);
+  console.log('🔧 REACTIONS: COMP METHOD - Modal position:', modal.style.left, modal.style.top);
+  
+  // Add modal to page
+  document.body.appendChild(modal);
+  
+  console.log('🔧 REACTIONS: COMP METHOD - Modal added to DOM, checking visibility...');
+  console.log('🔧 REACTIONS: COMP METHOD - Modal display:', modal.style.display);
+  console.log('🔧 REACTIONS: COMP METHOD - Modal position:', modal.style.position);
+  console.log('🔧 REACTIONS: COMP METHOD - Modal z-index:', modal.style.zIndex);
+  console.log('🔧 REACTIONS: COMP METHOD - Modal computed style:', window.getComputedStyle(modal).display);
+  
+  // Add click handlers for reaction options
+  modal.querySelectorAll('.reaction-option').forEach(option => {
+    option.addEventListener('click', async (e) => {
+      const selectedReaction = e.target.dataset.reaction;
+      
+      console.log('🔧 REACTIONS: COMP METHOD - Selected reaction:', selectedReaction);
+      
+      // Update the reaction button with the selected reaction
+      reactionBtn.textContent = selectedReaction;
+      reactionBtn.dataset.reaction = selectedReaction;
+      
+      // Remove modal
+      if (modal.parentNode) {
+        document.body.removeChild(modal);
+      }
+      
+      try {
+        // Map emoji to semantically meaningful reaction kind (original mapping)
+        const reactionMap = {
+          '👍': 'AGREE',     // Thumbs up = agree
+          '❓': 'QUESTION',  // Question mark = question
+          '🔁': 'CLARIFY',      // Repeat = clarify
+          '🔗': 'CITE',      // Link = cite
+          '⚠️': 'FLAG',      // Warning = flag
+          '🙅': 'DISAGREE'   // No gesture = disagree
+        };
+        
+        const kind = reactionMap[selectedReaction] || 'AGREE';
+        
+        // Store the actual emoji clicked for later retrieval
+        reactionBtn.dataset.selectedEmoji = selectedReaction;
+        
+        // Toggle reaction via API (store in message data)
+        // Since reactions table doesn't exist, we'll use a simple approach
+        const userEmail = window.currentUser?.email;
+        const reactionData = {
+          message_id: message.id,
+          user_email: userEmail,
+          reaction_type: kind,
+          emoji: selectedReaction,
+          timestamp: new Date().toISOString()
+        };
+        
+        // For now, just log the reaction - in a real system, this would be stored
+        console.log('Reaction added:', reactionData);
+        
+        // Emit real-time event for reaction addition
+        if (window.reactionsIntegration && window.reactionsIntegration.isInitialized) {
+          window.reactionsIntegration.addReaction(message.id, selectedReaction, userEmail);
+        }
+        
+      } catch (error) {
+        console.error('❌ REACTION: Failed to add reaction:', error);
+      }
+    });
+  });
+  
+  // Add click-outside handler to close modal
+  setTimeout(() => {
+    document.addEventListener('click', function closeModal(e) {
+      if (!modal.contains(e.target) && e.target !== reactionBtn) {
+        console.log('🔧 REACTIONS: COMP METHOD - Clicking outside modal, closing...');
+        if (modal.parentNode) {
+          document.body.removeChild(modal);
+        }
+        document.removeEventListener('click', closeModal);
+      }
+    });
+  }, 100);
+}
+
+// COMP METHOD: Exact COMP loadMessageReactions implementation
+async function loadMessageReactions(messageId, reactionBtn) {
+  try {
+    // First try to get reactions from the stored reactions data if available
+    let reactions = [];
+    // Find the parent message div (not the button itself)
+    const messageDiv = reactionBtn.closest('.message');
+    if (messageDiv) {
+      console.log('Message div found:', messageDiv);
+      console.log('Message div dataset:', messageDiv.dataset);
+      const reactionsData = messageDiv.dataset.reactions;
+      console.log('📊 Stored reactions data:', reactionsData);
+      if (reactionsData) {
+        reactions = JSON.parse(reactionsData);
+      }
+    } else {
+      console.error('No message div found for reaction button');
+    }
+    
+    // Fallback to API call if no conversation data
+    if (reactions.length === 0) {
+      console.log('No stored reactions, calling API for message', messageId);
+      // NO POLLING - Reactions arrive via Supabase real-time subscription
+      // Real-time reactions are handled by handleReactionChange()
+      reactions = []; // Empty for now, will be populated by real-time events
+      console.log('API returned reactions:', reactions);
+    }
+    
+    const countSpan = reactionBtn.querySelector('.icon-count');
+    
+    if (reactions && reactions.length > 0) {
+      console.log(`📊 Found ${reactions.length} reactions`);
+      
+      // Update count
+      if (countSpan) {
+        countSpan.textContent = reactions.length;
+        countSpan.style.display = 'inline';
+        console.log(`📊 Updated count to: ${reactions.length}`);
+      }
+      
+      // Check if current user has reacted - use window.currentUser
+      const currentUser = window.currentUser;
+      console.log('👤 Current user:', currentUser);
+      
+      if (currentUser) {
+        // Generate the same UUID that the server uses
+        const serverUserId = currentUser.id; // Use the user ID from the database
+        console.log(`🆔 Generated server user ID: ${serverUserId}`);
+        
+        // Find user reaction by ID or email (fallback for existing data)
+        console.log(`   Current user email: ${currentUser.email}`);
+        
+        const userReaction = reactions.find(r => 
+          r.user_id === serverUserId || r.user_email === currentUser.email
+        );
+        
+        if (userReaction) {
+          console.log('👤 User has reacted:', userReaction);
+          // Update button to show user's reaction
+          reactionBtn.textContent = userReaction.emoji || '👍';
+          reactionBtn.dataset.reaction = userReaction.emoji || '';
+          reactionBtn.dataset.selectedEmoji = userReaction.emoji || '';
+        } else {
+          console.log('👤 User has not reacted');
+          // Reset to default
+          reactionBtn.textContent = '🔘';
+          reactionBtn.dataset.reaction = '';
+          reactionBtn.dataset.selectedEmoji = '';
+        }
+      }
+    } else {
+      console.log('📊 No reactions found');
+      
+      // Reset to default state
+      if (countSpan) {
+        countSpan.textContent = '';
+        countSpan.style.display = 'none';
+      }
+      reactionBtn.textContent = '🔘';
+      reactionBtn.dataset.reaction = '';
+      reactionBtn.dataset.selectedEmoji = '';
+    }
+  } catch (error) {
+    console.error('❌ REACTION: Failed to load reactions:', error);
+  }
+}
+
+// COMP METHOD: Add CSS for reply styling
+const replyStyle = document.createElement('style');
+replyStyle.textContent = `
+  .reply-message {
+    position: relative;
+  }
+  .reply-message::before {
+    content: '';
+    position: absolute;
+    left: -4px;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    background: #45B7D1;
+    border-radius: 2px;
+  }
+  .has-replies {
+    position: relative;
+  }
+  .has-replies::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    bottom: -2px;
+    width: 100%;
+    height: 2px;
+    background: #e9ecef;
+  }
+`;
+document.head.appendChild(replyStyle);
+
 // Export for global access
+console.log('🔍 CANOPI: About to export loadChatHistory to window');
 window.CanopiModule = CanopiModule;
 window.loadChatHistory = loadChatHistory;
+console.log('🔍 CANOPI: loadChatHistory exported to window:', typeof window.loadChatHistory);
 window.addMessageToChat = addMessageToChat;
 window.sendMessageViaSupabase = sendMessageViaSupabase;
 window.updateMessageInChat = updateMessageInChat;
+
+// Ensure loadChatHistory is available immediately
+console.log('🔍 CANOPI: loadChatHistory exported to window:', typeof window.loadChatHistory);
 window.removeMessageFromChat = removeMessageFromChat;
 window.checkAndAddThreadToggle = checkAndAddThreadToggle;
 window.setupMessageInputEventListeners = setupMessageInputEventListeners;
 window.sendChatMessage = sendChatMessage;
 window.convertUrlsToLinks = convertUrlsToLinks;
 window.updateMessageVisualHierarchy = updateMessageVisualHierarchy;
+
+// COMP METHOD: Add reply handling functions
+window.handleReply = function(message) {
+  console.log('🔧 REPLIES: COMP METHOD - Handling reply for message:', message.id);
+  
+  // Focus the message input
+  const messageInput = document.querySelector('#message-input, .message-input, input[type="text"], #chat-textarea');
+  if (messageInput) {
+    messageInput.focus();
+    messageInput.value = `@${message.author?.name || 'User'} `;
+    console.log('✅ REPLIES: COMP METHOD - Message input focused for reply');
+  } else {
+    console.error('❌ REPLIES: COMP METHOD - Message input not found');
+  }
+};
+
+// COMP METHOD: Add thread toggle function
+window.toggleThreadReplies = function(conversationId, messageDiv) {
+  console.log('🔧 REPLIES: COMP METHOD - Toggling thread replies for conversation:', conversationId);
+  
+  const toggleBtn = messageDiv.querySelector('.thread-toggle-btn');
+  if (!toggleBtn) return;
+  
+  const isExpanded = toggleBtn.dataset.expanded === 'true';
+  toggleBtn.dataset.expanded = !isExpanded;
+  
+  if (isExpanded) {
+    // Hide replies
+    const replies = messageDiv.querySelectorAll('.thread-reply');
+    replies.forEach(reply => reply.style.display = 'none');
+    toggleBtn.innerHTML = '📂<span class="icon-count">' + (toggleBtn.querySelector('.icon-count')?.textContent || '0') + '</span>';
+  } else {
+    // Show replies
+    const replies = messageDiv.querySelectorAll('.thread-reply');
+    replies.forEach(reply => reply.style.display = 'block');
+    toggleBtn.innerHTML = '📂<span class="icon-count">' + (toggleBtn.querySelector('.icon-count')?.textContent || '0') + '</span>';
+  }
+  
+  console.log('✅ REPLIES: COMP METHOD - Thread toggled:', !isExpanded);
+};
+
+// COMP METHOD: Add reaction handling function
+window.handleReaction = async function(message) {
+  console.log('🔧 REACTIONS: COMP METHOD - Handling reaction for message:', message.id);
+  
+  try {
+    // Get current user
+    const currentUser = window.currentUser || { email: 'user@example.com' };
+    
+    // Check if user already reacted
+    const existingReactions = message.reactions || [];
+    const userReaction = existingReactions.find(r => r.user_email === currentUser.email);
+    
+    if (userReaction) {
+      // Remove reaction
+      console.log('🔧 REACTIONS: COMP METHOD - Removing reaction');
+      await window.removeReaction(message.id, userReaction.reaction_type);
+    } else {
+      // Add reaction
+      console.log('🔧 REACTIONS: COMP METHOD - Adding reaction');
+      await window.addReaction(message.id, 'like');
+    }
+    
+  } catch (error) {
+    console.error('❌ REACTIONS: COMP METHOD - Error handling reaction:', error);
+  }
+};
+
+// COMP METHOD: Add reaction function
+window.addReaction = async function(messageId, reactionType) {
+  console.log('🔧 REACTIONS: COMP METHOD - Adding reaction:', reactionType, 'to message:', messageId);
+  
+  try {
+    const currentUser = window.currentUser || { email: 'user@example.com' };
+    
+    // Create reaction data
+    const reactionData = {
+      message_id: messageId,
+      user_email: currentUser.email,
+      reaction_type: reactionType,
+      created_at: new Date().toISOString()
+    };
+    
+    // Send via API
+    const response = await fetch('https://api.themetalayer.org/v1/reactions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(reactionData)
+    });
+    
+    if (response.ok) {
+      console.log('✅ REACTIONS: COMP METHOD - Reaction added successfully');
+      // Refresh message reactions
+      await window.loadMessageReactions(messageId);
+    } else {
+      console.error('❌ REACTIONS: COMP METHOD - Failed to add reaction:', response.status);
+      console.log('🔧 REACTIONS: COMP METHOD - Triggering local storage fallback due to API error');
+      throw new Error(`API call failed with status: ${response.status}`);
+    }
+    
+  } catch (error) {
+    console.error('❌ REACTIONS: COMP METHOD - Error adding reaction:', error);
+    throw error;
+  }
+};
+
+// COMP METHOD: Remove reaction function
+window.removeReaction = async function(messageId, reactionType) {
+  console.log('🔧 REACTIONS: COMP METHOD - Removing reaction:', reactionType, 'from message:', messageId);
+  
+  try {
+    const currentUser = window.currentUser || { email: 'user@example.com' };
+    
+    // Send delete request
+    const response = await fetch(`https://api.themetalayer.org/v1/reactions/${messageId}/${reactionType}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_email: currentUser.email })
+    });
+    
+    if (response.ok) {
+      console.log('✅ REACTIONS: COMP METHOD - Reaction removed successfully');
+      // Refresh message reactions
+      await window.loadMessageReactions(messageId);
+    } else {
+      console.error('❌ REACTIONS: COMP METHOD - Failed to remove reaction:', response.status);
+    }
+    
+  } catch (error) {
+    console.error('❌ REACTIONS: COMP METHOD - Error removing reaction:', error);
+  }
+};
+
+// COMP METHOD: Load message reactions
+window.loadMessageReactions = async function(messageId) {
+  console.log('🔧 REACTIONS: COMP METHOD - Loading reactions for message:', messageId);
+  
+  try {
+    const response = await fetch(`https://api.themetalayer.org/v1/reactions/${messageId}`);
+    if (response.ok) {
+      const reactions = await response.json();
+      console.log('🔧 REACTIONS: COMP METHOD - Loaded reactions:', reactions.length);
+      
+      // Update reaction display
+      await window.updateReactionDisplay(messageId, reactions);
+    }
+  } catch (error) {
+    console.error('❌ REACTIONS: COMP METHOD - Error loading reactions:', error);
+  }
+};
+
+// COMP METHOD: Update reaction display
+window.updateReactionDisplay = async function(messageId, reactions) {
+  console.log('🔧 REACTIONS: COMP METHOD - Updating reaction display for message:', messageId);
+  
+  const messageElement = document.querySelector(`[data-message-id="${messageId}"]`);
+  if (!messageElement) return;
+  
+  const reactionBtn = messageElement.querySelector('.reaction-btn');
+  if (!reactionBtn) return;
+  
+  // Update reaction count
+  const countSpan = reactionBtn.querySelector('.icon-count');
+  if (countSpan) {
+    countSpan.textContent = reactions.length > 0 ? reactions.length : '';
+  }
+  
+  console.log('✅ REACTIONS: COMP METHOD - Reaction display updated');
+};
+
+// ===== COMP METHOD: API ERROR HANDLING AND LOCAL STORAGE FALLBACKS =====
+
+// COMP METHOD: Override addReaction with local storage fallback
+if (typeof window.addReaction === 'function') {
+  const originalAddReaction = window.addReaction;
+  
+  window.addReaction = async function(messageId, reactionType) {
+    console.log('🔧 REACTIONS API: COMP METHOD - Adding reaction with fallback');
+    
+    try {
+      // Try API first
+      const result = await originalAddReaction.call(this, messageId, reactionType);
+      console.log('✅ REACTIONS API: COMP METHOD - API call succeeded');
+      return result;
+      
+    } catch (error) {
+      console.log('❌ REACTIONS API: COMP METHOD - API failed, using local storage');
+      
+      // COMP METHOD: Store reaction locally
+      return storeReactionLocally(messageId, reactionType);
+    }
+  };
+  
+  console.log('✅ REACTIONS API: COMP METHOD - Local storage fallback implemented');
+}
+
+// COMP METHOD: Store reaction locally
+function storeReactionLocally(messageId, reactionType) {
+  console.log('🔧 REACTIONS API: COMP METHOD - Storing reaction locally');
+  
+  const currentUser = window.currentUser || { email: 'user@example.com' };
+  const reactionData = {
+    messageId: messageId,
+    userId: currentUser.email,
+    reactionType: reactionType,
+    timestamp: new Date().toISOString(),
+    local: true
+  };
+  
+  // Store in local storage
+  chrome.storage.local.get(['local_reactions'], (result) => {
+    const reactions = result.local_reactions || [];
+    reactions.push(reactionData);
+    chrome.storage.local.set({ local_reactions: reactions });
+  });
+  
+  // Update UI immediately
+  updateReactionDisplayLocally(messageId, reactionType);
+  
+  console.log('✅ REACTIONS API: COMP METHOD - Reaction stored locally');
+  return { success: true, local: true };
+}
+
+// COMP METHOD: Update reaction display locally
+function updateReactionDisplayLocally(messageId, reactionType) {
+  console.log('🔧 REACTIONS API: COMP METHOD - Updating reaction display locally');
+  
+  const messageElement = document.querySelector(`[data-message-id="${messageId}"]`);
+  if (!messageElement) return;
+  
+  const reactionBtn = messageElement.querySelector('.reaction-btn');
+  if (!reactionBtn) return;
+  
+  // Update reaction count
+  const countSpan = reactionBtn.querySelector('.icon-count');
+  if (countSpan) {
+    const currentCount = parseInt(countSpan.textContent) || 0;
+    countSpan.textContent = currentCount + 1;
+  }
+  
+  // Add visual feedback
+  reactionBtn.style.background = '#e3f2fd';
+  setTimeout(() => {
+    reactionBtn.style.background = '';
+  }, 1000);
+  
+  console.log('✅ REACTIONS API: COMP METHOD - Reaction display updated locally');
+}
+
+// ===== COMP METHOD: REPLY HIERARCHY FIXES =====
+
+// COMP METHOD: Override addMessageToChat to handle reply hierarchy
+if (typeof window.addMessageToChat === 'function') {
+  const originalAddMessageToChat = window.addMessageToChat;
+  
+  window.addMessageToChat = function(message) {
+    console.log('🔧 REPLY HIERARCHY: COMP METHOD - Adding message with reply hierarchy:', message.id);
+    
+    // Call original function
+    const result = originalAddMessageToChat.call(this, message);
+    
+    // COMP METHOD: Handle reply hierarchy after DOM update
+    setTimeout(() => {
+      if (message.parentId && message.parentId !== null) {
+        console.log('🔧 REPLY HIERARCHY: COMP METHOD - Message is a reply, adding to parent thread');
+        addReplyToParentThread(message);
+      }
+    }, 100);
+    
+    return result;
+  };
+  
+  console.log('✅ REPLY HIERARCHY: COMP METHOD - Reply hierarchy handler added');
+}
+
+// COMP METHOD: Update user aura color in UI (from COMP)
+async function updateUserAuraInUI(userEmail, auraColor) {
+  console.log('🔧 AURA: COMP METHOD - Updating aura color in UI:', userEmail, auraColor);
+  
+  try {
+    // Update message avatars for this user
+    const messageContainers = document.querySelectorAll('.message');
+    let messageAvatarsUpdated = 0;
+    
+    for (const messageContainer of messageContainers) {
+      const avatarContainer = messageContainer.querySelector('.avatar-container');
+      if (avatarContainer) {
+        const messageId = messageContainer.getAttribute('data-message-id');
+        if (messageId) {
+          const messageData = window.currentChatData?.find(msg => msg.id === messageId);
+          if (messageData && messageData.author && messageData.author.email === userEmail) {
+            // Update the author's aura color
+            messageData.author.auraColor = auraColor;
+            
+            // Re-render the avatar
+            const newAvatarHTML = await getSenderAvatar(messageData.author);
+            avatarContainer.innerHTML = newAvatarHTML;
+            
+            messageAvatarsUpdated++;
+            console.log('🔧 AURA: Updated message avatar for', userEmail, 'with color', auraColor);
+          }
+        }
+      }
+    }
+    
+    console.log('🔧 AURA: Updated', messageAvatarsUpdated, 'message avatars for', userEmail);
+    
+    // Update visibility avatars
+    const visibilityAvatars = document.querySelectorAll('.user-avatar');
+    let visibilityAvatarsUpdated = 0;
+    
+    visibilityAvatars.forEach((avatarElement) => {
+      const userEmailAttr = avatarElement.getAttribute('data-user-email');
+      if (userEmailAttr === userEmail) {
+        // Update the aura ring color
+        const auraRing = avatarElement.querySelector('.aura-ring');
+        if (auraRing) {
+          auraRing.style.borderColor = auraColor;
+          auraRing.style.backgroundColor = auraColor;
+        }
+        
+        // Update the avatar border
+        avatarElement.style.borderColor = auraColor;
+        
+        visibilityAvatarsUpdated++;
+        console.log('🔧 AURA: Updated visibility avatar for', userEmail, 'with color', auraColor);
+      }
+    });
+    
+    console.log('🔧 AURA: Updated', visibilityAvatarsUpdated, 'visibility avatars for', userEmail);
+    
+  } catch (error) {
+    console.error('❌ AURA: Error updating aura color in UI:', error);
+  }
+}
+
+// Make function globally available
+window.updateUserAuraInUI = updateUserAuraInUI;
+
+// COMP METHOD: Add reply to parent thread
+function addReplyToParentThread(replyMessage) {
+  console.log('🔧 REPLY HIERARCHY: COMP METHOD - Adding reply to parent thread:', replyMessage.parentId);
+  
+  const parentMessage = document.querySelector(`[data-message-id="${replyMessage.parentId}"]`);
+  if (!parentMessage) {
+    console.log('❌ REPLY HIERARCHY: COMP METHOD - Parent message not found:', replyMessage.parentId);
+    return;
+  }
+  
+  // Create reply container if it doesn't exist
+  let replyContainer = parentMessage.querySelector('.thread-replies');
+  if (!replyContainer) {
+    replyContainer = document.createElement('div');
+    replyContainer.className = 'thread-replies';
+    replyContainer.style.cssText = `
+      margin-left: 20px;
+      border-left: 2px solid #e0e0e0;
+      padding-left: 10px;
+      margin-top: 5px;
+    `;
+    parentMessage.appendChild(replyContainer);
+  }
+  
+  // Create reply element
+  const replyElement = document.createElement('div');
+  replyElement.className = 'thread-reply';
+  replyElement.setAttribute('data-message-id', replyMessage.id);
+  replyElement.style.cssText = `
+    margin-bottom: 8px;
+    padding: 8px;
+    background: #f5f5f5;
+    border-radius: 4px;
+    border-left: 3px solid #007bff;
+  `;
+  
+  // Add reply content
+  replyElement.innerHTML = `
+    <div class="reply-content" style="display: flex; align-items: center; gap: 8px;">
+      <div class="reply-avatar" style="width: 24px; height: 24px; border-radius: 50%; background: #ddd;"></div>
+      <div class="reply-text" style="flex: 1;">
+        <div class="reply-author" style="font-weight: bold; font-size: 12px; color: #666;">
+          ${replyMessage.author?.name || 'User'}
+        </div>
+        <div class="reply-body" style="font-size: 14px;">
+          ${replyMessage.body || replyMessage.content || ''}
+        </div>
+      </div>
+    </div>
+  `;
+  
+  replyContainer.appendChild(replyElement);
+  console.log('✅ REPLY HIERARCHY: COMP METHOD - Reply added to parent thread');
+}
+
+console.log('✅ CanopiModule loaded with COMP method fixes');

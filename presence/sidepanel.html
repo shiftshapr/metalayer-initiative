@@ -17,8 +17,9 @@
   <!-- CRITICAL: Load StateManager FIRST (core dependency) -->
   <script src="StateManager.js"></script>
   <!-- Load Enhanced Logger System -->
-  <!-- Load Avatar Utilities -->
+  <!-- Load Avatar Utilities FIRST (CRITICAL DEPENDENCY) -->
   <script src="utils/AvatarUtils.js"></script>
+  <script src="utils/AvatarUtilsChecker.js"></script>
   <!-- Load Error Handler -->
   <script src="utils/ErrorHandler.js"></script>
   <!-- Load Message Diagnostic Manager -->
@@ -39,7 +40,7 @@
   
   <!-- Load Authentication Systems FIRST -->
   
-  <!-- Load Feature Modules in dependency order -->
+  <!-- Load Feature Modules in dependency order (AvatarUtils must be loaded first) -->
   <script src="features/ProfileManager.js"></script>
   <script src="utils/AvatarConfig.js"></script>
   <script src="features/UIManager.js"></script>

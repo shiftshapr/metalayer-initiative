@@ -11,7 +11,13 @@ exports.getCommunities = (req, res) => {
   console.log('🔍 COMMUNITIES DEBUG: Received request');
   console.log('🔍 COMMUNITIES DEBUG: Query params:', req.query);
   console.log('🔍 COMMUNITIES DEBUG: Headers:', req.headers);
-  console.log('🔍 COMMUNITIES DEBUG: Extracted userId:', userId);
+          console.log('🔍 COMMUNITIES DEBUG: Extracted userId:', userId);
+          
+          // SD1 CRITICAL DEBUG: Log what user is requesting communities
+          console.log('🔍 SD1 BACKEND DEBUG: === COMMUNITIES REQUEST DEBUG ===');
+          console.log('🔍 SD1 BACKEND DEBUG: Requesting user:', userId);
+          console.log('🔍 SD1 BACKEND DEBUG: Request headers:', req.headers);
+          console.log('🔍 SD1 BACKEND DEBUG: Request query:', req.query);
   
   // Mock user memberships - in real app, this would come from database
   const userMemberships = {
@@ -45,8 +51,7 @@ exports.getCommunities = (req, res) => {
       isPublic: true,
       isOpen: true,
       profileLink: 'public-square',
-      owner: 'themetalayer@gmail.com',
-      admins: ['themetalayer@gmail.com'],
+      // SD1 FIX: Removed owner and admins fields - not needed by frontend
       members: 3,
       messages: 5,
       ruleset: { allowAnonymous: true, moderation: 'light' } // Keep for backward compatibility
@@ -62,8 +67,7 @@ exports.getCommunities = (req, res) => {
       isPublic: true,
       isOpen: false,
       profileLink: 'governance-circle',
-      owner: 'themetalayer@gmail.com',
-      admins: ['themetalayer@gmail.com'],
+      // SD1 FIX: Removed owner and admins fields - not needed by frontend
       members: 2,
       messages: 3,
       ruleset: { allowAnonymous: false, moderation: 'strict' } // Keep for backward compatibility
@@ -74,6 +78,12 @@ exports.getCommunities = (req, res) => {
   const communities = allCommunities.filter(community => 
     userCommunities.includes(community.id)
   );
+  
+  // SD1 CRITICAL DEBUG: Log what's being returned
+  console.log('🔍 SD1 BACKEND DEBUG: === RETURNING COMMUNITIES ===');
+  console.log('🔍 SD1 BACKEND DEBUG: User requesting:', userId);
+  console.log('🔍 SD1 BACKEND DEBUG: Communities being returned:', JSON.stringify(communities, null, 2));
+  console.log('🔍 SD1 BACKEND DEBUG: === END RETURNING COMMUNITIES ===');
   
   res.json({ communities });
 };
@@ -111,8 +121,7 @@ exports.getManageableCommunities = (req, res) => {
       isPublic: true,
       isOpen: true,
       profileLink: 'public-square',
-      owner: 'themetalayer@gmail.com',
-      admins: ['themetalayer@gmail.com'],
+      // SD1 FIX: Removed owner and admins fields - not needed by frontend
       members: 3,
       messages: 5
     },
@@ -127,8 +136,7 @@ exports.getManageableCommunities = (req, res) => {
       isPublic: true,
       isOpen: false,
       profileLink: 'governance-circle',
-      owner: 'themetalayer@gmail.com',
-      admins: ['themetalayer@gmail.com'],
+      // SD1 FIX: Removed owner and admins fields - not needed by frontend
       members: 2,
       messages: 3
     }

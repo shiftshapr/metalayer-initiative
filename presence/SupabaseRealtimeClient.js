@@ -67,6 +67,9 @@ class SupabaseRealtimeClient {
         pageUrl: pageUrl
       };
       
+      // Set up real-time subscriptions for this page
+      await this.subscribeToPageUpdates(pageId);
+      
       console.log('✅ SUPABASE_CLIENT: Joined page successfully');
       return true;
     } catch (error) {
@@ -93,9 +96,69 @@ class SupabaseRealtimeClient {
     try {
       console.log('🔧 SUPABASE_CLIENT: Subscribing to page updates:', pageId);
       
-      // This would set up real-time subscriptions
-      // For now, just log the subscription
-      console.log('✅ SUPABASE_CLIENT: Subscribed to page updates');
+      // COMP METHOD: Set up real-time subscription for messages (INSERT, UPDATE, DELETE)
+      if (window.supabase && window.supabase.realtime) {
+        const channel = window.supabase.realtime.channel(`page_messages_${pageId}`)
+          .on('postgres_changes', {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'messages',
+            filter: `page_id=eq.${pageId}`
+          }, (payload) => {
+            console.log('💬 SUPABASE_CLIENT: New message received:', payload);
+            if (this.onNewMessage && typeof this.onNewMessage === 'function') {
+              this.onNewMessage(payload.new);
+            } else if (window.addMessageToChat && typeof window.addMessageToChat === 'function') {
+              console.log('💬 SUPABASE_CLIENT: Calling addMessageToChat with:', payload.new);
+              window.addMessageToChat(payload.new);
+            } else {
+              console.log('❌ SUPABASE_CLIENT: addMessageToChat not available');
+            }
+          })
+          .on('postgres_changes', {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'messages',
+            filter: `page_id=eq.${pageId}`
+          }, (payload) => {
+            console.log('✏️ SUPABASE_CLIENT: Message updated:', payload);
+            if (this.onMessageUpdated && typeof this.onMessageUpdated === 'function') {
+              this.onMessageUpdated(payload.new);
+            } else if (window.supabaseRealtimeClient && window.supabaseRealtimeClient.onMessageUpdated) {
+              window.supabaseRealtimeClient.onMessageUpdated(payload.new);
+            } else {
+              console.log('❌ SUPABASE_CLIENT: onMessageUpdated handler not available');
+            }
+          })
+          .on('postgres_changes', {
+            event: 'DELETE',
+            schema: 'public',
+            table: 'messages',
+            filter: `page_id=eq.${pageId}`
+          }, (payload) => {
+            console.log('🗑️ SUPABASE_CLIENT: Message deleted:', payload);
+            if (this.onMessageDeleted && typeof this.onMessageDeleted === 'function') {
+              this.onMessageDeleted(payload.old);
+            } else if (window.supabaseRealtimeClient && window.supabaseRealtimeClient.onMessageDeleted) {
+              window.supabaseRealtimeClient.onMessageDeleted(payload.old);
+            } else {
+              console.log('❌ SUPABASE_CLIENT: onMessageDeleted handler not available');
+            }
+          })
+          .subscribe((status, err) => {
+            if (err) {
+              console.error('❌ SUPABASE_CLIENT: Subscription error:', err);
+            } else {
+              console.log('✅ SUPABASE_CLIENT: Message subscription status:', status);
+            }
+          });
+        
+        this.messageChannel = channel;
+        console.log('✅ SUPABASE_CLIENT: Real-time message subscription set up');
+      } else {
+        console.log('❌ SUPABASE_CLIENT: Supabase realtime not available');
+      }
+      
       return true;
     } catch (error) {
       console.error('❌ SUPABASE_CLIENT: Failed to subscribe to page updates:', error);
@@ -103,9 +166,10 @@ class SupabaseRealtimeClient {
     }
   }
   
-  async sendMessage(content) {
+  async sendMessage(content, parentId = null) {
     try {
       console.log('🔧 SUPABASE_CLIENT: Sending message:', content);
+      console.log('🔧 SUPABASE_CLIENT: ParentId:', parentId);
       
       if (!this.supabase) {
         console.error('❌ SUPABASE_CLIENT: Supabase client not available');
@@ -122,15 +186,23 @@ class SupabaseRealtimeClient {
       }
       
       // Insert message into database using Supabase (COMP field names)
+      const messageData = {
+        content: content,
+        user_email: userEmail,
+        page_id: pageId,
+        community_id: 'comm-001',
+        created_at: new Date().toISOString()
+      };
+      
+      // Add parentId if provided (now that parent_id column exists in Supabase)
+      if (parentId) {
+        messageData.parent_id = parentId;
+        console.log('🔧 SUPABASE_CLIENT: Adding parentId to message:', parentId);
+      }
+      
       const { data, error } = await this.supabase
         .from('messages')
-        .insert({
-          content: content,
-          user_email: userEmail,
-          page_id: pageId,
-          community_id: 'comm-001',
-          created_at: new Date().toISOString()
-        })
+        .insert(messageData)
         .select()
         .single();
       
@@ -259,6 +331,36 @@ class SupabaseRealtimeClient {
     } catch (error) {
       console.error('❌ SUPABASE_CLIENT: Edit error:', error);
       return { success: false, error: error.message };
+    }
+  }
+
+  // COMP METHOD: Get users on a specific page (like COMP does)
+  async getPageUsers(pageId) {
+    try {
+      console.log('👁️ SUPABASE_CLIENT: Getting users for page:', pageId);
+      
+      if (!this.isInitialized || !this.supabase) {
+        console.error('❌ SUPABASE_CLIENT: Client not initialized');
+        return [];
+      }
+
+      const { data, error } = await this.supabase
+        .from('user_presence')
+        .select('*')
+        .eq('page_id', pageId)
+        .eq('is_active', true)
+        .order('last_seen', { ascending: false });
+
+      if (error) {
+        console.error('❌ SUPABASE_CLIENT: Failed to get page users:', error);
+        return [];
+      }
+
+      console.log('✅ SUPABASE_CLIENT: Found users for page:', data?.length || 0);
+      return data || [];
+    } catch (error) {
+      console.error('❌ SUPABASE_CLIENT: getPageUsers error:', error);
+      return [];
     }
   }
 }

@@ -214,7 +214,7 @@ function initializeNotificationIcon() {
         MESSAGE_NEW: {
           authorName: 'Test User',
           content: 'This is a test message notification',
-          authorEmail: 'test@example.com'
+          authorEmail: window.currentUser?.email || 'user@example.com'
         },
         FRIEND_AURA_CHANGE: {
           userName: 'Test Friend',
@@ -691,7 +691,7 @@ window.testNotification = async function(type = 'MESSAGE_NEW') {
       MESSAGE_NEW: {
         authorName: 'Test User',
         content: 'This is a test message notification',
-        authorEmail: 'test@example.com'
+        authorEmail: window.currentUser?.email || 'user@example.com'
       },
       FRIEND_AURA_CHANGE: {
         userName: 'Test Friend',

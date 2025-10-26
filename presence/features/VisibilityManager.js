@@ -247,6 +247,36 @@ class VisibilityManager {
   }
 
   /**
+   * Format last seen display like COMP
+   */
+  formatLastSeenDisplay(lastSeen) {
+    if (!lastSeen) return 'Last seen unknown';
+    
+    const now = new Date();
+    const lastSeenDate = new Date(lastSeen);
+    const diffMs = now - lastSeenDate;
+    const diffSeconds = Math.floor(diffMs / 1000);
+    const diffMinutes = Math.floor(diffSeconds / 60);
+    const diffHours = Math.floor(diffMinutes / 60);
+    const diffDays = Math.floor(diffHours / 24);
+    
+    // If the difference is negative, it means the timestamp is in the future
+    if (diffMs < 0) {
+      return 'Last seen just now';
+    }
+    
+    if (diffSeconds < 60) {
+      return `Last seen ${diffSeconds} second${diffSeconds === 1 ? '' : 's'} ago`;
+    } else if (diffMinutes < 60) {
+      return `Last seen ${diffMinutes} minute${diffMinutes === 1 ? '' : 's'} ago`;
+    } else if (diffHours < 24) {
+      return `Last seen ${diffHours} hour${diffHours === 1 ? '' : 's'} ago`;
+    } else {
+      return `Last seen ${diffDays} day${diffDays === 1 ? '' : 's'} ago`;
+    }
+  }
+
+  /**
    * Get visibility status
    */
   getStatus() {
@@ -286,27 +316,120 @@ if (typeof module !== 'undefined' && module.exports) {
  * Update the visible tab with avatars
  * @param {Array} avatars - Array of avatar objects
  */
+// Time formatting functions
+function formatTimeDisplay(enterTime) {
+  if (!enterTime) return 'Now';
+  
+  const now = new Date();
+  const enter = new Date(enterTime);
+  const diffMs = now - enter;
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+  const diffYears = Math.floor(diffDays / 365);
+  
+  if (diffMins < 1) return 'Now';
+  if (diffMins < 60) return `Online for ${diffMins} min${diffMins !== 1 ? 's' : ''}`;
+  if (diffHours < 24) return `Online for ${diffHours} hour${diffHours !== 1 ? 's' : ''}`;
+  if (diffDays < 365) return `Online for ${diffDays} day${diffDays !== 1 ? 's' : ''}`;
+  return `Online for ${diffYears} year${diffYears !== 1 ? 's' : ''}`;
+}
+
+function formatLastSeenDisplay(lastSeen) {
+  if (!lastSeen) return 'Never seen';
+  
+  const now = new Date();
+  const lastSeenDate = new Date(lastSeen);
+  const diffMs = now - lastSeenDate;
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+  const diffWeeks = Math.floor(diffDays / 7);
+  const diffMonths = Math.floor(diffDays / 30);
+  const diffYears = Math.floor(diffDays / 365);
+  
+  if (diffMins < 1) return 'Last seen just now';
+  if (diffMins < 60) return `Last seen ${diffMins} min${diffMins !== 1 ? 's' : ''} ago`;
+  if (diffHours < 24) return `Last seen ${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`;
+  if (diffDays < 7) return `Last seen ${diffDays} day${diffDays !== 1 ? 's' : ''} ago`;
+  if (diffWeeks < 4) return `Last seen ${diffWeeks} week${diffWeeks !== 1 ? 's' : ''} ago`;
+  if (diffMonths < 12) return `Last seen ${diffMonths} month${diffMonths !== 1 ? 's' : ''} ago`;
+  return `Last seen ${diffYears} year${diffYears !== 1 ? 's' : ''} ago`;
+}
+
+// COMP METHOD: Exact time formatting functions from sidepanel_COMP.js
+function formatTimeDisplay(enterTime) {
+  // REDUCED LOGGING - Only log when time changes categories (Now -> minutes -> hours -> days)
+  const now = new Date();
+  
+  if (!enterTime) {
+    return 'Now';
+  }
+  
+  const enterTimeDate = new Date(enterTime);
+  const diffMs = now - enterTimeDate;
+  const diffSeconds = Math.floor(diffMs / 1000);
+  const diffMinutes = Math.floor(diffSeconds / 60);
+  const diffHours = Math.floor(diffMinutes / 60);
+  const diffDays = Math.floor(diffHours / 24);
+  
+  // If the difference is negative, it means the timestamp is in the future
+  if (diffMs < 0) {
+    console.log('🕒 TIME_DEBUG: Negative time difference detected - enterTime is in the future!');
+    return 'Now';
+  }
+  
+  // User requirements: 
+  // a) If user is still on tab, show "Now" for under 60 seconds, then minutes, hours, days
+  // b) If user has left tab, show "Last seen X minutes ago"
+  // c) After 1 month threshold, don't show last seen
+  // d) If someone leaves and comes back, reset ENTER and null EXIT
+  
+  if (diffSeconds < 60) {
+    return 'Now'; // Don't show seconds, show "Now"
+  } else if (diffMinutes < 60) {
+    return `Online for ${diffMinutes} minute${diffMinutes === 1 ? '' : 's'}`;
+  } else if (diffHours < 24) {
+    return `Online for ${diffHours} hour${diffHours === 1 ? '' : 's'}`;
+  } else if (diffDays < 30) { // 1 month threshold
+    return `Online for ${diffDays} day${diffDays === 1 ? '' : 's'}`;
+  } else {
+    return 'Last seen over a month ago'; // Don't show after 1 month
+  }
+}
+
+function formatLastSeenDisplay(lastSeen) {
+  if (!lastSeen) return 'Last seen unknown';
+  
+  const now = new Date();
+  const lastSeenDate = new Date(lastSeen);
+  const diffMs = now - lastSeenDate;
+  const diffSeconds = Math.floor(diffMs / 1000);
+  const diffMinutes = Math.floor(diffSeconds / 60);
+  const diffHours = Math.floor(diffMinutes / 60);
+  const diffDays = Math.floor(diffHours / 24);
+  
+  // If the difference is negative, it means the timestamp is in the future
+  if (diffMs < 0) {
+    return 'Last seen just now';
+  }
+  
+  if (diffSeconds < 60) {
+    return `Last seen ${diffSeconds} second${diffSeconds === 1 ? '' : 's'} ago`;
+  } else if (diffMinutes < 60) {
+    return `Last seen ${diffMinutes} minute${diffMinutes === 1 ? '' : 's'} ago`;
+  } else if (diffHours < 24) {
+    return `Last seen ${diffHours} hour${diffHours === 1 ? '' : 's'} ago`;
+  } else {
+    return `Last seen ${diffDays} day${diffDays === 1 ? '' : 's'} ago`;
+  }
+}
+
 async function updateVisibleTab(avatars) {
   console.log('🔍 VISIBILITY: updateVisibleTab called with avatars:', JSON.stringify(avatars, null, 2));
   
-  // CRITICAL FIX: Add current user to visibility list if not already present
-  if (window.currentUser && window.currentUser.email) {
-    const currentUserEmail = window.currentUser.email;
-    const isCurrentUserInList = avatars.some(avatar => avatar.email === currentUserEmail);
-    
-    if (!isCurrentUserInList) {
-      console.log('🔍 VISIBILITY: Adding current user to visibility list');
-      const currentUserAvatar = {
-        email: currentUserEmail,
-        name: window.currentUser.name || currentUserEmail.split('@')[0],
-        avatarUrl: window.currentUser.avatarUrl, // Use the real Google avatar URL
-        auraColor: window.currentUser.auraColor || '#aaaaaa',
-        status: 'online',
-        enterTime: new Date().toISOString()
-      };
-      avatars.unshift(currentUserAvatar); // Add to beginning of list
-    }
-  }
+  // COMP METHOD: Do NOT add current user to visibility list - they should not see themselves
+  console.log('🔍 VISIBILITY: Current user should not appear in their own visibility list');
   
   // Store visibility data globally for real-time aura color access
   window.currentVisibilityData = { active: avatars };
@@ -334,23 +457,26 @@ async function updateVisibleTab(avatars) {
   window.currentVisibilityDataUnfiltered = { active: avatars };
   console.log(`VISIBILITY_UNFILTERED: Stored ${avatars.length} avatars (including current user) for profile avatar lookup`);
   
-  // Filter out ONLY the current user - show all other users
+  // COMP METHOD: Strict filtering - remove current user completely
   const usersWithAvatars = avatars.filter(avatar => {
     const userIdMatch = avatar.userId === currentUserEmail;
     const handleMatch = avatar.handle === currentUserEmail.split('@')[0];
     const nameMatch = avatar.name === currentUserEmail.split('@')[0];
     const emailMatch = avatar.email === currentUserEmail;
+    const idMatch = avatar.id === currentUserEmail;
     
-    const isCurrentUser = userIdMatch || handleMatch || nameMatch || emailMatch;
+    const isCurrentUser = userIdMatch || handleMatch || nameMatch || emailMatch || idMatch;
     
     if (isCurrentUser) {
-      console.log(`VISIBILITY: 🚫 FILTERING OUT current user from their own visibility list`);
+      console.log(`🔧 VISIBILITY: COMP METHOD - Strictly filtering out current user:`, avatar.name);
       return false;
     }
     
-    console.log(`VISIBILITY: NOT CURRENT USER - Keeping avatar: ${avatar.name} (${avatar.userId})`);
+    console.log(`🔧 VISIBILITY: COMP METHOD - Keeping avatar: ${avatar.name} (${avatar.userId})`);
     return true;
   });
+  
+  console.log(`🔧 VISIBILITY: COMP METHOD - Strictly filtered avatars:`, usersWithAvatars.length, 'of', avatars.length);
   
   console.log(`VISIBILITY: Showing ${usersWithAvatars.length} users with real avatars (filtered from ${avatars.length} total)`);
   
@@ -379,7 +505,10 @@ async function updateVisibleTab(avatars) {
               <div class="user-info" style="flex: 1; min-width: 0;">
                 <div class="user-name" style="font-weight: bold; color: var(--text-primary); font-size: 14px;">${avatar.name}</div>
                 <div class="user-status" style="font-size: 12px; color: ${isActive ? 'var(--success-color)' : 'var(--text-secondary)'};">
-                  ${isActive ? 'Active' : 'Inactive'}
+                  ${isActive ? 
+                    (avatar.enterTime ? formatTimeDisplay(avatar.enterTime) : 'Online') : 
+                    (avatar.lastSeen ? formatLastSeenDisplay(avatar.lastSeen) : 'Never seen')
+                  }
                 </div>
               </div>
             </li>

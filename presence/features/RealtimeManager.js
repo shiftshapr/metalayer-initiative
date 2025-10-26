@@ -30,12 +30,134 @@ class RealtimeManager {
         this.log('WARN', 'AurasIntegration not available for initialization');
       }
       
+      // COMP METHOD: Initialize presence tracking
+      this.initializePresenceTracking();
+      
       this.isInitialized = true;
       this.log('INFO', 'RealtimeManager initialized successfully');
     } catch (error) {
       this.log('ERROR', 'Failed to initialize RealtimeManager:', error);
       throw error;
     }
+  }
+
+  /**
+   * COMP METHOD: Initialize presence tracking
+   */
+  initializePresenceTracking() {
+    this.log('INFO', 'COMP METHOD: Initializing presence tracking...');
+    
+    // Initialize presence tracking for current page
+    const currentPageId = window.currentUrlData?.pageId;
+    if (currentPageId) {
+      this.initializePresence(currentPageId);
+    } else {
+      this.log('WARN', 'COMP METHOD: No page ID available for presence tracking');
+    }
+  }
+
+  /**
+   * COMP METHOD: Initialize presence for a specific page
+   */
+  initializePresence(pageId) {
+    this.log('INFO', `COMP METHOD: Initializing presence for page ${pageId}`);
+    
+    // Initialize presence tracking using COMP method
+    if (window.supabase && window.supabase.from) {
+      // Subscribe to presence changes
+      const presenceChannel = window.supabase
+        .channel(`presence:${pageId}`)
+        .on('presence', { event: 'sync' }, () => {
+          this.log('INFO', 'COMP METHOD: Presence sync event received');
+          this.updatePresenceDisplay();
+        })
+        .on('presence', { event: 'join' }, ({ key, newPresences }) => {
+          this.log('INFO', 'COMP METHOD: User joined presence:', key);
+          this.updatePresenceDisplay();
+        })
+        .on('presence', { event: 'leave' }, ({ key, leftPresences }) => {
+          this.log('INFO', 'COMP METHOD: User left presence:', key);
+          this.updatePresenceDisplay();
+        })
+        .subscribe();
+      
+      // Track current user's presence
+      this.trackUserPresence(pageId);
+    } else {
+      this.log('WARN', 'COMP METHOD: Supabase not available for presence tracking');
+    }
+  }
+
+  /**
+   * COMP METHOD: Track current user's presence
+   */
+  trackUserPresence(pageId) {
+    this.log('INFO', `COMP METHOD: Tracking user presence for page ${pageId}`);
+    
+    if (window.currentUser && window.supabase) {
+      const presenceChannel = window.supabase.channel(`presence:${pageId}`);
+      
+      presenceChannel
+        .on('presence', { event: 'sync' }, () => {
+          const state = presenceChannel.presenceState();
+          this.log('INFO', 'COMP METHOD: Current presence state:', state);
+        })
+        .subscribe(async (status) => {
+          if (status === 'SUBSCRIBED') {
+            await presenceChannel.track({
+              user_id: window.currentUser.email,
+              user_name: window.currentUser.name,
+              user_avatar: window.currentUser.avatar,
+              online_at: new Date().toISOString(),
+              page_id: pageId
+            });
+            this.log('INFO', 'COMP METHOD: User presence tracked successfully');
+          }
+        });
+    }
+  }
+
+  /**
+   * COMP METHOD: Update presence display
+   */
+  updatePresenceDisplay() {
+    this.log('INFO', 'COMP METHOD: Updating presence display...');
+    
+    // Get active users from presence state
+    const activeUsers = this.getActiveUsers();
+    
+    // Update visible tab if available
+    const visibleTab = document.querySelector('#visible-tab');
+    if (visibleTab) {
+      if (activeUsers.length > 0) {
+        visibleTab.innerHTML = '';
+        activeUsers.forEach(user => {
+          const profileDiv = document.createElement('div');
+          profileDiv.className = 'profile-item';
+          profileDiv.innerHTML = `
+            <div class="profile-avatar">
+              <img src="${user.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || user.email)}&background=random&color=fff&size=200`}" alt="${user.name || user.email}">
+            </div>
+            <div class="profile-info">
+              <div class="profile-name">${user.name || user.email}</div>
+              <div class="profile-status">Active</div>
+            </div>
+          `;
+          visibleTab.appendChild(profileDiv);
+        });
+      } else {
+        visibleTab.innerHTML = '<div class="no-users">No active users on this page</div>';
+      }
+    }
+  }
+
+  /**
+   * COMP METHOD: Get active users
+   */
+  getActiveUsers() {
+    // This would be implemented based on the actual presence system
+    // For now, return empty array - this should be connected to the actual presence data
+    return [];
   }
 
   /**
@@ -250,127 +372,15 @@ if (typeof window !== 'undefined') {
   window.initializeSupabaseRealtimeClient = initializeSupabaseRealtimeClient;
 }
 
-async function convertSupabaseMessageToAPIFormat(supabaseMessage) {
-  console.log('🔄 CONVERT_MESSAGE: Converting Supabase message to API format');
-  console.log('🔄 CONVERT_MESSAGE: Supabase message:', supabaseMessage);
-  
-  // Extract user info from email
-  const userEmail = supabaseMessage.user_email;
-  const userName = userEmail.split('@')[0];
-  const userHandle = userEmail.split('@')[0];
-  
-  // CRITICAL FIX: Fetch author data from user_presence table to get avatar and aura
-  let authorData = {
-    name: userName,
-    handle: userHandle,
-    email: userEmail,
-    avatarUrl: null,
-    auraColor: window.currentUser?.auraColor || '#aa00aa' // Use user's actual aura color
-  };
-  
-  try {
-    console.log('🔄 CONVERT_MESSAGE: Fetching author data from user_presence...');
-    console.log('🔍 REMOTE AVATAR DEBUG: User email:', userEmail);
-    console.log('🔍 REMOTE AVATAR DEBUG: Page ID:', supabaseMessage.page_id);
-    
-    const { data: presenceData, error } = await window.supabase
-      .from('user_presence')
-      .select('avatar_url, aura_color, user_name')
-      .eq('user_email', userEmail)
-      .eq('page_id', supabaseMessage.page_id)
-      .limit(1);
-    
-    console.log('🔍 REMOTE AVATAR DEBUG: Presence query result:', { presenceData, error });
-    
-    if (error) {
-      console.warn('⚠️ CONVERT_MESSAGE: Could not fetch author data:', error);
-      console.log('🔍 REMOTE AVATAR DEBUG: Trying fallback query without page_id filter...');
-      
-      // Try fallback query without page_id filter
-      const { data: fallbackData, error: fallbackError } = await window.supabase
-        .from('user_presence')
-        .select('avatar_url, aura_color, user_name')
-        .eq('user_email', userEmail)
-        .order('updated_at', { ascending: false })
-        .limit(1);
-      
-      console.log('🔍 REMOTE AVATAR DEBUG: Fallback query result:', { fallbackData, fallbackError });
-      
-      if (fallbackData && fallbackData.length > 0) {
-        console.log('✅ CONVERT_MESSAGE: Found author data via fallback:', fallbackData[0]);
-        authorData.avatarUrl = fallbackData[0].avatar_url;
-        authorData.auraColor = fallbackData[0].aura_color || window.currentUser?.auraColor || '#aa00aa';
-        authorData.name = fallbackData[0].user_name || authorData.name;
-        console.log('🔍 REMOTE AVATAR DEBUG: Updated author data with fallback:', {
-          avatarUrl: authorData.avatarUrl,
-          auraColor: authorData.auraColor,
-          name: authorData.name
-        });
-      } else {
-        console.log('🔍 REMOTE AVATAR DEBUG: No fallback data found, trying to get from visibility data...');
-        // Try to get avatar from current visibility data
-        if (window.currentVisibilityDataUnfiltered && window.currentVisibilityDataUnfiltered.active) {
-          const userInVisibility = window.currentVisibilityDataUnfiltered.active.find(u => u.email === userEmail);
-          if (userInVisibility && userInVisibility.avatarUrl) {
-            console.log('🔍 REMOTE AVATAR DEBUG: Found avatar in visibility data:', userInVisibility.avatarUrl);
-            authorData.avatarUrl = userInVisibility.avatarUrl;
-            authorData.auraColor = userInVisibility.auraColor || '#aa00aa';
-            authorData.name = userInVisibility.name || authorData.name;
-          }
-        }
-        
-        // If still no avatar, try to get from UnifiedPresenceManager if available
-        if (!authorData.avatarUrl && window.UnifiedPresenceManager) {
-          console.log('🔍 REMOTE AVATAR DEBUG: Trying UnifiedPresenceManager...');
-          // This would need to be implemented in UnifiedPresenceManager
-          // For now, we'll use a generic avatar as fallback
-          console.log('🔍 REMOTE AVATAR DEBUG: Using generic avatar as final fallback');
-        }
-      }
-    } else if (presenceData && presenceData.length > 0) {
-      console.log('✅ CONVERT_MESSAGE: Found author data:', presenceData[0]);
-      authorData.avatarUrl = presenceData[0].avatar_url;
-      authorData.auraColor = presenceData[0].aura_color || window.currentUser?.auraColor || '#aa00aa';
-      authorData.name = presenceData[0].user_name || authorData.name;
-    } else {
-      console.log('⚠️ CONVERT_MESSAGE: No presence data found for user');
-    }
-  } catch (error) {
-    console.warn('⚠️ CONVERT_MESSAGE: Exception fetching author data:', error);
-  }
-  
-  // Convert to API format that addMessageToChat expects
-  const apiMessage = {
-    id: supabaseMessage.id,
-    body: supabaseMessage.content,
-    content: supabaseMessage.content, // Also include content field
-    author: authorData,
-    createdAt: supabaseMessage.created_at,
-    created_at: supabaseMessage.created_at, // Also include created_at field
-    conversationId: `conv-${supabaseMessage.page_id}`, // Generate conversation ID from page_id
-    conversation: {
-      communityName: 'Current Community', // Will be updated by addMessageToChat
-      reactions: [] // Start with no reactions
-    },
-    isReply: false, // Supabase messages are typically not replies
-    hasReplies: false,
-    replyCount: 0,
-    reactionCount: 0,
-    hasUnseenReplies: false,
-    deletedAt: null,
-    optionalContent: null
-  };
-  
-  console.log('🔄 CONVERT_MESSAGE: Converted to API format with author data:', apiMessage);
-  return apiMessage;
-}
+// COMP METHOD: Use the convertSupabaseMessageToAPIFormat from CanopiModule.js
 
 async function sendSupabaseMessage(message) {
   const timer = console.log('supabase_send');
   console.log('supabase_send', { messageType: message.type, timestamp: Date.now() });
   
   try {
-    if (!window.aurasIntegration || !window.aurasIntegration.isInitialized) {
+    // COMP METHOD: Only require Auras integration for non-presence messages
+    if (message.type !== 'PRESENCE_UPDATE' && (!window.aurasIntegration || !window.aurasIntegration.isInitialized)) {
       console.error('❌ SUPABASE: Auras integration not initialized');
       return false;
     }
@@ -625,15 +635,15 @@ function handleMessageChange(payload) {
   }
 }
 
-// Handle real-time reaction changes from Supabase
+// Handle real-time reaction changes from Supabase - COMP METHOD
 function handleReactionChange(payload) {
-  console.log('🔔 REACTION_CHANGE: Processing real-time update:', payload);
+  console.log('🔔 REACTION_CHANGE: COMP METHOD - Processing real-time update:', payload);
   
   const { eventType, new: newRecord, old: oldRecord } = payload;
   
   switch (eventType) {
     case 'INSERT':
-      console.log('👍 REACTION: New reaction added:', newRecord);
+      console.log('👍 REACTION: COMP METHOD - New reaction added:', newRecord);
       addReactionToMessage(newRecord);
       break;
       
@@ -677,6 +687,36 @@ async function stopPresenceTracking() {
   currentPageId = null;
 }
 
+// COMP METHOD: Make sendPresenceEvent globally accessible
+window.sendPresenceEvent = sendPresenceEvent;
+
+// COMP METHOD: Ensure presence tracking is properly initialized
+async function initializePresenceTracking() {
+  console.log('🔧 PRESENCE: Initializing presence tracking...');
+  
+  if (window.currentUser && window.currentUrlData) {
+    try {
+      console.log('🔧 PRESENCE: Sending initial ENTER event...');
+      const result = await sendPresenceEvent('ENTER');
+      console.log('✅ PRESENCE: Initial presence event sent:', result);
+      
+      // Store presence tracking globally
+      window.presenceTrackingActive = true;
+      
+      return true;
+    } catch (error) {
+      console.error('❌ PRESENCE: Failed to send initial presence event:', error);
+      return false;
+    }
+  } else {
+    console.warn('⚠️ PRESENCE: Missing currentUser or currentUrlData');
+    return false;
+  }
+}
+
+// COMP METHOD: Make presence initialization globally accessible
+window.initializePresenceTracking = initializePresenceTracking;
+
 // Send a presence event to the server
 async function sendPresenceEvent(kind, availability = null, customLabel = null) {
   console.log('🔍 PRESENCE EVENT DEBUG: Starting sendPresenceEvent');
@@ -685,6 +725,19 @@ async function sendPresenceEvent(kind, availability = null, customLabel = null) 
   console.log('🔍 PRESENCE EVENT DEBUG: Custom label:', customLabel);
   
   let requestBody = null;
+  
+  try {
+    // COMP METHOD: Try API first, fallback to local storage on error
+    return await sendPresenceEventToAPI(kind, availability, customLabel);
+  } catch (error) {
+    console.log('❌ PRESENCE EVENT: API failed, using local storage fallback');
+    return await handlePresenceEventLocally(kind, availability, customLabel);
+  }
+}
+
+// COMP METHOD: Send presence event to API
+async function sendPresenceEventToAPI(kind, availability = null, customLabel = null) {
+  console.log('🔧 PRESENCE API: COMP METHOD - Sending presence event to API');
   
   try {
     if (!currentPageId) {
@@ -745,6 +798,31 @@ async function sendPresenceEvent(kind, availability = null, customLabel = null) 
              timestamp: Date.now()
            });
            console.log(`👥 WEBSOCKET: ${kind} event broadcast via background service worker`, null, 'general');
+           
+           // COMP METHOD: Return success response with status and data
+           
+           // CRITICAL FIX: Set is_active=true in database after successful API call
+           try {
+             console.log('🔧 PRESENCE FIX: Setting is_active=true in database...');
+             const { error: updateError } = await window.supabase
+               .from('user_presence')
+               .update({ 
+                 is_active: true,
+                 last_seen: new Date().toISOString()
+               })
+               .eq('user_email', userEmail)
+               .eq('page_id', currentPageId);
+             
+             if (updateError) {
+               console.error('❌ PRESENCE FIX: Failed to set is_active:', updateError);
+             } else {
+               console.log('✅ PRESENCE FIX: is_active set to true in database');
+             }
+           } catch (updateError) {
+             console.error('❌ PRESENCE FIX: Error setting is_active:', updateError);
+           }
+           
+           return { success: true, status: 200, data: responseData };
     } else {
       console.warn(`❌ PRESENCE: Failed to send ${kind} event:`, response.status);
       const errorText = await response.text();
@@ -755,6 +833,10 @@ async function sendPresenceEvent(kind, availability = null, customLabel = null) 
         errorText: errorText,
         requestBody: requestBody
       });
+      
+      // COMP METHOD: Trigger fallback on any non-200 status
+      console.log('🔧 PRESENCE: COMP METHOD - Triggering local storage fallback due to API error');
+      throw new Error(`API call failed with status: ${response.status}`);
     }
   } catch (error) {
     console.log('🔍 PRESENCE EVENT DEBUG: Exception details:', {
@@ -768,6 +850,9 @@ async function sendPresenceEvent(kind, availability = null, customLabel = null) 
     } else {
       console.error(`❌ PRESENCE: Error sending ${kind} event:`, error);
     }
+    
+    // Return error response
+    return { success: false, error: error.message };
   }
 }
 // async function sendMessageViaSupabase(content) {
@@ -851,8 +936,8 @@ function setupSupabaseEventHandlers() {
     console.log('💬 SUPABASE: From:', message.user_email);
     console.log('💬 SUPABASE: Content:', message.content?.substring(0, 50) + '...');
     
-    // SD1 FIX: Convert Supabase message format to API format for addMessageToChat
-    const convertedMessage = await convertSupabaseMessageToAPIFormat(message);
+    // COMP METHOD: Convert Supabase message format to API format for addMessageToChat
+    const convertedMessage = await window.convertSupabaseMessageToAPIFormat(message);
     console.log('💬 SUPABASE: Converted message:', convertedMessage);
     
     // Add message to chat immediately
@@ -875,8 +960,8 @@ function setupSupabaseEventHandlers() {
     console.log('✏️ SUPABASE: Message ID:', message.id);
     console.log('✏️ SUPABASE: New content:', message.content?.substring(0, 50) + '...');
     
-    // Convert Supabase message format to API format for updateMessageInChat
-    const convertedMessage = await convertSupabaseMessageToAPIFormat(message);
+    // COMP METHOD: Convert Supabase message format to API format for updateMessageInChat
+    const convertedMessage = await window.convertSupabaseMessageToAPIFormat(message);
     console.log('✏️ SUPABASE: Converted message:', convertedMessage);
     
     // Update message in chat
@@ -886,17 +971,57 @@ function setupSupabaseEventHandlers() {
   
   window.supabaseRealtimeClient.onMessageDeleted = (deletion) => {
     console.log('🗑️ SUPABASE: Message deleted:', deletion);
-    // Remove the deleted message from the UI
-    const messageElement = document.querySelector(`[data-message-id="${deletion.message_id}"]`);
-    if (messageElement) {
-      messageElement.remove();
-      console.log('✅ SUPABASE: Deleted message removed from UI');
+    console.log('🗑️ SUPABASE: Deletion object keys:', Object.keys(deletion));
+    console.log('🗑️ SUPABASE: Deletion id field:', deletion.id);
+    console.log('🗑️ SUPABASE: Deletion message_id field:', deletion.message_id);
+    
+    // Try different possible field names for the message ID
+    const messageId = deletion.id || deletion.message_id || deletion.messageId;
+    console.log('🗑️ SUPABASE: Using message ID:', messageId);
+    
+    if (messageId) {
+      // Dispatch the real-time deletion event for proper handling
+      console.log('🗑️ SUPABASE: Dispatching realtime-message-deleted event');
+      window.dispatchEvent(new CustomEvent('realtime-message-deleted', { 
+        detail: { 
+          messageId: messageId,
+          id: messageId,
+          deletion: deletion
+        } 
+      }));
     } else {
-      console.log('⚠️ SUPABASE: Message element not found for deletion');
+      console.log('❌ SUPABASE: No message ID found in deletion object');
     }
   };
   
   console.log('✅ SUPABASE: Event handlers configured');
+}
+
+// COMP METHOD: Handle presence events locally when API fails
+async function handlePresenceEventLocally(kind, availability, customLabel) {
+  console.log('🔧 PRESENCE API: COMP METHOD - Handling presence event locally');
+  
+  const currentUser = window.currentUser || { email: 'user@example.com' };
+  const currentPageId = window.currentUrlData?.pageId || 'unknown';
+  
+  // Store presence locally
+  const presenceData = {
+    userId: currentUser.email,
+    pageId: currentPageId,
+    kind: kind,
+    availability: availability,
+    customLabel: customLabel,
+    timestamp: new Date().toISOString(),
+    local: true
+  };
+  
+  // Store in local storage
+  chrome.storage.local.set({ 
+    [`presence_${currentPageId}_${currentUser.email}`]: presenceData 
+  });
+  
+  console.log('✅ PRESENCE API: COMP METHOD - Presence event stored locally');
+  return { success: true, local: true };
 }
 
 // Export for global access

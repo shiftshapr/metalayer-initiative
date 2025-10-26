@@ -8,89 +8,90 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model AppUser {
-  id                         String             @id
-  handle                     String             @unique
-  email                      String?            @unique
-  name                       String?
-  avatarUrl                  String?
-  isVerified                 Boolean            @default(false)
-  isSuperAdmin               Boolean            @default(false)
-  createdAt                  DateTime           @default(now())
-  updatedAt                  DateTime           @updatedAt
-  auraColor                  String?
-  defaultVisibility          Boolean            @default(false)
-  displayVisibilityAfterExit Int                @default(7)
-  headline                   String?
-  conversations              Conversation[]     @relation("ConversationCreatedBy")
-  moderationActions          ModerationAction[]
-  posts                      Post[]
-  presenceEvents             PresenceEvent[]
-  reactions                  Reaction[]
-  spaces                     SpaceMember[]
-  visibilityUrls             UserVisibility[]
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model message_deletions {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  message_id String
+  deleted_by String
+  deleted_at DateTime? @default(now()) @db.Timestamptz(6)
+  page_id    String
+  created_at DateTime? @default(now()) @db.Timestamptz(6)
+
+  @@index([deleted_at], map: "idx_message_deletions_deleted_at")
+  @@index([message_id], map: "idx_message_deletions_message_id")
+  @@index([page_id], map: "idx_message_deletions_page")
+  @@index([page_id], map: "idx_message_deletions_page_id")
 }
 
-model Space {
-  id          String        @id
-  name        String
-  description String?
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-  pages       Page[]
-  members     SpaceMember[]
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model messages {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  page_id      String
+  user_email   String
+  content      String
+  created_at   DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime? @default(now()) @db.Timestamptz(6)
+  community_id String    @default("comm-001")
+  parent_id    String?
+
+  @@index([community_id], map: "idx_messages_community_id")
+  @@index([page_id, community_id], map: "idx_messages_page_community")
+  @@index([page_id], map: "idx_messages_page_id")
+  @@index([parent_id], map: "idx_messages_parent_id")
+  @@index([user_email], map: "idx_messages_user_email")
 }
 
-model SpaceMember {
-  spaceId  String
-  userId   String
-  role     Role
-  joinedAt DateTime @default(now())
-  space    Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
-  user     AppUser  @relation(fields: [userId], references: [id], onDelete: Cascade)
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model reactions {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  message_id String    @db.Uuid
+  emoji      String
+  user_email String
+  created_at DateTime? @default(now()) @db.Timestamptz(6)
 
-  @@id([spaceId, userId])
+  @@index([message_id], map: "idx_reactions_message")
 }
 
-model Page {
-  id               String          @id
-  spaceId          String?
-  url              String
-  canonicalUrl     String
-  title            String?
-  description      String?
-  latestSnapshotId String?
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
-  conversations    Conversation[]
-  latestSnapshot   PageSnapshot?   @relation("LatestSnapshot", fields: [latestSnapshotId], references: [id])
-  space            Space?          @relation(fields: [spaceId], references: [id], onDelete: Cascade)
-  snapshots        PageSnapshot[]
-  presenceEvents   PresenceEvent[]
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model user_presence {
+  id         String    @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_email String
+  user_name  String?
+  page_id    String
+  page_url   String
+  aura_color String?   @default("#45B7D1")
+  is_active  Boolean?  @default(true)
+  last_seen  DateTime? @default(now()) @db.Timestamptz(6)
+  created_at DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at DateTime? @default(now()) @db.Timestamptz(6)
+  enter_time DateTime? @db.Timestamptz(6)
+  avatar_url String?
 
-  @@unique([spaceId, canonicalUrl])
-  @@index([canonicalUrl])
+  @@id([user_email, page_id])
+  @@unique([user_email, page_id], map: "user_presence_user_page_unique")
+  @@index([page_id, user_email], map: "idx_presence_page_user")
+  @@index([page_id], map: "idx_user_presence_page_id")
+  @@index([user_email], map: "idx_user_presence_user_email")
 }
 
-model PageSnapshot {
-  id            String    @id
-  pageId        String
-  contentHash   Bytes
-  simhash       BigInt
-  etag          String?
-  lastModified  DateTime?
-  screenshotKey String?
-  createdAt     DateTime  @default(now())
-  anchors       Anchor[]
-  pagesAsLatest Page[]    @relation("LatestSnapshot")
-  page          Page      @relation(fields: [pageId], references: [id], onDelete: Cascade)
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model user_visibility {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_email   String
+  page_id      String
+  is_visible   Boolean?  @default(true)
+  last_updated DateTime? @default(now()) @db.Timestamptz(6)
+  created_at   DateTime? @default(now()) @db.Timestamptz(6)
 
-  @@index([pageId, createdAt(sort: Desc)])
+  @@unique([user_email, page_id], map: "user_visibility_user_page_unique")
+  @@index([page_id, user_email], map: "idx_visibility_page_user")
 }
 
 model Anchor {
-  id             String         @id
-  pageSnapshotId String
+  id             String         @id @db.Uuid
+  pageSnapshotId String         @db.Uuid
   type           AnchorType
   selectors      Json
   bbox           Json?
@@ -98,158 +99,200 @@ model Anchor {
   snippet        String?
   confidence     Float          @default(1.0)
   createdAt      DateTime       @default(now())
-  pageSnapshot   PageSnapshot   @relation(fields: [pageSnapshotId], references: [id], onDelete: Cascade)
-  conversations  Conversation[]
+  PageSnapshot   PageSnapshot   @relation(fields: [pageSnapshotId], references: [id], onDelete: Cascade)
+  Conversation   Conversation[]
 
   @@index([pageSnapshotId])
   @@index([type])
 }
 
+model AppUser {
+  id               String             @id @db.Uuid
+  handle           String             @unique
+  email            String?            @unique
+  name             String?
+  avatarUrl        String?
+  isVerified       Boolean            @default(false)
+  isSuperAdmin     Boolean            @default(false)
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime
+  auraColor        String?
+  Conversation     Conversation[]
+  ModerationAction ModerationAction[]
+  Post             Post[]
+  PresenceEvent    PresenceEvent[]
+  Reaction         Reaction[]
+  SpaceMember      SpaceMember[]
+}
+
 model Conversation {
-  id          String     @id
-  pageId      String
-  anchorId    String?
+  id          String     @id @db.Uuid
+  pageId      String     @db.Uuid
+  anchorId    String?    @db.Uuid
   visibility  Visibility
   title       String?
   tags        String[]
   status      Status     @default(OPEN)
-  createdById String
+  createdById String     @db.Uuid
   createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  updatedAt   DateTime
   communityId String?
-  anchor      Anchor?    @relation(fields: [anchorId], references: [id])
-  createdBy   AppUser    @relation("ConversationCreatedBy", fields: [createdById], references: [id])
-  page        Page       @relation(fields: [pageId], references: [id], onDelete: Cascade)
-  posts       Post[]
-  reactions   Reaction[]
+  Anchor      Anchor?    @relation(fields: [anchorId], references: [id])
+  AppUser     AppUser    @relation(fields: [createdById], references: [id])
+  Page        Page       @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  Post        Post[]
+  Reaction    Reaction[]
 
-  @@index([pageId, updatedAt(sort: Desc)], map: "conversation_list_ix")
   @@index([anchorId])
-  @@index([status])
   @@index([communityId])
+  @@index([status])
+  @@index([pageId, updatedAt(sort: Desc)], map: "conversation_list_ix")
+}
+
+model ModerationAction {
+  id         String   @id @db.Uuid
+  actorId    String   @db.Uuid
+  targetType String
+  targetId   String
+  action     String
+  reason     String?
+  createdAt  DateTime @default(now())
+  AppUser    AppUser  @relation(fields: [actorId], references: [id])
+
+  @@index([actorId])
+  @@index([targetType, targetId])
+}
+
+model Page {
+  id                                               String          @id @db.Uuid
+  spaceId                                          String?         @db.Uuid
+  url                                              String
+  canonicalUrl                                     String
+  title                                            String?
+  description                                      String?
+  latestSnapshotId                                 String?         @db.Uuid
+  createdAt                                        DateTime        @default(now())
+  updatedAt                                        DateTime
+  Conversation                                     Conversation[]
+  PageSnapshot_Page_latestSnapshotIdToPageSnapshot PageSnapshot?   @relation("Page_latestSnapshotIdToPageSnapshot", fields: [latestSnapshotId], references: [id])
+  Space                                            Space?          @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  PageSnapshot_PageSnapshot_pageIdToPage           PageSnapshot[]  @relation("PageSnapshot_pageIdToPage")
+  PresenceEvent                                    PresenceEvent[]
+
+  @@unique([spaceId, canonicalUrl])
+  @@index([canonicalUrl])
+}
+
+model PageSnapshot {
+  id                                       String    @id @db.Uuid
+  pageId                                   String    @db.Uuid
+  contentHash                              Bytes
+  simhash                                  BigInt
+  etag                                     String?
+  lastModified                             DateTime?
+  screenshotKey                            String?
+  createdAt                                DateTime  @default(now())
+  Anchor                                   Anchor[]
+  Page_Page_latestSnapshotIdToPageSnapshot Page[]    @relation("Page_latestSnapshotIdToPageSnapshot")
+  Page_PageSnapshot_pageIdToPage           Page      @relation("PageSnapshot_pageIdToPage", fields: [pageId], references: [id], onDelete: Cascade)
+
+  @@index([pageId, createdAt(sort: Desc)])
 }
 
 model Post {
-  id                 String       @id
-  conversationId     String
-  parentId           String?
-  authorId           String
+  id                 String       @id @db.Uuid
+  conversationId     String       @db.Uuid
+  parentId           String?      @db.Uuid
+  authorId           String       @db.Uuid
   body               String
   attachments        Json?
   createdAt          DateTime     @default(now())
   editedAt           DateTime?
   visibilityOverride Visibility?
   deletedAt          DateTime?
-  author             AppUser      @relation(fields: [authorId], references: [id])
-  conversation       Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  parent             Post?        @relation("PostToPost", fields: [parentId], references: [id])
-  children           Post[]       @relation("PostToPost")
-  reactions          Reaction[]
+  AppUser            AppUser      @relation(fields: [authorId], references: [id])
+  Conversation       Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  Post               Post?        @relation("PostToPost", fields: [parentId], references: [id])
+  other_Post         Post[]       @relation("PostToPost")
+  Reaction           Reaction[]
 
-  @@index([conversationId, createdAt], map: "post_list_ix")
-  @@index([parentId])
   @@index([authorId])
+  @@index([parentId])
+  @@index([conversationId, createdAt], map: "post_list_ix")
+}
+
+model PresenceEvent {
+  id           BigInt            @id @default(autoincrement())
+  pageId       String            @db.Uuid
+  userId       String            @db.Uuid
+  kind         PresenceEventKind
+  availability Availability?
+  customLabel  String?
+  createdAt    DateTime          @default(now())
+  Page         Page              @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  AppUser      AppUser           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([pageId, createdAt(sort: Desc)])
+  @@index([userId])
 }
 
 model Reaction {
-  id             String        @id
-  userId         String
-  conversationId String?
-  postId         String?
+  id             String        @id @db.Uuid
+  userId         String        @db.Uuid
+  conversationId String?       @db.Uuid
+  postId         String?       @db.Uuid
   kind           ReactionKind
   createdAt      DateTime      @default(now())
   emoji          String?
-  conversation   Conversation? @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  post           Post?         @relation(fields: [postId], references: [id], onDelete: Cascade)
-  user           AppUser       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  Conversation   Conversation? @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  Post           Post?         @relation(fields: [postId], references: [id], onDelete: Cascade)
+  AppUser        AppUser       @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, conversationId, postId], map: "unique_user_target")
   @@index([conversationId])
   @@index([postId])
 }
 
-model PresenceEvent {
-  id           BigInt            @id @default(autoincrement())
-  pageId       String
-  userId       String
-  kind         PresenceEventKind
-  availability Availability?
-  customLabel  String?
-  createdAt    DateTime          @default(now())
-  page         Page              @relation(fields: [pageId], references: [id], onDelete: Cascade)
-  user         AppUser           @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, pageId, kind], name: "userId_pageId_kind")
-  @@index([pageId, createdAt(sort: Desc)])
-  @@index([userId])
+model Space {
+  id          String        @id @db.Uuid
+  name        String
+  description String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime
+  Page        Page[]
+  SpaceMember SpaceMember[]
 }
 
-model UserVisibility {
-  id        String   @id
-  userId    String
-  url       String
-  isVisible Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  user      AppUser  @relation(fields: [userId], references: [id], onDelete: Cascade)
+model SpaceMember {
+  spaceId  String   @db.Uuid
+  userId   String   @db.Uuid
+  role     Role
+  joinedAt DateTime @default(now())
+  Space    Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  AppUser  AppUser  @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, url], name: "user_url_visibility")
-  @@index([userId])
-  @@index([url])
+  @@id([spaceId, userId])
 }
 
-model ModerationAction {
-  id         String   @id
-  actorId    String
-  targetType String
-  targetId   String
-  action     String
-  reason     String?
-  createdAt  DateTime @default(now())
-  actor      AppUser  @relation(fields: [actorId], references: [id])
-
-  @@index([targetType, targetId])
-  @@index([actorId])
+enum AnchorType {
+  PAGE
+  REGION
+  TEXT
+  MEDIA
+  COMPOSITE
 }
 
-model UrlNormalizationRule {
-  id           String               @id @default(cuid())
-  type         UrlNormalizationType
-  domain       String
-  pattern      String
-  queryKeys    String[]
-  alternateTo  String?
-  hashPreserve Boolean              @default(false)
-  priority     Int                  @default(0)
-  isActive     Boolean              @default(true)
-  createdAt    DateTime             @default(now())
-  updatedAt    DateTime             @updatedAt
-
-  @@index([domain])
-  @@index([type])
-  @@index([isActive, priority])
-}
-
-enum Role {
-  OWNER
-  MODERATOR
-  MEMBER
-  VISITOR
-}
-
-enum Visibility {
-  PUBLIC
-  COMMUNITY
-  GROUP
-  PRIVATE
+enum Availability {
+  AVAILABLE
+  BUSY
+  AWAY
   CUSTOM
 }
 
-enum Status {
-  OPEN
-  RESOLVED
-  ARCHIVED
-  FLAGGED
+enum PresenceEventKind {
+  ENTER
+  EXIT
+  AVAILABILITY
 }
 
 enum ReactionKind {
@@ -263,29 +306,24 @@ enum ReactionKind {
   CLARIFY
 }
 
-enum PresenceEventKind {
-  ENTER
-  EXIT
-  AVAILABILITY
+enum Role {
+  OWNER
+  MODERATOR
+  MEMBER
+  VISITOR
 }
 
-enum UrlNormalizationType {
-  QUERY_KEY_PRESERVE
-  ALTERNATE_URL_PATTERN
-  HASH_PRESERVE
+enum Status {
+  OPEN
+  RESOLVED
+  ARCHIVED
+  FLAGGED
 }
 
-enum Availability {
-  AVAILABLE
-  BUSY
-  AWAY
+enum Visibility {
+  PUBLIC
+  COMMUNITY
+  GROUP
+  PRIVATE
   CUSTOM
-}
-
-enum AnchorType {
-  PAGE
-  REGION
-  TEXT
-  MEDIA
-  COMPOSITE
 }

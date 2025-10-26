@@ -111,11 +111,11 @@ class StateManager {
       if (current && typeof current === 'object' && key in current) {
         current = current[key];
       } else {
-//         return undefined;
+        return undefined;
       }
     }
     
-//     return current;
+    return current;
   }
   
   /**

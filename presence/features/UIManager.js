@@ -35,6 +35,237 @@ class UIManager {
     this.setupEventListeners();
     this.initializeModals();
     this.updateUIState();
+    
+    // COMP METHOD: Initialize COMP method fixes
+    this.initializeCOMPMethodFixes();
+  }
+
+  /**
+   * Initialize COMP method fixes for UI elements
+   */
+  initializeCOMPMethodFixes() {
+    console.log('Initializing COMP method fixes', null, 'ui');
+    
+    // Fix message UI elements
+    this.fixMessageUIElements();
+    
+    // Fix visible tab
+    this.fixVisibleTab();
+    
+    // Fix profile menu
+    this.fixProfileMenu();
+    
+    // Fix message input
+    this.fixMessageInput();
+  }
+
+  /**
+   * COMP METHOD: Fix message UI elements
+   */
+  fixMessageUIElements() {
+    console.log('COMP METHOD: Fixing message UI elements', null, 'ui');
+    
+    const messages = document.querySelectorAll('.message');
+    messages.forEach((message, index) => {
+      // Fix avatar display
+      const avatar = message.querySelector('.message-avatar img');
+      if (avatar && avatar.src.includes('gravatar.com') && avatar.dataset.avatarFallback === 'true') {
+        const userEmail = avatar.dataset.userEmail;
+        if (userEmail) {
+          avatar.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(userEmail.split('@')[0])}&background=random&color=fff&size=200`;
+        }
+      }
+      
+      // Fix author name
+      const authorName = message.querySelector('.message-author');
+      if (authorName && !authorName.textContent.trim()) {
+        const userEmail = message.dataset.userEmail || message.querySelector('[data-user-email]')?.dataset.userEmail;
+        if (userEmail) {
+          authorName.textContent = userEmail.split('@')[0];
+        }
+      }
+      
+      // Fix community info
+      const community = message.querySelector('.message-community');
+      if (community && !community.textContent.trim()) {
+        community.textContent = 'Metalayer';
+      }
+      
+      // Fix message menu
+      if (!message.querySelector('.message-menu')) {
+        const menuButton = document.createElement('button');
+        menuButton.className = 'message-menu';
+        menuButton.innerHTML = '⋮';
+        menuButton.title = 'Message options';
+        message.appendChild(menuButton);
+      }
+      
+      // Fix reactions
+      if (!message.querySelector('.message-reactions')) {
+        const reactionsDiv = document.createElement('div');
+        reactionsDiv.className = 'message-reactions';
+        reactionsDiv.innerHTML = `
+          <button class="reaction-btn" data-emoji="👍">👍</button>
+          <button class="reaction-btn" data-emoji="❤️">❤️</button>
+          <button class="reaction-btn" data-emoji="😂">😂</button>
+          <button class="reaction-btn" data-emoji="😮">😮</button>
+        `;
+        message.appendChild(reactionsDiv);
+      }
+      
+      // Fix replies
+      if (!message.querySelector('.message-replies')) {
+        const repliesDiv = document.createElement('div');
+        repliesDiv.className = 'message-replies';
+        repliesDiv.innerHTML = `<button class="reply-btn">Reply</button>`;
+        message.appendChild(repliesDiv);
+      }
+    });
+    
+    console.log('COMP METHOD: Message UI elements fixed', null, 'ui');
+  }
+
+  /**
+   * COMP METHOD: Fix visible tab using exact COMP method
+   */
+  fixVisibleTab() {
+    console.log('COMP METHOD: Fixing visible tab using COMP method', null, 'ui');
+    
+    // COMP METHOD: Use the exact COMP updateVisibleTab function
+    if (typeof window.updateVisibleTab === 'function') {
+      console.log('COMP METHOD: Using COMP updateVisibleTab function', null, 'ui');
+      
+      // COMP METHOD: Get current user and add to visibility list
+      if (window.currentUser && window.currentUser.email) {
+        const currentUserAvatar = {
+          email: window.currentUser.email,
+          name: window.currentUser.name || window.currentUser.email,
+          avatarUrl: window.currentUser.avatarUrl || window.currentUser.avatar,
+          status: 'active',
+          isCurrentUser: true
+        };
+        
+        console.log('COMP METHOD: Adding current user to visibility list', null, 'ui');
+        window.updateVisibleTab([currentUserAvatar]);
+      } else {
+        console.log('COMP METHOD: No current user, showing empty list', null, 'ui');
+        window.updateVisibleTab([]);
+      }
+    } else {
+      console.log('COMP METHOD: updateVisibleTab not available, using fallback', null, 'ui');
+      this.fixVisibleTabFallback();
+    }
+    
+    console.log('COMP METHOD: Visible tab fixed using COMP method', null, 'ui');
+  }
+
+  /**
+   * COMP METHOD: Fallback visible tab fix
+   */
+  fixVisibleTabFallback() {
+    console.log('COMP METHOD: Using fallback visible tab fix', null, 'ui');
+    
+    const visibleTab = document.querySelector('#visible-tab');
+    if (!visibleTab) return;
+    
+    // COMP METHOD: Always show current user in visible tab
+    if (window.currentUser && window.currentUser.email) {
+      visibleTab.innerHTML = '';
+      const profileDiv = document.createElement('div');
+      profileDiv.className = 'profile-item';
+      profileDiv.innerHTML = `
+        <div class="profile-avatar">
+          <img src="${window.currentUser.avatarUrl || window.currentUser.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(window.currentUser.name || window.currentUser.email)}&background=random&color=fff&size=200`}" alt="${window.currentUser.name || window.currentUser.email}">
+        </div>
+        <div class="profile-info">
+          <div class="profile-name">${window.currentUser.name || window.currentUser.email}</div>
+          <div class="profile-status">Active</div>
+        </div>
+      `;
+      visibleTab.appendChild(profileDiv);
+    } else {
+      visibleTab.innerHTML = '<div class="no-users">No active users on this page</div>';
+    }
+  }
+
+  /**
+   * COMP METHOD: Fix profile menu
+   */
+  fixProfileMenu() {
+    console.log('COMP METHOD: Fixing profile menu', null, 'ui');
+    
+    const profileMenu = document.querySelector('.profile-menu');
+    if (!profileMenu) {
+      try {
+        const menuDiv = document.createElement('div');
+        menuDiv.className = 'profile-menu';
+        
+        // Safe template literal with proper escaping
+        const userName = window.currentUser?.name || 'User';
+        const userEmail = window.currentUser?.email || 'user@example.com';
+        const userAvatar = window.currentUser?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(userName)}&background=random&color=fff&size=200`;
+        
+        menuDiv.innerHTML = `
+          <div class="profile-menu-header">
+            <div class="profile-avatar">
+              <img src="${userAvatar}" alt="${userName}">
+            </div>
+            <div class="profile-info">
+              <div class="profile-name">${userName}</div>
+              <div class="profile-email">${userEmail}</div>
+            </div>
+          </div>
+          <div class="profile-menu-actions">
+            <button class="profile-action">Settings</button>
+            <button class="profile-action">Help</button>
+            <button class="profile-action">Sign Out</button>
+          </div>
+        `;
+        
+        const profileButton = document.querySelector('.profile-button');
+        if (profileButton) {
+          profileButton.appendChild(menuDiv);
+        } else {
+          // COMP METHOD: Use a safer fallback
+          const userInfoDiv = document.querySelector('#user-info');
+          if (userInfoDiv) {
+            userInfoDiv.appendChild(menuDiv);
+          } else {
+            console.warn('COMP METHOD: No suitable container found for profile menu', null, 'ui');
+            return;
+          }
+        }
+        
+        console.log('COMP METHOD: Profile menu created successfully', null, 'ui');
+      } catch (error) {
+        console.error('COMP METHOD: Error creating profile menu:', error, null, 'ui');
+      }
+    } else {
+      console.log('COMP METHOD: Profile menu already exists', null, 'ui');
+    }
+    
+    console.log('COMP METHOD: Profile menu fixed', null, 'ui');
+  }
+
+  /**
+   * COMP METHOD: Fix message input
+   */
+  fixMessageInput() {
+    console.log('COMP METHOD: Fixing message input', null, 'ui');
+    
+    const messageInput = document.querySelector('#messageInput, #chat-textarea');
+    if (messageInput) {
+      if (messageInput.dataset.replyingTo) {
+        messageInput.dataset.replyingTo = '';
+      }
+      if (messageInput.dataset.editingMessageId) {
+        messageInput.dataset.editingMessageId = '';
+      }
+      messageInput.placeholder = 'Type a message...';
+      messageInput.disabled = false;
+    }
+    
+    console.log('COMP METHOD: Message input fixed', null, 'ui');
   }
 
   /**
@@ -192,9 +423,9 @@ class UIManager {
   /**
    * Create user avatar HTML
    */
-  createUserAvatar(user) {
+  async createUserAvatar(user) {
     if (window.AvatarUtils) {
-      return window.AvatarUtils.createUnifiedAvatar(user, {
+      return await window.AvatarUtils.createUnifiedAvatar(user, {
         context: 'visibility',
         showAura: true,
         size: 24

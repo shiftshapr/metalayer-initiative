@@ -30,7 +30,7 @@ const server = createServer(app);
 
 // CORS configuration
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://localhost:3001', 'chrome-extension://*'],
+  origin: ['http://216.238.91.120:3000', 'http://216.238.91.120:3001', 'chrome-extension://*'],
   credentials: true
 }));
 

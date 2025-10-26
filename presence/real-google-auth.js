@@ -128,38 +128,49 @@ class RealGoogleAuth {
       
       try {
         // Check if Chrome identity API is available
-        if (typeof chrome !== 'undefined' && chrome.identity && chrome.identity.getProfileUserInfo) {
-          console.log('🔍 REAL_GOOGLE_AUTH: Chrome identity API is available, calling getProfileUserInfo...');
+        if (typeof chrome !== 'undefined' && chrome.identity && chrome.identity.getAuthToken) {
+          console.log('🔍 REAL_GOOGLE_AUTH: Chrome identity API is available, calling getAuthToken...');
           
-          // Chrome identity API - get profile user info
-          const chromeProfile = await new Promise((resolve, reject) => {
-            chrome.identity.getProfileUserInfo((userInfo) => {
-              console.log('🔍 REAL_GOOGLE_AUTH: Chrome identity callback received:', userInfo);
+          // COMP METHOD: Chrome identity API - get OAuth token for Google People API
+          const authToken = await new Promise((resolve, reject) => {
+            chrome.identity.getAuthToken({ interactive: true }, (token) => {
+              console.log('🔍 REAL_GOOGLE_AUTH: Chrome identity callback received token:', token);
               console.log('🔍 REAL_GOOGLE_AUTH: Chrome runtime last error:', chrome.runtime.lastError);
               
               if (chrome.runtime.lastError) {
-                console.log('🔍 REAL_GOOGLE_AUTH: Chrome profile not available:', chrome.runtime.lastError.message);
+                console.log('🔍 REAL_GOOGLE_AUTH: Chrome auth token not available:', chrome.runtime.lastError.message);
                 resolve(null);
-              } else if (userInfo && userInfo.email) {
-                console.log('🔍 REAL_GOOGLE_AUTH: Chrome profile found:', userInfo.email);
-                console.log('🔍 REAL_GOOGLE_AUTH: Chrome profile ID:', userInfo.id);
-                resolve(userInfo);
+              } else if (token) {
+                console.log('🔍 REAL_GOOGLE_AUTH: Chrome auth token received:', token);
+                resolve(token);
               } else {
-                console.log('🔍 REAL_GOOGLE_AUTH: No Chrome profile email found');
+                console.log('🔍 REAL_GOOGLE_AUTH: No Chrome auth token found');
                 resolve(null);
               }
             });
           });
+
+          if (authToken) {
+            // COMP METHOD: Use OAuth token to get actual Google profile picture
+            console.log('🔍 REAL_GOOGLE_AUTH: Fetching Google profile with OAuth token...');
+            try {
+              const response = await fetch(`https://www.googleapis.com/oauth2/v2/userinfo?access_token=${authToken}`);
+              const userInfo = await response.json();
+              console.log('🔍 REAL_GOOGLE_AUTH: Google API response:', userInfo);
+              console.log('🔍 REAL_GOOGLE_AUTH: Google profile picture:', userInfo.picture);
+              console.log('🔍 REAL_GOOGLE_AUTH: Full Google profile data:', userInfo);
+              
+              const chromeProfile = userInfo;
 
           if (chromeProfile && chromeProfile.email) {
             // COMP METHOD: Create user object from Chrome profile
             const chromeUser = {
               email: chromeProfile.email,
               name: chromeProfile.email.split('@')[0], // Use email prefix as name
-              picture: `https://www.gravatar.com/avatar/${this.getGravatarHash(chromeProfile.email)}?d=identicon&s=200`,
+              picture: chromeProfile.picture, // Use ACTUAL Google profile picture
               user_metadata: {
                 full_name: chromeProfile.email.split('@')[0],
-                avatar_url: `https://www.gravatar.com/avatar/${this.getGravatarHash(chromeProfile.email)}?d=identicon&s=200`
+                avatar_url: chromeProfile.picture // Use ACTUAL Google profile picture
               },
               provider: 'chrome_profile',
               id: chromeProfile.id || chromeProfile.email
@@ -177,8 +188,14 @@ class RealGoogleAuth {
             console.log('🔍 REAL_GOOGLE_AUTH: RETURNING Chrome profile user:', chromeUser.email);
             console.log('🔍 REAL_GOOGLE_AUTH: RETURNING Chrome user object:', chromeUser);
             return chromeUser;
+              } else {
+                console.log('🔍 REAL_GOOGLE_AUTH: Chrome profile found but no email:', chromeProfile);
+              }
+            } catch (error) {
+              console.log('🔍 REAL_GOOGLE_AUTH: Google API error:', error);
+            }
           } else {
-            console.log('🔍 REAL_GOOGLE_AUTH: Chrome profile found but no email:', chromeProfile);
+            console.log('🔍 REAL_GOOGLE_AUTH: No auth token received');
           }
         } else {
           console.log('🔍 REAL_GOOGLE_AUTH: Chrome identity API not available');
@@ -241,23 +258,7 @@ class RealGoogleAuth {
     }
   }
 
-  // Helper method to generate Gravatar hash
-  getGravatarHash(email) {
-    const crypto = window.crypto || window.msCrypto;
-    if (crypto && crypto.subtle) {
-      // Use crypto API if available
-      return btoa(email.toLowerCase().trim()).replace(/[^a-zA-Z0-9]/g, '');
-    } else {
-      // Fallback to simple hash
-      let hash = 0;
-      for (let i = 0; i < email.length; i++) {
-        const char = email.charCodeAt(i);
-        hash = ((hash << 5) - hash) + char;
-        hash = hash & hash; // Convert to 32-bit integer
-      }
-      return Math.abs(hash).toString(36);
-    }
-  }
+  // Helper method to generate Gravatar ha
 }
 
 // Export for use

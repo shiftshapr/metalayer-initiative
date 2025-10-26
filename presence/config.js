@@ -54,7 +54,7 @@
       // Check for environment indicators
       if (typeof chrome !== 'undefined' && chrome.runtime) {
         // Force development mode if local server is available
-        // This ensures we use localhost:3003 instead of production
+        // This ensures we use VPS IP instead of production
         return 'development';
         
         // Check if we're in development mode
@@ -72,7 +72,7 @@
       }
       
       // Fallback detection
-      if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      if (window.location.hostname === '216.238.91.120' || window.location.hostname === '127.0.0.1') {
         return 'development';
       }
       

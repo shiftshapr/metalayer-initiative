@@ -59,13 +59,64 @@ async function loadCommunities() {
       
       console.log('Loading communities...');
       const response = await api.getCommunities();
-      const communities = response.communities || response; // Handle both formats
+      let communities = response.communities || response; // Handle both formats
+      
+      // SD1 CRITICAL FIX: Filter out owner/admin fields that contain themetalayer
+      console.log('🔍 SD1 FIX: Filtering out owner/admin fields to prevent themetalayer confusion');
+      communities = communities.map(community => {
+        const { owner, admins, ...cleanCommunity } = community;
+        console.log(`🔍 SD1 FIX: Removed owner (${owner}) and admins (${JSON.stringify(admins)}) from community ${community.name}`);
+        return cleanCommunity;
+      });
       console.log(`🔍 USER_IDENTITY: Loaded ${communities.length} communities`);
       console.log('🔍 USER_IDENTITY: Communities data:', communities);
+      
+      // SD1 CRITICAL DEBUG: Trace where themetalayer is coming from
+      console.log('🔍 SD1 DEBUG: === TRACING THEMETALAYER SOURCE ===');
+      communities.forEach((community, index) => {
+        console.log(`🔍 SD1 DEBUG: Community ${index + 1}:`, {
+          id: community.id,
+          name: community.name,
+          owner: community.owner,
+          admins: community.admins,
+          members: community.members
+        });
+        // SD1 DEBUG: Check for themetalayer in community data
+        if (community.owner === 'themetalayer@gmail.com') {
+          console.log(`ℹ️ SD1 DEBUG: Found themetalayer as owner in community ${community.name}`);
+        }
+      });
+      console.log('🔍 SD1 DEBUG: === END THEMETALAYER TRACE ===');
+      
       console.log('🔍 USER_IDENTITY: === END COMMUNITIES USER IDENTITY TRACE ===');
       
       // Update community dropdown
       updateCommunityDropdown(communities);
+      
+      // SD1 CRITICAL DEBUG: Check what's being displayed in the UI
+      console.log('🔍 SD1 DEBUG: === CHECKING UI DISPLAY ===');
+      setTimeout(() => {
+        const communityDropdown = document.querySelector('#community-dropdown');
+        const communityName = document.querySelector('.community-name');
+        const communityDescription = document.querySelector('.community-description');
+        
+        if (communityDropdown) {
+          console.log('🔍 SD1 DEBUG: Community dropdown text:', communityDropdown.textContent);
+        }
+        if (communityName) {
+          console.log('🔍 SD1 DEBUG: Community name text:', communityName.textContent);
+        }
+        if (communityDescription) {
+          console.log('🔍 SD1 DEBUG: Community description text:', communityDescription.textContent);
+        }
+        
+        // Check if themetalayer is being displayed anywhere
+        const allText = document.body.innerText;
+        if (allText.includes('themetalayer')) {
+          console.log('ℹ️ SD1 DEBUG: Found themetalayer in UI text (this is normal for current user)');
+        }
+      }, 1000);
+      console.log('🔍 SD1 DEBUG: === END UI DISPLAY CHECK ===');
       
       // Set up active communities and primary community
       if (communities.length > 0) {
@@ -114,7 +165,22 @@ async function loadCommunities() {
           console.log('🔍 INIT: Skipping avatar loading until user signs in');
           // Don't retry - wait for user to authenticate
         }
-        await loadChatHistory(primaryCommunity);
+        // Load chat history using CanopiModule
+        if (typeof window.loadChatHistory === 'function') {
+          console.log('🔍 INIT: loadChatHistory available, loading chat history...');
+          await window.loadChatHistory(primaryCommunity);
+        } else {
+          console.log('🔍 INIT: loadChatHistory not available, waiting for CanopiModule...');
+          // Wait a bit for CanopiModule to load
+          setTimeout(async () => {
+            if (typeof window.loadChatHistory === 'function') {
+              console.log('🔍 INIT: loadChatHistory now available, loading chat history...');
+              await window.loadChatHistory(primaryCommunity);
+            } else {
+              console.log('❌ INIT: loadChatHistory still not available after retry');
+            }
+          }, 1000);
+        }
         
         // Update placeholder text with primary community name
         updatePlaceholderText(communities[0].name);
@@ -197,7 +263,11 @@ async function loadCommunities() {
       });
       
       // Load chat history for the new primary community
-      loadChatHistory(community.id);
+      if (typeof window.loadChatHistory === 'function') {
+        window.loadChatHistory(community.id);
+      } else {
+        console.log('🔍 COMMUNITIES: loadChatHistory not available for community switch');
+      }
       
       // Note: We don't reload avatars here because we want to show people from ALL active communities
       // The avatars are already loaded from all active communities in loadCombinedAvatars()
@@ -244,54 +314,107 @@ async function loadCombinedAvatars(communityIds) {
       console.log('✅ LOAD_VISIBILITY: Raw URL:', urlData.rawUrl);
       console.log('✅ LOAD_VISIBILITY: Page ID:', urlData.pageId);
       
-      // Try URL-based presence first (more accurate)
+      // COMP METHOD: Use the exact same approach as COMP
       let avatarResponses = [];
       try {
         console.log('');
-        console.log('📊 LOAD_VISIBILITY: Step 2 - Fetching active users from backend');
+        console.log('📊 LOAD_VISIBILITY: Step 2 - Using COMP method with Supabase realtime client');
         console.log('───────────────────────────────────────────────────────────');
-        console.log('🌐 LOAD_VISIBILITY: Calling API with URL:', currentUri);
-        const apiStartTime = Date.now();
-        // Load initial presence data via API, then real-time updates will handle changes
-        const urlResponse = await api.getPresenceByUrl(currentUri, communityIds);
-        const apiEndTime = Date.now();
-        console.log(`LOAD_VISIBILITY: API responded in ${apiEndTime - apiStartTime}ms`, null, 'general');
-        console.log('🔍 LOAD_VISIBILITY: Response structure:', {
-          hasActive: !!urlResponse?.active,
-          activeCount: urlResponse?.active?.length || 0,
-          pageId: urlResponse?.pageId,
-          url: urlResponse?.url
-        });
         
-        if (urlResponse && urlResponse.active && urlResponse.active.length > 0) {
-          avatarResponses = [urlResponse];
+        // COMP METHOD: Ensure presence tracking is active before querying
+        if (!window.presenceTrackingActive) {
+          console.log('🔧 LOAD_VISIBILITY: Presence tracking not active, initializing...');
+          if (typeof window.initializePresenceTracking === 'function') {
+            await window.initializePresenceTracking();
+            // Wait a moment for presence to be processed
+            await new Promise(resolve => setTimeout(resolve, 2000));
+          }
+        }
+        
+        // COMP METHOD: Use the Supabase realtime client directly like COMP does
+        const client = window.supabaseRealtimeClient || supabaseRealtimeClient;
+        if (!client) {
+          throw new Error('Supabase realtime client not available');
+        }
+        
+        console.log('🌐 LOAD_VISIBILITY: Using client.getPageUsers() like COMP');
+        const users = await client.getPageUsers(urlData.pageId);
+        console.log('👁️ LOAD_VISIBILITY: Enhanced query returned users:', users.length);
+        console.log('👁️ LOAD_VISIBILITY: Users:', users.map(u => `${u.user_email} (${u.is_active ? 'ACTIVE' : 'INACTIVE'})`));
+        
+        if (users && users.length > 0) {
           console.log('');
-          console.log('✅✅✅ LOAD_VISIBILITY: Found active users ✅✅✅');
-          console.log('✅ LOAD_VISIBILITY: Count:', urlResponse.active.length);
+          console.log('✅✅✅ LOAD_VISIBILITY: Found active users using COMP method ✅✅✅');
+          console.log('✅ LOAD_VISIBILITY: Count:', users.length);
           
-          // Enhanced logging for each active user
-          urlResponse.active.forEach((user, index) => {
-            console.log(`👤 LOAD_VISIBILITY: User ${index + 1}/${urlResponse.active.length}:`, {
-              email: user.email,
-              name: user.name,
-              isActive: user.isActive,
-              status: user.status,
-              lastSeen: user.lastSeen,
-              enterTime: user.enterTime
-            }, 'general');
-          });
+          // COMP METHOD: Process users exactly like COMP does
+          const usersWithAvatars = await Promise.all(users.map(async (user) => {
+            let avatarUrl = null;
+            let userName = user.user_email.split('@')[0];
+            let userHandle = user.user_email.split('@')[0];
+            let avatarSource = 'none';
+            
+            console.log(`🔍 COMP AVATAR: Processing user ${user.user_email} using AvatarUtils`);
+            
+            try {
+              // COMP METHOD: Use AvatarUtils directly (same as COMP)
+              // Check both global and window.AvatarUtils
+              const avatarUtils = window.AvatarUtils || AvatarUtils;
+              if (typeof avatarUtils === 'undefined' || !avatarUtils.getAvatarUrl) {
+                console.warn(`⚠️ COMP AVATAR: AvatarUtils not available, using fallback for ${user.user_email}`);
+                throw new Error('AvatarUtils not available');
+              }
+              
+              // Handle async AvatarUtils
+              const avatarData = await avatarUtils.getAvatarUrl(user, 'visibility');
+              avatarUrl = avatarData.avatarUrl;
+              userName = avatarData.userName;
+              avatarSource = avatarData.source;
+              
+              console.log(`✅ COMP AVATAR RESULT: ${user.user_email} - avatarUrl: ${avatarUrl}, source: ${avatarSource}, name: ${userName}`);
+            } catch (error) {
+              console.error(`❌ COMP AVATAR: Exception processing ${user.user_email}:`, error);
+              
+              // Fallback if AvatarUtils fails
+              avatarUrl = `https://lh3.googleusercontent.com/a/default-user=s96-c`;
+              avatarSource = 'fallback';
+              console.warn(`COMP FALLBACK: Using generic avatar for ${user.user_email}: ${avatarUrl}`);
+            }
+            
+            return {
+              id: user.user_email,
+              userId: user.user_email,
+              email: user.user_email,
+              name: userName,
+              handle: userHandle,
+              avatarUrl: avatarUrl,
+              auraColor: user.aura_color || '#aaaaaa',
+              communityId: 'comm-001',
+              communityName: 'Community comm-001',
+              lastSeen: user.last_seen,
+              availability: null,
+              customLabel: null,
+              enterTime: user.enter_time,
+              isActive: user.is_active,
+              status: user.is_active ? 'online' : 'offline',
+              avatarSource: avatarSource
+            };
+          }));
+          
+          // Convert to the format expected by updateVisibleTab
+          const formattedResponse = {
+            active: usersWithAvatars,
+            pageId: urlData.pageId,
+            url: currentUri
+          };
+          
+          avatarResponses = [formattedResponse];
+          console.log('✅ LOAD_VISIBILITY: Users with avatars processed:', usersWithAvatars.length);
         } else {
           console.log('');
-          console.log('⚠️⚠️⚠️ LOAD_VISIBILITY: No active users on this page ⚠️⚠️⚠️');
+          console.log('⚠️⚠️⚠️ LOAD_VISIBILITY: No active users found using COMP method ⚠️⚠️⚠️');
           console.log('⚠️ LOAD_VISIBILITY: This page has no currently active users');
-          console.log('⚠️ LOAD_VISIBILITY: Response:', JSON.stringify(urlResponse, null, 2));
-          console.log('🔍 LOAD_VISIBILITY DEBUG: Current user email:', window.currentUser?.email);
-          console.log('🔍 LOAD_VISIBILITY DEBUG: Current page ID:', currentPageId);
-          console.log('🔍 LOAD_VISIBILITY DEBUG: API URL called:', `https://api.themetalayer.org/presence/by-url?url=${encodeURIComponent(currentUri)}`);
-          console.log('🔍 LOAD_VISIBILITY DEBUG: Community IDs:', communityIds);
-          console.log('🔍 LOAD_VISIBILITY DEBUG: This suggests the presence tracking is not working properly');
-          console.log('🔍 LOAD_VISIBILITY DEBUG: Current user should be present on this page');
-          throw new Error('No active users found via URL-based presence');
+          throw new Error('No active users found via COMP method');
         }
       } catch (urlError) {
         console.log('🔍 VISIBILITY: URL-based presence failed, falling back to community-based:', urlError.message);
@@ -516,3 +639,4 @@ async function loadMessageReplies(messageId, conversationId, communityId = null)
 window.CommunitiesModule = CommunitiesModule;
 window.loadCommunities = loadCommunities;
 window.loadCombinedAvatars = loadCombinedAvatars;
+window.getPrimaryCommunityName = getPrimaryCommunityName;
