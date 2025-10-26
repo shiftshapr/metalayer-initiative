@@ -292,6 +292,428 @@ const presence = await prisma.user_presence.upsert({
 
 ---
 
+## ⚡ Real-time Server Setup
+
+### Overview
+The system uses **Supabase** as the real-time backend, providing WebSocket connections for live updates across all modules. This section covers the complete real-time infrastructure setup.
+
+### Real-time Architecture
+```
+Frontend (Chrome Extension)
+    ↓ WebSocket Connection
+Supabase Real-time (PostgreSQL + WebSockets)
+    ↓ Database Changes
+PostgreSQL Database
+    ↓ API Calls
+Express.js Backend Server
+```
+
+### Supabase Configuration
+
+#### 1. Supabase Project Setup
+```bash
+# 1. Create Supabase project at https://supabase.com
+# 2. Get your project URL and anon key
+# 3. Configure in .env file
+
+SUPABASE_URL="https://your-project-id.supabase.co"
+SUPABASE_ANON_KEY="your-anon-key-here"
+SUPABASE_SERVICE_ROLE_KEY="your-service-role-key-here"
+```
+
+#### 2. Database Schema for Real-time
+```sql
+-- Enable Row Level Security (RLS) for real-time
+ALTER TABLE user_presence ENABLE ROW LEVEL SECURITY;
+ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE reactions ENABLE ROW LEVEL SECURITY;
+
+-- Create policies for real-time access
+CREATE POLICY "Enable real-time for user_presence" ON user_presence
+  FOR ALL USING (true);
+
+CREATE POLICY "Enable real-time for messages" ON messages
+  FOR ALL USING (true);
+
+CREATE POLICY "Enable real-time for reactions" ON reactions
+  FOR ALL USING (true);
+```
+
+#### 3. Real-time Channels Setup
+```javascript
+// Frontend: Initialize real-time client
+class SupabaseRealtimeClient {
+  constructor() {
+    this.supabase = null;
+    this.isConnected = false;
+    this.channels = new Map();
+  }
+
+  async initialize(supabaseClient) {
+    this.supabase = supabaseClient;
+    this.isConnected = true;
+    
+    // Set up real-time subscriptions
+    await this.setupPresenceChannel();
+    await this.setupMessagesChannel();
+    await this.setupReactionsChannel();
+  }
+
+  async setupPresenceChannel() {
+    const channel = this.supabase
+      .channel('user_presence')
+      .on('postgres_changes', 
+        { event: '*', schema: 'public', table: 'user_presence' },
+        (payload) => this.handlePresenceUpdate(payload)
+      )
+      .subscribe();
+    
+    this.channels.set('presence', channel);
+  }
+
+  async setupMessagesChannel() {
+    const channel = this.supabase
+      .channel('messages')
+      .on('postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'messages' },
+        (payload) => this.handleNewMessage(payload)
+      )
+      .on('postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'messages' },
+        (payload) => this.handleMessageUpdate(payload)
+      )
+      .on('postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'messages' },
+        (payload) => this.handleMessageDelete(payload)
+      )
+      .subscribe();
+    
+    this.channels.set('messages', channel);
+  }
+}
+```
+
+### Real-time Event Types
+
+#### 1. Presence Events
+```javascript
+// User joins a page
+{
+  event: 'INSERT',
+  table: 'user_presence',
+  data: {
+    user_email: 'user@example.com',
+    page_id: 'google_com_',
+    is_active: true,
+    last_seen: '2025-01-26T00:00:00Z',
+    aura_color: '#33aa33'
+  }
+}
+
+// User leaves a page
+{
+  event: 'UPDATE',
+  table: 'user_presence',
+  data: {
+    user_email: 'user@example.com',
+    page_id: 'google_com_',
+    is_active: false,
+    last_seen: '2025-01-26T00:05:00Z'
+  }
+}
+```
+
+#### 2. Message Events
+```javascript
+// New message
+{
+  event: 'INSERT',
+  table: 'messages',
+  data: {
+    id: 'uuid',
+    page_id: 'google_com_',
+    user_email: 'user@example.com',
+    content: 'Hello world!',
+    parent_id: null,
+    created_at: '2025-01-26T00:00:00Z'
+  }
+}
+
+// Message reply
+{
+  event: 'INSERT',
+  table: 'messages',
+  data: {
+    id: 'uuid',
+    page_id: 'google_com_',
+    user_email: 'user@example.com',
+    content: 'This is a reply',
+    parent_id: 'parent-message-uuid',
+    created_at: '2025-01-26T00:01:00Z'
+  }
+}
+```
+
+#### 3. Reaction Events
+```javascript
+// New reaction
+{
+  event: 'INSERT',
+  table: 'reactions',
+  data: {
+    id: 'uuid',
+    message_id: 'message-uuid',
+    emoji: '👍',
+    user_email: 'user@example.com',
+    created_at: '2025-01-26T00:00:00Z'
+  }
+}
+```
+
+### Real-time Integration Patterns
+
+#### 1. Frontend Real-time Setup
+```javascript
+// Initialize real-time in your module
+class YourModule {
+  async initialize() {
+    // Wait for Supabase to be available
+    await this.waitForSupabase();
+    
+    // Set up real-time listeners
+    this.setupRealtimeListeners();
+  }
+
+  async waitForSupabase() {
+    while (!window.supabase) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+  }
+
+  setupRealtimeListeners() {
+    // Listen to presence updates
+    window.supabase
+      .channel('user_presence')
+      .on('postgres_changes', 
+        { event: '*', schema: 'public', table: 'user_presence' },
+        (payload) => this.handlePresenceUpdate(payload)
+      )
+      .subscribe();
+
+    // Listen to message updates
+    window.supabase
+      .channel('messages')
+      .on('postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'messages' },
+        (payload) => this.handleNewMessage(payload)
+      )
+      .subscribe();
+  }
+
+  handlePresenceUpdate(payload) {
+    console.log('Presence update:', payload);
+    // Update UI with new presence data
+    this.updatePresenceUI(payload.data);
+  }
+
+  handleNewMessage(payload) {
+    console.log('New message:', payload);
+    // Add message to chat UI
+    this.addMessageToUI(payload.data);
+  }
+}
+```
+
+#### 2. Backend Real-time Publishing
+```javascript
+// In your service methods, changes automatically trigger real-time updates
+class PresenceService {
+  async recordPresenceEvent(userId, pageId, kind, availability = null) {
+    // Database operation automatically triggers real-time update
+    const presence = await this.prisma.user_presence.upsert({
+      where: { 
+        user_email_page_id: { 
+          user_email: userId, 
+          page_id: pageId 
+        }
+      },
+      update: { 
+        is_active: kind === 'ENTER',
+        last_seen: new Date(),
+        availability: availability
+      },
+      create: { 
+        user_email: userId, 
+        page_id: pageId, 
+        is_active: kind === 'ENTER',
+        availability: availability
+      }
+    });
+
+    // Real-time update is automatically sent to all connected clients
+    return presence;
+  }
+}
+```
+
+### Real-time Testing
+
+#### 1. Test Real-time Connection
+```javascript
+// Test real-time connection
+async function testRealtimeConnection() {
+  try {
+    const supabase = window.supabase;
+    
+    // Test presence channel
+    const presenceChannel = supabase
+      .channel('test_presence')
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'user_presence' },
+        (payload) => console.log('Presence test:', payload)
+      )
+      .subscribe();
+
+    console.log('✅ Real-time connection established');
+    return true;
+  } catch (error) {
+    console.error('❌ Real-time connection failed:', error);
+    return false;
+  }
+}
+```
+
+#### 2. Test Real-time Events
+```bash
+# Test presence event via API
+curl -X POST "http://216.238.91.120:3002/v1/presence/event" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userId": "test@example.com",
+    "pageId": "test_page",
+    "kind": "ENTER"
+  }'
+
+# This should trigger a real-time update in the frontend
+```
+
+#### 3. Monitor Real-time Events
+```javascript
+// Add to your module for debugging
+class RealtimeDebugger {
+  constructor() {
+    this.events = [];
+  }
+
+  logEvent(type, payload) {
+    this.events.push({
+      timestamp: new Date(),
+      type,
+      payload
+    });
+    
+    console.log(`🔔 REALTIME ${type}:`, payload);
+  }
+
+  getEventHistory() {
+    return this.events;
+  }
+}
+```
+
+### Real-time Troubleshooting
+
+#### Common Issues
+1. **Connection Failed**: Check Supabase URL and keys
+2. **No Real-time Updates**: Verify RLS policies are enabled
+3. **Duplicate Events**: Check for multiple channel subscriptions
+4. **Memory Leaks**: Properly unsubscribe from channels
+
+#### Debug Commands
+```javascript
+// Check Supabase connection
+console.log('Supabase client:', window.supabase);
+
+// Check active channels
+console.log('Active channels:', window.supabaseRealtimeClient?.channels);
+
+// Test database connection
+window.supabase
+  .from('user_presence')
+  .select('*')
+  .limit(1)
+  .then(result => console.log('DB test:', result));
+```
+
+### Real-time Performance Optimization
+
+#### 1. Channel Management
+```javascript
+// Properly manage channels to prevent memory leaks
+class ChannelManager {
+  constructor() {
+    this.channels = new Map();
+  }
+
+  subscribe(channelName, config) {
+    // Unsubscribe from existing channel if exists
+    if (this.channels.has(channelName)) {
+      this.unsubscribe(channelName);
+    }
+
+    const channel = window.supabase
+      .channel(channelName)
+      .on('postgres_changes', config, (payload) => {
+        this.handleEvent(channelName, payload);
+      })
+      .subscribe();
+
+    this.channels.set(channelName, channel);
+    return channel;
+  }
+
+  unsubscribe(channelName) {
+    const channel = this.channels.get(channelName);
+    if (channel) {
+      window.supabase.removeChannel(channel);
+      this.channels.delete(channelName);
+    }
+  }
+
+  cleanup() {
+    this.channels.forEach((channel, name) => {
+      this.unsubscribe(name);
+    });
+  }
+}
+```
+
+#### 2. Event Debouncing
+```javascript
+// Debounce rapid real-time events
+class EventDebouncer {
+  constructor(delay = 100) {
+    this.delay = delay;
+    this.timeouts = new Map();
+  }
+
+  debounce(key, callback) {
+    if (this.timeouts.has(key)) {
+      clearTimeout(this.timeouts.get(key));
+    }
+
+    const timeout = setTimeout(() => {
+      callback();
+      this.timeouts.delete(key);
+    }, this.delay);
+
+    this.timeouts.set(key, timeout);
+  }
+}
+```
+
+---
+
 ## 🎯 Your Focus: Feature Modules
 
 ### 1. 🤖 AgentModule.js
