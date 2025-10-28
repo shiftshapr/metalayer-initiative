@@ -91,20 +91,40 @@ model user_presence {
   id              String    @id @default(dbgenerated("gen_random_uuid()"))
   user_email      String
   page_id         String
+  page_url        String
   is_active       Boolean   @default(true)
   last_seen       DateTime  @default(now())
-  enter_time      DateTime  @default(now())
-  availability    String?
-  custom_label    String?
-  aura_color      String?   @default("#ffffff")
-  avatar_url      String?
-  user_name       String?   // NEW: Google profile names
+  enter_time      DateTime?
+  user_name       String?   // Google profile names
   created_at      DateTime  @default(now())
   updated_at      DateTime  @updatedAt
+  
+  // Relationship to AppUser for user profile data
+  AppUser         AppUser?  @relation(fields: [user_email], references: [email])
   
   @@unique([user_email, page_id])
   @@index([page_id])
   @@index([user_email])
+}
+
+model AppUser {
+  id               String             @id @db.Uuid
+  handle           String             @unique
+  email            String?            @unique
+  name             String?
+  avatarUrl        String             // User profile picture
+  isVerified       Boolean            @default(false)
+  isSuperAdmin     Boolean            @default(false)
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime
+  auraColor        String?            // User's aura color preference
+  Conversation     Conversation[]
+  ModerationAction ModerationAction[]
+  Post             Post[]
+  PresenceEvent    PresenceEvent[]
+  Reaction         Reaction[]
+  SpaceMember      SpaceMember[]
+  user_presence    user_presence[]    // Relationship to user_presence
 }
 
 model messages {
@@ -133,6 +153,35 @@ model reactions {
   @@index([message_id])
 }
 ```
+
+### Database Architecture Changes
+
+#### Data Normalization Update
+The database schema has been updated to follow proper data normalization principles:
+
+**Before (Denormalized):**
+- `user_presence` table contained both presence data AND user profile data (`aura_color`, `avatar_url`)
+- User profile data was duplicated across multiple tables
+- No proper relationships between user data and presence data
+
+**After (Normalized):**
+- `user_presence` table contains ONLY presence/activity data
+- `AppUser` table contains ALL user profile data (`auraColor`, `avatarUrl`, `name`, etc.)
+- Proper relationship established: `user_presence.AppUser` → `AppUser.email`
+- Single source of truth for user profile data
+
+#### Key Benefits:
+1. **Data Consistency**: User profile data comes from one source (`AppUser`)
+2. **Proper Relationships**: Foreign key relationship between presence and user data
+3. **Reduced Duplication**: No more duplicate user data across tables
+4. **Better Performance**: Proper indexing and relationships
+5. **Maintainability**: Clear separation of concerns
+
+#### Migration Notes:
+- `user_visibility` table was removed (unused feature)
+- `aura_color` and `avatar_url` columns removed from `user_presence`
+- Added relationship between `user_presence` and `AppUser`
+- Updated all services to join with `AppUser` table for user data
 
 ### API Endpoints
 
@@ -264,11 +313,28 @@ router.post('/event', async (req, res) => {
 
 #### 3. Database Operations with Prisma
 ```javascript
-// Using Prisma ORM
-const user = await prisma.appUser.findUnique({
-  where: { email: userEmail }
+// Using Prisma ORM with normalized architecture
+// First, ensure AppUser exists (user profile data)
+const appUser = await prisma.appUser.upsert({
+  where: { email: userEmail },
+  update: {
+    name: googleProfileName,
+    avatarUrl: googleProfilePicture,
+    updatedAt: new Date()
+  },
+  create: {
+    id: generateUUID(),
+    handle: googleProfileName || userEmail.split('@')[0],
+    email: userEmail,
+    name: googleProfileName,
+    avatarUrl: googleProfilePicture,
+    auraColor: window.AVATAR_FALLBACK_COLOR, // Default white
+    createdAt: new Date(),
+    updatedAt: new Date()
+  }
 });
 
+// Then, update presence data (activity tracking)
 const presence = await prisma.user_presence.upsert({
   where: { 
     user_email_page_id: { 
@@ -279,11 +345,13 @@ const presence = await prisma.user_presence.upsert({
   update: { 
     is_active: true, 
     last_seen: new Date(),
-    user_name: googleProfileName
+    user_name: googleProfileName,
+    page_url: pageUrl
   },
   create: { 
     user_email: userEmail, 
-    page_id: pageId, 
+    page_id: pageId,
+    page_url: pageUrl,
     is_active: true,
     user_name: googleProfileName
   }
@@ -528,8 +596,23 @@ class YourModule {
 ```javascript
 // In your service methods, changes automatically trigger real-time updates
 class PresenceService {
-  async recordPresenceEvent(userId, pageId, kind, availability = null) {
-    // Database operation automatically triggers real-time update
+  async recordPresenceEvent(userId, pageId, kind, availability = null, pageUrl = null) {
+    // First ensure AppUser exists for user profile data
+    await this.prisma.appUser.upsert({
+      where: { email: userId },
+      update: { updatedAt: new Date() },
+      create: {
+        id: generateUUID(),
+        handle: userId.split('@')[0],
+        email: userId,
+        avatarUrl: '', // Will be updated by auth service
+        auraColor: window.AVATAR_FALLBACK_COLOR,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }
+    });
+
+    // Then update presence data (activity tracking only)
     const presence = await this.prisma.user_presence.upsert({
       where: { 
         user_email_page_id: { 
@@ -540,18 +623,27 @@ class PresenceService {
       update: { 
         is_active: kind === 'ENTER',
         last_seen: new Date(),
-        availability: availability
+        page_url: pageUrl
       },
       create: { 
         user_email: userId, 
-        page_id: pageId, 
-        is_active: kind === 'ENTER',
-        availability: availability
+        page_id: pageId,
+        page_url: pageUrl,
+        is_active: kind === 'ENTER'
       }
     });
 
     // Real-time update is automatically sent to all connected clients
     return presence;
+  }
+
+  async getActiveUsers(pageId) {
+    // Join with AppUser to get complete user data
+    return await this.prisma.user_presence.findMany({
+      where: { page_id: pageId, is_active: true },
+      include: { AppUser: true }, // Get user profile data
+      orderBy: { last_seen: 'desc' }
+    });
   }
 }
 ```
@@ -1309,6 +1401,38 @@ supabase
   )
   .subscribe();
 ```
+
+---
+
+## 🔧 Recent Architecture Improvements
+
+### Database Normalization (Latest Update)
+The database architecture has been significantly improved to follow proper data normalization principles:
+
+#### What Changed:
+1. **Removed `user_visibility` table** - Unused feature that was cluttering the database
+2. **Normalized user data** - Moved `auraColor` and `avatarUrl` from `user_presence` to `AppUser`
+3. **Added proper relationships** - `user_presence` now has a foreign key to `AppUser`
+4. **Cleaned up dead code** - Removed 185+ references to unused `user_visibility` table
+
+#### Benefits:
+- **Single source of truth** for user profile data
+- **Better performance** with proper indexing and relationships
+- **Reduced data duplication** across tables
+- **Cleaner codebase** with only active, relevant code
+- **Proper data consistency** through foreign key relationships
+
+#### Migration Impact:
+- All services updated to join with `AppUser` table
+- Frontend constants centralized (`window.AVATAR_FALLBACK_COLOR`)
+- Database schema properly normalized
+- Dead code and archived documentation removed
+
+### Code Quality Improvements:
+- **Dead code removal**: Eliminated unused `user_visibility` references
+- **Documentation cleanup**: Removed archived files and outdated docs
+- **Schema normalization**: Proper separation of concerns
+- **Service layer updates**: All services now use normalized data structure
 
 ---
 
