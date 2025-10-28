@@ -19,14 +19,14 @@ class UserService {
       
       // First try to find by email (since that's more reliable)
       let user = null;
-      user = await this.prisma.appUser.findUnique({
+      user = await this.prisma.AppUser.findUnique({
         where: { email }
       });
       
       // If not found by email and we have an ID, try by ID
       if (!user && id) {
         try {
-          user = await this.prisma.appUser.findUnique({
+          user = await this.prisma.AppUser.findUnique({
             where: { id }
           });
         } catch (idError) {
@@ -42,7 +42,7 @@ class UserService {
         
         // Check if handle exists and make it unique
         while (true) {
-          const existingUser = await this.prisma.appUser.findUnique({
+          const existingUser = await this.prisma.AppUser.findUnique({
             where: { handle: userHandle }
           });
           if (!existingUser) break;
@@ -56,10 +56,11 @@ class UserService {
           email,
           name: name || email.split('@')[0],
           handle: userHandle,
-          avatarUrl: avatarUrl || null,
+          avatarUrl: avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(name || email.split('@')[0])}&background=random&color=fff&size=96`,
           auraColor: auraColor || null,
           isVerified: false,
-          isSuperAdmin: false
+          isSuperAdmin: false,
+          updatedAt: new Date()
         };
         
         // Only use the provided ID if it's a valid UUID format
@@ -67,23 +68,30 @@ class UserService {
           userData.id = id;
         }
         
-        user = await this.prisma.appUser.create({
+        user = await this.prisma.AppUser.create({
           data: userData
         });
       } else {
-        // User exists, but update avatar URL if we have a new one and the current one is null
-        if (avatarUrl && !user.avatarUrl) {
-          user = await this.prisma.appUser.update({
+        // User exists, but update avatar URL if we have a new one
+        if (avatarUrl && avatarUrl !== user.avatarUrl) {
+          user = await this.prisma.AppUser.update({
             where: { id: user.id },
-            data: { avatarUrl }
+            data: { avatarUrl, updatedAt: new Date() }
+          });
+        } else if (!user.avatarUrl) {
+          // If user has no avatarUrl, generate one using ui-avatars.com
+          const fallbackAvatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || user.email.split('@')[0])}&background=random&color=fff&size=96`;
+          user = await this.prisma.AppUser.update({
+            where: { id: user.id },
+            data: { avatarUrl: fallbackAvatarUrl, updatedAt: new Date() }
           });
         }
         
         // Update aura color if provided
         if (auraColor !== undefined && user.auraColor !== auraColor) {
-          user = await this.prisma.appUser.update({
+          user = await this.prisma.AppUser.update({
             where: { id: user.id },
-            data: { auraColor }
+            data: { auraColor, updatedAt: new Date() }
           });
         }
       }
@@ -100,7 +108,7 @@ class UserService {
    */
   async getUser(userId) {
     try {
-      const user = await this.prisma.appUser.findUnique({
+      const user = await this.prisma.AppUser.findUnique({
         where: { id: userId }
       });
 
@@ -116,7 +124,7 @@ class UserService {
    */
   async updateUser(userId, updates) {
     try {
-      const user = await this.prisma.appUser.update({
+      const user = await this.prisma.AppUser.update({
         where: { id: userId },
         data: {
           ...updates,
@@ -132,13 +140,33 @@ class UserService {
   }
 
   /**
+   * Update user's avatar URL
+   */
+  async updateAvatarUrl(email, avatarUrl) {
+    try {
+      console.log(`🔍 USER SERVICE: Updating avatar URL for user ${email} to: ${avatarUrl}`);
+      
+      const user = await this.prisma.AppUser.update({
+        where: { email },
+        data: { avatarUrl, updatedAt: new Date() }
+      });
+      
+      console.log(`✅ USER SERVICE: Avatar URL updated successfully for user ${email}`);
+      return user;
+    } catch (error) {
+      console.error('Error updating avatar URL:', error);
+      throw new Error('Failed to update avatar URL');
+    }
+  }
+
+  /**
    * Update user's aura color
    */
   async updateAuraColor(userId, auraColor) {
     try {
-      const user = await this.prisma.appUser.update({
+      const user = await this.prisma.AppUser.update({
         where: { id: userId },
-        data: { auraColor }
+        data: { auraColor, updatedAt: new Date() }
       });
       return user;
     } catch (error) {
@@ -152,7 +180,7 @@ class UserService {
     try {
       console.log(`🔍 USER SERVICE: Updating headline for user ${userId} to: "${headline}"`);
       
-      const user = await this.prisma.appUser.update({
+      const user = await this.prisma.AppUser.update({
         where: { id: userId },
         data: { headline }
       });
@@ -170,7 +198,7 @@ class UserService {
     try {
       console.log(`🔍 USER SERVICE: Updating display visibility after exit for user ${userId} to ${days} days`);
       
-      const user = await this.prisma.appUser.update({
+      const user = await this.prisma.AppUser.update({
         where: { id: userId },
         data: { displayVisibilityAfterExit: days }
       });

@@ -27,7 +27,7 @@ class ProfileManager {
     try {
       if (typeof window.getState === 'function') {
         const storedColor = await window.getState('userAvatarBgColor');
-        if (storedColor && storedColor !== '#ffffff' && window.currentUser) {
+        if (storedColor && storedColor !== window.AVATAR_FALLBACK_COLOR && window.currentUser) {
           console.log('🔧 PROFILE_MANAGER: Loading aura color from storage:', storedColor);
           window.currentUser.auraColor = storedColor;
           
@@ -308,7 +308,7 @@ class ProfileManager {
     // COMP METHOD: Get current user's database aura color
     const currentAuraColor = this.getCurrentUserAuraColor();
     const currentColorHex = currentAuraColor.replace('#', '');
-    const displayColor = currentAuraColor || '#45B7D1';
+    const displayColor = currentAuraColor || window.AVATAR_FALLBACK_COLOR;
     
     console.log('🔧 AURA_MODAL: Current database aura color:', currentAuraColor);
     console.log('🔧 AURA_MODAL: Using color for modal:', displayColor);
@@ -596,10 +596,10 @@ class ProfileManager {
     
     const fallbackHTML = `
       <div style="position: relative; width: 32px; height: 32px;">
-        <div style="position: absolute; top: -2px; left: -2px; width: 36px; height: 36px; border-radius: 50%; background-color: ${this.profileData.auraColor || '#aaaaaa'}; z-index: 1;"></div>
+        <div style="position: absolute; top: -2px; left: -2px; width: 36px; height: 36px; border-radius: 50%; background-color: ${this.profileData.auraColor || window.AVATAR_FALLBACK_COLOR}; z-index: 1;"></div>
         <img src="${this.profileData.avatarUrl || 'https://lh3.googleusercontent.com/a/default-user=s96-c'}" 
              alt="${this.profileData.name || 'User'}" 
-             style="position: relative; z-index: 2; width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 2px solid ${this.profileData.auraColor || '#aaaaaa'};">
+             style="position: relative; z-index: 2; width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 2px solid ${this.profileData.auraColor || window.AVATAR_FALLBACK_COLOR};">
       </div>
     `;
     
@@ -772,7 +772,7 @@ function getCurrentUserAuraColor() {
   console.log('🔍 AURA_MODAL: Getting current user aura color from database');
   
   // First try to get from current user object
-  if (window.currentUser && window.currentUser.auraColor && window.currentUser.auraColor !== '#45B7D1') {
+  if (window.currentUser && window.currentUser.auraColor && window.currentUser.auraColor !== window.AVATAR_FALLBACK_COLOR) {
     console.log(`✅ AURA_MODAL: Found database aura color in currentUser: ${window.currentUser.auraColor}`);
     return window.currentUser.auraColor;
   }
@@ -782,7 +782,7 @@ function getCurrentUserAuraColor() {
     const currentUserEmail = window.currentUser?.email;
     if (currentUserEmail) {
       const userData = window.currentVisibilityData.active.find(u => u.email === currentUserEmail);
-      if (userData && userData.auraColor && userData.auraColor !== '#45B7D1') {
+      if (userData && userData.auraColor && userData.auraColor !== window.AVATAR_FALLBACK_COLOR) {
         console.log(`✅ AURA_MODAL: Found database aura color in visibility data: ${userData.auraColor}`);
         return userData.auraColor;
       }
@@ -794,7 +794,7 @@ function getCurrentUserAuraColor() {
     const currentUserEmail = window.currentUser?.email;
     if (currentUserEmail) {
       const userData = window.currentVisibilityDataUnfiltered.active.find(u => u.email === currentUserEmail);
-      if (userData && userData.auraColor && userData.auraColor !== '#45B7D1') {
+      if (userData && userData.auraColor && userData.auraColor !== window.AVATAR_FALLBACK_COLOR) {
         console.log(`✅ AURA_MODAL: Found database aura color in unfiltered visibility data: ${userData.auraColor}`);
         return userData.auraColor;
       }
@@ -803,7 +803,7 @@ function getCurrentUserAuraColor() {
   
   // Fallback to default
   console.log('⚠️ AURA_MODAL: No database aura color found, using default');
-  return '#45B7D1';
+  return window.AVATAR_FALLBACK_COLOR;
 }
 
 // COMP METHOD: Get aura color from database, never use hardcoded colors
@@ -811,7 +811,7 @@ function getCurrentUserAvatarBgColor() {
   console.log('🔍 AURA_FIX: Getting current user aura color from database');
   
   // First, try to get from currentUser if it has a real database color
-  if (window.currentUser && window.currentUser.auraColor && window.currentUser.auraColor !== '#45B7D1') {
+  if (window.currentUser && window.currentUser.auraColor && window.currentUser.auraColor !== window.AVATAR_FALLBACK_COLOR) {
     console.log(`✅ AURA_FIX: Found database aura color in currentUser: ${window.currentUser.auraColor}`);
     return window.currentUser.auraColor;
   }
@@ -821,7 +821,7 @@ function getCurrentUserAvatarBgColor() {
     const currentUserEmail = window.currentUser?.email;
     if (currentUserEmail) {
       const userData = window.currentVisibilityData.active.find(u => u.email === currentUserEmail);
-      if (userData && userData.auraColor && userData.auraColor !== '#45B7D1') {
+      if (userData && userData.auraColor && userData.auraColor !== window.AVATAR_FALLBACK_COLOR) {
         console.log(`✅ AURA_FIX: Found database aura color in visibility data: ${userData.auraColor}`);
         return userData.auraColor;
       }
@@ -832,7 +832,7 @@ function getCurrentUserAvatarBgColor() {
   if (typeof window.getState === 'function') {
     try {
       const storedColor = window.getState('userAvatarBgColor');
-      if (storedColor && storedColor !== '#ffffff' && storedColor !== '#45B7D1') {
+      if (storedColor && storedColor !== window.AVATAR_FALLBACK_COLOR) {
         console.log('🔧 AURA_FIX: Loading aura color from storage:', storedColor);
         return storedColor;
       }
@@ -843,14 +843,14 @@ function getCurrentUserAvatarBgColor() {
   
   // COMP METHOD: Never use hardcoded colors - use white fallback
   console.log('⚠️ AURA_FIX: No database aura color found, using white fallback (no hardcoded colors)');
-  return '#ffffff';
+  return window.AVATAR_FALLBACK_COLOR;
 }
 
 function getCurrentUserAvatarColor() {
   if (window.currentUser && window.currentUser.auraColor) {
     return window.currentUser.auraColor;
   }
-  return '#ffffff'; // Default white
+  return window.AVATAR_FALLBACK_COLOR; // Default white
 }
 
 function setCustomAvatarColor(color) {
@@ -865,7 +865,7 @@ function setCustomAvatarColor(color) {
 
 function resetCustomAvatarColor() {
   if (window.currentUser) {
-    window.currentUser.auraColor = '#aaaaaa'; // Default gray
+    window.currentUser.auraColor = window.AVATAR_FALLBACK_COLOR; // Default white
     // Update profile if ProfileManager instance exists
     if (window.ProfileManager && window.ProfileManager.updateProfile) {
       window.ProfileManager.updateProfile(window.currentUser);
@@ -1104,7 +1104,7 @@ function showColorPickerModal() {
     
     resetBtn.addEventListener('click', () => {
       // Get the dynamic default color (based on user's name) - use window.currentUser
-      let defaultColor = '#45B7D1'; // Fallback
+      let defaultColor = window.AVATAR_FALLBACK_COLOR; // Fallback
       const user = window.currentUser;
       if (user) {
         const name = user.user_metadata?.full_name || user.name || user.email || 'User';

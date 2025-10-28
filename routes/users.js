@@ -6,6 +6,67 @@ const { PrismaClient } = require('../generated/prisma');
 const prisma = new PrismaClient();
 const userService = new UserService(prisma);
 
+// Create or update user (fallback for avatar updates)
+router.post('/:email', async (req, res) => {
+  try {
+    const { email } = req.params;
+    const { name, avatarUrl, auraColor } = req.body;
+    
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+    
+    console.log(`🔍 BACKEND: Creating/updating user ${email} with avatarUrl: ${avatarUrl}`);
+    
+    const user = await userService.getOrCreateUser({ 
+      email: decodeURIComponent(email),
+      name: name || email.split('@')[0],
+      avatarUrl: avatarUrl,
+      auraColor: auraColor
+    });
+    
+    res.json({ 
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      handle: user.handle,
+      avatarUrl: user.avatarUrl,
+      auraColor: user.auraColor
+    });
+  } catch (error) {
+    console.error('Error creating/updating user:', error);
+    res.status(500).json({ error: 'Failed to create/update user' });
+  }
+});
+
+// Update user's avatar URL
+router.post('/update-avatar', async (req, res) => {
+  try {
+    const { email, avatarUrl } = req.body;
+    
+    if (!email || !avatarUrl) {
+      return res.status(400).json({ error: 'Email and avatar URL are required' });
+    }
+    
+    console.log(`🔍 BACKEND: Updating avatar URL for ${email} to ${avatarUrl}`);
+    
+    const user = await userService.updateAvatarUrl(email, avatarUrl);
+    
+    res.json({ 
+      success: true, 
+      message: 'Avatar URL updated successfully',
+      user: {
+        id: user.id,
+        email: user.email,
+        avatarUrl: user.avatarUrl
+      }
+    });
+  } catch (error) {
+    console.error('Error updating avatar URL:', error);
+    res.status(500).json({ error: 'Failed to update avatar URL' });
+  }
+});
+
 // Update user's aura color
 router.put('/:userId/aura-color', async (req, res) => {
   try {
@@ -23,9 +84,12 @@ router.put('/:userId/aura-color', async (req, res) => {
       return res.status(400).json({ error: 'Invalid color format. Must be a valid hex color (e.g., #FF6B6B)' });
     }
     
-    // If userId is a Google ID, find the user by email first
+    // If userId is an email, find the user by email first
     let targetUserId = userId;
-    if (/^\d+$/.test(userId) && userEmail) {
+    if (userId.includes('@') && userEmail) {
+      const user = await userService.getOrCreateUser({ email: userId });
+      targetUserId = user.id;
+    } else if (/^\d+$/.test(userId) && userEmail) {
       const user = await userService.getOrCreateUser({ email: userEmail });
       targetUserId = user.id;
     }

@@ -462,7 +462,7 @@ body {
     object-fit: cover !important;
     display: block !important;
     cursor: pointer !important;
-    background-color: #45B7D1; /* Default blue background */
+    background-color: var(--avatar-fallback-color, #ffffff); /* Default white background */
 }
 
 /* Dark mode for profile avatar */

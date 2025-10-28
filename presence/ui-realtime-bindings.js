@@ -118,7 +118,7 @@
           handle: userEmail.split('@')[0],
           avatarUrl: (window.currentUser && window.currentUser.avatarUrl) || null,
           email: userEmail,
-          auraColor: window.currentUser?.auraColor || '#aa00aa'
+          auraColor: window.currentUser?.auraColor || window.AVATAR_FALLBACK_COLOR
         },
         conversation: {
           id: `conv-${communityId}-${pageId}`,

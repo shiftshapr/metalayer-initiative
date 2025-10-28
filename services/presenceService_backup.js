@@ -129,14 +129,14 @@ class PresenceService {
         update: {
           is_active: isActive,
           last_seen: new Date(),
-          aura_color: user.auraColor || '#45B7D1',
+          aura_color: user.auraColor || window.AVATAR_FALLBACK_COLOR,
           page_url: pageUrl || page.canonicalUrl
         },
         create: {
           user_email: user.email,
           page_id: pageId,
           page_url: pageUrl || page.canonicalUrl,
-          aura_color: user.auraColor || '#45B7D1',
+          aura_color: user.auraColor || window.AVATAR_FALLBACK_COLOR,
           is_active: isActive,
           last_seen: new Date()
         }
@@ -363,7 +363,7 @@ class PresenceService {
         const avatarUrl = dbUser?.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(email.split('@')[0])}&background=${presence.aura_color?.replace('#', '') || '45B7D1'}&color=fff`;
         const name = dbUser?.name || email.split('@')[0];
         const handle = dbUser?.handle || email.split('@')[0];
-        const auraColor = dbUser?.auraColor || presence.aura_color || '#45B7D1';
+        const auraColor = dbUser?.auraColor || presence.aura_color || '#ffffff';
         
         const isRealAvatar = avatarUrl.includes('googleusercontent.com') || avatarUrl.includes('lh3.google');
         console.log(`🔍 AVATAR_FIX: Building user object for ${email}:`);
@@ -506,7 +506,7 @@ class PresenceService {
         const avatarUrl = dbUser?.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(email.split('@')[0])}&background=${presence.aura_color?.replace('#', '') || '45B7D1'}&color=fff`;
         const name = dbUser?.name || email.split('@')[0];
         const handle = dbUser?.handle || email.split('@')[0];
-        const auraColor = dbUser?.auraColor || presence.aura_color || '#45B7D1';
+        const auraColor = dbUser?.auraColor || presence.aura_color || '#ffffff';
         
         const isRealAvatar = avatarUrl.includes('googleusercontent.com') || avatarUrl.includes('lh3.google');
         console.log(`🔍 AVATAR_FIX (communities): Building user object for ${email}:`);

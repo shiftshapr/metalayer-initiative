@@ -18,7 +18,7 @@ function checkAvatarUtils() {
       // Create a fallback AvatarUtils to prevent crashes
       window.AvatarUtils = {
         getAvatarUrl: () => ({ avatarUrl: null, userName: 'User', source: 'fallback' }),
-        createUnifiedAvatar: async (user) => `<div class="avatar" style="width: 32px; height: 32px; border-radius: 50%; background: #45B7D1; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 14px;">${(user.name || user.email || 'U').charAt(0).toUpperCase()}</div>`
+        createUnifiedAvatar: async (user) => `<div class="avatar" style="width: 32px; height: 32px; border-radius: 50%; background: ${window.AVATAR_FALLBACK_COLOR}; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 14px;">${(user.name || user.email || 'U').charAt(0).toUpperCase()}</div>`
       };
     }
   } else {

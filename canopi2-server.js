@@ -129,8 +129,75 @@ app.get('/v1/posts/:id', (req, res) => canopi2Controller.getPost(req, res));
 app.put('/v1/posts/:id', (req, res) => canopi2Controller.updatePost(req, res));
 app.delete('/v1/posts/:id', (req, res) => canopi2Controller.deletePost(req, res));
 
-app.post('/v1/reactions', (req, res) => canopi2Controller.toggleReaction(req, res));
-app.get('/v1/reactions', (req, res) => canopi2Controller.getReactions(req, res));
+// Compatibility route for old reaction API format
+app.post('/v1/reactions', (req, res) => {
+  const { messageId, emoji, userEmail, avatarUrl } = req.body;
+  
+  if (messageId && emoji && userEmail) {
+    // Old API format - convert to new format
+    console.log('🔄 REACTIONS: Converting old API format to new format');
+    
+    // Set user headers for compatibility
+    req.headers['x-user-email'] = userEmail;
+    req.headers['x-user-name'] = userEmail.split('@')[0];
+    
+    // Set up user object for controller compatibility
+    req.user = {
+      id: require('crypto').randomUUID(), // Generate UUID for compatibility
+      email: userEmail,
+      name: userEmail.split('@')[0],
+      handle: userEmail.split('@')[0],
+      avatarUrl: avatarUrl || null, // Use avatarUrl from request body if provided
+      auraColor: null  // Explicitly set to null instead of undefined
+    };
+    
+    // Map emoji to kind
+    const emojiToKindMap = {
+      '👍': 'AGREE',
+      '❓': 'QUESTION', 
+      '🔁': 'CLARIFY',
+      '🔗': 'CITE',
+      '⚠️': 'FLAG',
+      '🙅': 'DISAGREE'
+    };
+    
+    const kind = emojiToKindMap[emoji] || 'AGREE';
+    
+    // Convert to new format
+    req.body = {
+      kind: kind,
+      emoji: emoji,
+      postId: messageId // Treat messageId as postId
+    };
+    
+    console.log('🔄 REACTIONS: Converted request body:', req.body);
+  }
+  
+  // Call the original handler
+  canopi2Controller.toggleReaction(req, res);
+});
+
+// Get reactions with messageId compatibility
+app.get('/v1/reactions/:messageId', async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    
+    // Convert to new format
+    const reactions = await canopi2Controller.reactionService.getReactions(messageId, 'post');
+    
+    res.json({
+      success: true,
+      reactions: reactions,
+      message: 'Reactions retrieved successfully'
+    });
+  } catch (error) {
+    console.error('❌ Error getting reactions:', error);
+    res.status(500).json({ 
+      error: 'Failed to get reactions',
+      details: error.message 
+    });
+  }
+});
 
 app.get('/v1/pages/:pageId/conversations', (req, res) => canopi2Controller.getPageConversations(req, res));
 

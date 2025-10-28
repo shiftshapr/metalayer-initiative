@@ -28,3 +28,5 @@ CREATE INDEX "UserPresence_isActive_idx" ON "UserPresence"("isActive");
 
 -- CreateIndex
 CREATE INDEX "UserPresence_lastSeen_idx" ON "UserPresence"("lastSeen");
+
+

@@ -16,7 +16,28 @@ class MetaLayerAPI {
   }
 
   async request(endpoint, options = {}) {
-    const url = `${this.baseURL}${endpoint}`;
+    // COMP_API_FIX: Handle comprehensive API endpoint redirection
+    let finalUrl = `${this.baseURL}${endpoint}`;
+    
+    // Check if this is a full URL that needs redirection
+    if (endpoint.startsWith('http')) {
+      if (endpoint.includes('api.themetalayer.org')) {
+        finalUrl = endpoint.replace('https://api.themetalayer.org', 'http://216.238.91.120:3002');
+        console.log('✅ COMP_API_FIX: Redirected api.themetalayer.org call:', endpoint, '->', finalUrl);
+      } else if (endpoint.includes('supabase.co')) {
+        // Extract the actual endpoint path after /rest/v1/
+        const pathMatch = endpoint.match(/\/rest\/v1\/(.+)/);
+        if (pathMatch) {
+          const actualEndpoint = pathMatch[1];
+          finalUrl = `${this.baseURL}/${actualEndpoint}`;
+          console.log('✅ COMP_API_FIX: Redirected Supabase API call:', endpoint, '->', finalUrl);
+        }
+      }
+    } else if (endpoint.startsWith('/v1/') || endpoint.startsWith('/communities') || endpoint.startsWith('/avatars')) {
+      // Handle relative API URLs - redirect to VPS
+      finalUrl = `http://216.238.91.120:3002${endpoint}`;
+      console.log('✅ COMP_API_FIX: Redirected relative API call:', endpoint, '->', finalUrl);
+    }
     
     // COMP METHOD: Get current user info to send in headers
     let user = null;
@@ -66,7 +87,7 @@ class MetaLayerAPI {
     };
 
     try {
-      const response = await fetch(url, config);
+      const response = await fetch(finalUrl, config);
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
@@ -234,7 +255,7 @@ class MetaLayerAPI {
           handle: msg.user_email.split('@')[0],
           avatarUrl: null,
           email: msg.user_email,
-          auraColor: window.currentUser?.auraColor || '#aa00aa'
+          auraColor: window.currentUser?.auraColor || window.AVATAR_FALLBACK_COLOR
         },
         conversation: {
           id: `conv-${communityId}-${pageId}`,
@@ -296,12 +317,36 @@ class MetaLayerAPI {
 }
 
 // Initialize API client (COMP METHOD)
-const api = new MetaLayerAPI('https://api.themetalayer.org');
+const api = new MetaLayerAPI('http://216.238.91.120:3002');
+
+// COMP_API_FIX: Also handle XMLHttpRequest redirection for older code
+const originalXHROpen = XMLHttpRequest.prototype.open;
+XMLHttpRequest.prototype.open = function(method, url, ...args) {
+  if (typeof url === 'string') {
+    let modifiedUrl = url;
+    
+    if (url.includes('api.themetalayer.org')) {
+      modifiedUrl = url.replace('https://api.themetalayer.org', 'http://216.238.91.120:3002');
+      console.log(`🔍 COMP_API_FIX: XHR Redirecting api.themetalayer.org ${url} to ${modifiedUrl}`);
+    } else if (url.startsWith('/v1/') || url.startsWith('/communities') || url.startsWith('/avatars')) {
+      // Handle relative API URLs - redirect to VPS
+      modifiedUrl = `http://216.238.91.120:3002${url}`;
+      console.log(`🔍 COMP_API_FIX: XHR Redirecting relative URL ${url} to ${modifiedUrl}`);
+    }
+    
+    return originalXHROpen.call(this, method, modifiedUrl, ...args);
+  }
+  return originalXHROpen.call(this, method, url, ...args);
+};
 
 // Make API globally available for debugging (COMP METHOD)
 window.api = api;
 
-console.log('✅ APIModule: MetaLayerAPI initialized');
+// COMP_API_FIX: Disabled global fetch override - using targeted approach instead
+// The global fetch override was causing cascading failures
+// Instead, we'll fix individual modules to use proper API calls
+
+console.log('✅ APIModule: MetaLayerAPI initialized with global fetch override');
 
 // Export for module system
 if (typeof module !== 'undefined' && module.exports) {

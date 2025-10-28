@@ -128,6 +128,37 @@ class RealGoogleAuth {
       
       try {
         // Check if Chrome identity API is available
+        if (typeof chrome !== 'undefined' && chrome.identity && chrome.identity.getProfileUserInfo) {
+          console.log('🔍 REAL_GOOGLE_AUTH: Chrome identity API is available, calling getProfileUserInfo...');
+          
+          // COMP METHOD: Chrome identity API - get signed-in Google user profile info directly
+          const profileInfo = await new Promise((resolve, reject) => {
+            chrome.identity.getProfileUserInfo((profileInfo) => {
+              console.log('🔍 REAL_GOOGLE_AUTH: Chrome profile info callback:', profileInfo);
+              console.log('🔍 REAL_GOOGLE_AUTH: Chrome runtime last error:', chrome.runtime.lastError);
+              
+              if (chrome.runtime.lastError) {
+                console.log('🔍 REAL_GOOGLE_AUTH: Chrome profile info not available:', chrome.runtime.lastError.message);
+                resolve(null);
+              } else if (profileInfo && profileInfo.email) {
+                console.log('🔍 REAL_GOOGLE_AUTH: Chrome profile info received:', profileInfo.email);
+                resolve(profileInfo);
+              } else {
+                console.log('🔍 REAL_GOOGLE_AUTH: No Chrome profile info found');
+                resolve(null);
+              }
+            });
+          });
+
+          if (profileInfo && profileInfo.email) {
+            console.log('🔍 REAL_GOOGLE_AUTH: Using Chrome profile info for:', profileInfo.email);
+            
+            // NOTE: getProfileUserInfo doesn't include profile picture, so we'll use OAuth token method below
+            console.log('🔍 REAL_GOOGLE_AUTH: getProfileUserInfo doesn\'t include profile picture, will use OAuth token method');
+          }
+        }
+        
+        // Fallback: Try getAuthToken method
         if (typeof chrome !== 'undefined' && chrome.identity && chrome.identity.getAuthToken) {
           console.log('🔍 REAL_GOOGLE_AUTH: Chrome identity API is available, calling getAuthToken...');
           
@@ -162,32 +193,32 @@ class RealGoogleAuth {
               
               const chromeProfile = userInfo;
 
-          if (chromeProfile && chromeProfile.email) {
-            // COMP METHOD: Create user object from Chrome profile
-            const chromeUser = {
-              email: chromeProfile.email,
-              name: chromeProfile.email.split('@')[0], // Use email prefix as name
-              picture: chromeProfile.picture, // Use ACTUAL Google profile picture
-              user_metadata: {
-                full_name: chromeProfile.email.split('@')[0],
-                avatar_url: chromeProfile.picture // Use ACTUAL Google profile picture
-              },
-              provider: 'chrome_profile',
-              id: chromeProfile.id || chromeProfile.email
-            };
+              if (chromeProfile && chromeProfile.email) {
+                // COMP METHOD: Create user object from Chrome profile
+                const chromeUser = {
+                  email: chromeProfile.email,
+                  name: chromeProfile.email.split('@')[0], // Use email prefix as name
+                  picture: chromeProfile.picture, // Use ACTUAL Google profile picture
+                  user_metadata: {
+                    full_name: chromeProfile.email.split('@')[0],
+                    avatar_url: chromeProfile.picture // Use ACTUAL Google profile picture
+                  },
+                  provider: 'chrome_profile',
+                  id: chromeProfile.id || chromeProfile.email
+                };
 
-            console.log('🔍 REAL_GOOGLE_AUTH: Chrome profile user created:', chromeUser.email);
-            console.log('🔍 REAL_GOOGLE_AUTH: Chrome profile avatar:', chromeUser.picture);
-            
-            // Store Chrome profile user in StateManager
-            if (typeof window.setState === 'function') {
-              await window.setState('supabaseUser', chromeUser);
-              await window.setState('supabaseSession', { user: chromeUser });
-            }
-            
-            console.log('🔍 REAL_GOOGLE_AUTH: RETURNING Chrome profile user:', chromeUser.email);
-            console.log('🔍 REAL_GOOGLE_AUTH: RETURNING Chrome user object:', chromeUser);
-            return chromeUser;
+                console.log('🔍 REAL_GOOGLE_AUTH: Chrome profile user created:', chromeUser.email);
+                console.log('🔍 REAL_GOOGLE_AUTH: Chrome profile avatar:', chromeUser.picture);
+                
+                // Store Chrome profile user in StateManager
+                if (typeof window.setState === 'function') {
+                  await window.setState('supabaseUser', chromeUser);
+                  await window.setState('supabaseSession', { user: chromeUser });
+                }
+                
+                console.log('🔍 REAL_GOOGLE_AUTH: RETURNING Chrome profile user:', chromeUser.email);
+                console.log('🔍 REAL_GOOGLE_AUTH: RETURNING Chrome user object:', chromeUser);
+                return chromeUser;
               } else {
                 console.log('🔍 REAL_GOOGLE_AUTH: Chrome profile found but no email:', chromeProfile);
               }

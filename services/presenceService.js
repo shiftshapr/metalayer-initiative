@@ -26,13 +26,27 @@ class PresenceService {
     try {
       console.log(`🔍 PRESENCE_EVENT: Recording ${kind} event for user ${userId} on page ${pageId}`);
       
-      // Find the user first
-      const user = await this.prisma.appUser.findUnique({
-        where: { id: userId }
+      // Find the user first, create AppUser if needed
+      let user = await this.prisma.appUser.findUnique({
+        where: { email: userId }
       });
       
       if (!user) {
-        throw new Error(`User ${userId} not found in database`);
+        // Create AppUser record for new user
+        console.log(`🔍 PRESENCE_EVENT: Creating new AppUser record for ${userId}`);
+        user = await this.prisma.appUser.create({
+          data: {
+            id: require('crypto').randomUUID(),
+            handle: userId.split('@')[0],
+            email: userId,
+            name: userId.split('@')[0],
+            avatarUrl: '', // Will be updated by auth service
+            auraColor: '#ffffff', // Default white
+            createdAt: new Date(),
+            updatedAt: new Date()
+          }
+        });
+        console.log(`✅ PRESENCE_EVENT: Created AppUser record for ${userId}`);
       }
       
       // Determine if user is active based on event kind
@@ -49,7 +63,7 @@ class PresenceService {
         update: {
           is_active: isActive,
           last_seen: new Date(),
-          aura_color: user.auraColor || '#45B7D1',
+          // Don't update aura_color on presence updates - keep existing database value
           page_url: pageUrl || pageId,
           user_name: user.user_metadata?.full_name || user.name || user.email?.split('@')[0] || 'User'
         },
@@ -58,7 +72,6 @@ class PresenceService {
           user_name: user.user_metadata?.full_name || user.name || user.email?.split('@')[0] || 'User',
           page_id: pageId,
           page_url: pageUrl || pageId,
-          aura_color: user.auraColor || '#45B7D1',
           is_active: isActive,
           last_seen: new Date()
         }
@@ -122,14 +135,8 @@ class PresenceService {
       
       const activeUsers = await this.prisma.user_presence.findMany({
         where: whereClause,
-        select: {
-          user_email: true,
-          user_name: true,
-          avatar_url: true,
-          aura_color: true,
-          last_seen: true,
-          enter_time: true,
-          is_active: true
+        include: {
+          AppUser: true // Join with AppUser table to get auraColor and avatarUrl
         },
         orderBy: {
           last_seen: 'desc'
@@ -138,15 +145,15 @@ class PresenceService {
       
       console.log(`✅ GET_ACTIVE_USERS: Found ${activeUsers.length} active users`);
       
-      // Transform to expected format
+      // Transform to expected format using AppUser data
       return activeUsers.map(user => ({
         id: user.user_email,
         userId: user.user_email,
         email: user.user_email,
-        name: user.user_name || user.user_email.split('@')[0],
-        handle: user.user_name || user.user_email.split('@')[0],
-        avatarUrl: user.avatar_url,
-        auraColor: user.aura_color || '#45B7D1',
+        name: user.AppUser?.name || user.user_name || user.user_email.split('@')[0],
+        handle: user.AppUser?.handle || user.user_name || user.user_email.split('@')[0],
+        avatarUrl: user.AppUser?.avatarUrl || null, // Get from AppUser, not user_presence
+        auraColor: user.AppUser?.auraColor || window.AVATAR_FALLBACK_COLOR, // Get from AppUser, fallback to white
         lastSeen: user.last_seen,
         enterTime: user.enter_time,
         isActive: user.is_active,
@@ -202,7 +209,7 @@ class PresenceService {
       // Calculate cutoff time
       const cutoffTime = new Date(Date.now() - (minutes * 60 * 1000));
       
-      // Query user_presence table directly (COMP method)
+      // Query user_presence table with AppUser join (COMP method)
       const activeUsers = await this.prisma.user_presence.findMany({
         where: {
           page_id: pageId,
@@ -211,6 +218,9 @@ class PresenceService {
             gte: cutoffTime
           }
         },
+        include: {
+          AppUser: true // Join with AppUser table to get avatarUrl and auraColor
+        },
         orderBy: {
           last_seen: 'desc'
         }
@@ -218,15 +228,15 @@ class PresenceService {
 
       console.log(`✅ PRESENCE_SERVICE: Found ${activeUsers.length} active users`);
       
-      // Transform to expected format
+      // Transform to expected format using AppUser data
       return activeUsers.map(user => ({
         id: user.user_email,
         userId: user.user_email,
         email: user.user_email,
-        name: user.user_name || user.user_email?.split('@')[0] || 'User',
-        handle: user.user_name || user.user_email?.split('@')[0] || 'User',
-        avatarUrl: user.avatar_url,
-        auraColor: user.aura_color || '#45B7D1',
+        name: user.AppUser?.name || user.user_name || user.user_email?.split('@')[0] || 'User',
+        handle: user.AppUser?.handle || user.user_name || user.user_email?.split('@')[0] || 'User',
+        avatarUrl: user.AppUser?.avatarUrl || null, // Get from AppUser, not user_presence
+        auraColor: user.AppUser?.auraColor || window.AVATAR_FALLBACK_COLOR, // Get from AppUser, fallback to white
         lastSeen: user.last_seen,
         isActive: user.is_active,
         pageId: user.page_id,
@@ -274,7 +284,7 @@ class PresenceService {
         name: user.user_name || user.user_email?.split('@')[0] || 'User',
         handle: user.user_name || user.user_email?.split('@')[0] || 'User',
         avatarUrl: user.avatar_url,
-        auraColor: user.aura_color || '#45B7D1',
+        auraColor: user.aura_color || window.AVATAR_FALLBACK_COLOR,
         lastSeen: user.last_seen,
         isActive: user.is_active,
         pageId: user.page_id,

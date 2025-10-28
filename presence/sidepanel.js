@@ -1,30 +1,6 @@
-// COMP METHOD: API Endpoint Redirection (CRITICAL FIX)
-// Override fetch to redirect all API calls to VPS
-const originalFetch = window.fetch;
-window.fetch = function(url, options = {}) {
-  let modifiedUrl = url;
-  
-      // Redirect all API calls from production to VPS
-      if (typeof url === 'string' && url.includes('api.themetalayer.org')) {
-        modifiedUrl = url.replace('https://api.themetalayer.org', 'http://216.238.91.120:3002');
-        console.log(`🔍 COMP_API_FIX: Redirecting ${url} to ${modifiedUrl}`);
-      }
-  
-  return originalFetch.call(this, modifiedUrl, options);
-};
-
-// Also override XMLHttpRequest for older code
-const originalXHROpen = XMLHttpRequest.prototype.open;
-XMLHttpRequest.prototype.open = function(method, url, ...args) {
-      if (typeof url === 'string' && url.includes('api.themetalayer.org')) {
-        const modifiedUrl = url.replace('https://api.themetalayer.org', 'http://216.238.91.120:3002');
-        console.log(`🔍 COMP_API_FIX: XHR Redirecting ${url} to ${modifiedUrl}`);
-        return originalXHROpen.call(this, method, modifiedUrl, ...args);
-      }
-  return originalXHROpen.call(this, method, url, ...args);
-};
-
-console.log('✅ COMP_API_FIX: All API calls redirected to VPS:216.238.91.120:3002');
+// API endpoint redirection is now handled by APIModule.js
+// The MetaLayerAPI class in APIModule.js handles all API redirection logic
+// This maintains modular architecture while providing the same functionality
 
 // Initialize all modern architecture components (FROM COMP)
 let stateManager = null;
@@ -88,7 +64,7 @@ async function initializeCompleteModernArchitecture() {
     // Initialize StateManager
     stateManager = new StateManager();
     await stateManager.initialize({
-      userAvatarBgColor: '#45B7D1',
+      userAvatarBgColor: window.AVATAR_FALLBACK_COLOR,
       googleUser: null,
       supabaseUser: null,
       metalayerUser: null,
@@ -433,7 +409,7 @@ async function updateVisibleTab(avatars) {
         email: currentUserEmail,
         name: window.currentUser.name || currentUserEmail.split('@')[0],
         avatarUrl: window.currentUser.avatarUrl, // Use the real Google avatar URL
-        auraColor: window.currentUser.auraColor || '#aaaaaa',
+        auraColor: window.currentUser.auraColor || window.AVATAR_FALLBACK_COLOR,
         status: 'online',
         enterTime: new Date().toISOString()
       };
@@ -488,9 +464,9 @@ async function updateVisibleTab(avatars) {
         ${usersWithAvatars.map(avatar => `
           <li class="item" style="display: flex; align-items: center; gap: 8px; padding: 8px; border-bottom: 1px solid var(--border-color);">
             <div class="avatar-container" style="position: relative;">
-              <img src="${avatar.avatarUrl || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(avatar.name || avatar.email) + '&background=random'}" 
+              <img src="${avatar.avatarUrl}" 
                    alt="${avatar.name || avatar.email}" 
-                   style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover; border: 2px solid ${avatar.auraColor || '#aaaaaa'};">
+                   style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover; border: 2px solid ${avatar.auraColor || window.AVATAR_FALLBACK_COLOR};">
             </div>
             <div class="user-info" style="flex: 1;">
               <div class="user-name" style="font-weight: bold; color: var(--text-primary); font-size: 12px;">${avatar.name || avatar.email}</div>
@@ -505,6 +481,12 @@ async function updateVisibleTab(avatars) {
   `;
   
   console.log('✅ VISIBILITY: Visible tab updated successfully');
+  
+  // COMP METHOD: Refresh all message avatars now that visibility data is available
+  if (typeof window.refreshAllMessageAvatars === 'function') {
+    console.log('🔧 VISIBILITY: Refreshing all message avatars with updated visibility data');
+    window.refreshAllMessageAvatars();
+  }
 }
 
 // ===== COMP METHOD: Message handling moved to CanopiModule.js =====
@@ -584,7 +566,7 @@ async function refreshVisibilityAvatars() {
             name: userName,
             email: user.user_email,
             avatarUrl: avatarUrl,
-            auraColor: user.aura_color || '#aaaaaa',
+            auraColor: user.aura_color || window.AVATAR_FALLBACK_COLOR,
             isActive: user.is_active,
             enterTime: user.enter_time,
             lastSeen: user.last_seen,
@@ -745,14 +727,14 @@ async function updateUI(user) {
         const userInVisibility = window.currentVisibilityDataUnfiltered.active.find(
           u => u.email === user.email || u.userId === user.email
         );
-        if (userInVisibility && userInVisibility.auraColor && userInVisibility.auraColor !== '#45B7D1') {
+        if (userInVisibility && userInVisibility.auraColor && userInVisibility.auraColor !== window.AVATAR_FALLBACK_COLOR) {
           userAuraColor = userInVisibility.auraColor;
           console.log(`PROFILE_AVATAR: Using database aura color: ${userAuraColor}`);
         }
       }
       
       // Fallback to stored aura color only if no database color found
-      if (!userAuraColor && user.auraColor && user.auraColor !== null && user.auraColor !== 'null' && user.auraColor !== '#ffffff') {
+      if (!userAuraColor && user.auraColor && user.auraColor !== null && user.auraColor !== 'null' && user.auraColor !== window.AVATAR_FALLBACK_COLOR) {
         userAuraColor = user.auraColor;
         console.log(`PROFILE_AVATAR: Using stored aura color: ${userAuraColor}`);
       } else if (!userAuraColor) {
@@ -842,8 +824,8 @@ async function updateUI(user) {
               width: 32px;
               height: 32px;
               border-radius: 50%;
-              border: 2px solid ${userData.auraColor || '#aaaaaa'};
-              background: ${userData.auraColor || '#aaaaaa'};
+              border: 2px solid ${userData.auraColor || window.AVATAR_FALLBACK_COLOR};
+              background: ${userData.auraColor || window.AVATAR_FALLBACK_COLOR};
               display: flex;
               align-items: center;
               justify-content: center;
@@ -865,8 +847,8 @@ async function updateUI(user) {
             width: 32px;
             height: 32px;
             border-radius: 50%;
-            border: 2px solid ${userData.auraColor || '#aaaaaa'};
-            background: ${userData.auraColor || '#aaaaaa'};
+            border: 2px solid ${userData.auraColor || window.AVATAR_FALLBACK_COLOR};
+            background: ${userData.auraColor || window.AVATAR_FALLBACK_COLOR};
             display: flex;
             align-items: center;
             justify-content: center;
@@ -2476,10 +2458,10 @@ window.notificationHistory = window.notificationHistory || null;
 window.navigationManager = window.navigationManager || null;
 
 // Avatar functions (from ProfileManager)
-window.getCurrentUserAvatarBgColor = window.getCurrentUserAvatarBgColor || function() { return '#ffffff'; };
+window.getCurrentUserAvatarBgColor = window.getCurrentUserAvatarBgColor || function() { return window.AVATAR_FALLBACK_COLOR; };
 window.setCustomAvatarColor = window.setCustomAvatarColor || function() {};
 window.resetCustomAvatarColor = window.resetCustomAvatarColor || function() {};
-window.getCurrentUserAvatarColor = window.getCurrentUserAvatarColor || function() { return '#ffffff'; };
+window.getCurrentUserAvatarColor = window.getCurrentUserAvatarColor || function() { return window.AVATAR_FALLBACK_COLOR; };
 
 // UI functions (from UIManager)
 window.updateVisualHierarchy = window.updateVisualHierarchy || function() {};
@@ -2714,10 +2696,18 @@ function initializeSidepanel() {
         } else if (storedSession && storedSession.user && storedSession.user.picture) {
           realAvatarUrl = storedSession.user.picture;
           console.log('🔐 AUTH: Using ACTUAL Google profile picture from supabaseSession:', realAvatarUrl);
+        } else if (realGoogleUser && realGoogleUser.picture) {
+          realAvatarUrl = realGoogleUser.picture;
+          console.log('🔐 AUTH: Using ACTUAL Google profile picture from realGoogleUser:', realAvatarUrl);
+        } else if (realGoogleUser && realGoogleUser.user_metadata && realGoogleUser.user_metadata.avatar_url) {
+          realAvatarUrl = realGoogleUser.user_metadata.avatar_url;
+          console.log('🔐 AUTH: Using ACTUAL Google profile picture from realGoogleUser.user_metadata:', realAvatarUrl);
         } else {
           console.log('🔐 AUTH: No stored user picture found, using fallback');
           console.log('🔐 AUTH: storedUser.picture:', storedUser?.picture);
           console.log('🔐 AUTH: storedSession.user.picture:', storedSession?.user?.picture);
+          console.log('🔐 AUTH: realGoogleUser.picture:', realGoogleUser?.picture);
+          console.log('🔐 AUTH: realGoogleUser.user_metadata.avatar_url:', realGoogleUser?.user_metadata?.avatar_url);
           realAvatarUrl = "https://www.gravatar.com/avatar/ZGF2ZXJvb21AZ21haWwuY29t?d=identicon&s=200";
         }
           
@@ -2729,6 +2719,48 @@ function initializeSidepanel() {
             id: currentUserEmail,
             user_metadata: realGoogleUser?.user_metadata || null
           };
+          
+          // COMP METHOD: Update AppUser table with real avatar URL
+          if (realAvatarUrl && (realAvatarUrl.includes('googleusercontent.com') || realAvatarUrl.includes('googleapis.com'))) {
+            console.log('🔐 AUTH: Updating AppUser table with real Google profile picture:', realAvatarUrl);
+            try {
+              const updateResponse = await window.api.request('/v1/users/update-avatar', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  email: currentUserEmail,
+                  avatarUrl: realAvatarUrl
+                })
+              });
+              console.log('✅ AUTH: AppUser table updated with real avatar URL:', updateResponse);
+            } catch (error) {
+              console.log('⚠️ AUTH: Failed to update AppUser table:', error);
+              
+              // COMP METHOD: Fallback - try to get or create user with avatar URL
+              try {
+                console.log('🔐 AUTH: Attempting fallback - get or create user with avatar URL');
+                const fallbackResponse = await window.api.request(`/v1/users/${encodeURIComponent(currentUserEmail)}`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    email: currentUserEmail,
+                    name: currentUserEmail.split('@')[0],
+                    avatarUrl: realAvatarUrl,
+                    auraColor: avatarColor
+                  })
+                });
+                console.log('✅ AUTH: Fallback successful - user created/updated:', fallbackResponse);
+              } catch (fallbackError) {
+                console.log('❌ AUTH: Fallback also failed:', fallbackError);
+              }
+            }
+          } else {
+            console.log('⚠️ AUTH: Not updating AppUser table - avatar URL is not a real Google profile picture:', realAvatarUrl);
+          }
           
           // COMPREHENSIVE USER IDENTITY LOGGING
           console.log('🔍 USER_IDENTITY: === WINDOW.CURRENTUSER ASSIGNMENT TRACE ===');

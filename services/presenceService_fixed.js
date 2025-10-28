@@ -48,14 +48,14 @@ class PresenceService {
         update: {
           is_active: isActive,
           last_seen: new Date(),
-          aura_color: user.auraColor || '#45B7D1',
+          aura_color: user.auraColor || window.AVATAR_FALLBACK_COLOR,
           page_url: pageUrl || pageId
         },
         create: {
           user_email: user.email,
           page_id: pageId,
           page_url: pageUrl || pageId,
-          aura_color: user.auraColor || '#45B7D1',
+          aura_color: user.auraColor || window.AVATAR_FALLBACK_COLOR,
           is_active: isActive,
           last_seen: new Date()
         }
@@ -100,3 +100,5 @@ class PresenceService {
 }
 
 module.exports = PresenceService;
+
+

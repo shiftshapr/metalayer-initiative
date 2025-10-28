@@ -29,7 +29,7 @@ function createUnifiedAvatar(user, options = {}) {
     auraColor = window.currentUser.auraColor;
   }
   if (!auraColor) {
-    auraColor = '#45B7D1'; // Default blue
+    auraColor = window.AVATAR_FALLBACK_COLOR; // Default white
   }
 
   // Size classes

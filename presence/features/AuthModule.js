@@ -535,7 +535,7 @@ function getCurrentUserAvatarColor() {
         getCurrentUserEmail().then(email => {
           resolve(getAvatarColor(email));
         }).catch(() => {
-          resolve('#45B7D1'); // Default blue
+          resolve(window.AVATAR_FALLBACK_COLOR); // Default white
         });
       }
     });
@@ -547,14 +547,14 @@ function getUserAvatarBgColor() {
   if (window.currentUser && window.currentUser.auraColor) {
     return window.currentUser.auraColor;
   }
-  return '#ffffff'; // Default white
+  return window.AVATAR_FALLBACK_COLOR; // Default white
 }
 
 function getCurrentUserAvatarBgColor() {
   if (window.currentUser && window.currentUser.auraColor) {
     return window.currentUser.auraColor;
   }
-  return '#ffffff'; // Default white
+  return window.AVATAR_FALLBACK_COLOR; // Default white
 }
 
 

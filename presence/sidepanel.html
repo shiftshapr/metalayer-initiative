@@ -40,7 +40,8 @@
   
   <!-- Load Authentication Systems FIRST -->
   
-  <!-- Load Feature Modules in dependency order (AvatarUtils must be loaded first) -->
+  <!-- Load Feature Modules in dependency order (APIModule must be loaded first for redirection) -->
+  <script src="features/APIModule.js"></script>
   <script src="features/ProfileManager.js"></script>
   <script src="utils/AvatarConfig.js"></script>
   <script src="features/UIManager.js"></script>
@@ -49,7 +50,6 @@
   <script src="features/AgentModule.js"></script>
   <script src="features/AuthManager.js"></script>
   <script src="features/AuraColorModal.js"></script>
-  <script src="features/APIModule.js"></script>
   <script src="features/CommunitiesModule.js"></script>
   <script src="features/NavigationManager.js"></script>
   <script src="features/NotificationManager.js"></script>

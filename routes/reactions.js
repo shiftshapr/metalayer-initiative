@@ -56,30 +56,46 @@ router.post('/', async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
     
-    // Check if user already reacted with this emoji
+    // Check if user already has ANY reaction on this message
     const existingReaction = await prisma.reactions.findFirst({
       where: {
         message_id: messageId,
-        user_email: userEmail,
-        emoji: emoji
+        user_email: userEmail
       }
     });
     
     if (existingReaction) {
-      // Remove the reaction (toggle off)
-      await prisma.reactions.delete({
-        where: { id: existingReaction.id }
-      });
-      
-      console.log(`✅ REACTIONS: Removed reaction ${emoji} from message ${messageId}`);
-      
-      return res.json({
-        success: true,
-        action: 'removed',
-        message: 'Reaction removed successfully'
-      });
+      if (existingReaction.emoji === emoji) {
+        // Same emoji clicked - remove the reaction (toggle off)
+        await prisma.reactions.delete({
+          where: { id: existingReaction.id }
+        });
+        
+        console.log(`✅ REACTIONS: Removed reaction ${emoji} from message ${messageId}`);
+        
+        return res.json({
+          success: true,
+          action: 'removed',
+          message: 'Reaction removed successfully'
+        });
+      } else {
+        // Different emoji clicked - replace existing reaction
+        const updatedReaction = await prisma.reactions.update({
+          where: { id: existingReaction.id },
+          data: { emoji: emoji }
+        });
+        
+        console.log(`✅ REACTIONS: Replaced reaction ${existingReaction.emoji} with ${emoji} on message ${messageId}`);
+        
+        return res.json({
+          success: true,
+          action: 'replaced',
+          reaction: updatedReaction,
+          message: 'Reaction replaced successfully'
+        });
+      }
     } else {
-      // Add the reaction
+      // No existing reaction - add the reaction
       const reaction = await prisma.reactions.create({
         data: {
           message_id: messageId,

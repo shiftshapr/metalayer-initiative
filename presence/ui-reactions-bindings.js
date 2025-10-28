@@ -159,10 +159,10 @@
     // Group reactions by type
     const reactionGroups = {};
     reactions.forEach(reaction => {
-      if (!reactionGroups[reaction.reaction_type]) {
-        reactionGroups[reaction.reaction_type] = [];
+      if (!reactionGroups[reaction.emoji]) {
+        reactionGroups[reaction.emoji] = [];
       }
-      reactionGroups[reaction.reaction_type].push(reaction);
+      reactionGroups[reaction.emoji].push(reaction);
     });
 
     // Clear existing reactions
@@ -230,7 +230,7 @@
         // Check if user already reacted with this type
         const existingReactions = await window.reactionsIntegration.reactionsManager.getReactions(messageId);
         const userReaction = existingReactions.find(r => 
-          r.user_email === window.currentUser?.email && r.reaction_type === reactionType
+          r.user_email === window.currentUser?.email && r.emoji === reactionType
         );
         
         if (userReaction) {

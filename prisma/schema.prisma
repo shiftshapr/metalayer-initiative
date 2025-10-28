@@ -61,13 +61,14 @@ model user_presence {
   user_name  String?
   page_id    String
   page_url   String
-  aura_color String?   @default("#45B7D1")
   is_active  Boolean?  @default(true)
   last_seen  DateTime? @default(now()) @db.Timestamptz(6)
   created_at DateTime? @default(now()) @db.Timestamptz(6)
   updated_at DateTime? @default(now()) @db.Timestamptz(6)
   enter_time DateTime? @db.Timestamptz(6)
-  avatar_url String?
+  
+  // Relationship to AppUser for user profile data
+  AppUser    AppUser?  @relation(fields: [user_email], references: [email])
 
   @@id([user_email, page_id])
   @@unique([user_email, page_id], map: "user_presence_user_page_unique")
@@ -76,18 +77,7 @@ model user_presence {
   @@index([user_email], map: "idx_user_presence_user_email")
 }
 
-/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
-model user_visibility {
-  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  user_email   String
-  page_id      String
-  is_visible   Boolean?  @default(true)
-  last_updated DateTime? @default(now()) @db.Timestamptz(6)
-  created_at   DateTime? @default(now()) @db.Timestamptz(6)
-
-  @@unique([user_email, page_id], map: "user_visibility_user_page_unique")
-  @@index([page_id, user_email], map: "idx_visibility_page_user")
-}
+// user_visibility model removed - table was dropped as unused
 
 model Anchor {
   id             String         @id @db.Uuid
@@ -111,7 +101,7 @@ model AppUser {
   handle           String             @unique
   email            String?            @unique
   name             String?
-  avatarUrl        String?
+  avatarUrl        String             // Changed from String? to String (non-null required)
   isVerified       Boolean            @default(false)
   isSuperAdmin     Boolean            @default(false)
   createdAt        DateTime           @default(now())
@@ -123,6 +113,7 @@ model AppUser {
   PresenceEvent    PresenceEvent[]
   Reaction         Reaction[]
   SpaceMember      SpaceMember[]
+  user_presence    user_presence[] // Relationship to user_presence
 }
 
 model Conversation {

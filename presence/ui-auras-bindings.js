@@ -237,7 +237,7 @@
     picker.className = 'aura-color-picker';
     picker.innerHTML = `
       <label for="aura-color">Aura Color:</label>
-      <input type="color" id="aura-color" value="#aa00aa">
+      <input type="color" id="aura-color" value="${window.AVATAR_FALLBACK_COLOR}">
     `;
     
     // Add change handler
@@ -296,7 +296,7 @@
       if (window.aurasIntegration) {
         // Get current aura color
         const currentAura = await window.aurasIntegration.getUserAura();
-        const color = currentAura ? currentAura.aura_color : '#aa00aa';
+        const color = currentAura ? currentAura.aura_color : window.AVATAR_FALLBACK_COLOR;
         
         await window.aurasIntegration.updateAura(color, intensity);
         console.log('✅ UI AURAS: Aura intensity updated:', intensity);

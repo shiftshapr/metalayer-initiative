@@ -35,7 +35,26 @@ class AvatarUtils {
         console.log(`✅ SD1 FIX: Using avatarUrl from user object (profile): ${avatarUrl}`);
       }
       
-      // PRIORITY 2: For current user, use user_metadata (same as profile avatar system)
+      // PRIORITY 2: Check AppUser table via API (COMP METHOD - single source of truth)
+      if (!avatarUrl && window.api) {
+        try {
+          const userEmail = user.user_email || user.email;
+          if (userEmail) {
+            console.log(`🔍 AVATAR_UTILS: Checking AppUser table for ${userEmail}`);
+            const appUserResponse = await window.api.request(`/v1/users/${encodeURIComponent(userEmail)}`);
+            if (appUserResponse && appUserResponse.avatarUrl && !appUserResponse.avatarUrl.includes('default-user')) {
+              avatarUrl = appUserResponse.avatarUrl;
+              userName = appUserResponse.name || userName;
+              avatarSource = 'appuser_table';
+              console.log(`✅ AVATAR_UTILS: Using AppUser table avatar for ${userEmail}: ${avatarUrl}`);
+            }
+          }
+        } catch (error) {
+          console.log(`⚠️ AVATAR_UTILS: Failed to check AppUser table: ${error.message}`);
+        }
+      }
+      
+      // PRIORITY 3: For current user, use user_metadata (fallback)
       if (!avatarUrl) {
         const currentUser = window.currentUser || {};
         if ((user.user_email || user.email) === currentUser.email && currentUser.user_metadata?.avatar_url) {
@@ -46,7 +65,7 @@ class AvatarUtils {
         }
       }
       
-      // PRIORITY 3: For other users, use visibility data (same as profile avatar system)
+      // PRIORITY 4: For other users, use visibility data (same as profile avatar system)
       if (!avatarUrl) {
         console.log(`🔍 SD1 AVATAR DEBUG: Checking visibility data for ${user.user_email || user.email}`);
         console.log(`🔍 SD1 AVATAR DEBUG: currentVisibilityDataUnfiltered exists: ${!!window.currentVisibilityDataUnfiltered}`);
@@ -79,41 +98,13 @@ class AvatarUtils {
           } else {
             console.log(`ℹ️ User ${user.user_email || user.email} not found in visibility data`);
             
-            // COMP METHOD: Try to get avatar from database directly for remote users
-            try {
-              if (window.supabase && window.supabase.from) {
-                const userEmail = user.user_email || user.email;
-                
-                // Query database for user avatar data
-                if (userEmail) {
-                  const { data: userData, error } = await window.supabase
-                    .from('user_presence')
-                    .select('avatar_url, user_name, aura_color')
-                    .eq('user_email', userEmail)
-                    .order('updated_at', { ascending: false })
-                    .limit(1);
-                  
-                  if (!error && userData && userData.length > 0 && userData[0].avatar_url) {
-                    avatarUrl = userData[0].avatar_url;
-                    userName = userData[0].user_name || userName;
-                    avatarSource = 'database_direct';
-                    console.log(`✅ Found avatar in database for ${userEmail} - avatarUrl: ${avatarUrl}`);
-                  } else if (error) {
-                    console.log(`⚠️ Database query failed for ${userEmail}:`, error.message);
-                  }
-                } else {
-                  console.log(`⚠️ Skipping database lookup for test email: ${userEmail}`);
-                }
-              }
-            } catch (dbError) {
-              console.log(`⚠️ Database lookup failed for ${user.user_email || user.email}:`, dbError);
-            }
+            // COMP METHOD: Database query removed - now using AppUser table via API (Priority 2 above)
           }
         } else {
           console.log(`ℹ️ No unfiltered visibility data available`);
         }
         
-        // PRIORITY 3.5: Check if current user has real avatar in window.currentUser
+        // PRIORITY 5: Check if current user has real avatar in window.currentUser
         if (!avatarUrl && window.currentUser && (user.user_email || user.email) === window.currentUser.email) {
           if (window.currentUser.avatarUrl && !window.currentUser.avatarUrl.includes('default-user')) {
             avatarUrl = window.currentUser.avatarUrl;
@@ -171,7 +162,8 @@ class AvatarUtils {
       userHandle
     } = avatarData;
 
-    const auraColor = user.aura_color || user.auraColor || '#aaaaaa';
+    // COMP METHOD: Only use white fallback when auraColor is null/undefined
+    const auraColor = user.aura_color || user.auraColor || window.AVATAR_FALLBACK_COLOR;
     const showAura = options.showAura !== false;
     const size = options.size || (context === 'profile' ? 32 : 24);
     const showStatus = options.showStatus !== false;

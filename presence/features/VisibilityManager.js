@@ -101,7 +101,7 @@ class VisibilityManager {
             name: userProfile?.name || user.user_email.split('@')[0],
             handle: userProfile?.handle || user.user_email.split('@')[0],
             avatarUrl: userProfile?.avatar_url || null,
-            auraColor: user.aura_color || '#aaaaaa',
+            auraColor: user.aura_color || window.AVATAR_FALLBACK_COLOR,
             communityId: 'comm-001',
             communityName: 'Community comm-001',
             lastSeen: user.last_seen,
@@ -125,7 +125,7 @@ class VisibilityManager {
             name: user.user_email.split('@')[0],
             handle: user.user_email.split('@')[0],
             avatarUrl: null,
-            auraColor: user.aura_color || '#aaaaaa',
+            auraColor: user.aura_color || window.AVATAR_FALLBACK_COLOR,
             communityId: 'comm-001',
             communityName: 'Community comm-001',
             lastSeen: user.last_seen,
@@ -500,7 +500,7 @@ async function updateVisibleTab(avatars) {
               <div class="avatar-container" style="position: relative; width: 32px; height: 32px;">
                 <img src="${avatar.avatarUrl || '/icons/default-user.svg'}" 
                      alt="${avatar.name}" 
-                     style="width: 32px; height: 32px; border-radius: 50%; border: 2px solid ${avatar.auraColor || '#aaaaaa'};">
+                     style="width: 32px; height: 32px; border-radius: 50%; border: 2px solid ${avatar.auraColor || window.AVATAR_FALLBACK_COLOR};">
               </div>
               <div class="user-info" style="flex: 1; min-width: 0;">
                 <div class="user-name" style="font-weight: bold; color: var(--text-primary); font-size: 14px;">${avatar.name}</div>

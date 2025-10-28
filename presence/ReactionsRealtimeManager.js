@@ -174,15 +174,13 @@ class ReactionsRealtimeManager {
       const reactionData = {
         message_id: messageId,
         user_email: this.user.email,
-        reaction_type: reactionType,
-        page_id: this.currentPageId,
-        community_id: this.user.communityId,
-        created_at: new Date().toISOString()
+        emoji: reactionType
+        // created_at is auto-generated
       };
 
       // Insert reaction record
       const { data, error } = await this.supabase
-        .from('message_reactions')
+        .from('reactions')
         .insert([reactionData])
         .select()
         .single();
@@ -230,15 +228,15 @@ class ReactionsRealtimeManager {
       console.log('🔍 REACTIONS DEBUG: Query filters:', {
         message_id: messageId,
         user_email: this.user.email,
-        reaction_type: reactionType
+        emoji: reactionType
       });
       
-        // For now, just log the reaction removal since message_reactions table doesn't exist
-        console.log('🔍 REACTIONS DEBUG: Simulating reaction removal (table doesn\'t exist)');
+        // For now, just log the reaction removal since reactions table exists
+        console.log('🔍 REACTIONS DEBUG: Simulating reaction removal');
         console.log('🔍 REACTIONS DEBUG: Would remove reaction:', {
           message_id: messageId,
           user_email: this.user.email,
-          reaction_type: reactionType
+          emoji: reactionType
         });
         
         // Simulate successful removal

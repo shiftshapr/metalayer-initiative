@@ -256,8 +256,14 @@ class Canopi2Controller {
       // Ensure user exists in database before creating reaction
       const user = await this.userService.getOrCreateUser(userData);
 
+      console.log('🔍 CONTROLLER: User data:', userData);
+      console.log('🔍 CONTROLLER: User email:', userData.email);
+      console.log('🔍 CONTROLLER: PostId:', postId);
+      console.log('🔍 CONTROLLER: Emoji:', emoji);
+
       const result = await this.reactionService.toggleReaction({
         userId: user.id, // Use the actual database user ID
+        userEmail: userData.email, // Pass email for compatibility
         kind,
         emoji,
         conversationId,

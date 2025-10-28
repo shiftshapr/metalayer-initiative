@@ -10,7 +10,7 @@ class ReactionService {
    */
   async toggleReaction(data) {
     try {
-      const { userId, kind, conversationId, postId, emoji } = data;
+      const { userId, userEmail, kind, conversationId, postId, emoji } = data;
 
       // Validate that at least one target is specified
       if (!conversationId && !postId) {
@@ -18,46 +18,48 @@ class ReactionService {
       }
 
       // Check for existing reaction
-      const existing = await this.prisma.reaction.findFirst({
+      console.log('🔍 REACTION SERVICE: Looking for existing reaction for user:', userEmail, 'message:', postId);
+      console.log('🔍 REACTION SERVICE: Query parameters:', { user_email: userEmail, message_id: postId });
+      
+      const existing = await this.prisma.reactions.findFirst({
         where: {
-          userId,
-          conversationId: conversationId || null,
-          postId: postId || null
+          user_email: userEmail,
+          message_id: postId
         }
       });
 
+      console.log('🔍 REACTION SERVICE: Existing reaction found:', existing);
+      console.log('🔍 REACTION SERVICE: Query result type:', typeof existing);
+      console.log('🔍 REACTION SERVICE: Query result length:', existing ? Object.keys(existing).length : 'null');
+
       if (existing) {
-        if (existing.kind === kind) {
-          // Remove reaction if same kind
-          await this.prisma.reaction.delete({
+        if (existing.emoji === emoji) {
+          // Remove reaction if same emoji
+          console.log('🔍 REACTION SERVICE: Same emoji, removing reaction');
+          await this.prisma.reactions.delete({
             where: { id: existing.id }
           });
           return { action: 'removed', reaction: null };
         } else {
-          // Update reaction if different kind or emoji
-          const updated = await this.prisma.reaction.update({
+          // Update reaction if different emoji
+          console.log('🔍 REACTION SERVICE: Different emoji, replacing reaction');
+          const updated = await this.prisma.reactions.update({
             where: { id: existing.id },
-            data: { kind, emoji }
+            data: { emoji: emoji }
           });
-          return { action: 'updated', reaction: updated };
+          return { action: 'replaced', reaction: updated };
         }
       } else {
         // Create new reaction
-        const reaction = await this.prisma.reaction.create({
+        console.log('🔍 REACTION SERVICE: No existing reaction, creating new one');
+        const reaction = await this.prisma.reactions.create({
           data: {
-            userId,
-            kind,
-            emoji,
-            conversationId: conversationId || null,
-            postId: postId || null
-          },
-          include: {
-            user: {
-              select: { id: true, handle: true, name: true, avatarUrl: true }
-            }
+            message_id: postId,
+            emoji: emoji,
+            user_email: userEmail
           }
         });
-        return { action: 'created', reaction };
+        return { action: 'added', reaction };
       }
     } catch (error) {
       console.error('Error toggling reaction:', error);
@@ -70,18 +72,11 @@ class ReactionService {
    */
   async getReactions(targetId, targetType) {
     try {
-      const where = targetType === 'post' 
-        ? { postId: targetId }
-        : { conversationId: targetId };
-
-      const reactions = await this.prisma.reaction.findMany({
-        where,
-        include: {
-          user: {
-            select: { id: true, handle: true, name: true, avatarUrl: true }
-          }
+      const reactions = await this.prisma.reactions.findMany({
+        where: {
+          message_id: targetId
         },
-        orderBy: { createdAt: 'asc' }
+        orderBy: { created_at: 'asc' }
       });
 
       // Return flat array for frontend compatibility

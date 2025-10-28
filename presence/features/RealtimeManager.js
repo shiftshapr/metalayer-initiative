@@ -136,7 +136,7 @@ class RealtimeManager {
           profileDiv.className = 'profile-item';
           profileDiv.innerHTML = `
             <div class="profile-avatar">
-              <img src="${user.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || user.email)}&background=random&color=fff&size=200`}" alt="${user.name || user.email}">
+              <img src="${user.avatar}" alt="${user.name || user.email}">
             </div>
             <div class="profile-info">
               <div class="profile-name">${user.name || user.email}</div>
@@ -177,81 +177,6 @@ class RealtimeManager {
 // TODO: Move these functions from sidepanel.js:
 
 // ===== SUPABASE REAL-TIME INTEGRATION =====
-async function sendMessageViaSupabase(content) {
-  console.log('🔥🔥🔥 ============================================');
-  console.log('🔥🔥🔥 SEND_MESSAGE_VIA_SUPABASE: ENTRY POINT');
-  console.log('🔥🔥🔥 ============================================');
-  console.log('📡 SUPABASE_MESSAGE: Starting real-time message broadcast...');
-  console.log('📡 SUPABASE_MESSAGE: Content:', content);
-  console.log('📡 SUPABASE_MESSAGE: Content type:', typeof content);
-  console.log('📡 SUPABASE_MESSAGE: Content length:', content?.length);
-  
-  // Use robust integration system if available
-  console.log('📡 SUPABASE_MESSAGE: Checking robust integration...');
-  console.log('📡 SUPABASE_MESSAGE: window.robustIntegration exists:', !!window.robustIntegration);
-  console.log('📡 SUPABASE_MESSAGE: window.robustIntegration.isInitialized:', window.robustIntegration?.isInitialized);
-  
-  if (window.robustIntegration && window.robustIntegration.isInitialized) {
-    console.log('📡 SUPABASE_MESSAGE: Using robust integration system...');
-    try {
-      const messageData = await window.robustIntegration.sendMessage(content);
-      if (messageData) {
-        console.log('📡 SUPABASE_MESSAGE: ✅ Robust integration message sent successfully');
-        console.log('📡 SUPABASE_MESSAGE: Message data returned:', messageData);
-        return messageData;
-      } else {
-        console.log('📡 SUPABASE_MESSAGE: ❌ Robust integration message failed');
-        return false;
-      }
-    } catch (error) {
-      console.log('📡 SUPABASE_MESSAGE: ❌ Robust integration error:', error);
-      return false;
-    }
-  }
-  
-  // Fallback to legacy system
-  console.log('📡 SUPABASE_MESSAGE: Using legacy system...');
-  console.log('📡 SUPABASE_MESSAGE: Supabase client available:', !!supabaseRealtimeClient);
-  console.log('📡 SUPABASE_MESSAGE: Window supabase client available:', !!window.supabaseRealtimeClient);
-  console.log('📡 SUPABASE_MESSAGE: window.supabaseRealtimeClient type:', typeof window.supabaseRealtimeClient);
-  
-  const client = window.supabaseRealtimeClient || supabaseRealtimeClient;
-  console.log('📡 SUPABASE_MESSAGE: Using client:', !!client);
-  console.log('📡 SUPABASE_MESSAGE: Client type:', typeof client);
-  console.log('📡 SUPABASE_MESSAGE: Client has sendMessage method:', typeof client?.sendMessage);
-  
-  if (client) {
-    console.log('✅ SUPABASE_MESSAGE: Client is available');
-    try {
-      console.log('📡 SUPABASE_MESSAGE: About to call client.sendMessage...');
-      console.log('📡 SUPABASE_MESSAGE: Timestamp before call:', new Date().toISOString());
-      const messageData = await client.sendMessage(content);
-      console.log('📡 SUPABASE_MESSAGE: Timestamp after call:', new Date().toISOString());
-      console.log('💬 SUPABASE: ✅ Message sent via real-time');
-      console.log('💬 SUPABASE: ✅ Returned messageData:', messageData);
-      console.log('💬 SUPABASE: ✅ messageData type:', typeof messageData);
-      console.log('💬 SUPABASE: ✅ messageData is null:', messageData === null);
-      console.log('💬 SUPABASE: ✅ messageData id:', messageData?.id);
-      return messageData; // Return the message with its UUID
-    } catch (error) {
-      console.log('💬 SUPABASE: ❌ Error sending via Supabase real-time:', error);
-      console.log('💬 SUPABASE: ❌ Error type:', typeof error);
-      console.log('💬 SUPABASE: ❌ Error message:', error?.message);
-      console.log('💬 SUPABASE: ❌ Error stack:', error?.stack);
-      console.log('💬 SUPABASE: ❌ Full error object:', JSON.stringify(error, null, 2));
-      return null;
-    }
-  } else {
-    console.log('❌ SUPABASE_MESSAGE: Client is NOT available');
-    console.log('💬 SUPABASE: ❌ Supabase real-time client not available');
-    console.log('💬 SUPABASE: ❌ supabaseRealtimeClient:', !!supabaseRealtimeClient);
-    console.log('💬 SUPABASE: ❌ window.supabaseRealtimeClient:', !!window.supabaseRealtimeClient);
-    return null;
-  }
-  
-  // CRITICAL FIX: Use ONLY Supabase real-time for message propagation
-  // Removed WebSocket system to prevent conflicts and duplicate messages
-}
 
 // ===== SUPABASE REAL-TIME INTEGRATION =====
 

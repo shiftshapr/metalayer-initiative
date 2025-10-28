@@ -9,8 +9,8 @@
       this.config = {
         // Development (VPS deployment with domain)
         development: {
-          apiUrl: 'https://api.themetalayer.org',
-          wsUrl: 'wss://api.themetalayer.org/ws',
+          apiUrl: 'http://216.238.91.120:3002',
+          wsUrl: 'ws://216.238.91.120:3002/ws',
           supabaseUrl: 'https://zwxomzkmncwzwryvudwu.supabase.co',
           supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp3eG9temttbmN3endyeXZ1ZHd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk2Njg2ODQsImV4cCI6MjA3NTI0NDY4NH0.CoceGOzumiF6aYVGQSWily93snNYh9N9C4p8lrjrTyM',
           debugMode: true,
@@ -20,8 +20,8 @@
         },
         // Production
         production: {
-          apiUrl: 'https://api.themetalayer.org',
-          wsUrl: 'wss://api.themetalayer.org/ws',
+          apiUrl: 'http://216.238.91.120:3002',
+          wsUrl: 'ws://216.238.91.120:3002/ws',
           supabaseUrl: 'https://zwxomzkmncwzwryvudwu.supabase.co',
           supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp3eG9temttbmN3endyeXZ1ZHd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk2Njg2ODQsImV4cCI6MjA3NTI0NDY4NH0.CoceGOzumiF6aYVGQSWily93snNYh9N9C4p8lrjrTyM',
           debugMode: false,
@@ -32,7 +32,7 @@
         // Staging
         staging: {
           apiUrl: 'https://api.themetalayer.org/staging',
-          wsUrl: 'wss://api.themetalayer.org/staging/ws',
+          wsUrl: 'ws://216.238.91.120:3002/staging/ws',
           supabaseUrl: 'https://zwxomzkmncwzwryvudwu.supabase.co',
           supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp3eG9temttbmN3endyeXZ1ZHd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk2Njg2ODQsImV4cCI6MjA3NTI0NDY4NH0.CoceGOzumiF6aYVGQSWily93snNYh9N9C4p8lrjrTyM',
           debugMode: true,
@@ -174,6 +174,9 @@
   window.SUPABASE_ANON_KEY = window.configManager.get('supabaseAnonKey');
   window.DEBUG_MODE = window.configManager.get('debugMode');
   window.LOG_LEVEL = window.configManager.get('logLevel');
+  
+  // COMP METHOD: Single source of truth for avatar fallback color
+  window.AVATAR_FALLBACK_COLOR = '#ffffff';
 
   console.log('✅ CONFIG: Modern configuration system initialized');
 })();

@@ -123,7 +123,7 @@ function showColorPickerModal() {
     
     resetBtn.addEventListener('click', () => {
       // Get the dynamic default color (based on user's name) - use window.currentUser
-      let defaultColor = '#45B7D1'; // Fallback
+      let defaultColor = window.AVATAR_FALLBACK_COLOR; // Fallback
       const user = window.currentUser;
       if (user) {
         const name = user.user_metadata?.full_name || user.name || user.email || 'User';
@@ -164,6 +164,27 @@ function showColorPickerModal() {
         // Save aura color to storage and database
         if (typeof window.setState === 'function') {
           window.setState('userAvatarBgColor', auraColor);
+        }
+        
+        // Save aura color to database via API
+        try {
+          const userEmail = window.currentUser?.email;
+          if (userEmail) {
+            console.log('🎨 Saving aura color to database for user:', userEmail);
+            const result = await window.api.request(`/v1/users/${encodeURIComponent(userEmail)}/aura-color`, {
+              method: 'PUT',
+              headers: {
+                'X-User-Email': userEmail
+              },
+              body: JSON.stringify({
+                auraColor: auraColor
+              })
+            });
+            
+            console.log('✅ Aura color saved to database:', result);
+          }
+        } catch (error) {
+          console.error('❌ Error saving aura color to database:', error);
         }
         
         // Update UI with new aura color
@@ -247,7 +268,7 @@ function updateColorPreview(hex) {
 // Global function to set custom avatar color for the current user
 async function setCustomAvatarColor(color) {
   if (!color || !color.startsWith('#')) {
-    console.error('❌ Invalid color. Please provide a hex color (e.g., #45B7D1)');
+    console.error('❌ Invalid color. Please provide a hex color (e.g., ' + window.AVATAR_FALLBACK_COLOR + ')');
     return;
   }
   
@@ -280,7 +301,7 @@ async function setCustomAvatarColor(color) {
 async function resetUserAvatarBgColor() {
   // Reset to default aura color (no custom background color needed)
   if (window.currentUser) {
-    window.currentUser.auraColor = '#aaaaaa'; // Default gray
+    window.currentUser.auraColor = window.AVATAR_FALLBACK_COLOR; // Default white
   }
   
   // Remove from chrome storage
@@ -444,7 +465,7 @@ function getLatestAuraColorFromPresence(userEmail) {
 
 function getAvatarColor(name) {
   // Generate a consistent color based on the name (for message avatars)
-  const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F'];
+  const colors = ['#FF6B6B', '#4ECDC4', window.AVATAR_FALLBACK_COLOR, '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F'];
   const index = name.charCodeAt(0) % colors.length;
   return colors[index];
 }

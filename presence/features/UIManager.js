@@ -72,7 +72,7 @@ class UIManager {
       if (avatar && avatar.src.includes('gravatar.com') && avatar.dataset.avatarFallback === 'true') {
         const userEmail = avatar.dataset.userEmail;
         if (userEmail) {
-          avatar.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(userEmail.split('@')[0])}&background=random&color=fff&size=200`;
+          avatar.src = window.currentUser?.avatarUrl || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgdmlld0JveD0iMCAwIDIwMCAyMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIyMDAiIGhlaWdodD0iMjAwIiBmaWxsPSIjRjBGMEYwIi8+Cjx0ZXh0IHg9IjEwMCIgeT0iMTAwIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iNDAiIGZpbGw9IiM5OTk5OTkiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5VPC90ZXh0Pgo8L3N2Zz4K';
         }
       }
       
@@ -175,7 +175,7 @@ class UIManager {
       profileDiv.className = 'profile-item';
       profileDiv.innerHTML = `
         <div class="profile-avatar">
-          <img src="${window.currentUser.avatarUrl || window.currentUser.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(window.currentUser.name || window.currentUser.email)}&background=random&color=fff&size=200`}" alt="${window.currentUser.name || window.currentUser.email}">
+          <img src="${window.currentUser.avatarUrl}" alt="${window.currentUser.name || window.currentUser.email}">
         </div>
         <div class="profile-info">
           <div class="profile-name">${window.currentUser.name || window.currentUser.email}</div>
@@ -203,7 +203,7 @@ class UIManager {
         // Safe template literal with proper escaping
         const userName = window.currentUser?.name || 'User';
         const userEmail = window.currentUser?.email || 'user@example.com';
-        const userAvatar = window.currentUser?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(userName)}&background=random&color=fff&size=200`;
+        const userAvatar = window.currentUser?.avatarUrl || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgdmlld0JveD0iMCAwIDIwMCAyMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIyMDAiIGhlaWdodD0iMjAwIiBmaWxsPSIjRjBGMEYwIi8+Cjx0ZXh0IHg9IjEwMCIgeT0iMTAwIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iNDAiIGZpbGw9IiM5OTk5OTkiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5VPC90ZXh0Pgo8L3N2Zz4K';
         
         menuDiv.innerHTML = `
           <div class="profile-menu-header">
@@ -435,10 +435,10 @@ class UIManager {
     // Fallback avatar
     return `
       <div style="position: relative; width: 24px; height: 24px;">
-        <div style="position: absolute; top: -1px; left: -1px; width: 26px; height: 26px; border-radius: 50%; background-color: ${user.auraColor || '#aaaaaa'}; z-index: 1;"></div>
+        <div style="position: absolute; top: -1px; left: -1px; width: 26px; height: 26px; border-radius: 50%; background-color: ${user.auraColor || window.AVATAR_FALLBACK_COLOR}; z-index: 1;"></div>
         <img src="${user.avatarUrl || 'https://lh3.googleusercontent.com/a/default-user=s96-c'}" 
              alt="${user.name || 'User'}" 
-             style="position: relative; z-index: 2; width: 24px; height: 24px; border-radius: 50%; object-fit: cover; border: 1px solid ${user.auraColor || '#aaaaaa'};">
+             style="position: relative; z-index: 2; width: 24px; height: 24px; border-radius: 50%; object-fit: cover; border: 1px solid ${user.auraColor || window.AVATAR_FALLBACK_COLOR};">
       </div>
     `;
   }

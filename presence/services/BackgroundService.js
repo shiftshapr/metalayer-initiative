@@ -992,7 +992,7 @@ function setupCrossProfileCommunication() {
                     name: currentUserData?.name || currentUserData?.displayName || 'You',
                     handle: currentUserData?.handle || currentUserData?.name?.toLowerCase().replace(/\s+/g, '') || 'user',
                     avatarUrl: currentUserData?.avatarUrl || currentUserData?.photoURL || currentUserData?.avatar_url || currentUserData?.user_metadata?.avatar_url,
-                    auraColor: currentUserData?.auraColor || window.currentUser?.auraColor || '#aa00aa'
+                    auraColor: currentUserData?.auraColor || window.currentUser?.auraColor || window.AVATAR_FALLBACK_COLOR
                   }
                 };
                 
