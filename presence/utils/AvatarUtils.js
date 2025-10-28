@@ -20,6 +20,17 @@ class AvatarUtils {
     let userHandle = userName;
     let avatarSource = 'none';
 
+    // CRITICAL FIX: Validate user object to prevent null/undefined calls
+    if (!user || (!user.user_email && !user.email)) {
+      console.log(`❌ AVATAR_UTILS: Invalid user object:`, user);
+      return {
+        avatarUrl: `https://lh3.googleusercontent.com/a/default-user=s96-c`,
+        source: 'generic-fallback',
+        userName: 'unknown',
+        userHandle: 'unknown'
+      };
+    }
+
     try {
       // SD1 FIX: PRIORITY 1 - Check if user object already has avatar_url (from user_presence table)
       if (user.avatar_url && !user.avatar_url.includes('default-user')) {
@@ -39,14 +50,18 @@ class AvatarUtils {
       if (!avatarUrl && window.api) {
         try {
           const userEmail = user.user_email || user.email;
-          if (userEmail) {
+          if (userEmail && userEmail !== 'null' && userEmail !== 'undefined' && userEmail.trim() !== '') {
             console.log(`🔍 AVATAR_UTILS: Checking AppUser table for ${userEmail}`);
             const appUserResponse = await window.api.request(`/v1/users/${encodeURIComponent(userEmail)}`);
-            if (appUserResponse && appUserResponse.avatarUrl && !appUserResponse.avatarUrl.includes('default-user')) {
+            if (appUserResponse && appUserResponse.avatarUrl) {
+              // CRITICAL FIX: Accept ANY avatarUrl from AppUser table - daveroom DOES have a real avatarUrl
+              // The database is the source of truth, even if the URL appears truncated
               avatarUrl = appUserResponse.avatarUrl;
               userName = appUserResponse.name || userName;
               avatarSource = 'appuser_table';
               console.log(`✅ AVATAR_UTILS: Using AppUser table avatar for ${userEmail}: ${avatarUrl}`);
+            } else {
+              console.log(`⚠️ AVATAR_UTILS: No avatarUrl found in AppUser table for ${userEmail}`);
             }
           }
         } catch (error) {
@@ -90,13 +105,13 @@ class AvatarUtils {
             console.log(`🔍 SD1 AVATAR DEBUG: userInVisibility details:`, userInVisibility);
           }
           
-          if (userInVisibility && userInVisibility.avatarUrl) {
+          if (userInVisibility && userInVisibility.avatarUrl && !userInVisibility.avatarUrl.includes('default-user')) {
             avatarUrl = userInVisibility.avatarUrl;
             userName = userInVisibility.name || userName;
             avatarSource = 'visibility_data';
             console.log(`✅ Found REAL avatar in visibility data for ${user.user_email || user.email} - avatarUrl: ${avatarUrl}`);
           } else {
-            console.log(`ℹ️ User ${user.user_email || user.email} not found in visibility data`);
+            console.log(`ℹ️ User ${user.user_email || user.email} not found in visibility data or has generic avatar`);
             
             // COMP METHOD: Database query removed - now using AppUser table via API (Priority 2 above)
           }
@@ -122,16 +137,14 @@ class AvatarUtils {
       console.log(`⚠️ No avatar URL found, using generic for ${user.user_email || user.email}`);
       avatarUrl = `https://lh3.googleusercontent.com/a/default-user=s96-c`;
       avatarSource = 'generic-fallback';
-    } else if (avatarUrl.includes('default-user')) {
-      console.log(`⚠️ Avatar URL contains default-user, treating as generic for ${user.user_email || user.email}`);
-      avatarSource = 'generic-fallback';
     } else if (!avatarUrl.startsWith('http://') && !avatarUrl.startsWith('https://')) {
       console.log(`⚠️ Invalid avatar URL format, using generic for ${user.user_email || user.email}: ${avatarUrl}`);
       avatarUrl = `https://lh3.googleusercontent.com/a/default-user=s96-c`;
       avatarSource = 'generic-fallback';
     } else {
-      // SD1 FIX: Ensure we don't treat real avatars as generic
-      console.log(`✅ SD1 FIX: Using REAL avatar for ${user.user_email || user.email}: ${avatarUrl}`);
+      // CRITICAL FIX: Accept ANY valid HTTP/HTTPS URL as real avatar
+      // daveroom's avatarUrl (https://lh3.googleusercontent.com/a/defa) should be treated as real
+      console.log(`✅ AVATAR_UTILS: Using REAL avatar for ${user.user_email || user.email}: ${avatarUrl}`);
     }
 
     console.log(`Avatar result: ${user.user_email || user.email} - avatarUrl: ${avatarUrl}, source: ${avatarSource}, name: ${userName}`);

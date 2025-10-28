@@ -6,6 +6,34 @@ const { PrismaClient } = require('../generated/prisma');
 const prisma = new PrismaClient();
 const userService = new UserService(prisma);
 
+// Update user's avatar URL (MUST be before /:email route to avoid conflicts)
+router.post('/update-avatar', async (req, res) => {
+  try {
+    const { email, avatarUrl } = req.body;
+    
+    if (!email || !avatarUrl) {
+      return res.status(400).json({ error: 'Email and avatar URL are required' });
+    }
+    
+    console.log(`🔍 BACKEND: Updating avatar URL for ${email} to ${avatarUrl}`);
+    
+    const user = await userService.updateAvatarUrl(email, avatarUrl);
+    
+    res.json({ 
+      success: true, 
+      message: 'Avatar URL updated successfully',
+      user: {
+        id: user.id,
+        email: user.email,
+        avatarUrl: user.avatarUrl
+      }
+    });
+  } catch (error) {
+    console.error('Error updating avatar URL:', error);
+    res.status(500).json({ error: 'Failed to update avatar URL' });
+  }
+});
+
 // Create or update user (fallback for avatar updates)
 router.post('/:email', async (req, res) => {
   try {
@@ -36,34 +64,6 @@ router.post('/:email', async (req, res) => {
   } catch (error) {
     console.error('Error creating/updating user:', error);
     res.status(500).json({ error: 'Failed to create/update user' });
-  }
-});
-
-// Update user's avatar URL
-router.post('/update-avatar', async (req, res) => {
-  try {
-    const { email, avatarUrl } = req.body;
-    
-    if (!email || !avatarUrl) {
-      return res.status(400).json({ error: 'Email and avatar URL are required' });
-    }
-    
-    console.log(`🔍 BACKEND: Updating avatar URL for ${email} to ${avatarUrl}`);
-    
-    const user = await userService.updateAvatarUrl(email, avatarUrl);
-    
-    res.json({ 
-      success: true, 
-      message: 'Avatar URL updated successfully',
-      user: {
-        id: user.id,
-        email: user.email,
-        avatarUrl: user.avatarUrl
-      }
-    });
-  } catch (error) {
-    console.error('Error updating avatar URL:', error);
-    res.status(500).json({ error: 'Failed to update avatar URL' });
   }
 });
 
@@ -117,8 +117,17 @@ router.get('/:email', async (req, res) => {
     
     console.log(`🔍 BACKEND: GET /v1/users/${email}`);
     
-    if (!email) {
-      return res.status(400).json({ error: 'Email is required' });
+    // CRITICAL FIX: Validate email parameter to prevent null/undefined calls
+    if (!email || email === 'null' || email === 'undefined' || email.trim() === '') {
+      console.log(`❌ BACKEND: Invalid email parameter: ${email}`);
+      return res.status(400).json({ error: 'Valid email is required' });
+    }
+    
+    // CRITICAL FIX: Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      console.log(`❌ BACKEND: Invalid email format: ${email}`);
+      return res.status(400).json({ error: 'Invalid email format' });
     }
     
     const user = await userService.getOrCreateUser({ email: decodeURIComponent(email) });
