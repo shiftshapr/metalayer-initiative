@@ -1,0 +1,129 @@
+// UPDATED SCHEMA: After migration to UUID foreign keys
+// This shows the target state after migration
+// Keep this as reference, actual schema.prisma will be updated after migration
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model message_deletions {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  message_id String
+  deleted_by String    // May contain email or UUID (for backward compatibility)
+  user_id    String?   @db.Uuid  // NEW: UUID foreign key
+  deleted_at DateTime? @default(now()) @db.Timestamptz(6)
+  page_id    String
+  created_at DateTime? @default(now()) @db.Timestamptz(6)
+
+  AppUser    AppUser?  @relation(fields: [user_id], references: [id])  // NEW: Standard FK
+
+  @@index([deleted_at], map: "idx_message_deletions_deleted_at")
+  @@index([message_id], map: "idx_message_deletions_message_id")
+  @@index([page_id], map: "idx_message_deletions_page")
+  @@index([page_id], map: "idx_message_deletions_page_id")
+  @@index([user_id], map: "idx_message_deletions_user_id")  // NEW: Index on user_id
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model messages {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  page_id      String
+  user_email   String    // KEPT: Denormalized for readability and backward compatibility
+  user_id      String?   @db.Uuid  // NEW: UUID foreign key (standard FK)
+  content      String
+  created_at   DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime? @default(now()) @db.Timestamptz(6)
+  community_id String    @default("comm-001")
+  parent_id    String?
+
+  AppUser      AppUser?  @relation(fields: [user_id], references: [id])  // NEW: Standard FK
+
+  @@index([community_id], map: "idx_messages_community_id")
+  @@index([page_id, community_id], map: "idx_messages_page_community")
+  @@index([page_id], map: "idx_messages_page_id")
+  @@index([parent_id], map: "idx_messages_parent_id")
+  @@index([user_email], map: "idx_messages_user_email")  // KEPT: For email-based queries
+  @@index([user_id], map: "idx_messages_user_id")  // NEW: For UUID joins
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model reactions {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  message_id String    @db.Uuid
+  emoji      String
+  user_email String    // KEPT: Denormalized for readability and backward compatibility
+  user_id    String?   @db.Uuid  // NEW: UUID foreign key (standard FK)
+  created_at DateTime? @default(now()) @db.Timestamptz(6)
+
+  AppUser    AppUser?  @relation(fields: [user_id], references: [id])  // NEW: Standard FK
+
+  @@index([message_id], map: "idx_reactions_message")
+  @@index([user_id], map: "idx_reactions_user_id")  // NEW: For UUID joins
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model user_presence {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid  // CHANGED: Now primary key
+  user_email String    // KEPT: Denormalized for readability and backward compatibility
+  user_id    String?   @db.Uuid  // NEW: UUID foreign key (standard FK)
+  user_name  String?
+  page_id    String
+  page_url   String
+  is_active  Boolean?  @default(true)
+  last_seen  DateTime? @default(now()) @db.Timestamptz(6)
+  created_at DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at DateTime? @default(now()) @db.Timestamptz(6)
+  enter_time DateTime? @db.Timestamptz(6)
+  
+  AppUser    AppUser?  @relation(fields: [user_id], references: [id])  // CHANGED: Now uses UUID FK
+
+  @@unique([user_email, page_id], map: "user_presence_user_page_unique")  // CHANGED: Now unique constraint instead of PK
+  @@index([page_id, user_email], map: "idx_presence_page_user")
+  @@index([page_id], map: "idx_user_presence_page_id")
+  @@index([user_email], map: "idx_user_presence_user_email")  // KEPT: For email-based queries
+  @@index([user_id], map: "idx_user_presence_user_id")  // NEW: For UUID joins
+}
+
+model AppUser {
+  id               String             @id @db.Uuid  // UNCHANGED: UUID primary key
+  handle           String             @unique
+  email            String?            @unique
+  name             String?
+  avatarUrl        String
+  isVerified       Boolean            @default(false)
+  isSuperAdmin     Boolean            @default(false)
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime
+  auraColor        String?
+  Conversation     Conversation[]
+  ModerationAction ModerationAction[]
+  Post             Post[]
+  PresenceEvent    PresenceEvent[]
+  Reaction         Reaction[]
+  SpaceMember      SpaceMember[]
+  
+  // NEW: Updated relationships using UUID foreign keys
+  message_deletions message_deletions[]
+  messages          messages[]
+  reactions         reactions[]
+  user_presence     user_presence[]
+  
+  // UNCHANGED: Existing relationships (already using UUID)
+  Conversation     Conversation[]
+  ModerationAction ModerationAction[]
+  Post             Post[]
+  PresenceEvent    PresenceEvent[]
+  Reaction         Reaction[]
+  SpaceMember      SpaceMember[]
+}
+
+// ... rest of schema unchanged ...
+
