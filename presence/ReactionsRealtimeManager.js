@@ -104,8 +104,7 @@ class ReactionsRealtimeManager {
         .on('postgres_changes', {
           event: '*',
           schema: 'public',
-          table: 'messages',
-          filter: `page_id=eq.${pageId}`
+          table: 'reactions'
         }, (payload) => {
           this._handleReactionChange(payload);
         })
@@ -121,6 +120,15 @@ class ReactionsRealtimeManager {
   }
 
   /**
+   * Get message IDs for a page (simplified approach)
+   */
+  _getMessageIdsForPage(pageId) {
+    // For now, use a wildcard approach - subscribe to all reactions
+    // In production, this should query the messages table for the page
+    return '*';
+  }
+
+  /**
    * Handle reaction changes from Postgres
    */
   _handleReactionChange(payload) {
@@ -132,11 +140,17 @@ class ReactionsRealtimeManager {
     }
     this._processedEvents.add(eventId);
 
-    this.logger.console.log('Reaction change received:', payload);
+    this.logger.info('Reaction change received:', payload);
     this.logger.info(`Real-time ${payload.eventType} event for reaction:`, payload.new?.id || payload.old?.id);
 
-    // Emit event for UI handling
-    this._emitReactionEvent(payload);
+    // COMP METHOD: Delegate to the existing global handler
+    if (typeof window.handleReactionChange === 'function') {
+      this.logger.info('Delegating to window.handleReactionChange');
+      window.handleReactionChange(payload);
+    } else {
+      this.logger.warn('window.handleReactionChange not available, emitting event');
+      this._emitReactionEvent(payload);
+    }
   }
 
   /**
@@ -171,27 +185,28 @@ class ReactionsRealtimeManager {
     try {
       this.logger.info(`Adding reaction: ${reactionType} to message: ${messageId}`);
       
-      const reactionData = {
-        message_id: messageId,
-        user_email: this.user.email,
-        emoji: reactionType
-        // created_at is auto-generated
-      };
-
-      // Insert reaction record
-      const { data, error } = await this.supabase
-        .from('reactions')
-        .insert([reactionData])
-        .select()
-        .single();
-
-      if (error) {
-        this.logger.error('Failed to add reaction:', error);
+      // COMP METHOD: Use API instead of direct Supabase calls
+      if (typeof window.api !== 'undefined' && window.api.request) {
+        const result = await window.api.request('/v1/reactions', {
+          method: 'POST',
+          body: JSON.stringify({
+            messageId: messageId,
+            emoji: reactionType,
+            userEmail: this.user.email
+          })
+        });
+        
+        if (result.success || result.action) {
+          this.logger.info('Reaction added successfully via API:', result);
+          return true;
+        } else {
+          this.logger.error('API failed to add reaction:', result);
+          return false;
+        }
+      } else {
+        this.logger.error('API module not available');
         return false;
       }
-
-      this.logger.info('Reaction added successfully:', data);
-      return data;
       
     } catch (error) {
       this.logger.error('Error adding reaction:', error);
@@ -203,64 +218,41 @@ class ReactionsRealtimeManager {
    * Remove a reaction from a message
    */
   async removeReaction(messageId, reactionType) {
-    console.log('🔍 REACTIONS DEBUG: Starting removeReaction');
-    console.log('🔍 REACTIONS DEBUG: Message ID:', messageId);
-    console.log('🔍 REACTIONS DEBUG: Reaction type:', reactionType);
-    console.log('🔍 REACTIONS DEBUG: Is connected:', this.isConnected);
-    console.log('🔍 REACTIONS DEBUG: User:', this.user);
-    console.log('🔍 REACTIONS DEBUG: Supabase client:', !!this.supabase);
-    
     if (!this.isConnected) {
       this.logger.error('Not connected to any page');
-      console.log('🔍 REACTIONS DEBUG: Not connected to any page');
       return false;
     }
 
     if (!this.user) {
       this.logger.error('User not set');
-      console.log('🔍 REACTIONS DEBUG: User not set');
       return false;
     }
 
     try {
       this.logger.info(`Removing reaction: ${reactionType} from message: ${messageId}`);
-      console.log('🔍 REACTIONS DEBUG: Attempting to delete from message_reactions table');
-      console.log('🔍 REACTIONS DEBUG: Query filters:', {
-        message_id: messageId,
-        user_email: this.user.email,
-        emoji: reactionType
-      });
       
-        // For now, just log the reaction removal since reactions table exists
-        console.log('🔍 REACTIONS DEBUG: Simulating reaction removal');
-        console.log('🔍 REACTIONS DEBUG: Would remove reaction:', {
-          message_id: messageId,
-          user_email: this.user.email,
-          emoji: reactionType
+      // COMP METHOD: Use API instead of direct Supabase calls
+      if (typeof window.api !== 'undefined' && window.api.request) {
+        const result = await window.api.request('/v1/reactions', {
+          method: 'POST',
+          body: JSON.stringify({
+            messageId: messageId,
+            emoji: reactionType,
+            userEmail: this.user.email
+          })
         });
         
-        // Simulate successful removal
-        const data = { removed: true };
-        const error = null;
-
-      console.log('🔍 REACTIONS DEBUG: Delete operation completed');
-      console.log('🔍 REACTIONS DEBUG: Data returned:', data);
-      console.log('🔍 REACTIONS DEBUG: Error from delete:', error);
-
-      if (error) {
-        this.logger.error('Failed to remove reaction:', error);
-        console.log('🔍 REACTIONS DEBUG: Full error details:', {
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-          code: error.code
-        });
+        if (result.success || result.action) {
+          this.logger.info('Reaction removed successfully via API:', result);
+          return true;
+        } else {
+          this.logger.error('API failed to remove reaction:', result);
+          return false;
+        }
+      } else {
+        this.logger.error('API module not available');
         return false;
       }
-
-      this.logger.info('Reaction removed successfully:', data);
-      console.log('🔍 REACTIONS DEBUG: Reaction removal successful');
-      return data;
       
     } catch (error) {
       this.logger.error('Error removing reaction:', error);

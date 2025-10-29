@@ -1076,52 +1076,24 @@ async function handleMessageFocus(message) {
 // Make reaction functions globally available (will be assigned after function definitions)
 
 // COMP METHOD: Set up real-time reaction subscription for a message
+// NOTE: This function is deprecated - reactions are now handled by the global ReactionsIntegration
 function setupReactionSubscription(messageId) {
-  console.log('🔧 REACTIONS: COMP METHOD - Setting up real-time subscription for message:', messageId);
+  console.log('🔧 REACTIONS: COMP METHOD - Per-message subscriptions deprecated, using global ReactionsIntegration');
   
-  if (!window.supabase) {
-    console.warn('⚠️ REACTIONS: COMP METHOD - Supabase client not available for real-time subscription');
-    return;
+  // COMP METHOD: Ensure global reactions integration is initialized
+  if (window.reactionsIntegration && !window.reactionsIntegration.isInitialized) {
+    console.log('🔧 REACTIONS: COMP METHOD - Initializing global reactions integration...');
+    window.reactionsIntegration.initialize().then(success => {
+      if (success) {
+        console.log('✅ REACTIONS: COMP METHOD - Global reactions integration initialized');
+        // Join current page
+        const currentUrl = window.location.href;
+        window.reactionsIntegration.joinPage(currentUrl);
+      } else {
+        console.warn('⚠️ REACTIONS: COMP METHOD - Global reactions integration initialization failed');
+      }
+    });
   }
-  
-  // COMP METHOD: Subscribe to reactions table changes for this specific message
-  const channel = window.supabase
-    .channel(`reactions-${messageId}`)
-    .on('postgres_changes', {
-      event: '*',
-      schema: 'public',
-      table: 'reactions',
-      filter: `message_id=eq.${messageId}`
-    }, (payload) => {
-      console.log('🔔 REACTIONS: COMP METHOD - Real-time reaction update received:', payload);
-      console.log('🔔 REACTIONS: COMP METHOD - Payload details:', {
-        eventType: payload.eventType,
-        messageId: payload.new?.message_id || payload.old?.message_id,
-        emoji: payload.new?.emoji || payload.old?.emoji,
-        userEmail: payload.new?.user_email || payload.old?.user_email
-      });
-      
-      // COMP METHOD: Ensure UI updates immediately with proper error handling
-      // Increase delay to ensure database has fully updated before reloading
-      setTimeout(() => {
-        try {
-          handleReactionChange(payload);
-        } catch (error) {
-          console.error('❌ REACTIONS: COMP METHOD - Error in handleReactionChange:', error);
-          // Force reload all reactions as fallback
-          const messageId = payload.new?.message_id || payload.old?.message_id;
-          if (messageId) {
-            const reactionBtn = document.querySelector(`[data-message-id="${messageId}"] .reaction-btn`);
-            if (reactionBtn) {
-              window.loadMessageReactions(messageId, reactionBtn);
-            }
-          }
-        }
-      }, 200); // COMP METHOD: Increased delay for better database propagation
-    })
-    .subscribe();
-    
-  console.log('✅ REACTIONS: COMP METHOD - Real-time subscription established for message:', messageId);
 }
 
 // COMP METHOD: Handle real-time reaction changes
@@ -1139,33 +1111,24 @@ window.handleReactionChange = window.handleReactionChange || function(payload) {
   console.log('🔔 REACTIONS: COMP METHOD - Event type:', eventType);
   console.log('🔔 REACTIONS: COMP METHOD - Message ID:', messageId);
   
-  // COMP METHOD: Always reload reactions from database for accurate state
-  // Use proper selector to find reaction button within message element
-  const messageElement = document.querySelector(`[data-message-id="${messageId}"]`);
-  const reactionBtn = messageElement?.querySelector('.reaction-btn');
-  
-  if (reactionBtn) {
-    console.log('🔧 REACTIONS: COMP METHOD - Reloading reactions after real-time change');
+    // COMP METHOD: Always reload reactions from database for accurate state
+    // Use proper selector to find reaction button within message element
+    const messageElement = document.querySelector(`[data-message-id="${messageId}"]`);
+    const reactionBtn = messageElement?.querySelector('.reaction-btn');
     
-    // COMP METHOD: Increase delay to ensure database has fully updated and propagated
-    // Real-time events may arrive before database commit completes
-    setTimeout(async () => {
+    if (reactionBtn) {
+      console.log('🔧 REACTIONS: COMP METHOD - Reloading reactions after real-time change');
+      
+      // COMP METHOD: Reload immediately - no delays needed
       try {
         await window.loadMessageReactions(messageId, reactionBtn);
         console.log('✅ REACTIONS: COMP METHOD - Reactions reloaded after real-time update');
       } catch (error) {
         console.error('❌ REACTIONS: COMP METHOD - Error reloading reactions:', error);
-        // Fallback: Try again after a longer delay
-        setTimeout(() => {
-          window.loadMessageReactions(messageId, reactionBtn).catch(err => {
-            console.error('❌ REACTIONS: COMP METHOD - Retry failed:', err);
-          });
-        }, 500);
       }
-    }, 200); // COMP METHOD: Increased from 100ms to 200ms for better propagation
-  } else {
-    console.warn('⚠️ REACTIONS: COMP METHOD - Reaction button not found for message:', messageId);
-  }
+    } else {
+      console.warn('⚠️ REACTIONS: COMP METHOD - Reaction button not found for message:', messageId);
+    }
 };
 
 // COMP METHOD: Add reaction to message display
@@ -3529,14 +3492,23 @@ async function showReactionModalGlobal(messageId) {
         // User has an existing reaction - remove it (toggle off)
         console.log('🔄 REACTION: COMP METHOD - User has existing reaction, removing it...', userReaction.emoji);
         
-        const removeResult = await window.api.request('/v1/reactions', {
-          method: 'POST',
-          body: JSON.stringify({
-            messageId: messageId,
-            emoji: userReaction.emoji,
-            userEmail: userEmail
-          })
-        });
+        // COMP METHOD: Use ReactionsIntegration for removal
+        let removeResult;
+        if (window.reactionsIntegration && window.reactionsIntegration.isInitialized) {
+          console.log('🔧 REACTIONS: COMP METHOD - Using ReactionsIntegration for removal...');
+          const success = await window.reactionsIntegration.removeReaction(messageId, userReaction.emoji);
+          removeResult = { success: success, action: success ? 'removed' : 'failed' };
+        } else {
+          console.log('🔧 REACTIONS: COMP METHOD - ReactionsIntegration not available, using direct API...');
+          removeResult = await window.api.request('/v1/reactions', {
+            method: 'POST',
+            body: JSON.stringify({
+              messageId: messageId,
+              emoji: userReaction.emoji,
+              userEmail: userEmail
+            })
+          });
+        }
         console.log('✅ REACTION: COMP METHOD - Reaction removed:', removeResult);
         
         // Update UI - reset to default (preserve count span)
@@ -3547,11 +3519,8 @@ async function showReactionModalGlobal(messageId) {
         reactionBtn.dataset.selectedEmoji = '';
         
         // CRITICAL FIX: Reload reactions to get accurate count from database
-        // Add delay to ensure database has fully processed the removal
         console.log('🔧 REACTIONS: COMP METHOD - Reloading reactions after removal for accurate count');
-        setTimeout(() => {
-          window.loadMessageReactions(messageId, reactionBtn);
-        }, 200); // COMP METHOD: Delay to ensure database propagation
+        window.loadMessageReactions(messageId, reactionBtn);
         
         return; // Don't show modal, just remove reaction
       }
@@ -3642,17 +3611,26 @@ async function showReactionModalGlobal(messageId) {
         console.log('🔍 REACTIONS: Error getting Chrome profile info:', error);
       }
       
-      console.log('🔧 REACTIONS: COMP METHOD - Calling API for reaction:', selectedReaction);
+      console.log('🔧 REACTIONS: COMP METHOD - Using ReactionsIntegration for reaction:', selectedReaction);
       
-      const result = await window.api.request('/v1/reactions', {
-        method: 'POST',
-        body: JSON.stringify({
-          messageId: messageId,
-          emoji: selectedReaction,
-          userEmail: userEmail,
-          avatarUrl: chromeAvatarUrl // Include Chrome profile avatar URL
-        })
-      });
+      // COMP METHOD: Use ReactionsIntegration instead of direct API calls
+      let result;
+      if (window.reactionsIntegration && window.reactionsIntegration.isInitialized) {
+        console.log('🔧 REACTIONS: COMP METHOD - Using ReactionsIntegration...');
+        const success = await window.reactionsIntegration.addReaction(messageId, selectedReaction);
+        result = { success: success, action: success ? 'added' : 'failed' };
+      } else {
+        console.log('🔧 REACTIONS: COMP METHOD - ReactionsIntegration not available, using direct API...');
+        result = await window.api.request('/v1/reactions', {
+          method: 'POST',
+          body: JSON.stringify({
+            messageId: messageId,
+            emoji: selectedReaction,
+            userEmail: userEmail,
+            avatarUrl: chromeAvatarUrl // Include Chrome profile avatar URL
+          })
+        });
+      }
       console.log('✅ REACTIONS: COMP METHOD - API response:', result);
       console.log('🔍 REACTIONS: COMP METHOD - API response success:', result.success);
       console.log('🔍 REACTIONS: COMP METHOD - API response action:', result.action);

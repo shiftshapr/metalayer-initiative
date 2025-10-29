@@ -1678,13 +1678,23 @@ async function startPresenceTracking() {
     }
 
     // Join page with reactions system if available
-    if (window.reactionsIntegration && window.reactionsIntegration.isInitialized) {
-      console.log('🔧 PRESENCE: Using reactions integration system...');
-      const reactionsJoinSuccess = await window.reactionsIntegration.joinPage(urlData.normalizedUrl);
-      if (reactionsJoinSuccess) {
-        console.log('✅ PRESENCE: Reactions integration system configured with user and page');
-      } else {
-        console.warn('⚠️ PRESENCE: Reactions integration failed');
+    if (window.reactionsIntegration) {
+      if (!window.reactionsIntegration.isInitialized) {
+        console.log('🔧 PRESENCE: Initializing reactions integration system...');
+        const initSuccess = await window.reactionsIntegration.initialize();
+        if (!initSuccess) {
+          console.warn('⚠️ PRESENCE: Reactions integration initialization failed');
+        }
+      }
+      
+      if (window.reactionsIntegration.isInitialized) {
+        console.log('🔧 PRESENCE: Using reactions integration system...');
+        const reactionsJoinSuccess = await window.reactionsIntegration.joinPage(urlData.normalizedUrl);
+        if (reactionsJoinSuccess) {
+          console.log('✅ PRESENCE: Reactions integration system configured with user and page');
+        } else {
+          console.warn('⚠️ PRESENCE: Reactions integration failed');
+        }
       }
     }
 
