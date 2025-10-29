@@ -14,32 +14,38 @@ model message_deletions {
   id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   message_id String
   deleted_by String
+  user_id    String?   @db.Uuid
   deleted_at DateTime? @default(now()) @db.Timestamptz(6)
   page_id    String
   created_at DateTime? @default(now()) @db.Timestamptz(6)
+
+  AppUser    AppUser?  @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@index([deleted_at], map: "idx_message_deletions_deleted_at")
   @@index([message_id], map: "idx_message_deletions_message_id")
   @@index([page_id], map: "idx_message_deletions_page")
   @@index([page_id], map: "idx_message_deletions_page_id")
+  @@index([user_id], map: "idx_message_deletions_user_id")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model messages {
   id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   page_id      String
-  user_email   String
+  user_id      String    @db.Uuid
   content      String
   created_at   DateTime? @default(now()) @db.Timestamptz(6)
   updated_at   DateTime? @default(now()) @db.Timestamptz(6)
   community_id String    @default("comm-001")
   parent_id    String?
 
+  AppUser      AppUser   @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
   @@index([community_id], map: "idx_messages_community_id")
   @@index([page_id, community_id], map: "idx_messages_page_community")
   @@index([page_id], map: "idx_messages_page_id")
   @@index([parent_id], map: "idx_messages_parent_id")
-  @@index([user_email], map: "idx_messages_user_email")
+  @@index([user_id], map: "idx_messages_user_id")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -47,17 +53,20 @@ model reactions {
   id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   message_id String    @db.Uuid
   emoji      String
-  user_email String
+  user_id    String    @db.Uuid
   created_at DateTime? @default(now()) @db.Timestamptz(6)
 
+  AppUser    AppUser   @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
   @@index([message_id], map: "idx_reactions_message")
+  @@index([user_id], map: "idx_reactions_user_id")
 }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model user_presence {
-  id         String    @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  user_email String
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id    String    @db.Uuid
   user_name  String?
   page_id    String
   page_url   String
@@ -67,14 +76,12 @@ model user_presence {
   updated_at DateTime? @default(now()) @db.Timestamptz(6)
   enter_time DateTime? @db.Timestamptz(6)
   
-  // Relationship to AppUser for user profile data
-  AppUser    AppUser?  @relation(fields: [user_email], references: [email])
+  AppUser    AppUser   @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
-  @@id([user_email, page_id])
-  @@unique([user_email, page_id], map: "user_presence_user_page_unique")
-  @@index([page_id, user_email], map: "idx_presence_page_user")
+  @@unique([user_id, page_id], map: "unique_user_presence_user_page")
+  @@index([page_id, user_id], map: "idx_presence_page_user")
   @@index([page_id], map: "idx_user_presence_page_id")
-  @@index([user_email], map: "idx_user_presence_user_email")
+  @@index([user_id], map: "idx_user_presence_user_id")
 }
 
 // user_visibility model removed - table was dropped as unused
@@ -113,7 +120,12 @@ model AppUser {
   PresenceEvent    PresenceEvent[]
   Reaction         Reaction[]
   SpaceMember      SpaceMember[]
-  user_presence    user_presence[] // Relationship to user_presence
+  
+  // Updated relationships using UUID foreign keys
+  message_deletions message_deletions[]
+  messages          messages[]
+  reactions         reactions[]
+  user_presence     user_presence[]
 }
 
 model Conversation {
