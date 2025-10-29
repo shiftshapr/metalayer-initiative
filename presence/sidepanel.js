@@ -786,13 +786,9 @@ async function updateUI(user) {
         console.log(`PROFILE_AVATAR_FIX: No UNFILTERED visibility data available, using auth avatar`);
       }
       
-      // CRITICAL FIX: Only use email addresses, not UUIDs
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      const userId = user.email; // Always use email as user ID
-      
       const userData = {
-        id: userId,
-        userId: userId,
+        id: user.id || user.email,
+        userId: user.id || user.email,
         name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
         email: user.email,
         avatarUrl: realAvatarUrl,  // USE THE REAL AVATAR URL FROM DATABASE
@@ -1824,7 +1820,15 @@ async function startPresenceTracking() {
         filter: `page_url=eq.${urlData.normalizedUrl}`
       }, (payload) => {
         console.log('🔔 PAGE_REACTIONS: Real-time update received:', payload);
-        handleReactionChange(payload);
+        // COMP METHOD: Delegate to window.handleReactionChange if available (from CanopiModule)
+        // Otherwise use RealtimeManager's handleReactionChange which will also delegate
+        if (typeof window.handleReactionChange === 'function') {
+          window.handleReactionChange(payload);
+        } else if (typeof handleReactionChange === 'function') {
+          handleReactionChange(payload);
+        } else {
+          console.warn('⚠️ PAGE_REACTIONS: No handleReactionChange function available');
+        }
       })
       .subscribe((status, err) => {
         if (err) {
@@ -1837,10 +1841,19 @@ async function startPresenceTracking() {
     console.log('✅ REALTIME: All Supabase real-time subscriptions started');
     
     // Make real-time functions globally accessible for testing
-    window.handlePresenceChange = handlePresenceChange;
-    window.handleMessageChange = handleMessageChange;
-    window.handleReactionChange = handleReactionChange;
-    window.handleAuraChange = handleAuraChange;
+    // COMP METHOD: Don't overwrite window functions if they're already set (from modules)
+    if (typeof window.handlePresenceChange !== 'function') {
+      window.handlePresenceChange = handlePresenceChange;
+    }
+    if (typeof window.handleMessageChange !== 'function') {
+      window.handleMessageChange = handleMessageChange;
+    }
+    if (typeof window.handleReactionChange !== 'function') {
+      window.handleReactionChange = handleReactionChange;
+    }
+    if (typeof window.handleAuraChange !== 'function') {
+      window.handleAuraChange = handleAuraChange;
+    }
     
     console.log('✅ REALTIME: Real-time functions made globally accessible');
     

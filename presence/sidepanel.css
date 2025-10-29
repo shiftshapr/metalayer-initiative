@@ -1618,16 +1618,21 @@ div.message.message-reply.visible div.message-content-wrapper div.message-header
 }
 
 .reaction-modal {
-  background: white;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  padding: 8px;
+  /* COMP METHOD: No border or background - transparent container */
+  background: transparent;
+  border: none;
+  padding: 0;
 }
 
 .reaction-options {
   display: flex;
   gap: 4px;
+  /* COMP METHOD: All styling on inner container */
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  padding: 8px;
 }
 
 .reaction-option {

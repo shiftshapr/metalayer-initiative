@@ -20,14 +20,7 @@ function createUnifiedAvatar(user, options = {}) {
   } = options;
 
   // Get user identification
-  // CRITICAL FIX: Only use email addresses, not UUIDs
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  let userEmail = user.user_email || user.email;
-  
-  // Only use user.id if it's actually an email address
-  if (!userEmail && user.id && emailRegex.test(user.id)) {
-    userEmail = user.id;
-  }
+  const userEmail = user.user_email || user.email || user.id;
   const userName = user.name || user.display_name || userEmail;
   
   // Get aura color - prioritize user.auraColor, then fallback to stored

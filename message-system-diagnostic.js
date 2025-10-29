@@ -211,3 +211,4 @@ async function runMessageDiagnostic() {
 runMessageDiagnostic().catch(console.error);
 
 console.log('🔍 MESSAGE DIAGNOSTIC: Diagnostic code loaded. Check console output above.');
+

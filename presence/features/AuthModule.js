@@ -96,13 +96,13 @@ async function authenticateWithSupabase(user) {
     
     // Set the current user in the real-time client for context
     if (window.supabaseRealtimeClient) {
-      await window.supabaseRealtimeClient.setCurrentUser(user.email, user.email, 'comm-001');
+      await window.supabaseRealtimeClient.setCurrentUser(user.email, user.id, 'comm-001');
       console.log('✅ SUPABASE AUTH: Real-time client user set');
     }
     
     // Update global user context with additional data
     if (window.currentUser) {
-      window.currentUser.id = user.email;
+      window.currentUser.id = user.id;
       window.currentUser.communityId = 'comm-001';
     }
     
@@ -293,13 +293,13 @@ async function authenticateWithSupabase(user) {
     
     // Set the current user in the real-time client for context
     if (window.supabaseRealtimeClient) {
-      await window.supabaseRealtimeClient.setCurrentUser(user.email, user.email, 'comm-001');
+      await window.supabaseRealtimeClient.setCurrentUser(user.email, user.id, 'comm-001');
       console.log('✅ SUPABASE AUTH: Real-time client user set');
     }
     
     // Update global user context with additional data
     if (window.currentUser) {
-      window.currentUser.id = user.email;
+      window.currentUser.id = user.id;
       window.currentUser.communityId = 'comm-001';
     }
     

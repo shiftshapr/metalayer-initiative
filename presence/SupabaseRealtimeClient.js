@@ -346,7 +346,7 @@ class SupabaseRealtimeClient {
 
       const { data, error } = await this.supabase
         .from('user_presence')
-        .select('user_email, user_name, page_id, page_url, is_active, last_seen, enter_time, created_at, updated_at')
+        .select('*')
         .eq('page_id', pageId)
         .eq('is_active', true)
         .order('last_seen', { ascending: false });

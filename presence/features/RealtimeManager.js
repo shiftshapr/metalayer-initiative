@@ -482,7 +482,7 @@ async function subscribeToCurrentPage() {
     await sendSupabaseMessage({
       type: 'PAGE_SUBSCRIPTION',
       userEmail: user.email,
-      userId: user.email, // Always use email as user ID
+      userId: user.id || user.email,
       pageId: urlData.pageId,
       url: urlData.normalizedUrl,
       timestamp: Date.now()
@@ -566,20 +566,35 @@ function handleReactionChange(payload) {
   
   const { eventType, new: newRecord, old: oldRecord } = payload;
   
+  // COMP METHOD: Delegate to window.handleReactionChange if available (from CanopiModule)
+  // This ensures consistent handling across modules
+  if (typeof window.handleReactionChange === 'function') {
+    console.log('🔔 REACTION_CHANGE: COMP METHOD - Delegating to window.handleReactionChange');
+    window.handleReactionChange(payload);
+    return;
+  }
+  
+  // Fallback: Handle directly if window function not available
   switch (eventType) {
     case 'INSERT':
       console.log('👍 REACTION: COMP METHOD - New reaction added:', newRecord);
-      addReactionToMessage(newRecord);
+      if (typeof window.addReactionToMessage === 'function') {
+        window.addReactionToMessage(newRecord);
+      }
       break;
       
     case 'UPDATE':
       console.log('🔄 REACTION: Reaction updated:', newRecord);
-      updateReactionInMessage(newRecord);
+      if (typeof window.updateReactionInMessage === 'function') {
+        window.updateReactionInMessage(newRecord);
+      }
       break;
       
     case 'DELETE':
       console.log('👎 REACTION: Reaction removed:', oldRecord);
-      removeReactionFromMessage(oldRecord);
+      if (typeof window.removeReactionFromMessage === 'function') {
+        window.removeReactionFromMessage(oldRecord);
+      }
       break;
       
     default:

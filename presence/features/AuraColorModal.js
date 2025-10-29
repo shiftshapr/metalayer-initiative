@@ -595,7 +595,7 @@ async function broadcastAuraChange(auraColor) {
     await sendSupabaseMessage({
       type: 'AURA_COLOR_CHANGED',
       userEmail: user.email,
-      userId: user.email, // Always use email as user ID
+      userId: user.id || user.email,
       auraColor: auraColor,
       pageId: urlData.pageId,
       url: urlData.normalizedUrl,

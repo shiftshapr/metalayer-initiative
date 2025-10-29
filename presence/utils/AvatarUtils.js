@@ -20,22 +20,9 @@ class AvatarUtils {
     let userHandle = userName;
     let avatarSource = 'none';
 
-    // CRITICAL FIX: Validate user object to prevent null/undefined calls and UUIDs
+    // CRITICAL FIX: Validate user object to prevent null/undefined calls
     if (!user || (!user.user_email && !user.email)) {
       console.log(`❌ AVATAR_UTILS: Invalid user object:`, user);
-      return {
-        avatarUrl: `https://lh3.googleusercontent.com/a/default-user=s96-c`,
-        source: 'generic-fallback',
-        userName: 'unknown',
-        userHandle: 'unknown'
-      };
-    }
-
-    // CRITICAL FIX: Validate that user identifier is an email, not a UUID
-    const userEmail = user.user_email || user.email;
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (userEmail && !emailRegex.test(userEmail)) {
-      console.log(`❌ AVATAR_UTILS: User identifier is not an email (likely UUID): ${userEmail}`);
       return {
         avatarUrl: `https://lh3.googleusercontent.com/a/default-user=s96-c`,
         source: 'generic-fallback',
@@ -63,10 +50,7 @@ class AvatarUtils {
       if (!avatarUrl && window.api) {
         try {
           const userEmail = user.user_email || user.email;
-          
-          // CRITICAL FIX: Validate that userEmail is actually an email, not a UUID
-          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-          if (userEmail && userEmail !== 'null' && userEmail !== 'undefined' && userEmail.trim() !== '' && emailRegex.test(userEmail)) {
+          if (userEmail && userEmail !== 'null' && userEmail !== 'undefined' && userEmail.trim() !== '') {
             console.log(`🔍 AVATAR_UTILS: Checking AppUser table for ${userEmail}`);
             const appUserResponse = await window.api.request(`/v1/users/${encodeURIComponent(userEmail)}`);
             if (appUserResponse && appUserResponse.avatarUrl && appUserResponse.avatarUrl !== 'undefined') {
@@ -105,8 +89,6 @@ class AvatarUtils {
                 }
               }
             }
-          } else {
-            console.log(`❌ AVATAR_UTILS: Invalid userEmail format (not an email): ${userEmail}`);
           }
         } catch (error) {
           console.log(`⚠️ AVATAR_UTILS: Failed to check AppUser table: ${error.message}`);

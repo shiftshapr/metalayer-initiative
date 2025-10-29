@@ -47,48 +47,6 @@ class CanopiModule {
 
 // ===== MESSAGE AND CHAT FUNCTIONS (Move from sidepanel.js) =====
 
-// COMP METHOD: Use existing functions from other modules
-// These functions are defined in AuthModule.js, ProfileManager.js, and sidepanel.js
-// We'll access them through the global scope when they're available
-
-// COMP METHOD: State management functions using StateManager
-async function getState(key) {
-  if (window.StateManager) {
-    try {
-      return await window.StateManager.get(key);
-    } catch (error) {
-      console.log('⚠️ CANOPI: Error getting state:', error);
-    }
-  }
-  
-  // Fallback to default values
-  const defaults = {
-    activeCommunities: ['comm-001'],
-    primaryCommunity: 'comm-001',
-    currentCommunity: 'comm-001',
-    communities: []
-  };
-  
-  return defaults[key] || null;
-}
-
-async function setState(key, value) {
-  if (window.StateManager) {
-    try {
-      return await window.StateManager.set(key, value);
-    } catch (error) {
-      console.log('⚠️ CANOPI: Error setting state:', error);
-    }
-  }
-  
-  // Fallback: store in window object
-  if (!window.canopiState) {
-    window.canopiState = {};
-  }
-  window.canopiState[key] = value;
-  return true;
-}
-
 async function sendMessageViaSupabase(content, parentId = null) {
   console.log('🔥🔥🔥 ============================================');
   console.log('🔥🔥🔥 SEND_MESSAGE_VIA_SUPABASE: ENTRY POINT');
@@ -124,10 +82,11 @@ async function sendMessageViaSupabase(content, parentId = null) {
   
   // Fallback to legacy system
   console.log('📡 SUPABASE_MESSAGE: Using legacy system...');
+  console.log('📡 SUPABASE_MESSAGE: Supabase client available:', !!supabaseRealtimeClient);
   console.log('📡 SUPABASE_MESSAGE: Window supabase client available:', !!window.supabaseRealtimeClient);
   console.log('📡 SUPABASE_MESSAGE: window.supabaseRealtimeClient type:', typeof window.supabaseRealtimeClient);
   
-  const client = window.supabaseRealtimeClient;
+  const client = window.supabaseRealtimeClient || supabaseRealtimeClient;
   console.log('📡 SUPABASE_MESSAGE: Using client:', !!client);
   console.log('📡 SUPABASE_MESSAGE: Client type:', typeof client);
   console.log('📡 SUPABASE_MESSAGE: Client has sendMessage method:', typeof client?.sendMessage);
@@ -156,6 +115,7 @@ async function sendMessageViaSupabase(content, parentId = null) {
   } else {
     console.log('❌ SUPABASE_MESSAGE: Client is NOT available');
     console.log('💬 SUPABASE: ❌ Supabase real-time client not available');
+    console.log('💬 SUPABASE: ❌ supabaseRealtimeClient:', !!supabaseRealtimeClient);
     console.log('💬 SUPABASE: ❌ window.supabaseRealtimeClient:', !!window.supabaseRealtimeClient);
     return null;
   }
@@ -303,10 +263,10 @@ async function getSenderAvatar(author) {
   
   // COMP METHOD: Always try to get the latest aura color from presence data
   // This ensures cross-profile updates work correctly for ALL users
-  const currentUserEmail = window.getCurrentUserEmail ? await window.getCurrentUserEmail() : (window.currentUser?.email || null);
+  const currentUserEmail = getCurrentUserEmail();
   if (author.email === currentUserEmail) {
     // For current user's messages, use current aura color
-    const currentAuraColor = window.getCurrentUserAvatarBgColor ? window.getCurrentUserAvatarBgColor() : (window.currentUser?.auraColor || window.AVATAR_FALLBACK_COLOR);
+    const currentAuraColor = getCurrentUserAvatarBgColor();
     if (currentAuraColor && currentAuraColor !== window.AVATAR_FALLBACK_COLOR) {
       author.auraColor = currentAuraColor;
       console.log('🔧 AURA: Using current user aura color:', currentAuraColor);
@@ -314,7 +274,7 @@ async function getSenderAvatar(author) {
   } else {
     // For other users' messages, try to get the latest aura color from presence data
     // This ensures real-time aura updates for all users
-    const latestAuraColor = window.getLatestAuraColorFromPresence ? window.getLatestAuraColorFromPresence(author.email) : window.AVATAR_FALLBACK_COLOR;
+    const latestAuraColor = getLatestAuraColorFromPresence(author.email);
     if (latestAuraColor && latestAuraColor !== window.AVATAR_FALLBACK_COLOR) {
       author.auraColor = latestAuraColor;
       console.log('🔧 AURA: Using real-time aura color for', author.email, ':', latestAuraColor);
@@ -386,14 +346,7 @@ async function refreshMessageAvatarsWithCurrentPresence() {
       const auraColorMap = {};
       presenceData.active.forEach(user => {
         // Check both email and userId fields for user identification
-        // CRITICAL FIX: Only use email addresses, not UUIDs
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        let userEmail = user.email || user.userId;
-        
-        // Only use user.id if it's actually an email address
-        if (!userEmail && user.id && emailRegex.test(user.id)) {
-          userEmail = user.id;
-        }
+        const userEmail = user.email || user.userId || user.id;
         if (userEmail && user.auraColor) {
           auraColorMap[userEmail] = user.auraColor;
           }
@@ -1149,6 +1102,7 @@ function setupReactionSubscription(messageId) {
       });
       
       // COMP METHOD: Ensure UI updates immediately with proper error handling
+      // Increase delay to ensure database has fully updated before reloading
       setTimeout(() => {
         try {
           handleReactionChange(payload);
@@ -1163,7 +1117,7 @@ function setupReactionSubscription(messageId) {
             }
           }
         }
-      }, 100);
+      }, 200); // COMP METHOD: Increased delay for better database propagation
     })
     .subscribe();
     
@@ -1186,21 +1140,29 @@ window.handleReactionChange = window.handleReactionChange || function(payload) {
   console.log('🔔 REACTIONS: COMP METHOD - Message ID:', messageId);
   
   // COMP METHOD: Always reload reactions from database for accurate state
-  const reactionBtn = document.querySelector(`[data-message-id="${messageId}"] .reaction-btn`);
+  // Use proper selector to find reaction button within message element
+  const messageElement = document.querySelector(`[data-message-id="${messageId}"]`);
+  const reactionBtn = messageElement?.querySelector('.reaction-btn');
+  
   if (reactionBtn) {
     console.log('🔧 REACTIONS: COMP METHOD - Reloading reactions after real-time change');
     
-    // Force immediate UI update with timeout
-    setTimeout(() => {
-      window.loadMessageReactions(messageId, reactionBtn);
-    }, 50);
-    
-    // Also refresh all reaction displays to ensure consistency
-    setTimeout(() => {
-      if (window.refreshAllReactionDisplays) {
-        window.refreshAllReactionDisplays();
+    // COMP METHOD: Increase delay to ensure database has fully updated and propagated
+    // Real-time events may arrive before database commit completes
+    setTimeout(async () => {
+      try {
+        await window.loadMessageReactions(messageId, reactionBtn);
+        console.log('✅ REACTIONS: COMP METHOD - Reactions reloaded after real-time update');
+      } catch (error) {
+        console.error('❌ REACTIONS: COMP METHOD - Error reloading reactions:', error);
+        // Fallback: Try again after a longer delay
+        setTimeout(() => {
+          window.loadMessageReactions(messageId, reactionBtn).catch(err => {
+            console.error('❌ REACTIONS: COMP METHOD - Retry failed:', err);
+          });
+        }, 500);
       }
-    }, 100);
+    }, 200); // COMP METHOD: Increased from 100ms to 200ms for better propagation
   } else {
     console.warn('⚠️ REACTIONS: COMP METHOD - Reaction button not found for message:', messageId);
   }
@@ -1209,41 +1171,71 @@ window.handleReactionChange = window.handleReactionChange || function(payload) {
 // COMP METHOD: Add reaction to message display
 function addReactionToMessage(reaction) {
   const messageId = reaction.message_id;
-  const reactionBtn = document.querySelector(`[data-message-id="${messageId}"].reaction-btn`);
+  const messageElement = document.querySelector(`[data-message-id="${messageId}"]`);
+  const reactionBtn = messageElement?.querySelector('.reaction-btn');
   
   if (reactionBtn) {
     console.log('🔔 REACTIONS: Adding reaction to message:', reaction);
     
-    // Reload all reactions for this message to get accurate count
-    window.loadMessageReactions(messageId, reactionBtn);
-    
-    console.log('✅ REACTIONS: COMP METHOD - Reaction added to message display:', reaction);
+    // COMP METHOD: Reload all reactions for this message to get accurate count
+    // Increase delay to ensure database has updated and propagated
+    setTimeout(async () => {
+      try {
+        await window.loadMessageReactions(messageId, reactionBtn);
+        console.log('✅ REACTIONS: COMP METHOD - Reaction added to message display:', reaction);
+      } catch (error) {
+        console.error('❌ REACTIONS: COMP METHOD - Error reloading reactions:', error);
+      }
+    }, 200); // COMP METHOD: Increased delay for better propagation
+  } else {
+    console.warn('⚠️ REACTIONS: COMP METHOD - Reaction button not found for message:', messageId);
   }
 }
 
 // COMP METHOD: Update reaction in message display
 function updateReactionInMessage(reaction) {
   console.log('🔄 REACTIONS: COMP METHOD - Updating reaction in message:', reaction);
-  // Reload reactions for this message to get accurate count
-  const reactionBtn = document.querySelector(`[data-message-id="${reaction.message_id}"].reaction-btn`);
+  const messageId = reaction.message_id;
+  const messageElement = document.querySelector(`[data-message-id="${messageId}"]`);
+  const reactionBtn = messageElement?.querySelector('.reaction-btn');
+  
   if (reactionBtn) {
-    window.loadMessageReactions(reaction.message_id, reactionBtn);
+    // COMP METHOD: Reload reactions for this message to get accurate count
+    // Increase delay for better propagation
+    setTimeout(async () => {
+      try {
+        await window.loadMessageReactions(messageId, reactionBtn);
+        console.log('✅ REACTIONS: COMP METHOD - Reaction updated in message display');
+      } catch (error) {
+        console.error('❌ REACTIONS: COMP METHOD - Error reloading reactions:', error);
+      }
+    }, 200); // COMP METHOD: Increased delay for better propagation
+  } else {
+    console.warn('⚠️ REACTIONS: COMP METHOD - Reaction button not found for message:', messageId);
   }
 }
 
 // COMP METHOD: Remove reaction from message display
 function removeReactionFromMessage(reaction) {
   const messageId = reaction.message_id;
-  const reactionBtn = document.querySelector(`[data-message-id="${messageId}"].reaction-btn`);
+  const messageElement = document.querySelector(`[data-message-id="${messageId}"]`);
+  const reactionBtn = messageElement?.querySelector('.reaction-btn');
   
   if (reactionBtn) {
     console.log('🔔 REACTIONS: COMP METHOD - Removing reaction from message:', reaction);
     
     // COMP METHOD: Reload reactions to get accurate state from database
-    console.log('🔧 REACTIONS: COMP METHOD - Reloading reactions after real-time removal');
-    window.loadMessageReactions(messageId, reactionBtn);
-    
-    console.log('✅ REACTIONS: COMP METHOD - Reaction removed from message display:', reaction);
+    // Increase delay to ensure database has updated and propagated
+    setTimeout(async () => {
+      try {
+        await window.loadMessageReactions(messageId, reactionBtn);
+        console.log('✅ REACTIONS: COMP METHOD - Reaction removed from message display:', reaction);
+      } catch (error) {
+        console.error('❌ REACTIONS: COMP METHOD - Error reloading reactions:', error);
+      }
+    }, 200); // COMP METHOD: Increased delay for better propagation
+  } else {
+    console.warn('⚠️ REACTIONS: COMP METHOD - Reaction button not found for message:', messageId);
   }
 }
 
@@ -1392,7 +1384,7 @@ function removeReactionFromMessage(reaction) {
             console.log('✅ Message deleted via robust integration');
           } else {
             // Fallback to legacy system
-            const client = window.supabaseRealtimeClient;
+            const client = window.supabaseRealtimeClient || supabaseRealtimeClient;
             if (client) {
               await client.deleteMessage(message.id);
               console.log('✅ Message deleted via Supabase real-time (legacy)');
@@ -1542,7 +1534,7 @@ function removeReactionFromMessage(reaction) {
             console.log('✅ Message updated via robust integration');
           } else {
             // Fallback to legacy system
-            const client = window.supabaseRealtimeClient;
+            const client = window.supabaseRealtimeClient || supabaseRealtimeClient;
             if (client) {
               await client.editMessage(message.id, newContent);
               console.log('✅ Message updated via Supabase real-time (legacy)');
@@ -3555,8 +3547,11 @@ async function showReactionModalGlobal(messageId) {
         reactionBtn.dataset.selectedEmoji = '';
         
         // CRITICAL FIX: Reload reactions to get accurate count from database
+        // Add delay to ensure database has fully processed the removal
         console.log('🔧 REACTIONS: COMP METHOD - Reloading reactions after removal for accurate count');
-        window.loadMessageReactions(messageId, reactionBtn);
+        setTimeout(() => {
+          window.loadMessageReactions(messageId, reactionBtn);
+        }, 200); // COMP METHOD: Delay to ensure database propagation
         
         return; // Don't show modal, just remove reaction
       }
@@ -3572,9 +3567,9 @@ async function showReactionModalGlobal(messageId) {
   // Create modal HTML positioned over the message (COMP METHOD)
   const reactionBtnRect = reactionBtn.getBoundingClientRect();
   const modalHTML = `
-    <div class="reaction-modal" style="position: fixed; top: ${reactionBtnRect.top - 60}px; left: ${reactionBtnRect.left}px; z-index: 99999; background: transparent;">
-      <div class="reaction-options" style="background: white; padding: 8px; border-radius: 8px; display: flex; gap: 2px;">
-        ${reactions.map(reaction => `<button class="reaction-option" data-reaction="${reaction}" style="background: none; border: none; font-size: 18px; padding: 4px; cursor: pointer; border-radius: 4px;">${reaction}</button>`).join('')}
+    <div class="reaction-modal" style="position: fixed; top: ${reactionBtnRect.top - 60}px; left: ${reactionBtnRect.left}px; z-index: 99999;">
+      <div class="reaction-options">
+        ${reactions.map(reaction => `<button class="reaction-option" data-reaction="${reaction}">${reaction}</button>`).join('')}
       </div>
     </div>
   `;
@@ -3677,7 +3672,10 @@ async function showReactionModalGlobal(messageId) {
           
           // CRITICAL FIX: Reload reactions to get accurate count from database
           console.log('🔧 REACTIONS: COMP METHOD - Reloading reactions after removal for accurate count');
-          window.loadMessageReactions(messageId, reactionBtn);
+          // Add delay to ensure database has updated
+          setTimeout(() => {
+            window.loadMessageReactions(messageId, reactionBtn);
+          }, 200); // COMP METHOD: Delay for database propagation
         } else if (result.action === 'added' || result.action === 'replaced') {
           // Reaction was added or replaced - update UI (preserve count span)
           const countSpan = reactionBtn.querySelector('.icon-count');
@@ -3688,7 +3686,10 @@ async function showReactionModalGlobal(messageId) {
           
           // CRITICAL FIX: Reload reactions to get accurate count from database
           console.log('🔧 REACTIONS: COMP METHOD - Reloading reactions after addition for accurate count');
-          window.loadMessageReactions(messageId, reactionBtn);
+          // Add delay to ensure database has updated
+          setTimeout(() => {
+            window.loadMessageReactions(messageId, reactionBtn);
+          }, 200); // COMP METHOD: Delay for database propagation
         } else {
           console.log('⚠️ REACTIONS: COMP METHOD - Unknown action in API response:', result.action);
         }
@@ -3839,15 +3840,15 @@ window.refreshAllReactionDisplays = window.refreshAllReactionDisplays || async f
             };
             
             // Get the latest aura color from presence data
-            const currentUserEmail = window.getCurrentUserEmail ? await window.getCurrentUserEmail() : (window.currentUser?.email || null);
+            const currentUserEmail = getCurrentUserEmail();
             if (author.email === currentUserEmail) {
-              const currentAuraColor = window.getCurrentUserAvatarBgColor ? window.getCurrentUserAvatarBgColor() : (window.currentUser?.auraColor || window.AVATAR_FALLBACK_COLOR);
+              const currentAuraColor = getCurrentUserAvatarBgColor();
               if (currentAuraColor && currentAuraColor !== window.AVATAR_FALLBACK_COLOR) {
                 author.auraColor = currentAuraColor;
                 console.log('🔧 AVATARS: Using current user aura color:', currentAuraColor);
               }
             } else {
-              const latestAuraColor = window.getLatestAuraColorFromPresence ? window.getLatestAuraColorFromPresence(author.email) : window.AVATAR_FALLBACK_COLOR;
+              const latestAuraColor = getLatestAuraColorFromPresence(author.email);
               if (latestAuraColor && latestAuraColor !== window.AVATAR_FALLBACK_COLOR) {
                 author.auraColor = latestAuraColor;
                 console.log('🔧 AVATARS: Using real-time aura color for', author.email, ':', latestAuraColor);
