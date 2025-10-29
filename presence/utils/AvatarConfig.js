@@ -20,7 +20,9 @@ function createUnifiedAvatar(user, options = {}) {
   } = options;
 
   // Get user identification
-  const userEmail = user.user_email || user.email || user.id;
+  // COMP METHOD: Use email only, never UUID (id) as fallback
+  // This ensures we follow COMP method architecture where user_email should be email addresses
+  const userEmail = user.user_email || user.email;
   const userName = user.name || user.display_name || userEmail;
   
   // Get aura color - prioritize user.auraColor, then fallback to stored

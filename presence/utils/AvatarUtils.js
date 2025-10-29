@@ -51,16 +51,31 @@ class AvatarUtils {
         try {
           const userEmail = user.user_email || user.email;
           if (userEmail && userEmail !== 'null' && userEmail !== 'undefined' && userEmail.trim() !== '') {
-            console.log(`🔍 AVATAR_UTILS: Checking AppUser table for ${userEmail}`);
-            const appUserResponse = await window.api.request(`/v1/users/${encodeURIComponent(userEmail)}`);
-            if (appUserResponse && appUserResponse.avatarUrl && appUserResponse.avatarUrl !== 'undefined') {
-              // COMP METHOD: Use real avatar from AppUser table
-              avatarUrl = appUserResponse.avatarUrl;
-              userName = appUserResponse.name || userName;
-              avatarSource = 'appuser_table';
-              console.log(`✅ AVATAR_UTILS: Using AppUser table avatar for ${userEmail}: ${avatarUrl}`);
-            } else {
-              console.log(`⚠️ AVATAR_UTILS: No valid avatarUrl found in AppUser table for ${userEmail}`);
+            
+            // COMP METHOD: Check if user_email contains UUID instead of email (data integrity issue)
+            const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userEmail);
+            const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(userEmail);
+            
+            if (isUUID) {
+              console.log(`⚠️ AVATAR_UTILS: Detected UUID in user_email field: ${userEmail}`);
+              console.log('⚠️ AVATAR_UTILS: This breaks COMP method foreign key relationships');
+              console.log('⚠️ AVATAR_UTILS: Using generic fallback instead of API call');
+              
+              // Return generic fallback for UUIDs
+              avatarUrl = 'https://lh3.googleusercontent.com/a/default-user=s96-c';
+              userName = 'Unknown User';
+              avatarSource = 'uuid-fallback';
+            } else if (isEmail) {
+              console.log(`🔍 AVATAR_UTILS: Checking AppUser table for ${userEmail}`);
+              const appUserResponse = await window.api.request(`/v1/users/${encodeURIComponent(userEmail)}`);
+              if (appUserResponse && appUserResponse.avatarUrl && appUserResponse.avatarUrl !== 'undefined') {
+                // COMP METHOD: Use real avatar from AppUser table
+                avatarUrl = appUserResponse.avatarUrl;
+                userName = appUserResponse.name || userName;
+                avatarSource = 'appuser_table';
+                console.log(`✅ AVATAR_UTILS: Using AppUser table avatar for ${userEmail}: ${avatarUrl}`);
+              } else {
+                console.log(`⚠️ AVATAR_UTILS: No valid avatarUrl found in AppUser table for ${userEmail}`);
               
               // COMP METHOD: Try to get real Google profile picture for current user
               if (window.realGoogleAuth && userEmail === window.currentUser?.email) {
