@@ -52,11 +52,11 @@ class PresenceService {
       // Determine if user is active based on event kind
       const isActive = kind === 'ENTER';
       
-      // Upsert UserPresence record using string pageId (like "google_com_")
+      // Upsert UserPresence record using UUID foreign key
       const userPresence = await this.prisma.user_presence.upsert({
             where: {
-          user_email_page_id: {
-            user_email: user.email,
+          unique_user_presence_user_page: {
+            user_id: user.id,
             page_id: pageId
               }
             },
@@ -68,7 +68,7 @@ class PresenceService {
           user_name: user.user_metadata?.full_name || user.name || user.email?.split('@')[0] || 'User'
             },
             create: {
-          user_email: user.email,
+          user_id: user.id,
           user_name: user.user_metadata?.full_name || user.name || user.email?.split('@')[0] || 'User',
           page_id: pageId,
           page_url: pageUrl || pageId,
@@ -147,13 +147,13 @@ class PresenceService {
       
       // Transform to expected format using AppUser data
       return activeUsers.map(user => ({
-        id: user.user_email,
-        userId: user.user_email,
-        email: user.user_email,
-        name: user.AppUser?.name || user.user_name || user.user_email.split('@')[0],
-        handle: user.AppUser?.handle || user.user_name || user.user_email.split('@')[0],
+        id: user.AppUser?.id || user.user_id,
+        userId: user.AppUser?.id || user.user_id,
+        email: user.AppUser?.email || 'unknown@example.com',
+        name: user.AppUser?.name || user.user_name || 'User',
+        handle: user.AppUser?.handle || user.user_name || 'user',
         avatarUrl: user.AppUser?.avatarUrl || null, // Get from AppUser, not user_presence
-        auraColor: user.AppUser?.auraColor || window.AVATAR_FALLBACK_COLOR, // Get from AppUser, fallback to white
+        auraColor: user.AppUser?.auraColor || '#ffffff', // Get from AppUser, fallback to white
         lastSeen: user.last_seen,
         enterTime: user.enter_time,
         isActive: user.is_active,
@@ -230,13 +230,13 @@ class PresenceService {
       
       // Transform to expected format using AppUser data
       return activeUsers.map(user => ({
-        id: user.user_email,
-        userId: user.user_email,
-        email: user.user_email,
-        name: user.AppUser?.name || user.user_name || user.user_email?.split('@')[0] || 'User',
-        handle: user.AppUser?.handle || user.user_name || user.user_email?.split('@')[0] || 'User',
+        id: user.AppUser?.id || user.user_id,
+        userId: user.AppUser?.id || user.user_id,
+        email: user.AppUser?.email || 'unknown@example.com',
+        name: user.AppUser?.name || user.user_name || 'User',
+        handle: user.AppUser?.handle || user.user_name || 'user',
         avatarUrl: user.AppUser?.avatarUrl || null, // Get from AppUser, not user_presence
-        auraColor: user.AppUser?.auraColor || window.AVATAR_FALLBACK_COLOR, // Get from AppUser, fallback to white
+        auraColor: user.AppUser?.auraColor || '#ffffff', // Get from AppUser, fallback to white
         lastSeen: user.last_seen,
         isActive: user.is_active,
         pageId: user.page_id,
@@ -276,15 +276,15 @@ class PresenceService {
 
       console.log(`✅ PRESENCE_SERVICE: Found ${activeUsers.length} active users across communities`);
       
-      // Transform to expected format
+      // Transform to expected format using AppUser data
       return activeUsers.map(user => ({
-        id: user.user_email,
-        userId: user.user_email,
-        email: user.user_email,
-        name: user.user_name || user.user_email?.split('@')[0] || 'User',
-        handle: user.user_name || user.user_email?.split('@')[0] || 'User',
-        avatarUrl: user.avatar_url,
-        auraColor: user.aura_color || window.AVATAR_FALLBACK_COLOR,
+        id: user.AppUser?.id || user.user_id,
+        userId: user.AppUser?.id || user.user_id,
+        email: user.AppUser?.email || 'unknown@example.com',
+        name: user.AppUser?.name || user.user_name || 'User',
+        handle: user.AppUser?.handle || user.user_name || 'user',
+        avatarUrl: user.AppUser?.avatarUrl || null,
+        auraColor: user.AppUser?.auraColor || '#ffffff',
         lastSeen: user.last_seen,
         isActive: user.is_active,
         pageId: user.page_id,

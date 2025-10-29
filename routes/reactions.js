@@ -14,6 +14,16 @@ router.get('/:messageId', async (req, res) => {
     const reactions = await prisma.reactions.findMany({
       where: {
         message_id: messageId
+      },
+      include: {
+        AppUser: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            avatarUrl: true
+          }
+        }
       }
     });
     
@@ -47,9 +57,10 @@ router.post('/', async (req, res) => {
     
     console.log(`🔍 REACTIONS: Adding reaction ${emoji} to message ${messageId} by ${userEmail}`);
     
-    // Find the user
+    // Find the user and get their UUID
     const user = await prisma.appUser.findUnique({
-      where: { email: userEmail }
+      where: { email: userEmail },
+      select: { id: true, email: true, name: true, avatarUrl: true }
     });
     
     if (!user) {
@@ -60,7 +71,17 @@ router.post('/', async (req, res) => {
     const existingReaction = await prisma.reactions.findFirst({
       where: {
         message_id: messageId,
-        user_email: userEmail
+        user_id: user.id
+      },
+      include: {
+        AppUser: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            avatarUrl: true
+          }
+        }
       }
     });
     
@@ -82,7 +103,17 @@ router.post('/', async (req, res) => {
         // Different emoji clicked - replace existing reaction
         const updatedReaction = await prisma.reactions.update({
           where: { id: existingReaction.id },
-          data: { emoji: emoji }
+          data: { emoji: emoji },
+          include: {
+            AppUser: {
+              select: {
+                id: true,
+                email: true,
+                name: true,
+                avatarUrl: true
+              }
+            }
+          }
         });
         
         console.log(`✅ REACTIONS: Replaced reaction ${existingReaction.emoji} with ${emoji} on message ${messageId}`);
@@ -100,7 +131,17 @@ router.post('/', async (req, res) => {
         data: {
           message_id: messageId,
           emoji: emoji,
-          user_email: userEmail
+          user_id: user.id
+        },
+        include: {
+          AppUser: {
+            select: {
+              id: true,
+              email: true,
+              name: true,
+              avatarUrl: true
+            }
+          }
         }
       });
       

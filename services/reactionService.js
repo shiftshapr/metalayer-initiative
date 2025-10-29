@@ -17,13 +17,26 @@ class ReactionService {
         throw new Error('At least one of conversationId or postId must be specified');
       }
 
+      // Get user ID from email if not provided
+      let actualUserId = userId;
+      if (!actualUserId && userEmail) {
+        const user = await this.prisma.appUser.findUnique({
+          where: { email: userEmail },
+          select: { id: true }
+        });
+        if (!user) {
+          throw new Error('User not found');
+        }
+        actualUserId = user.id;
+      }
+
       // Check for existing reaction
-      console.log('🔍 REACTION SERVICE: Looking for existing reaction for user:', userEmail, 'message:', postId);
-      console.log('🔍 REACTION SERVICE: Query parameters:', { user_email: userEmail, message_id: postId });
+      console.log('🔍 REACTION SERVICE: Looking for existing reaction for user:', actualUserId, 'message:', postId);
+      console.log('🔍 REACTION SERVICE: Query parameters:', { user_id: actualUserId, message_id: postId });
       
       const existing = await this.prisma.reactions.findFirst({
         where: {
-          user_email: userEmail,
+          user_id: actualUserId,
           message_id: postId
         }
       });
@@ -56,7 +69,7 @@ class ReactionService {
           data: {
             message_id: postId,
             emoji: emoji,
-            user_email: userEmail
+            user_id: actualUserId
           }
         });
         return { action: 'added', reaction };
