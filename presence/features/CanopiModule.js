@@ -47,6 +47,48 @@ class CanopiModule {
 
 // ===== MESSAGE AND CHAT FUNCTIONS (Move from sidepanel.js) =====
 
+// COMP METHOD: Use existing functions from other modules
+// These functions are defined in AuthModule.js, ProfileManager.js, and sidepanel.js
+// We'll access them through the global scope when they're available
+
+// COMP METHOD: State management functions using StateManager
+async function getState(key) {
+  if (window.StateManager) {
+    try {
+      return await window.StateManager.get(key);
+    } catch (error) {
+      console.log('⚠️ CANOPI: Error getting state:', error);
+    }
+  }
+  
+  // Fallback to default values
+  const defaults = {
+    activeCommunities: ['comm-001'],
+    primaryCommunity: 'comm-001',
+    currentCommunity: 'comm-001',
+    communities: []
+  };
+  
+  return defaults[key] || null;
+}
+
+async function setState(key, value) {
+  if (window.StateManager) {
+    try {
+      return await window.StateManager.set(key, value);
+    } catch (error) {
+      console.log('⚠️ CANOPI: Error setting state:', error);
+    }
+  }
+  
+  // Fallback: store in window object
+  if (!window.canopiState) {
+    window.canopiState = {};
+  }
+  window.canopiState[key] = value;
+  return true;
+}
+
 async function sendMessageViaSupabase(content, parentId = null) {
   console.log('🔥🔥🔥 ============================================');
   console.log('🔥🔥🔥 SEND_MESSAGE_VIA_SUPABASE: ENTRY POINT');
@@ -82,11 +124,10 @@ async function sendMessageViaSupabase(content, parentId = null) {
   
   // Fallback to legacy system
   console.log('📡 SUPABASE_MESSAGE: Using legacy system...');
-  console.log('📡 SUPABASE_MESSAGE: Supabase client available:', !!supabaseRealtimeClient);
   console.log('📡 SUPABASE_MESSAGE: Window supabase client available:', !!window.supabaseRealtimeClient);
   console.log('📡 SUPABASE_MESSAGE: window.supabaseRealtimeClient type:', typeof window.supabaseRealtimeClient);
   
-  const client = window.supabaseRealtimeClient || supabaseRealtimeClient;
+  const client = window.supabaseRealtimeClient;
   console.log('📡 SUPABASE_MESSAGE: Using client:', !!client);
   console.log('📡 SUPABASE_MESSAGE: Client type:', typeof client);
   console.log('📡 SUPABASE_MESSAGE: Client has sendMessage method:', typeof client?.sendMessage);
@@ -115,7 +156,6 @@ async function sendMessageViaSupabase(content, parentId = null) {
   } else {
     console.log('❌ SUPABASE_MESSAGE: Client is NOT available');
     console.log('💬 SUPABASE: ❌ Supabase real-time client not available');
-    console.log('💬 SUPABASE: ❌ supabaseRealtimeClient:', !!supabaseRealtimeClient);
     console.log('💬 SUPABASE: ❌ window.supabaseRealtimeClient:', !!window.supabaseRealtimeClient);
     return null;
   }
@@ -263,10 +303,10 @@ async function getSenderAvatar(author) {
   
   // COMP METHOD: Always try to get the latest aura color from presence data
   // This ensures cross-profile updates work correctly for ALL users
-  const currentUserEmail = getCurrentUserEmail();
+  const currentUserEmail = window.getCurrentUserEmail ? await window.getCurrentUserEmail() : (window.currentUser?.email || null);
   if (author.email === currentUserEmail) {
     // For current user's messages, use current aura color
-    const currentAuraColor = getCurrentUserAvatarBgColor();
+    const currentAuraColor = window.getCurrentUserAvatarBgColor ? window.getCurrentUserAvatarBgColor() : (window.currentUser?.auraColor || window.AVATAR_FALLBACK_COLOR);
     if (currentAuraColor && currentAuraColor !== window.AVATAR_FALLBACK_COLOR) {
       author.auraColor = currentAuraColor;
       console.log('🔧 AURA: Using current user aura color:', currentAuraColor);
@@ -274,7 +314,7 @@ async function getSenderAvatar(author) {
   } else {
     // For other users' messages, try to get the latest aura color from presence data
     // This ensures real-time aura updates for all users
-    const latestAuraColor = getLatestAuraColorFromPresence(author.email);
+    const latestAuraColor = window.getLatestAuraColorFromPresence ? window.getLatestAuraColorFromPresence(author.email) : window.AVATAR_FALLBACK_COLOR;
     if (latestAuraColor && latestAuraColor !== window.AVATAR_FALLBACK_COLOR) {
       author.auraColor = latestAuraColor;
       console.log('🔧 AURA: Using real-time aura color for', author.email, ':', latestAuraColor);
@@ -346,7 +386,14 @@ async function refreshMessageAvatarsWithCurrentPresence() {
       const auraColorMap = {};
       presenceData.active.forEach(user => {
         // Check both email and userId fields for user identification
-        const userEmail = user.email || user.userId || user.id;
+        // CRITICAL FIX: Only use email addresses, not UUIDs
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        let userEmail = user.email || user.userId;
+        
+        // Only use user.id if it's actually an email address
+        if (!userEmail && user.id && emailRegex.test(user.id)) {
+          userEmail = user.id;
+        }
         if (userEmail && user.auraColor) {
           auraColorMap[userEmail] = user.auraColor;
           }
@@ -1345,7 +1392,7 @@ function removeReactionFromMessage(reaction) {
             console.log('✅ Message deleted via robust integration');
           } else {
             // Fallback to legacy system
-            const client = window.supabaseRealtimeClient || supabaseRealtimeClient;
+            const client = window.supabaseRealtimeClient;
             if (client) {
               await client.deleteMessage(message.id);
               console.log('✅ Message deleted via Supabase real-time (legacy)');
@@ -1495,7 +1542,7 @@ function removeReactionFromMessage(reaction) {
             console.log('✅ Message updated via robust integration');
           } else {
             // Fallback to legacy system
-            const client = window.supabaseRealtimeClient || supabaseRealtimeClient;
+            const client = window.supabaseRealtimeClient;
             if (client) {
               await client.editMessage(message.id, newContent);
               console.log('✅ Message updated via Supabase real-time (legacy)');
@@ -3037,25 +3084,26 @@ window.addReaction = async function(messageId, reactionType) {
   try {
     const currentUser = window.currentUser || { email: 'user@example.com' };
     
-    // Create reaction data
-    const reactionData = {
-      message_id: messageId,
-      user_email: currentUser.email,
-      emoji: reactionType,
-      timestamp: new Date().toISOString()
-    };
+    // Use the correct API endpoint
+    const response = await fetch('/v1/reactions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messageId: messageId,
+        emoji: reactionType,
+        userEmail: currentUser.email
+      })
+    });
     
-    // COMP METHOD: Exact COMP approach - just log the reaction (no API calls)
-    console.log('🔧 REACTIONS: COMP METHOD - Reaction data:', reactionData);
-    console.log('🔧 REACTIONS: COMP METHOD - Reaction added:', reactionData);
-    
-    // COMP METHOD: Simulate successful response (exact COMP approach)
-    const response = { success: true };
-    
-    console.log('✅ REACTIONS: COMP METHOD - Reaction logged successfully (COMP approach)');
-    
-    // COMP METHOD: No API refresh needed - reactions come via real-time (exact COMP approach)
-    console.log('🔧 REACTIONS: COMP METHOD - Reactions will be updated via real-time events');
+    if (response.ok) {
+      const result = await response.json();
+      console.log('✅ REACTIONS: COMP METHOD - Reaction added successfully:', result);
+      
+      // Refresh message reactions
+      await window.loadMessageReactions(messageId);
+    } else {
+      console.error('❌ REACTIONS: COMP METHOD - Failed to add reaction:', response.status);
+    }
     
   } catch (error) {
     console.error('❌ REACTIONS: COMP METHOD - Error adding reaction:', error);
@@ -3070,19 +3118,25 @@ window.removeReaction = async function(messageId, reactionType) {
   try {
     const currentUser = window.currentUser || { email: 'user@example.com' };
     
-    // Send delete request
-    const response = await fetch(`/v1/reactions/${messageId}/${reactionType}`, {
-      method: 'DELETE',
+    // Use the same API endpoint as addReaction (backend handles toggling)
+    const response = await fetch('/v1/reactions', {
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user_email: currentUser.email })
+      body: JSON.stringify({
+        messageId: messageId,
+        emoji: reactionType,
+        userEmail: currentUser.email
+      })
     });
     
     if (response.ok) {
-      console.log('✅ REACTIONS: COMP METHOD - Reaction removed successfully');
+      const result = await response.json();
+      console.log('✅ REACTIONS: COMP METHOD - Reaction toggled successfully:', result);
+      
       // Refresh message reactions
       await window.loadMessageReactions(messageId);
     } else {
-      console.error('❌ REACTIONS: COMP METHOD - Failed to remove reaction:', response.status);
+      console.error('❌ REACTIONS: COMP METHOD - Failed to toggle reaction:', response.status);
     }
     
   } catch (error) {
@@ -3174,19 +3228,14 @@ window.updateReactionDisplay = async function(messageId, reactions) {
     updatedCountSpan.style.display = totalReactionCount > 0 ? 'inline' : 'none';
     console.log('🔧 REACTIONS: Updated count span - text:', updatedCountSpan.textContent, 'display:', updatedCountSpan.style.display);
   } else {
-    console.log('⚠️ REACTIONS: Count span not found, creating one');
-    // Create count span if it doesn't exist
+    // COMP METHOD: Create count span if it doesn't exist
     const countSpan = document.createElement('span');
     countSpan.className = 'icon-count';
+    countSpan.style.cssText = 'font-size: 9px; margin-left: 2px; font-weight: normal; color: #666;';
     countSpan.textContent = totalReactionCount > 0 ? totalReactionCount : '';
     countSpan.style.display = totalReactionCount > 0 ? 'inline' : 'none';
-    countSpan.style.fontSize = '12px';
-    countSpan.style.marginLeft = '4px';
-    countSpan.style.color = '#666';
-    
-    // Add count span to reaction button
     reactionBtn.appendChild(countSpan);
-    console.log('🔧 REACTIONS: Created and added count span');
+    console.log('🔧 REACTIONS: Created new count span - text:', countSpan.textContent, 'display:', countSpan.style.display);
   }
   
   console.log('🔧 REACTIONS: Updated display - emoji:', displayEmoji, 'count:', totalReactionCount);
@@ -3790,15 +3839,15 @@ window.refreshAllReactionDisplays = window.refreshAllReactionDisplays || async f
             };
             
             // Get the latest aura color from presence data
-            const currentUserEmail = getCurrentUserEmail();
+            const currentUserEmail = window.getCurrentUserEmail ? await window.getCurrentUserEmail() : (window.currentUser?.email || null);
             if (author.email === currentUserEmail) {
-              const currentAuraColor = getCurrentUserAvatarBgColor();
+              const currentAuraColor = window.getCurrentUserAvatarBgColor ? window.getCurrentUserAvatarBgColor() : (window.currentUser?.auraColor || window.AVATAR_FALLBACK_COLOR);
               if (currentAuraColor && currentAuraColor !== window.AVATAR_FALLBACK_COLOR) {
                 author.auraColor = currentAuraColor;
                 console.log('🔧 AVATARS: Using current user aura color:', currentAuraColor);
               }
             } else {
-              const latestAuraColor = getLatestAuraColorFromPresence(author.email);
+              const latestAuraColor = window.getLatestAuraColorFromPresence ? window.getLatestAuraColorFromPresence(author.email) : window.AVATAR_FALLBACK_COLOR;
               if (latestAuraColor && latestAuraColor !== window.AVATAR_FALLBACK_COLOR) {
                 author.auraColor = latestAuraColor;
                 console.log('🔧 AVATARS: Using real-time aura color for', author.email, ':', latestAuraColor);

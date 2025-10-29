@@ -210,6 +210,48 @@ class RealGoogleAuth {
                 console.log('🔍 REAL_GOOGLE_AUTH: Chrome profile user created:', chromeUser.email);
                 console.log('🔍 REAL_GOOGLE_AUTH: Chrome profile avatar:', chromeUser.picture);
                 
+                // COMP METHOD: Automatically update AppUser table with real Google profile picture
+                if (chromeProfile.picture && !chromeProfile.picture.includes('default-user')) {
+                  console.log('🔍 REAL_GOOGLE_AUTH: Updating AppUser table with real Google profile picture...');
+                  try {
+                    const updateResponse = await window.api.request('/v1/users/update-avatar', {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                      },
+                      body: JSON.stringify({
+                        email: chromeProfile.email,
+                        avatarUrl: chromeProfile.picture
+                      })
+                    });
+                    console.log('✅ REAL_GOOGLE_AUTH: AppUser table updated with real avatar:', updateResponse);
+                  } catch (error) {
+                    console.log('⚠️ REAL_GOOGLE_AUTH: Failed to update AppUser table:', error);
+                    
+                    // COMP METHOD: Fallback - try to get or create user with avatar URL
+                    try {
+                      console.log('🔍 REAL_GOOGLE_AUTH: Attempting fallback - get or create user with avatar URL');
+                      const fallbackResponse = await window.api.request(`/v1/users/${encodeURIComponent(chromeProfile.email)}`, {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                          email: chromeProfile.email,
+                          name: chromeProfile.email.split('@')[0],
+                          avatarUrl: chromeProfile.picture,
+                          auraColor: window.AVATAR_FALLBACK_COLOR
+                        })
+                      });
+                      console.log('✅ REAL_GOOGLE_AUTH: Fallback successful - user created/updated:', fallbackResponse);
+                    } catch (fallbackError) {
+                      console.log('❌ REAL_GOOGLE_AUTH: Fallback also failed:', fallbackError);
+                    }
+                  }
+                } else {
+                  console.log('⚠️ REAL_GOOGLE_AUTH: Not updating AppUser table - avatar URL is generic fallback:', chromeProfile.picture);
+                }
+                
                 // Store Chrome profile user in StateManager
                 if (typeof window.setState === 'function') {
                   await window.setState('supabaseUser', chromeUser);
@@ -296,5 +338,8 @@ class RealGoogleAuth {
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = RealGoogleAuth;
 } else if (typeof window !== 'undefined') {
+  // COMP METHOD: Initialize and expose globally for browser extension
+  window.realGoogleAuth = new RealGoogleAuth();
   window.RealGoogleAuth = RealGoogleAuth;
+  console.log('✅ REAL_GOOGLE_AUTH: Initialized and exposed globally as window.realGoogleAuth');
 }

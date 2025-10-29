@@ -51,8 +51,9 @@ class UserService {
         }
 
         // Create new user with only the fields that exist in the schema
-        // Use the provided ID if it's a valid UUID, otherwise let Prisma generate one
+        // Always generate a UUID for the ID
         const userData = {
+          id: require('crypto').randomUUID(),
           email,
           name: name || email.split('@')[0],
           handle: userHandle,
@@ -63,7 +64,7 @@ class UserService {
           updatedAt: new Date()
         };
         
-        // Only use the provided ID if it's a valid UUID format
+        // Override with provided ID only if it's a valid UUID format
         if (id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
           userData.id = id;
         }

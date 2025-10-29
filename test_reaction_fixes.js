@@ -28,7 +28,7 @@ console.log(`📊 Functions Available: ${availableFunctions}/${functionsToTest.l
 
 // Test 2: Reaction Buttons Structure
 console.log('\n📋 Test 2: Reaction Button Structure');
-const reactionButtons = document.querySelectorAll('.reaction-btn');
+  const reactionButtons = document.querySelectorAll('.reaction-btn');
 console.log(`📊 Found ${reactionButtons.length} reaction buttons`);
 
 reactionButtons.forEach((btn, index) => {

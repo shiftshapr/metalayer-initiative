@@ -786,9 +786,13 @@ async function updateUI(user) {
         console.log(`PROFILE_AVATAR_FIX: No UNFILTERED visibility data available, using auth avatar`);
       }
       
+      // CRITICAL FIX: Only use email addresses, not UUIDs
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      const userId = user.email; // Always use email as user ID
+      
       const userData = {
-        id: user.id || user.email,
-        userId: user.id || user.email,
+        id: userId,
+        userId: userId,
         name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
         email: user.email,
         avatarUrl: realAvatarUrl,  // USE THE REAL AVATAR URL FROM DATABASE
@@ -2696,18 +2700,10 @@ function initializeSidepanel() {
         } else if (storedSession && storedSession.user && storedSession.user.picture) {
           realAvatarUrl = storedSession.user.picture;
           console.log('🔐 AUTH: Using ACTUAL Google profile picture from supabaseSession:', realAvatarUrl);
-        } else if (realGoogleUser && realGoogleUser.picture) {
-          realAvatarUrl = realGoogleUser.picture;
-          console.log('🔐 AUTH: Using ACTUAL Google profile picture from realGoogleUser:', realAvatarUrl);
-        } else if (realGoogleUser && realGoogleUser.user_metadata && realGoogleUser.user_metadata.avatar_url) {
-          realAvatarUrl = realGoogleUser.user_metadata.avatar_url;
-          console.log('🔐 AUTH: Using ACTUAL Google profile picture from realGoogleUser.user_metadata:', realAvatarUrl);
         } else {
           console.log('🔐 AUTH: No stored user picture found, using fallback');
           console.log('🔐 AUTH: storedUser.picture:', storedUser?.picture);
           console.log('🔐 AUTH: storedSession.user.picture:', storedSession?.user?.picture);
-          console.log('🔐 AUTH: realGoogleUser.picture:', realGoogleUser?.picture);
-          console.log('🔐 AUTH: realGoogleUser.user_metadata.avatar_url:', realGoogleUser?.user_metadata?.avatar_url);
           realAvatarUrl = "https://www.gravatar.com/avatar/ZGF2ZXJvb21AZ21haWwuY29t?d=identicon&s=200";
         }
           
@@ -2719,48 +2715,6 @@ function initializeSidepanel() {
             id: currentUserEmail,
             user_metadata: realGoogleUser?.user_metadata || null
           };
-          
-          // COMP METHOD: Update AppUser table with real avatar URL
-          if (realAvatarUrl && (realAvatarUrl.includes('googleusercontent.com') || realAvatarUrl.includes('googleapis.com'))) {
-            console.log('🔐 AUTH: Updating AppUser table with real Google profile picture:', realAvatarUrl);
-            try {
-              const updateResponse = await window.api.request('/v1/users/update-avatar', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                  email: currentUserEmail,
-                  avatarUrl: realAvatarUrl
-                })
-              });
-              console.log('✅ AUTH: AppUser table updated with real avatar URL:', updateResponse);
-            } catch (error) {
-              console.log('⚠️ AUTH: Failed to update AppUser table:', error);
-              
-              // COMP METHOD: Fallback - try to get or create user with avatar URL
-              try {
-                console.log('🔐 AUTH: Attempting fallback - get or create user with avatar URL');
-                const fallbackResponse = await window.api.request(`/v1/users/${encodeURIComponent(currentUserEmail)}`, {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                  },
-                  body: JSON.stringify({
-                    email: currentUserEmail,
-                    name: currentUserEmail.split('@')[0],
-                    avatarUrl: realAvatarUrl,
-                    auraColor: avatarColor
-                  })
-                });
-                console.log('✅ AUTH: Fallback successful - user created/updated:', fallbackResponse);
-              } catch (fallbackError) {
-                console.log('❌ AUTH: Fallback also failed:', fallbackError);
-              }
-            }
-          } else {
-            console.log('⚠️ AUTH: Not updating AppUser table - avatar URL is not a real Google profile picture:', realAvatarUrl);
-          }
           
           // COMPREHENSIVE USER IDENTITY LOGGING
           console.log('🔍 USER_IDENTITY: === WINDOW.CURRENTUSER ASSIGNMENT TRACE ===');

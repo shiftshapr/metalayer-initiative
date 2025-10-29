@@ -20,9 +20,22 @@ class AvatarUtils {
     let userHandle = userName;
     let avatarSource = 'none';
 
-    // CRITICAL FIX: Validate user object to prevent null/undefined calls
+    // CRITICAL FIX: Validate user object to prevent null/undefined calls and UUIDs
     if (!user || (!user.user_email && !user.email)) {
       console.log(`❌ AVATAR_UTILS: Invalid user object:`, user);
+      return {
+        avatarUrl: `https://lh3.googleusercontent.com/a/default-user=s96-c`,
+        source: 'generic-fallback',
+        userName: 'unknown',
+        userHandle: 'unknown'
+      };
+    }
+
+    // CRITICAL FIX: Validate that user identifier is an email, not a UUID
+    const userEmail = user.user_email || user.email;
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (userEmail && !emailRegex.test(userEmail)) {
+      console.log(`❌ AVATAR_UTILS: User identifier is not an email (likely UUID): ${userEmail}`);
       return {
         avatarUrl: `https://lh3.googleusercontent.com/a/default-user=s96-c`,
         source: 'generic-fallback',
@@ -50,19 +63,50 @@ class AvatarUtils {
       if (!avatarUrl && window.api) {
         try {
           const userEmail = user.user_email || user.email;
-          if (userEmail && userEmail !== 'null' && userEmail !== 'undefined' && userEmail.trim() !== '') {
+          
+          // CRITICAL FIX: Validate that userEmail is actually an email, not a UUID
+          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+          if (userEmail && userEmail !== 'null' && userEmail !== 'undefined' && userEmail.trim() !== '' && emailRegex.test(userEmail)) {
             console.log(`🔍 AVATAR_UTILS: Checking AppUser table for ${userEmail}`);
             const appUserResponse = await window.api.request(`/v1/users/${encodeURIComponent(userEmail)}`);
-            if (appUserResponse && appUserResponse.avatarUrl) {
-              // CRITICAL FIX: Accept ANY avatarUrl from AppUser table - daveroom DOES have a real avatarUrl
-              // The database is the source of truth, even if the URL appears truncated
+            if (appUserResponse && appUserResponse.avatarUrl && appUserResponse.avatarUrl !== 'undefined') {
+              // COMP METHOD: Use real avatar from AppUser table
               avatarUrl = appUserResponse.avatarUrl;
               userName = appUserResponse.name || userName;
               avatarSource = 'appuser_table';
               console.log(`✅ AVATAR_UTILS: Using AppUser table avatar for ${userEmail}: ${avatarUrl}`);
             } else {
-              console.log(`⚠️ AVATAR_UTILS: No avatarUrl found in AppUser table for ${userEmail}`);
+              console.log(`⚠️ AVATAR_UTILS: No valid avatarUrl found in AppUser table for ${userEmail}`);
+              
+              // COMP METHOD: Try to get real Google profile picture for current user
+              if (window.realGoogleAuth && userEmail === window.currentUser?.email) {
+                try {
+                  console.log(`🔍 AVATAR_UTILS: Attempting to get real Google profile picture for ${userEmail}`);
+                  const realUser = await window.realGoogleAuth.getCurrentUser();
+                  if (realUser && realUser.picture && !realUser.picture.includes('default-user')) {
+                    avatarUrl = realUser.picture;
+                    avatarSource = 'real_google_auth';
+                    console.log(`✅ AVATAR_UTILS: Using real Google profile picture for ${userEmail}: ${avatarUrl}`);
+                    
+                    // Update AppUser table with real avatar
+                    try {
+                      await window.api.request('/v1/users/update-avatar', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email: userEmail, avatarUrl: realUser.picture })
+                      });
+                      console.log(`✅ AVATAR_UTILS: Updated AppUser table with real avatar for ${userEmail}`);
+                    } catch (updateError) {
+                      console.log(`⚠️ AVATAR_UTILS: Failed to update AppUser table: ${updateError.message}`);
+                    }
+                  }
+                } catch (realAuthError) {
+                  console.log(`⚠️ AVATAR_UTILS: Failed to get real Google profile: ${realAuthError.message}`);
+                }
+              }
             }
+          } else {
+            console.log(`❌ AVATAR_UTILS: Invalid userEmail format (not an email): ${userEmail}`);
           }
         } catch (error) {
           console.log(`⚠️ AVATAR_UTILS: Failed to check AppUser table: ${error.message}`);

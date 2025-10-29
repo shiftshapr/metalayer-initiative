@@ -35,7 +35,7 @@ class PresenceService {
         // Create AppUser record for new user
         console.log(`🔍 PRESENCE_EVENT: Creating new AppUser record for ${userId}`);
         user = await this.prisma.appUser.create({
-          data: {
+              data: {
             id: require('crypto').randomUUID(),
             handle: userId.split('@')[0],
             email: userId,
@@ -54,20 +54,20 @@ class PresenceService {
       
       // Upsert UserPresence record using string pageId (like "google_com_")
       const userPresence = await this.prisma.user_presence.upsert({
-        where: {
+            where: {
           user_email_page_id: {
             user_email: user.email,
             page_id: pageId
-          }
-        },
-        update: {
+              }
+            },
+            update: {
           is_active: isActive,
           last_seen: new Date(),
           // Don't update aura_color on presence updates - keep existing database value
           page_url: pageUrl || pageId,
           user_name: user.user_metadata?.full_name || user.name || user.email?.split('@')[0] || 'User'
-        },
-        create: {
+            },
+            create: {
           user_email: user.email,
           user_name: user.user_metadata?.full_name || user.name || user.email?.split('@')[0] || 'User',
           page_id: pageId,
@@ -176,7 +176,7 @@ class PresenceService {
       });
       
       const activeUsers = await this.prisma.user_presence.count({
-        where: { 
+        where: {
           page_id: pageId,
           is_active: true,
           last_seen: {
@@ -184,8 +184,8 @@ class PresenceService {
           }
         }
       });
-      
-      return {
+        
+        return {
         totalUsers,
         activeUsers,
         pageId

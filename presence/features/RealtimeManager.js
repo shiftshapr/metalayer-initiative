@@ -482,7 +482,7 @@ async function subscribeToCurrentPage() {
     await sendSupabaseMessage({
       type: 'PAGE_SUBSCRIPTION',
       userEmail: user.email,
-      userId: user.id || user.email,
+      userId: user.email, // Always use email as user ID
       pageId: urlData.pageId,
       url: urlData.normalizedUrl,
       timestamp: Date.now()
