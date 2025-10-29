@@ -1,0 +1,115 @@
+// CLEAN SCHEMA: UUID Foreign Keys Only (No Backward Compatibility)
+// This is the target schema after migration
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model message_deletions {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  message_id String
+  user_id    String    @db.Uuid  // UUID foreign key only
+  deleted_at DateTime? @default(now()) @db.Timestamptz(6)
+  page_id    String
+  created_at DateTime? @default(now()) @db.Timestamptz(6)
+
+  AppUser    AppUser   @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([deleted_at], map: "idx_message_deletions_deleted_at")
+  @@index([message_id], map: "idx_message_deletions_message_id")
+  @@index([page_id], map: "idx_message_deletions_page")
+  @@index([page_id], map: "idx_message_deletions_page_id")
+  @@index([user_id], map: "idx_message_deletions_user_id")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model messages {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  page_id      String
+  user_id      String    @db.Uuid  // UUID foreign key only
+  content      String
+  created_at   DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime? @default(now()) @db.Timestamptz(6)
+  community_id String    @default("comm-001")
+  parent_id    String?
+
+  AppUser      AppUser   @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([community_id], map: "idx_messages_community_id")
+  @@index([page_id, community_id], map: "idx_messages_page_community")
+  @@index([page_id], map: "idx_messages_page_id")
+  @@index([parent_id], map: "idx_messages_parent_id")
+  @@index([user_id], map: "idx_messages_user_id")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model reactions {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  message_id String    @db.Uuid
+  emoji      String
+  user_id    String    @db.Uuid  // UUID foreign key only
+  created_at DateTime? @default(now()) @db.Timestamptz(6)
+
+  AppUser    AppUser   @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([message_id], map: "idx_reactions_message")
+  @@index([user_id], map: "idx_reactions_user_id")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model user_presence {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id    String    @db.Uuid  // UUID foreign key only
+  user_name  String?
+  page_id    String
+  page_url   String
+  is_active  Boolean?  @default(true)
+  last_seen  DateTime? @default(now()) @db.Timestamptz(6)
+  created_at DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at DateTime? @default(now()) @db.Timestamptz(6)
+  enter_time DateTime? @db.Timestamptz(6)
+  
+  AppUser    AppUser   @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, page_id], map: "unique_user_presence_user_page")
+  @@index([page_id, user_id], map: "idx_presence_page_user")
+  @@index([page_id], map: "idx_user_presence_page_id")
+  @@index([user_id], map: "idx_user_presence_user_id")
+}
+
+model AppUser {
+  id               String             @id @db.Uuid
+  handle           String             @unique
+  email            String?            @unique
+  name             String?
+  avatarUrl        String
+  isVerified       Boolean            @default(false)
+  isSuperAdmin     Boolean            @default(false)
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime
+  auraColor        String?
+  
+  // Clean relationships using UUID foreign keys only
+  message_deletions message_deletions[]
+  messages          messages[]
+  reactions         reactions[]
+  user_presence     user_presence[]
+  
+  // Existing relationships (unchanged)
+  Conversation     Conversation[]
+  ModerationAction ModerationAction[]
+  Post             Post[]
+  PresenceEvent    PresenceEvent[]
+  Reaction         Reaction[]
+  SpaceMember      SpaceMember[]
+}
+
+// ... rest of schema unchanged ...
