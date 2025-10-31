@@ -214,12 +214,12 @@ function initializeNotificationIcon() {
         MESSAGE_NEW: {
           authorName: 'Test User',
           content: 'This is a test message notification',
-          authorEmail: window.currentUser?.email || 'user@example.com'
+          authorId: window.currentUser?.id || window.currentUser?.user_id || 'unknown'
         },
         FRIEND_AURA_CHANGE: {
           userName: 'Test Friend',
           auraColor: '#ff0000',
-          userEmail: 'friend@example.com'
+          userId: 'test-friend-123'
         }
       };
       
@@ -645,18 +645,18 @@ function initializeEnhancedNotifications() {
               title: `💬 New message from ${data.message?.author?.name || 'Someone'}`,
               message: data.message?.content || 'New message',
               url: data.url || window.location.href,
-              target: `[data-message-id="${data.message?.id}"]`
+              target: `[data-message-id="${data.messageId}"]`
             });
             break;
             
           case 'AURA_COLOR_CHANGED':
-            if (data.userEmail !== window.currentUser?.email) {
+            if (data.userId !== (window.currentUser?.id || window.currentUser?.user_id)) {
               window.notificationHistory.addNotification({
                 type: 'FRIEND_AURA_CHANGE',
-                title: `✨ ${data.userName || data.userEmail} changed their aura`,
+                title: `✨ ${data.userName || 'User'} changed their aura`,
                 message: `Their new aura color is ${data.auraColor}`,
                 url: data.url || window.location.href,
-                target: `[data-user-email="${data.userEmail}"]`
+                target: `[data-user-id="${data.userId}"]`
               });
             }
             break;
@@ -691,12 +691,12 @@ window.testNotification = async function(type = 'MESSAGE_NEW') {
       MESSAGE_NEW: {
         authorName: 'Test User',
         content: 'This is a test message notification',
-        authorEmail: window.currentUser?.email || 'user@example.com'
+        authorId: window.currentUser?.id || window.currentUser?.user_id || 'unknown'
       },
       FRIEND_AURA_CHANGE: {
         userName: 'Test Friend',
         auraColor: '#ff0000',
-        userEmail: 'friend@example.com'
+        userId: 'friend-123'
       }
     };
     

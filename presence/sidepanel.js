@@ -181,8 +181,8 @@ function setupModernEventHandling() {
   
   // Cross-profile events
   eventBus.on('crossProfile:auraChanged', (data) => {
-    console.log('📡 MODERN: Cross-profile aura changed:', data.userEmail, data.color);
-    updateUserAuraInUI(data.userEmail, data.color);
+    console.log('📡 MODERN: Cross-profile aura changed:', data.userId, data.color);
+    updateUserAuraInUI(data.userId, data.color);
   });
   
   // REMOVED: Duplicate handler - cross-profile messages handled by real-time
@@ -399,7 +399,7 @@ async function updateVisibleTab(avatars) {
   console.log('🔍 VISIBILITY: updateVisibleTab called with avatars:', JSON.stringify(avatars, null, 2));
   
   // CRITICAL FIX: Add current user to visibility list if not already present
-  if (window.currentUser && window.currentUser.email) {
+  if (window.currentUser && (window.currentUser.id || window.currentUser.user_id)) {
     const currentUserEmail = window.currentUser.email;
     const isCurrentUserInList = avatars.some(avatar => avatar.email === currentUserEmail);
     
@@ -407,7 +407,7 @@ async function updateVisibleTab(avatars) {
       console.log('🔍 VISIBILITY: Adding current user to visibility list');
       const currentUserAvatar = {
         email: currentUserEmail,
-        name: window.currentUser.name || currentUserEmail.split('@')[0],
+        name: window.currentUser.name || (currentUserEmail ? currentUserEmail.split('@')[0] : 'User'),
         avatarUrl: window.currentUser.avatarUrl, // Use the real Google avatar URL
         auraColor: window.currentUser.auraColor || window.AVATAR_FALLBACK_COLOR,
         status: 'online',
@@ -519,20 +519,42 @@ async function refreshVisibilityAvatars() {
     if (client && pageId) {
       console.log('🔄 REFRESH_VISIBILITY: === STARTING ENHANCED VISIBILITY REFRESH ===');
       
-      // COMP APPROACH: Use direct Supabase query instead of getPageUsers method
-      const { data: users, error } = await client
-        .from('user_presence')
-        .select('*')
-        .eq('page_id', pageId)
-        .eq('is_active', true);
-      
-      if (error) {
-        console.error('❌ REFRESH_VISIBILITY: Database query failed:', error);
-        return;
+      // Use backend presence enrichment endpoint - server expects 'url' parameter (not pageId/pageUrl)
+      const pageUrl = (window.currentUrlData && window.currentUrlData.rawUrl) || location.href;
+      // Skip presence URL call for chrome:// pages (server rejects non-http(s))
+      if (typeof pageUrl === 'string' && pageUrl.startsWith('chrome://')) {
+        console.warn('Skipping presence/url for chrome:// page');
+        return [];
+      }
+      // Backend expects 'url' parameter and returns { active: [...], pageId, url: normalizedUrl }
+      let presenceResp = null;
+      let users = [];
+      try {
+        presenceResp = await window.api.request(`/v1/presence/url?url=${encodeURIComponent(pageUrl)}`, { method: 'GET', allow404: false });
+        users = presenceResp?.active || [];
+        console.log('✅ REFRESH_VISIBILITY: API call succeeded, users:', users.length);
+      } catch (apiError) {
+        // Gracefully handle 400/401/500 errors - don't break avatar flow
+        const errorMsg = apiError?.message || String(apiError);
+        if (errorMsg.includes('401') || errorMsg.includes('Unauthorized')) {
+          console.warn('⚠️ REFRESH_VISIBILITY: Auth failed (401) - user may not be authenticated:', errorMsg);
+          console.warn('⚠️ REFRESH_VISIBILITY: Current user:', window.currentUser?.id || window.currentUser?.email || 'none');
+          // Continue without presence data - avatars will use existing visibility data
+          return [];
+        } else if (errorMsg.includes('400') || errorMsg.includes('Bad Request')) {
+          console.warn('⚠️ REFRESH_VISIBILITY: Bad request (400) - invalid URL or missing params:', errorMsg);
+          console.warn('⚠️ REFRESH_VISIBILITY: URL sent:', pageUrl);
+          // Continue without presence data - avatars will use existing visibility data
+          return [];
+        } else {
+          console.error('❌ REFRESH_VISIBILITY: API call failed:', errorMsg);
+          // Continue without presence data - avatars will use existing visibility data
+          return [];
+        }
       }
       
       console.log('👁️ REFRESH_VISIBILITY: Enhanced query returned users:', users.length);
-      console.log('👁️ REFRESH_VISIBILITY: Users:', users.map(u => `${u.user_email} (${u.is_active ? 'ACTIVE' : 'INACTIVE'})`));
+      console.log('👁️ REFRESH_VISIBILITY: Users:', users.map(u => `${u.user_id || u.id} (${u.is_active ? 'ACTIVE' : 'INACTIVE'})`));
       
       if (users && users.length > 0) {
         console.log('🔄 REFRESH_VISIBILITY: Processing enhanced query results...');
@@ -540,9 +562,33 @@ async function refreshVisibilityAvatars() {
         // Use AvatarUtils for consistent avatar URL fetching
         const usersWithAvatars = await Promise.all(users.map(async (user) => {
           let avatarUrl = null;
-          let userName = user.user_email.split('@')[0];
-          let userHandle = user.user_email.split('@')[0];
+          const userId = user.id || user.user_id || null;
+          let userName = user.name || 'Unknown';
+          let userHandle = user.handle || 'unknown';
           let avatarSource = 'none';
+          
+          // COMP METHOD: Skip known invalid UUIDs to prevent API calls
+          const knownInvalidUUIDs = [
+            '18ad77cb-222e-4485-a720-db39981a4099',
+            '41266409-84e9-439e-b1b3-df44d0797581', 
+            '60524d7d-da7d-4216-ba3b-475becaa2527',
+            '6c89ce15-c4a4-45b7-82f8-9dae06418f00'
+          ];
+          
+          if (userId && knownInvalidUUIDs.includes(userId)) {
+            console.log(`⚠️ REFRESH_VISIBILITY: Skipping known invalid UUID ${userId}`);
+            return {
+              userId: userId,
+              name: userName,
+              handle: userHandle,
+              avatarUrl: 'https://lh3.googleusercontent.com/a/default-user=s96-c',
+              auraColor: '#ffffff',
+              isActive: user.is_active || false,
+              enterTime: user.enter_time || null,
+              lastSeen: user.last_seen || new Date().toISOString(),
+              status: 'online'
+            };
+          }
           
           try {
             // Use AvatarUtils for consistent avatar URL fetching
@@ -554,17 +600,17 @@ async function refreshVisibilityAvatars() {
             } else {
               // Fallback if AvatarUtils not available
               avatarUrl = user.avatar_url || null;
-              userName = user.user_email.split('@')[0];
+              userName = user.name || 'Unknown';
             }
           } catch (error) {
-            console.error('❌ REFRESH_VISIBILITY: Error getting avatar for user:', user.user_email, error);
+            console.error('❌ REFRESH_VISIBILITY: Error getting avatar for user:', userId, error);
           }
           
           return {
-            userId: user.user_email,
+            userId: user.id || user.user_id || 'unknown',
             handle: userHandle,
             name: userName,
-            email: user.user_email,
+            id: userId,
             avatarUrl: avatarUrl,
             auraColor: user.aura_color || window.AVATAR_FALLBACK_COLOR,
             isActive: user.is_active,
@@ -691,10 +737,15 @@ async function updateUI(user) {
       }
     }
     
+    // ROOT CAUSE FIX: Preserve existing UUID from window.currentUser (always a UUID from AppUser table)
+    // user.id might be from Supabase auth (Google ID), so don't use it - AuthModule fetches AppUser UUID
+    const existingUuid = window.currentUser?.id;
+    
     window.currentUser = {
+      id: existingUuid || null, // Keep existing UUID if set, otherwise null (AuthModule will fetch it)
+      user_id: existingUuid || null,
       email: user.email,
       name: user.user_metadata?.full_name || user.email,
-      id: user.id,
       auraColor: user.auraColor || null,
       avatarUrl: avatarUrl,
       communityId: 'comm-001'
@@ -787,8 +838,9 @@ async function updateUI(user) {
       }
       
       const userData = {
-        id: user.id || user.email,
-        userId: user.id || user.email,
+        id: user.id,
+        user_id: user.id,
+        userId: user.id,
         name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
         email: user.email,
         avatarUrl: realAvatarUrl,  // USE THE REAL AVATAR URL FROM DATABASE
@@ -1109,8 +1161,8 @@ function updateProfileAvatarWithRealTimeAura() {
       return;
     }
 
-    const userEmail = window.currentUser.email;
-    const realTimeAuraColor = getLatestAuraColorFromPresence(userEmail);
+    const userId = window.currentUser.id || window.currentUser.user_id;
+    const realTimeAuraColor = getLatestAuraColorFromPresence(userId);
     
     if (realTimeAuraColor) {
       // Update the profile avatar with the real-time aura color
@@ -1474,7 +1526,7 @@ async function handleTabUpdate(tabId, url) {
     console.log('🔍 TAB_UPDATE: window.currentUrlData:', JSON.stringify(window.currentUrlData, null, 2));
     console.log('🔍 TAB_UPDATE: supabaseRealtimeClient exists:', !!window.supabaseRealtimeClient);
     console.log('🔍 TAB_UPDATE: supabaseRealtimeClient.currentPage:', JSON.stringify(window.supabaseRealtimeClient?.currentPage, null, 2));
-    console.log('🔍 TAB_UPDATE: supabaseRealtimeClient.currentUser:', window.supabaseRealtimeClient?.currentUser?.userEmail);
+    console.log('🔍 TAB_UPDATE: supabaseRealtimeClient.currentUser:', window.supabaseRealtimeClient?.currentUser?.userId);
     console.log('🔍 TAB_UPDATE: supabaseRealtimeClient.isLeavingPage:', window.supabaseRealtimeClient?.isLeavingPage);
     
     // Store old page ID BEFORE leaving (leaveCurrentPage clears it)
@@ -1812,7 +1864,11 @@ async function startPresenceTracking() {
         filter: `page_url=eq.${urlData.normalizedUrl}`
       }, (payload) => {
         console.log('🔔 PAGE_PRESENCE: Real-time update received:', payload);
-        handlePresenceChange(payload);
+        if (typeof window.handlePresenceChange === 'function') {
+          window.handlePresenceChange(payload);
+        } else {
+          console.error('❌ PRESENCE: handlePresenceChange not available');
+        }
       })
       .on('postgres_changes', {
         event: '*',
@@ -1821,7 +1877,11 @@ async function startPresenceTracking() {
         filter: `page_url=eq.${urlData.normalizedUrl}`
       }, (payload) => {
         console.log('🔔 PAGE_MESSAGES: Real-time update received:', payload);
-        handleMessageChange(payload);
+        if (typeof window.handleMessageChange === 'function') {
+          window.handleMessageChange(payload);
+        } else {
+          console.error('❌ MESSAGES: handleMessageChange not available');
+        }
       })
       .on('postgres_changes', {
         event: '*',
@@ -1834,8 +1894,6 @@ async function startPresenceTracking() {
         // Otherwise use RealtimeManager's handleReactionChange which will also delegate
         if (typeof window.handleReactionChange === 'function') {
           window.handleReactionChange(payload);
-        } else if (typeof handleReactionChange === 'function') {
-          handleReactionChange(payload);
         } else {
           console.warn('⚠️ PAGE_REACTIONS: No handleReactionChange function available');
         }
@@ -1851,21 +1909,37 @@ async function startPresenceTracking() {
     console.log('✅ REALTIME: All Supabase real-time subscriptions started');
     
     // Make real-time functions globally accessible for testing
-    // COMP METHOD: Don't overwrite window functions if they're already set (from modules)
-    if (typeof window.handlePresenceChange !== 'function') {
-      window.handlePresenceChange = handlePresenceChange;
-    }
-    if (typeof window.handleMessageChange !== 'function') {
-      window.handleMessageChange = handleMessageChange;
-    }
-    if (typeof window.handleReactionChange !== 'function') {
-      window.handleReactionChange = handleReactionChange;
-    }
-    if (typeof window.handleAuraChange !== 'function') {
-      window.handleAuraChange = handleAuraChange;
-    }
+    // COMP METHOD: Functions should already be available from RealtimeManager.js
+    console.log('🔧 PRESENCE: Checking real-time function availability...');
     
-    console.log('✅ REALTIME: Real-time functions made globally accessible');
+    // COMP METHOD: Wait for RealtimeManager to load and export functions
+    let retryCount = 0;
+    const maxRetries = 10;
+    
+    const checkRealtimeFunctions = () => {
+      const functions = ['handlePresenceChange', 'handleMessageChange', 'handleReactionChange', 'handleAuraChange'];
+      const available = functions.filter(func => typeof window[func] === 'function');
+      
+      console.log('handlePresenceChange available:', typeof window.handlePresenceChange === 'function');
+      console.log('handleMessageChange available:', typeof window.handleMessageChange === 'function');
+      console.log('handleReactionChange available:', typeof window.handleReactionChange === 'function');
+      console.log('handleAuraChange available:', typeof window.handleAuraChange === 'function');
+      
+      if (available.length === functions.length) {
+        console.log('✅ REALTIME: All real-time functions available');
+        return true;
+      } else if (retryCount < maxRetries) {
+        retryCount++;
+        console.log(`⏳ REALTIME: Waiting for functions... (${retryCount}/${maxRetries})`);
+        setTimeout(checkRealtimeFunctions, 100);
+        return false;
+      } else {
+        console.log('⚠️ REALTIME: Some functions still not available after retries');
+        return false;
+      }
+    };
+    
+    checkRealtimeFunctions();
     
     // Add comprehensive test function
     window.testRealtimeSystem = function() {
@@ -1919,7 +1993,7 @@ async function startPresenceTracking() {
         const testPresencePayload = {
           eventType: 'INSERT',
           new: {
-            user_email: window.currentUser?.email || 'user@example.com',
+            user_id: window.currentUser?.id || window.currentUser?.user_id || 'unknown-user',
             page_url: window.currentUrlData?.normalizedUrl || 'test-page',
             aura_color: '#ff0000',
             is_active: true
@@ -2198,7 +2272,7 @@ async function startPresenceTracking() {
         console.log('🔧 FIX 4: Checking table structure...');
         const { data: structureData, error: structureError } = await window.supabase
           .from('user_presence')
-          .select('community_id, is_active, user_email')
+          .select('community_id, is_active, user_id')
           .limit(1);
         
         if (structureError) {
@@ -2697,46 +2771,42 @@ function initializeSidepanel() {
         console.log('🔍 USER_IDENTITY: User email type:', typeof currentUserEmail);
         console.log('🔍 USER_IDENTITY: User email length:', currentUserEmail?.length);
         console.log('🔍 USER_IDENTITY: User email includes @:', currentUserEmail?.includes('@'));
-        console.log('🔍 USER_IDENTITY: User email domain:', currentUserEmail?.split('@')[1]);
+        console.log('🔍 USER_IDENTITY: User email domain:', (currentUserEmail && currentUserEmail.includes('@')) ? currentUserEmail.split('@')[1] : 'unknown');
         console.log('🔍 USER_IDENTITY: === END AUTHENTICATION USER IDENTITY TRACE ===');
         
         // CRITICAL FIX: Set window.currentUser with full user data
         if (typeof window.getCurrentUserAvatarBgColor === 'function') {
           const avatarColor = window.getCurrentUserAvatarBgColor();
           
-          // Get the real Google auth user data
-          let realGoogleUser = null;
+          // Get avatar from StateManager
           let realAvatarUrl = null;
           
-        // SD2 COMP MIMETIC FIX: Get the ACTUAL Google profile picture from StateManager
-        console.log('🔐 AUTH: Getting ACTUAL Google profile picture from StateManager');
-        const storedUser = window.getState ? window.getState('supabaseUser') : null;
-        const storedSession = window.getState ? window.getState('supabaseSession') : null;
-        
-        console.log('🔐 AUTH: storedUser:', storedUser);
-        console.log('🔐 AUTH: storedSession:', storedSession);
-        console.log('🔐 AUTH: window.getState available:', !!window.getState);
-        
-        if (storedUser && storedUser.picture) {
-          realAvatarUrl = storedUser.picture;
-          console.log('🔐 AUTH: Using ACTUAL Google profile picture from supabaseUser:', realAvatarUrl);
-        } else if (storedSession && storedSession.user && storedSession.user.picture) {
-          realAvatarUrl = storedSession.user.picture;
-          console.log('🔐 AUTH: Using ACTUAL Google profile picture from supabaseSession:', realAvatarUrl);
-        } else {
-          console.log('🔐 AUTH: No stored user picture found, using fallback');
-          console.log('🔐 AUTH: storedUser.picture:', storedUser?.picture);
-          console.log('🔐 AUTH: storedSession.user.picture:', storedSession?.user?.picture);
-          realAvatarUrl = "https://www.gravatar.com/avatar/ZGF2ZXJvb21AZ21haWwuY29t?d=identicon&s=200";
-        }
+          // SD2 COMP MIMETIC FIX: Get the ACTUAL Google profile picture from StateManager
+          console.log('🔐 AUTH: Getting ACTUAL Google profile picture from StateManager');
+          const storedUser = window.getState ? window.getState('supabaseUser') : null;
+          const storedSession = window.getState ? window.getState('supabaseSession') : null;
           
+          if (storedUser && storedUser.picture) {
+            realAvatarUrl = storedUser.picture;
+            console.log('🔐 AUTH: Using ACTUAL Google profile picture from supabaseUser:', realAvatarUrl);
+          } else if (storedSession && storedSession.user && storedSession.user.picture) {
+            realAvatarUrl = storedSession.user.picture;
+            console.log('🔐 AUTH: Using ACTUAL Google profile picture from supabaseSession:', realAvatarUrl);
+          } else {
+            console.log('🔐 AUTH: No stored user picture found, using fallback');
+            realAvatarUrl = "https://www.gravatar.com/avatar/ZGF2ZXJvb21AZ21haWwuY29t?d=identicon&s=200";
+          }
+          
+          // ROOT CAUSE FIX: Start with null - backend will return AppUser UUID after first API call
+          // APIModule will validate UUID format before sending as header
           window.currentUser = {
+            id: null, // Will be set to real AppUser UUID after first API call returns it
+            user_id: null,
             email: currentUserEmail,
-            name: currentUserEmail.split('@')[0],
+            name: currentUserEmail ? currentUserEmail.split('@')[0] : 'User',
             avatarUrl: realAvatarUrl,
             auraColor: avatarColor,
-            id: currentUserEmail,
-            user_metadata: realGoogleUser?.user_metadata || null
+            user_metadata: storedUser?.user_metadata || storedSession?.user?.user_metadata || null
           };
           
           // COMPREHENSIVE USER IDENTITY LOGGING

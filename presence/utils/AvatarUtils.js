@@ -13,15 +13,16 @@ class AvatarUtils {
    * @returns {Object} {avatarUrl, source, userName}
    */
   static async getAvatarUrl(user, context = 'visibility') {
-    console.log(`Getting avatar for ${user.user_email || user.email} in context: ${context}`);
+    console.log(`Getting avatar for ${user.id || user.user_id || user.name || 'unknown'} in context: ${context}`);
     
     let avatarUrl = null;
-    let userName = user.user_email?.split('@')[0] || user.email?.split('@')[0] || 'user';
+    let userName = user.name || 'user';
     let userHandle = userName;
     let avatarSource = 'none';
 
     // CRITICAL FIX: Validate user object to prevent null/undefined calls
-    if (!user || (!user.user_email && !user.email)) {
+    // Accept UUID-only users (id/user_id) per new COMP scheme
+    if (!user || (!user.id && !user.user_id && !user.name)) {
       console.log(`❌ AVATAR_UTILS: Invalid user object:`, user);
       return {
         avatarUrl: `https://lh3.googleusercontent.com/a/default-user=s96-c`,
@@ -32,7 +33,25 @@ class AvatarUtils {
     }
 
     try {
-      // SD1 FIX: PRIORITY 1 - Check if user object already has avatar_url (from user_presence table)
+      // SD3: Read-through cache to avoid initial generic flash
+      const cacheId = user.id || user.user_id || null;
+      if (!avatarUrl && cacheId && typeof window !== 'undefined' && window.localStorage) {
+        try {
+          const cached = window.localStorage.getItem(`avatarCache:${cacheId}`);
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            if (parsed && parsed.avatarUrl && !parsed.avatarUrl.includes('default-user')) {
+              avatarUrl = parsed.avatarUrl;
+              userName = parsed.userName || userName;
+              avatarSource = parsed.source || 'cache';
+              console.log(`✅ AVATAR_UTILS: Using cached avatar for ${cacheId}: ${avatarUrl}`);
+            }
+          }
+        } catch (e) {
+          // ignore cache errors
+        }
+      }
+      // SD1 FIX: PRIORITY 1 - Check if user object already has avatar_url (from AppUser table)
       if (user.avatar_url && !user.avatar_url.includes('default-user')) {
         avatarUrl = user.avatar_url;
         avatarSource = 'user_presence_table';
@@ -46,84 +65,23 @@ class AvatarUtils {
         console.log(`✅ SD1 FIX: Using avatarUrl from user object (profile): ${avatarUrl}`);
       }
       
-      // PRIORITY 2: Check AppUser table via API (COMP METHOD - single source of truth)
-      if (!avatarUrl && window.api) {
-        try {
-          const userEmail = user.user_email || user.email;
-          if (userEmail && userEmail !== 'null' && userEmail !== 'undefined' && userEmail.trim() !== '') {
-            
-            // COMP METHOD: Check if user_email contains UUID instead of email (data integrity issue)
-            const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userEmail);
-            const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(userEmail);
-            
-            if (isUUID) {
-              console.log(`⚠️ AVATAR_UTILS: Detected UUID in user_email field: ${userEmail}`);
-              console.log('⚠️ AVATAR_UTILS: This breaks COMP method foreign key relationships');
-              console.log('⚠️ AVATAR_UTILS: Using generic fallback instead of API call');
-              
-              // Return generic fallback for UUIDs
-              avatarUrl = 'https://lh3.googleusercontent.com/a/default-user=s96-c';
-              userName = 'Unknown User';
-              avatarSource = 'uuid-fallback';
-            } else if (isEmail) {
-              console.log(`🔍 AVATAR_UTILS: Checking AppUser table for ${userEmail}`);
-              const appUserResponse = await window.api.request(`/v1/users/${encodeURIComponent(userEmail)}`);
-              if (appUserResponse && appUserResponse.avatarUrl && appUserResponse.avatarUrl !== 'undefined') {
-                // COMP METHOD: Use real avatar from AppUser table
-                avatarUrl = appUserResponse.avatarUrl;
-                userName = appUserResponse.name || userName;
-                avatarSource = 'appuser_table';
-                console.log(`✅ AVATAR_UTILS: Using AppUser table avatar for ${userEmail}: ${avatarUrl}`);
-              } else {
-                console.log(`⚠️ AVATAR_UTILS: No valid avatarUrl found in AppUser table for ${userEmail}`);
-              
-              // COMP METHOD: Try to get real Google profile picture for current user
-              if (window.realGoogleAuth && userEmail === window.currentUser?.email) {
-                try {
-                  console.log(`🔍 AVATAR_UTILS: Attempting to get real Google profile picture for ${userEmail}`);
-                  const realUser = await window.realGoogleAuth.getCurrentUser();
-                  if (realUser && realUser.picture && !realUser.picture.includes('default-user')) {
-                    avatarUrl = realUser.picture;
-                    avatarSource = 'real_google_auth';
-                    console.log(`✅ AVATAR_UTILS: Using real Google profile picture for ${userEmail}: ${avatarUrl}`);
-                    
-                    // Update AppUser table with real avatar
-                    try {
-                      await window.api.request('/v1/users/update-avatar', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ email: userEmail, avatarUrl: realUser.picture })
-                      });
-                      console.log(`✅ AVATAR_UTILS: Updated AppUser table with real avatar for ${userEmail}`);
-                    } catch (updateError) {
-                      console.log(`⚠️ AVATAR_UTILS: Failed to update AppUser table: ${updateError.message}`);
-                    }
-                  }
-                } catch (realAuthError) {
-                  console.log(`⚠️ AVATAR_UTILS: Failed to get real Google profile: ${realAuthError.message}`);
-                }
-              }
-            }
-          }
-        } catch (error) {
-          console.log(`⚠️ AVATAR_UTILS: Failed to check AppUser table: ${error.message}`);
-        }
-      }
+      // REMOVED: Any API reads to /v1/users/:id. Avatars must come from
+      // provided user data (profile/presence/current user context) only.
       
-      // PRIORITY 3: For current user, use user_metadata (fallback)
+      // PRIORITY 2: For current user, use user_metadata
       if (!avatarUrl) {
         const currentUser = window.currentUser || {};
-        if ((user.user_email || user.email) === currentUser.email && currentUser.user_metadata?.avatar_url) {
+        if ((user.id || user.user_id) === (currentUser.id || currentUser.user_id) && currentUser.user_metadata?.avatar_url) {
           avatarUrl = currentUser.user_metadata.avatar_url;
           userName = currentUser.user_metadata.full_name || userName;
           avatarSource = 'current_user_metadata';
-          console.log(`✅ Using current user metadata for ${user.user_email || user.email} - avatarUrl: ${avatarUrl}`);
+          console.log(`✅ Using current user metadata for ${user.id || user.user_id} - avatarUrl: ${avatarUrl}`);
         }
       }
       
-      // PRIORITY 4: For other users, use visibility data (same as profile avatar system)
+      // PRIORITY 3: For other users, use visibility data (same as profile avatar system)
       if (!avatarUrl) {
-        console.log(`🔍 SD1 AVATAR DEBUG: Checking visibility data for ${user.user_email || user.email}`);
+        console.log(`🔍 SD1 AVATAR DEBUG: Checking visibility data for ${user.id || user.user_id}`);
         console.log(`🔍 SD1 AVATAR DEBUG: currentVisibilityDataUnfiltered exists: ${!!window.currentVisibilityDataUnfiltered}`);
         
         if (window.currentVisibilityDataUnfiltered && window.currentVisibilityDataUnfiltered.active) {
@@ -135,11 +93,10 @@ class AvatarUtils {
             avatarUrl: u.avatarUrl
           })));
           
-          const userInVisibility = window.currentVisibilityDataUnfiltered.active.find(
-            u => u.email === (user.user_email || user.email) || 
-                 u.userId === (user.user_email || user.email) || 
-                 u.id === (user.user_email || user.email)
-          );
+          const targetId = user.id || user.user_id || null;
+          const userInVisibility = window.currentVisibilityDataUnfiltered.active.find(u => (
+            targetId && (u.userId === targetId || u.id === targetId)
+          ));
           
           console.log(`🔍 SD1 AVATAR DEBUG: userInVisibility found: ${!!userInVisibility}`);
           if (userInVisibility) {
@@ -150,9 +107,9 @@ class AvatarUtils {
             avatarUrl = userInVisibility.avatarUrl;
             userName = userInVisibility.name || userName;
             avatarSource = 'visibility_data';
-            console.log(`✅ Found REAL avatar in visibility data for ${user.user_email || user.email} - avatarUrl: ${avatarUrl}`);
+            console.log(`✅ Found REAL avatar in visibility data for ${user.id || user.user_id} - avatarUrl: ${avatarUrl}`);
           } else {
-            console.log(`ℹ️ User ${user.user_email || user.email} not found in visibility data or has generic avatar`);
+            console.log(`ℹ️ User ${user.id || user.user_id} not found in visibility data or has generic avatar`);
             
             // COMP METHOD: Database query removed - now using AppUser table via API (Priority 2 above)
           }
@@ -161,34 +118,44 @@ class AvatarUtils {
         }
         
         // PRIORITY 5: Check if current user has real avatar in window.currentUser
-        if (!avatarUrl && window.currentUser && (user.user_email || user.email) === window.currentUser.email) {
+        if (!avatarUrl && window.currentUser && (user.id || user.user_id) === (window.currentUser.id || window.currentUser.user_id)) {
           if (window.currentUser.avatarUrl && !window.currentUser.avatarUrl.includes('default-user')) {
             avatarUrl = window.currentUser.avatarUrl;
             avatarSource = 'window_currentUser';
-            console.log(`✅ Using window.currentUser avatar for ${user.user_email || user.email} - avatarUrl: ${avatarUrl}`);
+            console.log(`✅ Using window.currentUser avatar for ${user.id || user.user_id} - avatarUrl: ${avatarUrl}`);
           }
         }
       }
     } catch (error) {
-      console.error(`Exception processing avatar for ${user.user_email || user.email}`, error, 'avatar');
+      console.error(`Exception processing avatar for ${user.id || user.user_id}`, error, 'avatar');
     }
 
-    // CRITICAL FIX: Enhanced avatar URL validation and fallback
+    // CRITICAL CHANGE: No generic fallback allowed. If no valid URL, return none.
     if (!avatarUrl || avatarUrl.trim() === '') {
-      console.log(`⚠️ No avatar URL found, using generic for ${user.user_email || user.email}`);
-      avatarUrl = `https://lh3.googleusercontent.com/a/default-user=s96-c`;
-      avatarSource = 'generic-fallback';
+      console.log(`⛔ No real avatar URL for ${user.id || user.user_id}; returning none`);
+      avatarUrl = null;
+      avatarSource = 'none';
     } else if (!avatarUrl.startsWith('http://') && !avatarUrl.startsWith('https://')) {
-      console.log(`⚠️ Invalid avatar URL format, using generic for ${user.user_email || user.email}: ${avatarUrl}`);
-      avatarUrl = `https://lh3.googleusercontent.com/a/default-user=s96-c`;
-      avatarSource = 'generic-fallback';
+      console.log(`⛔ Invalid avatar URL format for ${user.id || user.user_id}: ${avatarUrl}`);
+      avatarUrl = null;
+      avatarSource = 'none';
     } else {
       // CRITICAL FIX: Accept ANY valid HTTP/HTTPS URL as real avatar
       // daveroom's avatarUrl (https://lh3.googleusercontent.com/a/defa) should be treated as real
-      console.log(`✅ AVATAR_UTILS: Using REAL avatar for ${user.user_email || user.email}: ${avatarUrl}`);
+      console.log(`✅ AVATAR_UTILS: Using REAL avatar for ${user.id || user.user_id}: ${avatarUrl}`);
     }
 
-    console.log(`Avatar result: ${user.user_email || user.email} - avatarUrl: ${avatarUrl}, source: ${avatarSource}, name: ${userName}`);
+    // SD3: Write-through cache for next render to prevent flash
+    try {
+      if (cacheId && typeof window !== 'undefined' && window.localStorage && avatarUrl) {
+        const payload = JSON.stringify({ avatarUrl, userName, source: avatarSource, ts: Date.now() });
+        window.localStorage.setItem(`avatarCache:${cacheId}`, payload);
+      }
+    } catch (e) {
+      // ignore cache errors
+    }
+
+    console.log(`Avatar result: ${user.id || user.user_id || user.name || 'unknown'} - avatarUrl: ${avatarUrl}, source: ${avatarSource}, name: ${userName}`);
 
     return {
       avatarUrl,
@@ -206,7 +173,7 @@ class AvatarUtils {
    * @returns {string} HTML string
    */
   static async createUnifiedAvatar(user, context = 'visibility', options = {}) {
-    console.log(`Creating unified avatar for ${user.user_email || user.email} in context: ${context}`);
+    console.log(`Creating unified avatar for ${user.id || user.user_id || user.name || 'unknown'} in context: ${context}`);
 
     const avatarData = await this.getAvatarUrl(user, context);
     const {
@@ -215,6 +182,42 @@ class AvatarUtils {
       userName,
       userHandle
     } = avatarData;
+
+    // If no real avatar, optionally render generic only if explicitly allowed
+    if (!avatarUrl) {
+      if (options && options.allowGenericOnDeleted) {
+        const size = options.size || (context === 'profile' ? 32 : 24);
+        const auraColor = user.aura_color || user.auraColor || window.AVATAR_FALLBACK_COLOR;
+        let html = `<div style="position: relative; width: ${size}px; height: ${size}px;" data-user-id="${user.id || user.user_id || user.userId}">`;
+        if (options.showAura !== false) {
+          html += `<div style="position: absolute; top: -2px; left: -2px; width: ${size + 4}px; height: ${size + 4}px; border-radius: 50%; background-color: ${auraColor}; z-index: 1; border: 2px solid ${auraColor};"></div>`;
+        }
+        html += `<img src="https://lh3.googleusercontent.com/a/default-user=s96-c" alt="${userName}" style="position: relative; z-index: 2; width: ${size}px; height: ${size}px; border-radius: 50%; object-fit: cover; border: 2px solid ${auraColor};" data-avatar-source="generic-fallback" data-user-id="${user.id || user.user_id || user.userId}">`;
+        if (options.showStatus !== false) {
+          const statusDotColor = user.is_active ? '#22c55e' : '#6b7280';
+          html += `<div style="position: absolute; bottom: -2px; right: -2px; width: 8px; height: 8px; border-radius: 50%; background-color: ${statusDotColor}; border: 2px solid white; z-index: 3;"></div>`;
+        }
+        html += `</div>`;
+        return html;
+      }
+      // Always render an <img> element to keep DOM structure consistent,
+      // even when no real avatar is available. The src will be empty and
+      // the browser will display a broken image icon, which is preferable
+      // to missing <img> tags in our UI contract.
+      const size = options.size || (context === 'profile' ? 32 : 24);
+      const auraColor = user.aura_color || user.auraColor || window.AVATAR_FALLBACK_COLOR;
+      let html = `<div style="position: relative; width: ${size}px; height: ${size}px;" data-user-id="${user.id || user.user_id || user.userId}">`;
+      if (options.showAura !== false) {
+        html += `<div style="position: absolute; top: -2px; left: -2px; width: ${size + 4}px; height: ${size + 4}px; border-radius: 50%; background-color: ${auraColor}; z-index: 1; border: 2px solid ${auraColor};"></div>`;
+      }
+      html += `<img src="" alt="${userName}" style="position: relative; z-index: 2; width: ${size}px; height: ${size}px; border-radius: 50%; object-fit: cover; border: 2px solid ${auraColor};" data-avatar-source="none" data-user-id="${user.id || user.user_id || user.userId}" referrerpolicy="no-referrer">`;
+      if (options.showStatus !== false) {
+        const statusDotColor = user.is_active ? '#22c55e' : '#6b7280';
+        html += `<div style="position: absolute; bottom: -2px; right: -2px; width: 8px; height: 8px; border-radius: 50%; background-color: ${statusDotColor}; border: 2px solid white; z-index: 3;"></div>`;
+      }
+      html += `</div>`;
+      return html;
+    }
 
     // COMP METHOD: Only use white fallback when auraColor is null/undefined
     const auraColor = user.aura_color || user.auraColor || window.AVATAR_FALLBACK_COLOR;
@@ -227,13 +230,14 @@ class AvatarUtils {
     // Status dot color based on activity
     const statusDotColor = user.is_active ? '#22c55e' : '#6b7280';
 
-    let html = `<div style="position: relative; width: ${size}px; height: ${size}px;" data-user-email="${user.user_email || user.email}" data-user-id="${user.user_email || user.email}">`;
+    let html = `<div style="position: relative; width: ${size}px; height: ${size}px;" data-user-id="${user.id || user.user_id || user.userId}">`;
     
     if (showAura) {
       html += `<div style="position: absolute; top: -2px; left: -2px; width: ${size + 4}px; height: ${size + 4}px; border-radius: 50%; background-color: ${auraColor}; z-index: 1; border: 2px solid ${auraColor};"></div>`;
     }
     
-    html += `<img src="${avatarUrl}" alt="${userName}" style="position: relative; z-index: 2; width: ${size}px; height: ${size}px; border-radius: 50%; object-fit: cover; border: 2px solid ${auraColor};" data-avatar-fallback="true" data-avatar-source="${avatarSource}" data-user-email="${user.user_email || user.email}" data-user-id="${user.user_email || user.email}">`;
+    // For message avatars, set src immediately.
+    html += `<img src="${avatarUrl}" alt="${userName}" style="position: relative; z-index: 2; width: ${size}px; height: ${size}px; border-radius: 50%; object-fit: cover; border: 2px solid ${auraColor};" data-avatar-source="${avatarSource}" data-user-id="${user.id || user.user_id || user.userId}">`;
     
     if (showStatus) {
       html += `<div style="position: absolute; bottom: -2px; right: -2px; width: 8px; height: 8px; border-radius: 50%; background-color: ${statusDotColor}; border: 2px solid white; z-index: 3;"></div>`;
@@ -264,7 +268,24 @@ class AvatarUtils {
 
     const avatarHTML = await this.createUnifiedAvatar(user, context, options);
     container.innerHTML = avatarHTML;
-    
+
+    // SD3: After inserting, preload and set src to avoid flashing placeholder
+    const img = container.querySelector('img[data-avatar-src]');
+    if (img) {
+      const src = img.getAttribute('data-avatar-src');
+      if (src) {
+        const pre = new Image();
+        pre.onload = () => {
+          img.setAttribute('src', src);
+        };
+        pre.onerror = () => {
+          img.setAttribute('src', 'https://lh3.googleusercontent.com/a/default-user=s96-c');
+        };
+        pre.referrerPolicy = 'no-referrer';
+        pre.src = src;
+      }
+    }
+
     console.log(`✅ Avatar updated in DOM: ${selector}`);
     return true;
   }
@@ -343,4 +364,3 @@ if (typeof module !== 'undefined' && module.exports) {
 }
 
 console.log('AvatarUtils initialized');
-

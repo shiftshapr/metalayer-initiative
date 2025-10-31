@@ -8,18 +8,18 @@ const visibilityService = new VisibilityService(prisma);
 
 // Middleware to ensure user is authenticated
 const authenticateUser = (req, res, next) => {
-  const userEmail = req.headers['x-user-email'];
+  const requestUserId = req.headers['x-user-id'];
   const userName = req.headers['x-user-name'];
   const userAvatarUrl = req.headers['x-user-avatar'];
   
-  if (!userEmail) {
-    return res.status(401).json({ error: 'Unauthorized: x-user-email header required' });
+  if (!requestUserId) {
+    return res.status(401).json({ error: 'Unauthorized: x-user-id header required' });
   }
   
   // Generate UUID from email (same logic as main auth middleware)
   const crypto = require('crypto');
-  const hash = crypto.createHash('sha256').update(userEmail).digest('hex');
-  const userId = [
+  const hash = crypto.createHash('sha256').update(requestUserId).digest('hex');
+  const generatedUserId = [
     hash.substring(0, 8),
     hash.substring(8, 12),
     hash.substring(12, 16),
@@ -27,7 +27,7 @@ const authenticateUser = (req, res, next) => {
     hash.substring(20, 32)
   ].join('-');
   
-  req.user = { email: userEmail, id: userId, name: userName, avatarUrl: userAvatarUrl };
+  req.user = { id: generatedUserId, name: userName, avatarUrl: userAvatarUrl };
   next();
 };
 

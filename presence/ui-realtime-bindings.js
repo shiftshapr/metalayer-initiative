@@ -99,7 +99,7 @@
       // Record may come from PG (record/new/old) or broadcast payload
       const id = record.id || record.messageId || crypto.randomUUID();
       const content = record.content || record.newContent || record.body || '';
-      const userEmail = record.user_email || record.authorId || 'unknown@unknown';
+      const userId = record.user_id || record.authorId || 'unknown-user';
       const createdAt = record.created_at || record.timestamp || new Date().toISOString();
       const pageId = record.page_id || (window.currentUrlData && window.currentUrlData.pageId) || 'unknown';
       const communityId = record.community_id || (window.StateManager?.get?.('ui.primaryCommunity')) || 'comm-001';
@@ -108,16 +108,15 @@
         id: id,
         parentId: record.parent_id || null,
         conversationId: `conv-${communityId}-${pageId}`,
-        authorId: userEmail,
+        authorId: userId,
         body: content,
         createdAt: createdAt,
         editedAt: createdAt,
         author: {
-          id: userEmail,
-          name: userEmail,
-          handle: userEmail.split('@')[0],
+          id: userId,
+          name: record.author?.name || 'User',
+          handle: record.author?.handle || 'user',
           avatarUrl: (window.currentUser && window.currentUser.avatarUrl) || null,
-          email: userEmail,
           auraColor: window.currentUser?.auraColor || window.AVATAR_FALLBACK_COLOR
         },
         conversation: {

@@ -10,7 +10,7 @@ class ReactionService {
    */
   async toggleReaction(data) {
     try {
-      const { userId, userEmail, kind, conversationId, postId, emoji } = data;
+      const { userId, kind, conversationId, postId, emoji } = data;
 
       // Validate that at least one target is specified
       if (!conversationId && !postId) {
@@ -19,15 +19,8 @@ class ReactionService {
 
       // Get user ID from email if not provided
       let actualUserId = userId;
-      if (!actualUserId && userEmail) {
-        const user = await this.prisma.appUser.findUnique({
-          where: { email: userEmail },
-          select: { id: true }
-        });
-        if (!user) {
-          throw new Error('User not found');
-        }
-        actualUserId = user.id;
+      if (!actualUserId) {
+        throw new Error('User ID is required for reaction operations');
       }
 
       // Check for existing reaction
@@ -88,6 +81,16 @@ class ReactionService {
       const reactions = await this.prisma.reactions.findMany({
         where: {
           message_id: targetId
+        },
+        include: {
+          AppUser: {
+            select: {
+              id: true,
+              email: true,
+              name: true,
+              avatarUrl: true
+            }
+          }
         },
         orderBy: { created_at: 'asc' }
       });

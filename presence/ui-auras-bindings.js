@@ -96,9 +96,9 @@
   /**
    * Update user aura display
    */
-  function updateUserAuraDisplay(userEmail, auraData) {
+  function updateUserAuraDisplay(userId, auraData) {
     // Find user in visibility list or messages
-    const userElements = document.querySelectorAll(`[data-user-email="${userEmail}"]`);
+    const userElements = document.querySelectorAll(`[data-user-id="${userId}"]`);
     
     userElements.forEach(userElement => {
       updateUserElementAura(userElement, auraData);
@@ -152,8 +152,8 @@
   /**
    * Remove user aura display
    */
-  function removeUserAuraDisplay(userEmail) {
-    const userElements = document.querySelectorAll(`[data-user-email="${userEmail}"]`);
+  function removeUserAuraDisplay(userId) {
+    const userElements = document.querySelectorAll(`[data-user-id="${userId}"]`);
     
     userElements.forEach(userElement => {
       const existingAura = userElement.querySelector('.user-aura');

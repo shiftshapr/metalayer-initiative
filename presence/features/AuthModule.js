@@ -53,7 +53,7 @@ class AuthModule {
 async function authenticateWithSupabase(user) {
   try {
     console.log('🔧 SUPABASE AUTH: Authenticating user with Supabase...');
-    console.log('🔧 SUPABASE AUTH: User email:', user.email);
+    console.log('🔧 SUPABASE AUTH: User id:', user.id || user.user_id);
     
     if (!window.supabase) {
       console.error('❌ SUPABASE AUTH: Supabase client not available');
@@ -100,9 +100,31 @@ async function authenticateWithSupabase(user) {
       console.log('✅ SUPABASE AUTH: Real-time client user set');
     }
     
-    // Update global user context with additional data
-    if (window.currentUser) {
-      window.currentUser.id = user.id;
+    // ROOT CAUSE FIX: Fetch AppUser UUID from backend (AppUser table always has UUIDs)
+    // Supabase auth user.id is NOT a UUID - it's a Google ID like "116467399993975200419"
+    // We need to get the AppUser UUID from backend by email
+    if (window.currentUser && user.email) {
+      try {
+        // Get or create AppUser - backend will return UUID
+        const appUser = await window.api.request(`/v1/users/${encodeURIComponent(user.email)}`, {
+          method: 'POST',
+          body: JSON.stringify({
+            email: user.email,
+            name: user.name || user.user_metadata?.full_name || user.email.split('@')[0],
+            avatarUrl: user.picture || user.user_metadata?.avatar_url
+          })
+        });
+        
+        if (appUser && appUser.id) {
+          // AppUser.id is ALWAYS a UUID (from userService.getOrCreateUser)
+          window.currentUser.id = appUser.id;
+          window.currentUser.user_id = appUser.id;
+          console.log('✅ AUTH: Set window.currentUser.id to AppUser UUID:', appUser.id);
+        }
+      } catch (error) {
+        console.warn('⚠️ AUTH: Could not fetch AppUser UUID, will be set on next API call:', error);
+        // Leave as null - will be set when backend returns UUID in reaction/user API response
+      }
       window.currentUser.communityId = 'comm-001';
     }
     
@@ -250,7 +272,7 @@ function initializeRealGoogleAuth() {
 async function authenticateWithSupabase(user) {
   try {
     console.log('🔧 SUPABASE AUTH: Authenticating user with Supabase...');
-    console.log('🔧 SUPABASE AUTH: User email:', user.email);
+    console.log('🔧 SUPABASE AUTH: User id:', user.id || user.user_id);
     
     if (!window.supabase) {
       console.error('❌ SUPABASE AUTH: Supabase client not available');
@@ -297,9 +319,31 @@ async function authenticateWithSupabase(user) {
       console.log('✅ SUPABASE AUTH: Real-time client user set');
     }
     
-    // Update global user context with additional data
-    if (window.currentUser) {
-      window.currentUser.id = user.id;
+    // ROOT CAUSE FIX: Fetch AppUser UUID from backend (AppUser table always has UUIDs)
+    // Supabase auth user.id is NOT a UUID - it's a Google ID like "116467399993975200419"
+    // We need to get the AppUser UUID from backend by email
+    if (window.currentUser && user.email) {
+      try {
+        // Get or create AppUser - backend will return UUID
+        const appUser = await window.api.request(`/v1/users/${encodeURIComponent(user.email)}`, {
+          method: 'POST',
+          body: JSON.stringify({
+            email: user.email,
+            name: user.name || user.user_metadata?.full_name || user.email.split('@')[0],
+            avatarUrl: user.picture || user.user_metadata?.avatar_url
+          })
+        });
+        
+        if (appUser && appUser.id) {
+          // AppUser.id is ALWAYS a UUID (from userService.getOrCreateUser)
+          window.currentUser.id = appUser.id;
+          window.currentUser.user_id = appUser.id;
+          console.log('✅ AUTH: Set window.currentUser.id to AppUser UUID:', appUser.id);
+        }
+      } catch (error) {
+        console.warn('⚠️ AUTH: Could not fetch AppUser UUID, will be set on next API call:', error);
+        // Leave as null - will be set when backend returns UUID in reaction/user API response
+      }
       window.currentUser.communityId = 'comm-001';
     }
     

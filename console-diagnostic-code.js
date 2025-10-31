@@ -251,3 +251,7 @@ runFullDiagnostic().catch(console.error);
 
 console.log('🔍 DIAGNOSTIC: Diagnostic code loaded. Check console output above.');
 
+
+
+
+

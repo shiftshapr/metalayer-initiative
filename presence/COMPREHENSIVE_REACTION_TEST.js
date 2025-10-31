@@ -151,9 +151,9 @@
     try {
       // Test with mock reactions
       const mockReactions = [
-        { emoji: '👍', user_email: 'test1@example.com' },
-        { emoji: '👍', user_email: window.currentUser?.email || 'test2@example.com' },
-        { emoji: '❤️', user_email: 'test3@example.com' }
+        { emoji: '👍', user_id: 'test1-123' },
+        { emoji: '👍', user_id: window.currentUser?.id || 'test2-123' },
+        { emoji: '❤️', user_id: 'test3-123' }
       ];
       
       console.log('  Running updateReactionDisplay test...');

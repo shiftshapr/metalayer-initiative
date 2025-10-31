@@ -186,3 +186,5 @@ WHERE contype = 'f'
   AND confrelid = '"AppUser"'::regclass
 ORDER BY conname;
 
+
+

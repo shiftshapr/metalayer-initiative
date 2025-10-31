@@ -40,12 +40,11 @@ class SupabaseRealtimeClient {
     }
   }
   
-  async setCurrentUser(userEmail, userId, communityId = 'comm-001') {
+  async setCurrentUser(userId, communityId = 'comm-001') {
     try {
-      console.log('🔧 SUPABASE_CLIENT: Setting current user:', userEmail);
+      console.log('🔧 SUPABASE_CLIENT: Setting current user:', userId);
       
       this.currentUser = {
-        userEmail: userEmail,
         userId: userId,
         communityId: communityId
       };
@@ -176,19 +175,19 @@ class SupabaseRealtimeClient {
         return { success: false, error: 'Supabase client not available' };
       }
       
-      // Get current user and page data
-      const userEmail = this.currentUser?.userEmail || window.currentUser?.email;
+      // Get current user and page data (UUID only)
+      const userId = this.currentUser?.id || window.currentUser?.id;
       const pageId = this.currentPage?.pageId || window.currentUrlData?.pageId;
       
-      if (!userEmail || !pageId) {
-        console.error('❌ SUPABASE_CLIENT: Missing user email or page ID');
-        return { success: false, error: 'Missing user email or page ID' };
+      if (!userId || !pageId) {
+        console.error('❌ SUPABASE_CLIENT: Missing user id or page ID');
+        return { success: false, error: 'Missing user id or page ID' };
       }
       
       // Insert message into database using Supabase (COMP field names)
       const messageData = {
         content: content,
-        user_email: userEmail,
+        user_id: userId,
         page_id: pageId,
         community_id: 'comm-001',
         created_at: new Date().toISOString()
@@ -220,7 +219,7 @@ class SupabaseRealtimeClient {
       console.log('✅ SUPABASE_CLIENT: Data keys:', Object.keys(data || {}));
       console.log('✅ SUPABASE_CLIENT: Data id:', data?.id);
       console.log('✅ SUPABASE_CLIENT: Data content:', data?.content);
-      console.log('✅ SUPABASE_CLIENT: Data user_email:', data?.user_email);
+      console.log('✅ SUPABASE_CLIENT: Data user_id:', data?.user_id);
       console.log('✅ SUPABASE_CLIENT: Data page_id:', data?.page_id);
       console.log('✅ SUPABASE_CLIENT: Data created_at:', data?.created_at);
       
@@ -342,6 +341,43 @@ class SupabaseRealtimeClient {
       if (!this.isInitialized || !this.supabase) {
         console.error('❌ SUPABASE_CLIENT: Client not initialized');
         return [];
+      }
+
+      // First try server join endpoint to enrich with AppUser (names/avatars)
+      try {
+        const rawUrl = window.currentUrlData?.rawUrl || window.location?.href || '';
+        const params = new URLSearchParams({ url: rawUrl });
+        const cu = window.currentUser || {};
+        const headers = {
+          'Content-Type': 'application/json',
+          ...(cu.id ? { 'X-User-Id': cu.id, 'x-user-id': cu.id } : {}),
+          ...(cu.email ? { 'X-User-Email': cu.email, 'x-user-email': cu.email } : {})
+        };
+        if (window.METALAYER_API_URL) {
+          const resp = await fetch(`${window.METALAYER_API_URL}/v1/presence/url?${params}`, { headers });
+          if (resp.ok) {
+            const j = await resp.json();
+            const active = Array.isArray(j?.active) ? j.active : [];
+            // Map to legacy shape used by visibility pipeline
+            const serverUsers = active.map(u => ({
+              user_email: u.email || u.handle || 'unknown@unknown',
+              user_id: u.id || u.userId,
+              is_active: u.isActive !== false,
+              last_seen: u.lastSeen || null,
+              enter_time: u.enterTime || null,
+              aura_color: u.auraColor || '#ffffff',
+              // Extra fields for AvatarUtils if needed
+              name: u.name,
+              avatar_url: u.avatarUrl
+            }));
+            console.log('✅ SUPABASE_CLIENT: Using server-enriched presence users:', serverUsers.length);
+            return serverUsers;
+          } else {
+            console.warn('⚠️ SUPABASE_CLIENT: presence/url failed with', resp.status);
+          }
+        }
+      } catch (serverErr) {
+        console.warn('⚠️ SUPABASE_CLIENT: presence/url error:', serverErr?.message || serverErr);
       }
 
       const { data, error } = await this.supabase

@@ -53,7 +53,7 @@ async function loadCommunities() {
       console.log('🔍 USER_IDENTITY: === COMMUNITIES USER IDENTITY TRACE ===');
       console.log('🔍 USER_IDENTITY: Current user context before loading communities:');
       console.log('🔍 USER_IDENTITY: window.currentUser:', window.currentUser);
-      console.log('🔍 USER_IDENTITY: window.currentUser?.email:', window.currentUser?.email);
+      console.log('🔍 USER_IDENTITY: window.currentUser?.id:', window.currentUser?.id);
       console.log('🔍 USER_IDENTITY: window.currentUser?.name:', window.currentUser?.name);
       console.log('🔍 USER_IDENTITY: window.currentUser?.id:', window.currentUser?.id);
       
@@ -347,11 +347,20 @@ async function loadCombinedAvatars(communityIds) {
           console.log('✅✅✅ LOAD_VISIBILITY: Found active users using COMP method ✅✅✅');
           console.log('✅ LOAD_VISIBILITY: Count:', users.length);
           
-          // COMP METHOD: Process users exactly like COMP does
+          // Helper to safely derive a display name
+          const safeNameFrom = (u) => {
+            const email = u?.user_email;
+            if (typeof email === 'string' && email.includes('@')) {
+              return email.split('@')[0];
+            }
+            return u?.name || u?.handle || 'Unknown';
+          };
+
+          // COMP METHOD: Process users exactly like COMP does, with guards
           const usersWithAvatars = await Promise.all(users.map(async (user) => {
             let avatarUrl = null;
-            let userName = user.user_email.split('@')[0];
-            let userHandle = user.user_email.split('@')[0];
+            let userName = safeNameFrom(user);
+            let userHandle = userName;
             let avatarSource = 'none';
             
             console.log(`🔍 COMP AVATAR: Processing user ${user.user_email} using AvatarUtils`);
@@ -366,7 +375,13 @@ async function loadCombinedAvatars(communityIds) {
               }
               
               // Handle async AvatarUtils
-              const avatarData = await avatarUtils.getAvatarUrl(user, 'visibility');
+              const avatarData = await avatarUtils.getAvatarUrl({
+                id: user.user_id || user.userId || user.id,
+                user_id: user.user_id || user.userId,
+                email: user.user_email,
+                name: user.name || userName,
+                avatar_url: user.avatar_url
+              }, 'visibility');
               avatarUrl = avatarData.avatarUrl;
               userName = avatarData.userName;
               avatarSource = avatarData.source;
@@ -382,8 +397,8 @@ async function loadCombinedAvatars(communityIds) {
             }
             
             return {
-              id: user.user_email,
-              userId: user.user_email,
+              id: user.user_id || user.userId || user.id || user.user_email,
+              userId: user.user_id || user.userId || user.id || user.user_email,
               email: user.user_email,
               name: userName,
               handle: userHandle,

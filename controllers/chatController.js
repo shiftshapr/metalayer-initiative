@@ -4,26 +4,26 @@ const prisma = new PrismaClient();
 // POST /chat/message
 exports.postMessage = async (req, res) => {
   try {
-    const { userEmail, communityId, content, uri, parentId, threadId, optionalContent } = req.body;
-    if (!userEmail || !communityId || !content) {
-      return res.status(400).json({ error: 'userEmail, communityId & content are required' });
+    const { user_id, communityId, content, uri, parentId, threadId, optionalContent } = req.body;
+    if (!user_id || !communityId || !content) {
+      return res.status(400).json({ error: 'user_id, communityId & content are required' });
     }
 
-    console.log(`✅ CHAT: Creating message for user ${userEmail} in community ${communityId} on URI ${uri}`);
+    console.log(`✅ CHAT: Creating message for user ${user_id} in community ${communityId} on URI ${uri}`);
     console.log(`🔍 CHAT_CREATE: Message content: "${content}"`);
 
     // Look up user by email to get database user ID
     const user = await prisma.appUser.findUnique({
-      where: { email: userEmail }
+      where: { id: user_id }
     });
 
     if (!user) {
-      console.log(`❌ CHAT_CREATE: User not found for email: ${userEmail}`);
+      console.log(`❌ CHAT_CREATE: User not found for ID: ${user_id}`);
       return res.status(404).json({ error: 'User not found' });
     }
 
     const userId = user.id;
-    console.log(`🔍 CHAT_CREATE: Found user ${userId} for email ${userEmail}`);
+    console.log(`🔍 CHAT_CREATE: Found user ${userId}`);
 
     // Generate unique IDs
     const postId = `post-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -177,7 +177,17 @@ exports.getChatHistory = async (req, res) => {
     
     console.log(`🔍 CHAT_API: Querying Supabase messages table for pageId: ${pageId}`);
     
-    let query = supabase.from('messages').select('*');
+    // COMP METHOD: Join with AppUser table to get user information
+    let query = supabase.from('messages').select(`
+      *,
+      AppUser:user_id (
+        id,
+        name,
+        handle,
+        email,
+        avatarUrl
+      )
+    `);
     if (pageId) {
       query = query.eq('page_id', pageId);
     }
@@ -194,16 +204,15 @@ exports.getChatHistory = async (req, res) => {
     const msgs = messages?.map(msg => ({
       id: msg.id,
       body: msg.content,
-      authorId: msg.user_email,
+      authorId: msg.user_id || msg.AppUser?.id,
       conversationId: `conv-${communityId}-${pageId}`,
       createdAt: msg.created_at,
       updatedAt: msg.updated_at,
       author: {
-        id: msg.user_email,
-        name: msg.user_email,
-        handle: msg.user_email.split('@')[0],
-        avatarUrl: null,
-        email: msg.user_email,
+        id: msg.AppUser?.id || msg.user_id,
+        name: msg.AppUser?.name || 'Unknown',
+        handle: msg.AppUser?.handle || 'unknown',
+        avatarUrl: msg.AppUser?.avatarUrl || null,
         auraColor: '#aa00aa'
       },
       conversation: {

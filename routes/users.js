@@ -38,6 +38,14 @@ router.post('/update-avatar', async (req, res) => {
 router.post('/:email', async (req, res) => {
   try {
     const { email } = req.params;
+    // Normalize and validate email param
+    const raw = (email || '').toString();
+    const first = raw.includes(',') ? raw.split(',')[0] : raw;
+    const normalized = first.trim().toLowerCase();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!normalized || normalized === 'null' || normalized === 'undefined' || !emailRegex.test(normalized)) {
+      return res.status(400).json({ error: 'Valid email is required' });
+    }
     const { name, avatarUrl, auraColor } = req.body;
     
     if (!email) {
@@ -47,7 +55,7 @@ router.post('/:email', async (req, res) => {
     console.log(`🔍 BACKEND: Creating/updating user ${email} with avatarUrl: ${avatarUrl}`);
     
     const user = await userService.getOrCreateUser({ 
-      email: decodeURIComponent(email),
+      email: decodeURIComponent(normalized),
       name: name || email.split('@')[0],
       avatarUrl: avatarUrl,
       auraColor: auraColor
@@ -72,7 +80,7 @@ router.put('/:userId/aura-color', async (req, res) => {
   try {
     const { userId } = req.params;
     const { auraColor } = req.body;
-    const userEmail = req.headers['x-user-email'];
+    const requestUserId = req.headers['x-user-id'];
     
     if (!auraColor) {
       return res.status(400).json({ error: 'Aura color is required' });
@@ -86,11 +94,11 @@ router.put('/:userId/aura-color', async (req, res) => {
     
     // If userId is an email, find the user by email first
     let targetUserId = userId;
-    if (userId.includes('@') && userEmail) {
+    if (userId.includes('@')) {
       const user = await userService.getOrCreateUser({ email: userId });
       targetUserId = user.id;
-    } else if (/^\d+$/.test(userId) && userEmail) {
-      const user = await userService.getOrCreateUser({ email: userEmail });
+    } else if (/^\d+$/.test(userId)) {
+      const user = await userService.getOrCreateUser({ id: userId });
       targetUserId = user.id;
     }
     
@@ -110,64 +118,33 @@ router.put('/:userId/aura-color', async (req, res) => {
   }
 });
 
-// CRITICAL FIX: Get user by email (used by frontend for avatar fetching)
-router.get('/:email', async (req, res) => {
-  try {
-    const { email } = req.params;
-    
-    console.log(`🔍 BACKEND: GET /v1/users/${email}`);
-    
-    // CRITICAL FIX: Validate email parameter to prevent null/undefined calls
-    if (!email || email === 'null' || email === 'undefined' || email.trim() === '') {
-      console.log(`❌ BACKEND: Invalid email parameter: ${email}`);
-      return res.status(400).json({ error: 'Valid email is required' });
-    }
-    
-    // CRITICAL FIX: Validate email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      console.log(`❌ BACKEND: Invalid email format: ${email}`);
-      return res.status(400).json({ error: 'Invalid email format' });
-    }
-    
-    const user = await userService.getOrCreateUser({ email: decodeURIComponent(email) });
-    
-    if (!user) {
-      console.error(`❌ BACKEND: User not found for email: ${email}`);
-      return res.status(404).json({ error: 'User not found' });
-    }
-    
-    console.log(`✅ BACKEND: Found user: ${user.email}, avatarUrl: ${user.avatarUrl}`);
-    
-    res.json({ 
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      handle: user.handle,
-      avatarUrl: user.avatarUrl,
-      auraColor: user.auraColor
-    });
-  } catch (error) {
-    console.error('Error getting user by email:', error);
-    res.status(500).json({ error: 'Failed to get user' });
-  }
-});
-
-// Get current user's database ID by email
+// Get current user's database ID by UUID
 router.get('/me', async (req, res) => {
   try {
-    const userEmail = req.headers['x-user-email'];
-    
-    if (!userEmail) {
-      return res.status(400).json({ error: 'User email is required' });
+    const requestUserId = req.headers['x-user-id'];
+    const rawEmail = req.headers['x-user-email'];
+    let requestUserEmail = null;
+    if (rawEmail) {
+      const first = rawEmail.includes(',') ? rawEmail.split(',')[0] : rawEmail;
+      const normalized = first.trim().toLowerCase();
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (emailRegex.test(normalized)) {
+        requestUserEmail = normalized;
+      }
     }
-    
-    const user = await userService.getOrCreateUser({ email: userEmail });
-    
+    if (!requestUserId && !requestUserEmail) {
+      return res.status(400).json({ error: 'x-user-id or x-user-email required' });
+    }
+    let user = null;
+    if (requestUserId) {
+      user = await userService.getUser(requestUserId);
+    }
+    if (!user && requestUserEmail) {
+      user = await userService.getOrCreateUser({ email: decodeURIComponent(requestUserEmail) });
+    }
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
-    
     res.json({ 
       id: user.id,
       email: user.email,
@@ -178,6 +155,49 @@ router.get('/me', async (req, res) => {
     });
   } catch (error) {
     console.error('Error getting user:', error);
+    res.status(500).json({ error: 'Failed to get user' });
+  }
+});
+
+// COMP METHOD: Get user by UUID (used by frontend for avatar fetching)
+router.get('/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    console.log(`🔍 BACKEND: GET /v1/users/${userId}`);
+    
+    // COMP METHOD: Validate UUID parameter
+    if (!userId || userId === 'null' || userId === 'undefined' || userId.trim() === '') {
+      console.log(`❌ BACKEND: Invalid userId parameter: ${userId}`);
+      return res.status(400).json({ error: 'Valid userId is required' });
+    }
+    
+    // COMP METHOD: Try to find user by UUID first
+    let user = await userService.getUser(userId);
+    
+    // If not found by UUID and it looks like an email, try by email (backward compatibility)
+    if (!user && userId.includes('@')) {
+      console.log(`🔍 BACKEND: Trying email lookup for: ${userId}`);
+      user = await userService.getOrCreateUser({ email: decodeURIComponent(userId) });
+    }
+    
+    if (!user) {
+      console.error(`❌ BACKEND: User not found for userId: ${userId}`);
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    console.log(`✅ BACKEND: Found user: ${user.id}, avatarUrl: ${user.avatarUrl}`);
+    
+    res.json({ 
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      handle: user.handle,
+      avatarUrl: user.avatarUrl,
+      auraColor: user.auraColor
+    });
+  } catch (error) {
+    console.error('Error getting user by userId:', error);
     res.status(500).json({ error: 'Failed to get user' });
   }
 });
@@ -206,18 +226,17 @@ router.get('/:userId/aura-color', async (req, res) => {
 // Update user's headline
 router.put('/:userId/headline', async (req, res) => {
   try {
-    const { userId } = req.params;
+    const { userId: targetUserId } = req.params;
     const { headline } = req.body;
-    const userEmail = req.headers['x-user-email'];
+    const requestUserId = req.headers['x-user-id'];
     
     if (typeof headline !== 'string') {
       return res.status(400).json({ error: 'Headline must be a string' });
     }
     
-    // If userId is a Google ID, find the user by email first
-    let targetUserId = userId;
-    if (/^\d+$/.test(userId) && userEmail) {
-      const user = await userService.getOrCreateUser({ email: userEmail });
+    // If targetUserId is a Google ID, find the user by email first
+    if (/^\d+$/.test(targetUserId)) {
+      const user = await userService.getOrCreateUser({ id: targetUserId });
       targetUserId = user.id;
     }
     
@@ -242,16 +261,15 @@ router.put('/:userId/display-visibility-after-exit', async (req, res) => {
   try {
     const { userId } = req.params;
     const { days } = req.body;
-    const userEmail = req.headers['x-user-email'];
+    const requestUserId = req.headers['x-user-id'];
     
     if (typeof days !== 'number' || days < 0 || days > 365) {
       return res.status(400).json({ error: 'Days must be a number between 0 and 365' });
     }
     
-    // If userId is a Google ID, find the user by email first
-    let targetUserId = userId;
-    if (/^\d+$/.test(userId) && userEmail) {
-      const user = await userService.getOrCreateUser({ email: userEmail });
+    // If targetUserId is a Google ID, find the user by email first
+    if (/^\d+$/.test(targetUserId)) {
+      const user = await userService.getOrCreateUser({ id: targetUserId });
       targetUserId = user.id;
     }
     

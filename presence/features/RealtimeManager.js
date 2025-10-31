@@ -105,7 +105,7 @@ class RealtimeManager {
         .subscribe(async (status) => {
           if (status === 'SUBSCRIBED') {
             await presenceChannel.track({
-              user_id: window.currentUser.email,
+              user_id: window.currentUser.id || window.currentUser.user_id,
               user_name: window.currentUser.name,
               user_avatar: window.currentUser.avatar,
               online_at: new Date().toISOString(),
@@ -136,10 +136,10 @@ class RealtimeManager {
           profileDiv.className = 'profile-item';
           profileDiv.innerHTML = `
             <div class="profile-avatar">
-              <img src="${user.avatar}" alt="${user.name || user.email}">
+              <img src="${user.avatar}" alt="${user.name}">
             </div>
             <div class="profile-info">
-              <div class="profile-name">${user.name || user.email}</div>
+              <div class="profile-name">${user.name}</div>
               <div class="profile-status">Active</div>
             </div>
           `;
@@ -313,7 +313,7 @@ async function sendSupabaseMessage(message) {
     console.log('info', 'Sending message via Supabase real-time', {
       type: message.type,
       hasContent: !!message.content,
-      hasUserEmail: !!message.userEmail,
+      hasUserId: !!(message.userId || message.user_id),
       hasAuraColor: !!message.auraColor,
       timestamp: message.timestamp
     });
@@ -386,13 +386,11 @@ async function joinPageWithSupabase(pageId, pageUrl) {
   
   if (client) {
     try {
-      const userEmail = await getCurrentUserEmail();
       const userId = await getCurrentUserId();
       
-      console.log('🌐 SUPABASE: User email:', userEmail);
       console.log('🌐 SUPABASE: User ID:', userId);
       
-      await client.setCurrentUser(userEmail, userId);
+      await client.setCurrentUser(userId);
       console.log('✅ SUPABASE: User set successfully');
       
       await client.joinPage(pageId, pageUrl);
@@ -436,13 +434,13 @@ function handleWebSocketMessage(data) {
     // This prevents dual pathways (Supabase + chrome.runtime.onMessage)
       
     case 'PRESENCE_UPDATE':
-      console.log('[WEBSOCKET] Presence update:', data.userEmail, data.availability);
+      console.log('[WEBSOCKET] Presence update:', data.userId, data.availability);
       // Reload visible avatars
       loadCombinedAvatars().catch(err => console.error('[WEBSOCKET] Error loading avatars after presence update:', err));
       break;
       
     case 'VISIBILITY_UPDATE':
-      console.log('[WEBSOCKET] Visibility update:', data.userEmail, data.is_visible);
+      console.log('[WEBSOCKET] Visibility update:', data.userId, data.is_visible);
       // Reload visible avatars
       loadCombinedAvatars().catch(err => console.error('[WEBSOCKET] Error loading avatars after visibility update:', err));
       break;
@@ -481,7 +479,7 @@ async function subscribeToCurrentPage() {
     // Send subscription message
     await sendSupabaseMessage({
       type: 'PAGE_SUBSCRIPTION',
-      userEmail: user.email,
+      userId: user.id || user.user_id,
       userId: user.id || user.email,
       pageId: urlData.pageId,
       url: urlData.normalizedUrl,
@@ -561,25 +559,44 @@ function handleMessageChange(payload) {
 }
 
 // Handle real-time reaction changes from Supabase - COMP METHOD
-function handleReactionChange(payload) {
-  console.log('🔔 REACTION_CHANGE: COMP METHOD - Processing real-time update:', payload);
-  
-  const { eventType, new: newRecord, old: oldRecord } = payload;
-  
-  // COMP METHOD: Delegate to window.handleReactionChange if available (from CanopiModule)
-  // This ensures consistent handling across modules
-  if (typeof window.handleReactionChange === 'function') {
-    console.log('🔔 REACTION_CHANGE: COMP METHOD - Delegating to window.handleReactionChange');
-    window.handleReactionChange(payload);
+// CRITICAL FIX: Do NOT delegate to window.handleReactionChange to avoid infinite recursion
+// window.handleReactionChange will handle it via Supabase subscription callbacks
+let isProcessingReactionChange = false; // Guard to prevent infinite recursion
+async function handleReactionChange(payload) {
+  // Guard against infinite recursion
+  if (isProcessingReactionChange) {
+    console.warn('⚠️ REACTION_CHANGE: Already processing, skipping to prevent recursion');
     return;
   }
+  
+  isProcessingReactionChange = true;
+  try {
+    console.log('🔔 REACTION_CHANGE: COMP METHOD - Processing real-time update:', payload);
+    
+    const { eventType, new: newRecord, old: oldRecord } = payload;
   
   // Fallback: Handle directly if window function not available
   switch (eventType) {
     case 'INSERT':
       console.log('👍 REACTION: COMP METHOD - New reaction added:', newRecord);
+      console.log('👍 REACTION: Full payload for INSERT:', payload);
       if (typeof window.addReactionToMessage === 'function') {
-        window.addReactionToMessage(newRecord);
+        // ROOT CAUSE FIX: Pass the full payload so addReactionToMessage can extract messageId correctly
+        // newRecord might not have message_id directly, but payload might
+        const insertPayload = {
+          ...newRecord,
+          // Try multiple paths for message_id
+          message_id: newRecord?.message_id || 
+                     newRecord?.messageId ||
+                     payload?.new?.message_id || 
+                     payload?.new?.messageId ||
+                     payload?.old?.message_id || 
+                     payload?.old?.messageId,
+          // Also pass payload for fallback extraction
+          _payload: payload
+        };
+        console.log('👍 REACTION: Constructed insertPayload:', insertPayload);
+        window.addReactionToMessage(insertPayload);
       }
       break;
       
@@ -592,13 +609,34 @@ function handleReactionChange(payload) {
       
     case 'DELETE':
       console.log('👎 REACTION: Reaction removed:', oldRecord);
+      console.log('👎 REACTION: Full payload for DELETE:', payload);
       if (typeof window.removeReactionFromMessage === 'function') {
-        window.removeReactionFromMessage(oldRecord);
+        // ROOT CAUSE FIX: Pass the full payload so removeReactionFromMessage can extract messageId correctly
+        // For DELETE events, oldRecord should have message_id, but also check payload structure
+        const deletePayload = {
+          ...oldRecord,
+          // Try multiple paths for message_id
+          message_id: oldRecord?.message_id || 
+                     oldRecord?.messageId ||
+                     payload?.old?.message_id || 
+                     payload?.old?.messageId ||
+                     payload?.new?.message_id || 
+                     payload?.new?.messageId,
+          // Also pass payload for fallback extraction
+          _payload: payload
+        };
+        console.log('👎 REACTION: Constructed deletePayload:', deletePayload);
+        // ROOT CAUSE FIX: removeReactionFromMessage is now async, await it
+        await window.removeReactionFromMessage(deletePayload);
       }
       break;
       
     default:
       console.log('❓ REACTION: Unknown event type:', eventType);
+  }
+  } finally {
+    // Always reset guard after processing
+    isProcessingReactionChange = false;
   }
 }
 
@@ -692,9 +730,6 @@ async function sendPresenceEventToAPI(kind, availability = null, customLabel = n
     const urlData = await normalizeCurrentUrl();
     console.log('🔍 PRESENCE EVENT DEBUG: URL data:', urlData);
     
-    const userEmail = await getCurrentUserEmail();
-    console.log('🔍 PRESENCE EVENT DEBUG: User email:', userEmail);
-    
     const userId = await getCurrentUserId();
     console.log('🔍 PRESENCE EVENT DEBUG: User ID:', userId);
     
@@ -709,12 +744,20 @@ async function sendPresenceEventToAPI(kind, availability = null, customLabel = n
     console.log('🔍 PRESENCE EVENT DEBUG: Request body:', requestBody);
     console.log('🔍 PRESENCE EVENT DEBUG: API URL:', `${METALAYER_API_URL}/v1/presence/event`);
     
+    // Derive both UUID and email; backend may accept either for user resolution
+    const userEmail = (await getCurrentUserEmail()) || window.currentUser?.email || null;
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const isUuid = typeof userId === 'string' && uuidRegex.test(userId);
     const response = await fetch(`${METALAYER_API_URL}/v1/presence/event`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-user-email': userEmail,
-        'x-user-id': userId
+        // Canonical headers (preferred going forward)
+        ...(isUuid ? { 'X-User-Id': userId } : {}),
+        ...(userEmail ? { 'X-User-Email': userEmail } : {}),
+        // Temporary compatibility aliases (lowercase casing only)
+        ...(isUuid ? { 'x-user-id': userId } : {}),
+        ...(userEmail ? { 'x-user-email': userEmail } : {})
       },
       body: JSON.stringify(requestBody)
     });
@@ -734,33 +777,15 @@ async function sendPresenceEventToAPI(kind, availability = null, customLabel = n
              availability: availability,
              customLabel: customLabel,
              pageId: currentPageId,
-             userEmail: userEmail,
+             userId: userId,
              timestamp: Date.now()
            });
            console.log(`👥 WEBSOCKET: ${kind} event broadcast via background service worker`, null, 'general');
            
            // COMP METHOD: Return success response with status and data
            
-           // CRITICAL FIX: Set is_active=true in database after successful API call
-           try {
-             console.log('🔧 PRESENCE FIX: Setting is_active=true in database...');
-             const { error: updateError } = await window.supabase
-               .from('user_presence')
-               .update({ 
-                 is_active: true,
-                 last_seen: new Date().toISOString()
-               })
-               .eq('user_email', userEmail)
-               .eq('page_id', currentPageId);
-             
-             if (updateError) {
-               console.error('❌ PRESENCE FIX: Failed to set is_active:', updateError);
-             } else {
-               console.log('✅ PRESENCE FIX: is_active set to true in database');
-             }
-           } catch (updateError) {
-             console.error('❌ PRESENCE FIX: Error setting is_active:', updateError);
-           }
+          // Presence event endpoint already upserts and sets is_active.
+          // Removed deprecated Supabase REST update that referenced user_email.
            
            return { success: true, status: 200, data: responseData };
     } else {
@@ -966,3 +991,7 @@ async function handlePresenceEventLocally(kind, availability, customLabel) {
 
 // Export for global access
 window.RealtimeManager = RealtimeManager;
+window.handlePresenceChange = handlePresenceChange;
+window.handleMessageChange = handleMessageChange;
+window.handleReactionChange = handleReactionChange;
+window.handleAuraChange = handleAuraChange;

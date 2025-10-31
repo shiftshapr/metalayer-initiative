@@ -4,6 +4,63 @@ const { PrismaClient } = require('../generated/prisma');
 
 const prisma = new PrismaClient();
 
+// Middleware to ensure user is authenticated (same as presence.js)
+const authenticateUser = async (req, res, next) => {
+  const rawUserId = req.headers['x-user-id'] || null;
+  const rawEmail = req.headers['x-user-email'] || null;
+  let rawUserEmail = null;
+  if (rawEmail) {
+    const first = rawEmail.includes(',') ? rawEmail.split(',')[0] : rawEmail;
+    const normalized = first.trim().toLowerCase();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (emailRegex.test(normalized)) {
+      rawUserEmail = normalized;
+    }
+  }
+  const userName = req.headers['x-user-name'] || null;
+  const userAvatarUrl = req.headers['x-user-avatar'] || null;
+
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const validUuid = typeof rawUserId === 'string' && uuidRegex.test(rawUserId);
+
+  if (!validUuid && !rawUserEmail) {
+    return res.status(401).json({ error: 'Unauthorized: X-User-Id (UUID) or X-User-Email required' });
+  }
+
+  try {
+    let user = null;
+    
+    // ROOT CAUSE FIX: If UUID header is provided, it MUST match an AppUser
+    // DO NOT fall back to email - this causes ID mismatches
+    if (validUuid) {
+      user = await prisma.appUser.findUnique({ where: { id: rawUserId } });
+      if (!user) {
+        // UUID provided but not found - this is an error, don't fall back to email
+        return res.status(401).json({ 
+          error: 'User not found', 
+          details: 'X-User-Id header contains valid UUID format but user not found in database. Use correct AppUser UUID or use X-User-Email header instead.' 
+        });
+      }
+    } else if (rawUserEmail) {
+      // Only use email lookup if UUID was not provided
+      user = await prisma.appUser.findUnique({ where: { email: rawUserEmail } });
+      if (!user) {
+        return res.status(401).json({ error: 'User not found in database' });
+      }
+    }
+    
+    if (!user) {
+      return res.status(401).json({ error: 'User not found in database' });
+    }
+    
+    req.user = { id: user.id, email: user.email, name: userName, avatarUrl: userAvatarUrl };
+    next();
+  } catch (error) {
+    console.error('Error authenticating user:', error);
+    return res.status(500).json({ error: 'Internal server error', code: error.code, message: error.message });
+  }
+};
+
 // Get reactions for a message
 router.get('/:messageId', async (req, res) => {
   try {
@@ -45,33 +102,26 @@ router.get('/:messageId', async (req, res) => {
 });
 
 // Add a reaction to a message
-router.post('/', async (req, res) => {
+router.post('/', authenticateUser, async (req, res) => {
   try {
-    const { messageId, emoji, userEmail } = req.body;
+    const { messageId, emoji } = req.body;
     
-    if (!messageId || !emoji || !userEmail) {
+    if (!messageId || !emoji) {
       return res.status(400).json({ 
-        error: 'Missing required fields: messageId, emoji, userEmail' 
+        error: 'Missing required fields: messageId, emoji' 
       });
     }
     
-    console.log(`🔍 REACTIONS: Adding reaction ${emoji} to message ${messageId} by ${userEmail}`);
+    // Use authenticated user ID from headers (secure)
+    const userId = req.user.id;
     
-    // Find the user and get their UUID
-    const user = await prisma.appUser.findUnique({
-      where: { email: userEmail },
-      select: { id: true, email: true, name: true, avatarUrl: true }
-    });
-    
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
+    console.log(`🔍 REACTIONS: Adding reaction ${emoji} to message ${messageId} by ${userId}`);
     
     // Check if user already has ANY reaction on this message
     const existingReaction = await prisma.reactions.findFirst({
       where: {
         message_id: messageId,
-        user_id: user.id
+        user_id: userId
       },
       include: {
         AppUser: {
@@ -131,7 +181,7 @@ router.post('/', async (req, res) => {
         data: {
           message_id: messageId,
           emoji: emoji,
-          user_id: user.id
+          user_id: userId
         },
         include: {
           AppUser: {
@@ -188,6 +238,43 @@ router.delete('/:reactionId', async (req, res) => {
       error: 'Failed to remove reaction',
       details: error.message 
     });
+  }
+});
+
+// ROOT CAUSE FIX: GET reaction by ID (for DELETE event messageId extraction)
+router.get('/by-id/:id', authenticateUser, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const reaction = await prisma.reactions.findUnique({
+      where: { id: id },
+      include: {
+        AppUser: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            avatarUrl: true
+          }
+        }
+      }
+    });
+    
+    if (!reaction) {
+      return res.status(404).json({ error: 'Reaction not found' });
+    }
+    
+    return res.json({
+      id: reaction.id,
+      message_id: reaction.message_id,
+      emoji: reaction.emoji,
+      user_id: reaction.user_id,
+      created_at: reaction.created_at,
+      AppUser: reaction.AppUser
+    });
+  } catch (error) {
+    console.error('❌ REACTIONS: Error fetching reaction by ID:', error);
+    return res.status(500).json({ error: 'Internal server error', details: error.message });
   }
 });
 

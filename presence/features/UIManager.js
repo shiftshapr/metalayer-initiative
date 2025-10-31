@@ -70,8 +70,8 @@ class UIManager {
       // Fix avatar display
       const avatar = message.querySelector('.message-avatar img');
       if (avatar && avatar.src.includes('gravatar.com') && avatar.dataset.avatarFallback === 'true') {
-        const userEmail = avatar.dataset.userEmail;
-        if (userEmail) {
+        const userId = avatar.dataset.userId;
+        if (userId) {
           avatar.src = window.currentUser?.avatarUrl || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgdmlld0JveD0iMCAwIDIwMCAyMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIyMDAiIGhlaWdodD0iMjAwIiBmaWxsPSIjRjBGMEYwIi8+Cjx0ZXh0IHg9IjEwMCIgeT0iMTAwIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iNDAiIGZpbGw9IiM5OTk5OTkiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5VPC90ZXh0Pgo8L3N2Zz4K';
         }
       }
@@ -79,9 +79,9 @@ class UIManager {
       // Fix author name
       const authorName = message.querySelector('.message-author');
       if (authorName && !authorName.textContent.trim()) {
-        const userEmail = message.dataset.userEmail || message.querySelector('[data-user-email]')?.dataset.userEmail;
-        if (userEmail) {
-          authorName.textContent = userEmail.split('@')[0];
+        const userId = message.dataset.userId || message.querySelector('[data-user-id]')?.dataset.userId;
+        if (userId) {
+          authorName.textContent = userId || 'User';
         }
       }
       
@@ -202,7 +202,7 @@ class UIManager {
         
         // Safe template literal with proper escaping
         const userName = window.currentUser?.name || 'User';
-        const userEmail = window.currentUser?.email || 'user@example.com';
+        const userId = window.currentUser?.id || window.currentUser?.user_id || 'user-123';
         const userAvatar = window.currentUser?.avatarUrl || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgdmlld0JveD0iMCAwIDIwMCAyMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIyMDAiIGhlaWdodD0iMjAwIiBmaWxsPSIjRjBGMEYwIi8+Cjx0ZXh0IHg9IjEwMCIgeT0iMTAwIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iNDAiIGZpbGw9IiM5OTk5OTkiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5VPC90ZXh0Pgo8L3N2Zz4K';
         
         menuDiv.innerHTML = `
@@ -212,7 +212,7 @@ class UIManager {
             </div>
             <div class="profile-info">
               <div class="profile-name">${userName}</div>
-              <div class="profile-email">${userEmail}</div>
+              <div class="profile-id">${userId}</div>
             </div>
           </div>
           <div class="profile-menu-actions">

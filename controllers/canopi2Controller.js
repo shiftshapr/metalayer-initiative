@@ -263,7 +263,7 @@ class Canopi2Controller {
 
       const result = await this.reactionService.toggleReaction({
         userId: user.id, // Use the actual database user ID
-        userEmail: userData.email, // Pass email for compatibility
+        userId: userData.id, // Pass user ID for compatibility
         kind,
         emoji,
         conversationId,

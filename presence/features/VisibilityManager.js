@@ -96,10 +96,10 @@ class VisibilityManager {
           
           return {
             id: user.user_email,
-            userId: user.user_email,
-            email: user.user_email,
-            name: userProfile?.name || user.user_email.split('@')[0],
-            handle: userProfile?.handle || user.user_email.split('@')[0],
+            userId: user.user_email || user.email,
+            email: user.user_email || user.email,
+            name: userProfile?.name || (user.user_email || user.email)?.split('@')[0] || 'Unknown',
+            handle: userProfile?.handle || (user.user_email || user.email)?.split('@')[0] || 'unknown',
             avatarUrl: userProfile?.avatar_url || null,
             auraColor: user.aura_color || window.AVATAR_FALLBACK_COLOR,
             communityId: 'comm-001',
@@ -113,17 +113,17 @@ class VisibilityManager {
           };
         } catch (error) {
           this.logger.warn('VISIBILITY', 'Failed to fetch avatar for user', { 
-            userEmail: user.user_email,
+            userId: user.id || user.user_id,
             error: error.message 
           });
           
           // Return basic user data without avatar
           return {
             id: user.user_email,
-            userId: user.user_email,
-            email: user.user_email,
-            name: user.user_email.split('@')[0],
-            handle: user.user_email.split('@')[0],
+            userId: user.user_email || user.email,
+            email: user.user_email || user.email,
+            name: (user.user_email || user.email)?.split('@')[0] || 'Unknown',
+            handle: (user.user_email || user.email)?.split('@')[0] || 'unknown',
             avatarUrl: null,
             auraColor: user.aura_color || window.AVATAR_FALLBACK_COLOR,
             communityId: 'comm-001',
@@ -208,7 +208,7 @@ class VisibilityManager {
     try {
       this.logger.visibility('Processing presence event', { 
         eventType,
-        userEmail: newRecord?.user_email || oldRecord?.user_email,
+        userId: newRecord?.user_id || oldRecord?.user_id,
         pageId: newRecord?.page_id || oldRecord?.page_id
       });
 

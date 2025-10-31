@@ -78,3 +78,5 @@ Migrating from email-based foreign keys to UUID-based foreign keys for proper re
 - Email columns: Denormalized for read performance
 - Indexes: Both fields indexed for optimal queries
 
+
+

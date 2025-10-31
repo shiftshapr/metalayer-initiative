@@ -11,33 +11,47 @@ class UserService {
   async getOrCreateUser(userData) {
     try {
       const { id, email, name, handle, avatarUrl, auraColor } = userData;
+      // Normalize and validate inputs to prevent malformed users
+      const emailCandidate = (email ?? '').toString();
+      // If multiple header values were merged, Node may present them comma-separated
+      let normalizedEmail = emailCandidate.includes(',') ? emailCandidate.split(',')[0] : emailCandidate;
+      normalizedEmail = normalizedEmail.trim().toLowerCase();
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!normalizedEmail || normalizedEmail === 'null' || normalizedEmail === 'undefined' || !emailRegex.test(normalizedEmail)) {
+        normalizedEmail = null;
+      }
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      const normalizedId = (typeof id === 'string' && uuidRegex.test(id)) ? id : null;
       
-      // Must have email to create/find user
-      if (!email) {
-        throw new Error('Email is required to get or create user');
+      // Must have either email or id to create/find user
+      if (!normalizedEmail && !normalizedId) {
+        throw new Error('Email or ID is required to get or create user');
       }
       
-      // First try to find by email (since that's more reliable)
+      // Try to find user by ID first (if provided), then by email
       let user = null;
-      user = await this.prisma.AppUser.findUnique({
-        where: { email }
-      });
       
-      // If not found by email and we have an ID, try by ID
-      if (!user && id) {
+      if (normalizedId) {
         try {
           user = await this.prisma.AppUser.findUnique({
-            where: { id }
+            where: { id: normalizedId }
           });
         } catch (idError) {
           // ID might be invalid format, ignore and continue
-          console.log('Invalid user ID format, continuing with email lookup');
+          console.log('Invalid user ID format, trying email lookup');
         }
+      }
+      
+      // If not found by ID and we have an email, try by email
+      if (!user && normalizedEmail) {
+        user = await this.prisma.AppUser.findUnique({
+          where: { email: normalizedEmail }
+        });
       }
 
       if (!user) {
         // Generate unique handle
-        let userHandle = handle || email.split('@')[0];
+        let userHandle = handle || (normalizedEmail ? normalizedEmail.split('@')[0] : 'user');
         let counter = 1;
         
         // Check if handle exists and make it unique
@@ -46,40 +60,36 @@ class UserService {
             where: { handle: userHandle }
           });
           if (!existingUser) break;
-          userHandle = `${handle || email.split('@')[0]}${counter}`;
+          userHandle = `${handle || (normalizedEmail ? normalizedEmail.split('@')[0] : 'user')}${counter}`;
           counter++;
         }
 
         // Create new user with only the fields that exist in the schema
-        // Always generate a UUID for the ID
+        // Use provided ID or generate a UUID
+        const userName = name || (normalizedEmail ? normalizedEmail.split('@')[0] : 'User');
         const userData = {
-          id: require('crypto').randomUUID(),
-          email,
-          name: name || email.split('@')[0],
+          id: normalizedId || require('crypto').randomUUID(),
+          email: normalizedEmail || null, // Save email if available, null if not
+          name: userName,
           handle: userHandle,
-          avatarUrl: avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(name || email.split('@')[0])}&background=random&color=fff&size=96`,
+          avatarUrl: (avatarUrl && avatarUrl.trim() !== '') ? avatarUrl : `https://ui-avatars.com/api/?name=${encodeURIComponent(userName)}&background=random&color=fff&size=96`,
           auraColor: auraColor || null,
           isVerified: false,
           isSuperAdmin: false,
           updatedAt: new Date()
         };
         
-        // Override with provided ID only if it's a valid UUID format
-        if (id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
-          userData.id = id;
-        }
-        
         user = await this.prisma.AppUser.create({
           data: userData
         });
       } else {
         // User exists, but update avatar URL if we have a new one
-        if (avatarUrl && avatarUrl !== user.avatarUrl) {
+        if (avatarUrl && avatarUrl.trim() !== '' && avatarUrl !== user.avatarUrl) {
           user = await this.prisma.AppUser.update({
             where: { id: user.id },
             data: { avatarUrl, updatedAt: new Date() }
           });
-        } else if (!user.avatarUrl) {
+        } else if (!user.avatarUrl || user.avatarUrl.trim() === '') {
           // If user has no avatarUrl, generate one using ui-avatars.com
           const fallbackAvatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || user.email.split('@')[0])}&background=random&color=fff&size=96`;
           user = await this.prisma.AppUser.update({

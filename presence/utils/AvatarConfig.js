@@ -20,14 +20,11 @@ function createUnifiedAvatar(user, options = {}) {
   } = options;
 
   // Get user identification
-  // COMP METHOD: Use email only, never UUID (id) as fallback
-  // This ensures we follow COMP method architecture where user_email should be email addresses
-  const userEmail = user.user_email || user.email;
-  const userName = user.name || user.display_name || userEmail;
+  const userName = user.name || user.display_name;
   
   // Get aura color - prioritize user.auraColor, then fallback to stored
   let auraColor = user.auraColor;
-  if (!auraColor && window.currentUser && window.currentUser.email === userEmail) {
+  if (!auraColor && window.currentUser && window.currentUser.id === userId) {
     auraColor = window.currentUser.auraColor;
   }
   if (!auraColor) {
@@ -44,7 +41,7 @@ function createUnifiedAvatar(user, options = {}) {
   // Create avatar HTML
   const avatarHTML = `
     <div class="unified-avatar ${sizeClasses[size]} ${context}-avatar" 
-         data-user-email="${userEmail}" 
+         data-user-id="${user.id || user.user_id}" 
          data-aura-color="${auraColor}"
          ${clickable ? 'onclick="handleAvatarClick(event)"' : ''}>
       <div class="avatar-container" style="background-color: ${auraColor};">
@@ -83,13 +80,13 @@ function handleAvatarClick(event) {
   event.stopPropagation();
   
   const avatar = event.currentTarget;
-  const userEmail = avatar.getAttribute('data-user-email');
+  const userId = avatar.getAttribute('data-user-id');
   
-  console.log('Avatar clicked for user:', userEmail);
+  console.log('Avatar clicked for user:', userId);
   
   // Dispatch custom event for other modules to handle
   document.dispatchEvent(new CustomEvent('avatarClicked', {
-    detail: { userEmail, avatar }
+    detail: { userId, avatar }
   }));
 }
 

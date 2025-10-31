@@ -38,19 +38,18 @@ class ReactionsRealtimeManager {
   /**
    * Set user for real-time operations
    */
-  setUser(userEmail, userId = null, communityId = 'comm-001') {
-    if (!userEmail) {
-      this.logger.error('User email is required');
+  setUser(userId, communityId = 'comm-001') {
+    if (!userId) {
+      this.logger.error('User ID is required');
       return false;
     }
-    
+
     this.user = {
-      email: userEmail,
-      id: userId || userEmail,
+      id: userId,
       communityId: communityId
     };
     
-    this.logger.info(`User set: ${userEmail}`);
+    this.logger.info(`User set: ${userId}`);
     return true;
   }
 
@@ -186,13 +185,13 @@ class ReactionsRealtimeManager {
       this.logger.info(`Adding reaction: ${reactionType} to message: ${messageId}`);
       
       // COMP METHOD: Use API instead of direct Supabase calls
+      // Backend uses authenticated user from headers - don't send user_id in body
       if (typeof window.api !== 'undefined' && window.api.request) {
         const result = await window.api.request('/v1/reactions', {
           method: 'POST',
           body: JSON.stringify({
             messageId: messageId,
-            emoji: reactionType,
-            userEmail: this.user.email
+            emoji: reactionType
           })
         });
         
@@ -232,13 +231,13 @@ class ReactionsRealtimeManager {
       this.logger.info(`Removing reaction: ${reactionType} from message: ${messageId}`);
       
       // COMP METHOD: Use API instead of direct Supabase calls
+      // Backend uses authenticated user from headers - don't send user_id in body
       if (typeof window.api !== 'undefined' && window.api.request) {
         const result = await window.api.request('/v1/reactions', {
           method: 'POST',
           body: JSON.stringify({
             messageId: messageId,
-            emoji: reactionType,
-            userEmail: this.user.email
+            emoji: reactionType
           })
         });
         

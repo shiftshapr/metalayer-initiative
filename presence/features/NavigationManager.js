@@ -10,7 +10,7 @@
     console.log('⚡ Current page:', window.currentUrlData?.pageId || 'NOT SET - CRITICAL ERROR');
     console.log('⚡ Current URL (raw):', window.currentUrlData?.rawUrl || 'NOT SET');
     console.log('⚡ Current URL (normalized):', window.currentUrlData?.normalizedUrl || 'NOT SET');
-    console.log('⚡ Current user:', window.currentUser?.email || 'null');
+    console.log('⚡ Current user:', window.currentUser?.id || 'null');
     console.log('⚡ Current user avatar:', window.currentUser?.avatarUrl || 'null');
     console.log('⚡ Current user aura:', window.currentUser?.auraColor || 'null');
     

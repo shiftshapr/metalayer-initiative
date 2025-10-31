@@ -106,3 +106,5 @@ npm test
 
 ## Result
 Clean, standard relational database with UUID foreign keys only. No email foreign keys, no backward compatibility complexity.
+
+

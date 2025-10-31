@@ -101,7 +101,7 @@
     const visibilityContainer = getOrCreateVisibilityContainer();
     
     // Check if user already exists
-    const existingUser = visibilityContainer.querySelector(`[data-user-id="${userData.user_email}"]`);
+    const existingUser = visibilityContainer.querySelector(`[data-user-id="${userData.user_id}"]`);
     if (existingUser) {
       console.log('👤 UI VISIBILITY: User already in visibility list');
       return;
@@ -119,7 +119,7 @@
    */
   function updateUserInVisibilityList(userData) {
     const visibilityContainer = getOrCreateVisibilityContainer();
-    const userElement = visibilityContainer.querySelector(`[data-user-id="${userData.user_email}"]`);
+    const userElement = visibilityContainer.querySelector(`[data-user-id="${userData.user_id}"]`);
     
     if (userElement) {
       // Update user element
@@ -136,7 +136,7 @@
    */
   function removeUserFromVisibilityList(userData) {
     const visibilityContainer = getOrCreateVisibilityContainer();
-    const userElement = visibilityContainer.querySelector(`[data-user-id="${userData.user_email}"]`);
+    const userElement = visibilityContainer.querySelector(`[data-user-id="${userData.user_id}"]`);
     
     if (userElement) {
       userElement.remove();
@@ -172,8 +172,8 @@
   function createUserElement(userData) {
     const userElement = document.createElement('div');
     userElement.className = 'visibility-user';
-    userElement.setAttribute('data-user-id', userData.user_email);
-    userElement.setAttribute('data-user-email', userData.user_email);
+    userElement.setAttribute('data-user-id', userData.user_id || userData.id);
+    userElement.removeAttribute('data-user-email');
     userElement.setAttribute('data-is-visible', userData.is_visible);
     
     // Create user content
@@ -182,7 +182,7 @@
         <img src="${getUserAvatar(userData.user_email)}" alt="${userData.user_email}" />
       </div>
       <div class="user-info">
-        <div class="user-name">${getUserDisplayName(userData.user_email)}</div>
+        <div class="user-name">${getUserDisplayName(userData.user_id)}</div>
         <div class="user-status ${userData.is_visible ? 'visible' : 'hidden'}">
           ${userData.is_visible ? 'Visible' : 'Hidden'}
         </div>
@@ -221,7 +221,7 @@
   /**
    * Get user avatar
    */
-  function getUserAvatar(userEmail) {
+  function getUserAvatar(userId) {
     // Use the same avatar system as messages
     if (typeof window.createUnifiedAvatar === 'function') {
       // This would need to be adapted for visibility
@@ -233,9 +233,19 @@
   /**
    * Get user display name
    */
-  function getUserDisplayName(userEmail) {
-    // Extract name from email
-    return userEmail.split('@')[0];
+  function getUserDisplayName(userId) {
+    // Resolve display name by UUID from visibility data first
+    const active = (window.currentVisibilityDataUnfiltered && window.currentVisibilityDataUnfiltered.active) || [];
+    const match = active.find(u => u.id === userId || u.userId === userId);
+    if (match && match.name) return match.name;
+
+    // Fallback to current user if IDs match
+    if (window.currentUser && (window.currentUser.id === userId || window.currentUser.user_id === userId)) {
+      return window.currentUser.name || 'User';
+    }
+
+    // Final fallback
+    return 'User';
   }
 
   // Initialize when DOM is ready

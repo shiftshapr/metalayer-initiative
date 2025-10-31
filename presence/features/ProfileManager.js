@@ -191,7 +191,7 @@ class ProfileManager {
           </div>
           <div>
             <div class="user-name" style="font-weight: bold; font-size: 14px;">${currentUser.name}</div>
-            <div class="user-email" style="font-size: 12px; color: #666;">${currentUser.email}</div>
+            <div class="user-id" style="font-size: 12px; color: #666;">${currentUser.id || currentUser.user_id}</div>
           </div>
         </div>
       </div>
@@ -756,7 +756,7 @@ class ProfileManager {
   getProfileStatus() {
     return {
       hasProfileData: !!this.profileData,
-      userEmail: this.profileData?.email || null,
+      userId: this.profileData?.id || this.profileData?.user_id || null,
       hasAvatar: !!this.profileData?.avatarUrl,
       avatarSource: this.profileData?.avatarSource || null,
       auraColor: this.profileData?.auraColor || null,

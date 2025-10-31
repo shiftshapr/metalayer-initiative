@@ -38,19 +38,18 @@ class VisibilityRealtimeManager {
   /**
    * Set user for real-time operations
    */
-  setUser(userEmail, userId = null, communityId = 'comm-001') {
-    if (!userEmail) {
-      this.logger.error('User email is required');
+  setUser(userId, communityId = 'comm-001') {
+    if (!userId) {
+      this.logger.error('User ID is required');
       return false;
     }
-    
+
     this.user = {
-      email: userEmail,
-      id: userId || userEmail,
+      id: userId,
       communityId: communityId
     };
     
-    this.logger.info(`User set: ${userEmail}`);
+    this.logger.info(`User set: ${userId}`);
     return true;
   }
 

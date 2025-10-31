@@ -361,7 +361,7 @@ class AuthManager {
       authState: this.authState,
       isAuthenticated: this.isAuthenticated(),
       hasUser: !!this.currentUser,
-      userEmail: this.currentUser?.email || null,
+      userId: this.currentUser?.id || this.currentUser?.user_id || null,
       callbacksRegistered: this.authCallbacks.length
     };
   }

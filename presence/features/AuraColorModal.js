@@ -126,7 +126,7 @@ function showColorPickerModal() {
       let defaultColor = window.AVATAR_FALLBACK_COLOR; // Fallback
       const user = window.currentUser;
       if (user) {
-        const name = user.user_metadata?.full_name || user.name || user.email || 'User';
+        const name = user.user_metadata?.full_name || user.name || 'User';
         defaultColor = getAvatarColor(name);
       }
       const defaultHex = defaultColor.replace('#', '');
@@ -147,17 +147,17 @@ function showColorPickerModal() {
           window.currentUser.auraColor = auraColor;
           updateUI(window.currentUser);
           
-          // Update all message avatars with new aura color
+          // Update all message avatars with new aura color (UUID)
           console.log('🔍 AURA DEBUG: Updating all message avatars with new aura color');
-          updateAllMessageAvatars(window.currentUser.email, auraColor);
+          updateAllMessageAvatars(window.currentUser.id, auraColor);
           
-          // Update all visibility avatars with new aura color
+          // Update all visibility avatars with new aura color (UUID)
           console.log('🔍 AURA DEBUG: Updating all visibility avatars with new aura color');
-          updateAllVisibilityAvatars(window.currentUser.email, auraColor);
+          updateAllVisibilityAvatars(window.currentUser.id, auraColor);
           
           // Send aura change via real-time system
           if (window.aurasIntegration && window.aurasIntegration.isInitialized) {
-            window.aurasIntegration.setAura(window.currentUser.email, auraColor);
+            window.aurasIntegration.setAura(window.currentUser.id, auraColor);
           }
         }
         
@@ -168,13 +168,13 @@ function showColorPickerModal() {
         
         // Save aura color to database via API
         try {
-          const userEmail = window.currentUser?.email;
-          if (userEmail) {
-            console.log('🎨 Saving aura color to database for user:', userEmail);
-            const result = await window.api.request(`/v1/users/${encodeURIComponent(userEmail)}/aura-color`, {
+          const userId = window.currentUser?.id;
+          if (userId) {
+            console.log('🎨 Saving aura color to database for userId:', userId);
+            const result = await window.api.request(`/v1/users/${encodeURIComponent(userId)}/aura-color`, {
               method: 'PUT',
               headers: {
-                'X-User-Email': userEmail
+                'X-User-Id': userId
               },
               body: JSON.stringify({
                 auraColor: auraColor
@@ -188,7 +188,7 @@ function showColorPickerModal() {
         }
         
         // Update UI with new aura color
-        updateUserAuraInUI(auraColor);
+        updateUserAuraInUI(window.currentUser?.id, auraColor);
         
         // Broadcast aura change via WebSocket
         broadcastAuraChange(auraColor);
@@ -315,6 +315,7 @@ async function resetUserAvatarBgColor() {
     chrome.runtime.sendMessage({
       type: 'AURA_COLOR_CHANGED',
       color: 'reset',
+      userId: window.currentUser?.id,
       timestamp: Date.now()
     });
     console.log('📡 AURA: Broadcasted aura color reset to other profiles');
@@ -331,13 +332,13 @@ async function broadcastAuraColorChange(color) {
 }
 
 
-function updateUserAuraInUI(userEmail, auraColor) {
+function updateUserAuraInUI(userId, auraColor) {
   try {
     const timer = Date.now();
     console.log('Starting aura color UI update:', {
-      userEmail,
+      userId,
       auraColor,
-      isCurrentUser: window.currentUser?.email === userEmail
+      isCurrentUser: window.currentUser?.id === userId
     });
     
     // Update message avatars for this user
@@ -353,7 +354,7 @@ function updateUserAuraInUI(userEmail, auraColor) {
         const messageId = messageContainer.getAttribute('data-message-id');
         if (messageId) {
           const messageData = window.currentChatData?.find(msg => msg.id === messageId);
-          if (messageData && messageData.author && messageData.author.email === userEmail) {
+          if (messageData && messageData.author && (messageData.author.id === userId || messageData.author.user_id === userId)) {
             // Update the author's aura color
             messageData.author.auraColor = auraColor;
             
@@ -364,7 +365,7 @@ function updateUserAuraInUI(userEmail, auraColor) {
             messageAvatarsUpdated++;
             console.log('Updated message avatar:', {
               messageId,
-              userEmail,
+              userId,
               auraColor,
               avatarIndex: index
             });
@@ -384,7 +385,7 @@ function updateUserAuraInUI(userEmail, auraColor) {
     
     // Update profile avatar if it's the current user
     const currentUser = window.currentUser || {};
-    if (currentUser.email === userEmail) {
+    if (currentUser.id === userId) {
       console.log('Updating profile avatar for current user');
       const profileAvatarContainer = document.getElementById('user-avatar-container');
       if (profileAvatarContainer) {
@@ -406,7 +407,7 @@ function updateUserAuraInUI(userEmail, auraColor) {
         // Set the HTML directly on the container
         profileAvatarContainer.innerHTML = newProfileAvatarHTML;
         console.log('Profile avatar updated using unified avatar:', {
-          userEmail,
+          userId,
           auraColor
         });
         console.log('🎨 Updated profile avatar for current user with aura ' + auraColor);
@@ -422,12 +423,12 @@ function updateUserAuraInUI(userEmail, auraColor) {
 }
 
 // Get the latest aura color from presence data for any user
-function getLatestAuraColorFromPresence(userEmail) {
+function getLatestAuraColorFromPresence(userId) {
   try {
     // Check if we have presence data stored
     const presenceData = window.currentPresenceData || window.presenceData;
     if (presenceData && presenceData.active) {
-      const user = presenceData.active.find(u => u.email === userEmail || u.id === userEmail || u.userId === userEmail);
+      const user = presenceData.active.find(u => u.id === userId || u.userId === userId || u.email === userId);
       if (user && user.auraColor) {
         return user.auraColor;
       }
@@ -436,14 +437,14 @@ function getLatestAuraColorFromPresence(userEmail) {
     // Fallback: try to get from current visibility data
     const visibilityData = window.currentVisibilityData;
     if (visibilityData && visibilityData.active) {
-      const user = visibilityData.active.find(u => u.email === userEmail || u.id === userEmail || u.userId === userEmail);
+      const user = visibilityData.active.find(u => u.id === userId || u.userId === userId || u.email === userId);
       if (user && user.auraColor) {
         return user.auraColor;
       }
     }
     
     // Additional fallback: check if this is the current user and get from stored aura color
-    if (window.currentUser && window.currentUser.email === userEmail) {
+    if (window.currentUser && (window.currentUser.id === userId || window.currentUser.user_id === userId)) {
       const storedAuraColor = window.currentUser.auraColor;
       if (storedAuraColor && storedAuraColor !== null && storedAuraColor !== 'null') {
         return storedAuraColor;
@@ -452,7 +453,7 @@ function getLatestAuraColorFromPresence(userEmail) {
     
     return null;
   } catch (error) {
-    console.error(`❌ GET_LATEST_AURA: Error getting latest aura color for ${userEmail}:`, error);
+    console.error(`❌ GET_LATEST_AURA: Error getting latest aura color for ${userId}:`, error);
     return null;
   }
 }
@@ -472,18 +473,16 @@ function getAvatarColor(name) {
 
 
 // Function to update all message avatars with new aura color
-function updateAllMessageAvatars(userEmail, auraColor) {
-  console.log('🔍 AURA DEBUG: Updating message avatars for user:', userEmail, 'with color:', auraColor);
+function updateAllMessageAvatars(userId, auraColor) {
+  console.log('🔍 AURA DEBUG: Updating message avatars for user:', userId, 'with color:', auraColor);
   
   // Find all message avatars for this user - try multiple selectors
   const messageAvatars = document.querySelectorAll(`
-    .message-avatar[data-user-email="${userEmail}"],
-    .message-avatar[data-user-id="${userEmail}"],
-    .avatar[data-user-email="${userEmail}"],
-    .avatar[data-user-id="${userEmail}"],
-    .message[data-author-id="${userEmail}"] .message-avatar,
-    .message[data-author-id="${userEmail}"] .avatar,
-    .message[data-author-id="${userEmail}"] img[src*="googleusercontent.com"]
+    .message-avatar[data-user-id="${userId}"],
+    .avatar[data-user-id="${userId}"],
+    .message[data-author-id="${userId}"] .message-avatar,
+    .message[data-author-id="${userId}"] .avatar,
+    .message[data-author-id="${userId}"] img[src*="googleusercontent.com"]
   `);
   console.log('🔍 AURA DEBUG: Found message avatars:', messageAvatars.length);
   
@@ -492,8 +491,8 @@ function updateAllMessageAvatars(userEmail, auraColor) {
   let foundInMessages = 0;
   
   allMessages.forEach(message => {
-    const authorEmail = message.dataset.authorId || message.querySelector('[data-user-email]')?.dataset.userEmail;
-    if (authorEmail === userEmail) {
+    const authorId = message.dataset.authorId || message.querySelector('[data-user-id]')?.dataset.userId;
+    if (authorId === userId) {
       const avatar = message.querySelector('.message-avatar, .avatar');
       if (avatar) {
         foundInMessages++;
@@ -541,15 +540,13 @@ function updateAvatarAura(avatar, auraColor) {
 }
 
 // Function to update all visibility avatars with new aura color
-function updateAllVisibilityAvatars(userEmail, auraColor) {
-  console.log('🔍 AURA DEBUG: Updating visibility avatars for user:', userEmail, 'with color:', auraColor);
+function updateAllVisibilityAvatars(userId, auraColor) {
+  console.log('🔍 AURA DEBUG: Updating visibility avatars for user:', userId, 'with color:', auraColor);
   
   // Find all visibility avatars for this user - try multiple selectors
   const visibilityAvatars = document.querySelectorAll(`
-    .avatar[data-user-email="${userEmail}"],
-    .user-avatar[data-user-email="${userEmail}"],
-    .avatar[data-user-id="${userEmail}"],
-    .user-avatar[data-user-id="${userEmail}"]
+    .avatar[data-user-id="${userId}"],
+    .user-avatar[data-user-id="${userId}"]
   `);
   console.log('🔍 AURA DEBUG: Found visibility avatars:', visibilityAvatars.length);
   
@@ -560,8 +557,8 @@ function updateAllVisibilityAvatars(userEmail, auraColor) {
   visibilityContainers.forEach(container => {
     const avatars = container.querySelectorAll('.avatar, .user-avatar');
     avatars.forEach(avatar => {
-      const avatarEmail = avatar.dataset.userEmail || avatar.dataset.userId;
-      if (avatarEmail === userEmail) {
+      const avatarId = avatar.dataset.userId;
+      if (avatarId === userId) {
         foundInVisibility++;
         console.log('🔍 AURA DEBUG: Found avatar in visibility container:', avatar);
         updateAvatarAura(avatar, auraColor);
@@ -594,8 +591,7 @@ async function broadcastAuraChange(auraColor) {
     // Send aura change message
     await sendSupabaseMessage({
       type: 'AURA_COLOR_CHANGED',
-      userEmail: user.email,
-      userId: user.id || user.email,
+      userId: user.id || user.user_id,
       auraColor: auraColor,
       pageId: urlData.pageId,
       url: urlData.normalizedUrl,

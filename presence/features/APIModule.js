@@ -44,19 +44,19 @@ class MetaLayerAPI {
     try {
       console.log('🔍 USER_IDENTITY: === API USER IDENTITY TRACE ===');
       console.log('🔍 USER_IDENTITY: window.currentUser:', window.currentUser);
-      console.log('🔍 USER_IDENTITY: window.currentUser?.email:', window.currentUser?.email);
+      console.log('🔍 USER_IDENTITY: window.currentUser?.id:', window.currentUser?.id);
       console.log('🔍 USER_IDENTITY: window.authManager:', typeof window.authManager);
       console.log('🔍 USER_IDENTITY: window.getCurrentUserEmail:', typeof window.getCurrentUserEmail);
       
       // First try to get from window.currentUser (set by authentication)
-      if (window.currentUser && window.currentUser.email) {
+      if (window.currentUser && (window.currentUser.id || window.currentUser.user_id)) {
         user = window.currentUser;
-        console.log('🔍 USER_IDENTITY: ✅ Using window.currentUser for authentication:', user.email);
+        console.log('🔍 USER_IDENTITY: ✅ Using window.currentUser for authentication:', user.id || user.user_id);
         console.log('🔍 USER_IDENTITY: ✅ User name:', user.name);
         console.log('🔍 USER_IDENTITY: ✅ User avatar:', user.avatarUrl);
       } else if (window.authManager && typeof window.authManager.getCurrentUser === 'function') {
         user = await window.authManager.getCurrentUser();
-        console.log('🔍 USER_IDENTITY: ✅ Using authManager for authentication:', user?.email);
+        console.log('🔍 USER_IDENTITY: ✅ Using authManager for authentication:', user?.id || user?.user_id);
       } else if (typeof window.getCurrentUserEmail === 'function') {
         const email = await window.getCurrentUserEmail();
         if (email) {
@@ -73,14 +73,21 @@ class MetaLayerAPI {
       console.log('🔍 USER_IDENTITY: ❌ Error getting user authentication:', error);
     }
     
+    // Derive identifiers early for consistent headers
+    const derivedUserId = user?.id || user?.user_id || window.currentUser?.id || window.currentUser?.user_id || null;
+    const derivedEmail = user?.email || window.currentUser?.email || null;
+    const derivedName = user?.name || user?.user_metadata?.full_name || window.currentUser?.name || window.currentUser?.user_metadata?.full_name || undefined;
+    const derivedAvatar = user?.user_metadata?.avatar_url || user?.picture || window.currentUser?.user_metadata?.avatar_url || window.currentUser?.avatarUrl || undefined;
+
+    // window.currentUser.id is always a UUID (from AppUser table) - no format validation needed
     const config = {
       headers: {
         'Content-Type': 'application/json',
-        ...(user && user.email && {
-          'X-User-Email': user.email,
-          'X-User-Name': user.name || user.user_metadata?.full_name,
-          'X-User-Avatar': user.user_metadata?.avatar_url || user.picture
-        }),
+        ...(derivedEmail && { 'X-User-Email': derivedEmail }),
+        // window.currentUser.id is always a UUID from AppUser table
+        ...(derivedUserId && { 'X-User-Id': derivedUserId }),
+        ...(derivedName && { 'X-User-Name': derivedName }),
+        ...(derivedAvatar && { 'X-User-Avatar': derivedAvatar }),
         ...options.headers
       },
       ...options
@@ -88,10 +95,71 @@ class MetaLayerAPI {
 
     try {
       const response = await fetch(finalUrl, config);
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      // Allow callers to opt-in to treating 404 as a non-throwing null result
+      if (response.status === 404 && options.allow404) {
+        console.warn('API 404 (allowed):', finalUrl);
+        return null;
       }
-      return await response.json();
+      if (!response.ok) {
+        // Include response body in error for debugging 400/401/500
+        let errorDetails = `HTTP error! status: ${response.status}`;
+        try {
+          const errorBody = await response.text();
+          if (errorBody) {
+            try {
+              const parsed = JSON.parse(errorBody);
+              errorDetails += ` - ${JSON.stringify(parsed)}`;
+            } catch {
+              errorDetails += ` - ${errorBody.substring(0, 200)}`;
+            }
+          }
+        } catch (e) {
+          // Ignore errors reading response body
+        }
+        const error = new Error(errorDetails);
+        error.status = response.status;
+        throw error;
+      }
+      // Handle empty responses
+      const contentType = response.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        return null;
+      }
+      
+      const data = await response.json();
+      
+      // ROOT CAUSE FIX: Only set window.currentUser.id from responses that are FOR THE CURRENT USER
+      // DO NOT set it from other users' data in reactions/messages!
+      // Only trust user.id from /v1/users/:email or user objects that match current email
+      if (data && window.currentUser && !window.currentUser.id) {
+        const currentUserEmail = window.currentUser.email?.toLowerCase().trim();
+        
+        // Only set UUID if:
+        // 1. Response has a user object with matching email, OR
+        // 2. Response is from /v1/users/:email endpoint (which returns user data for current user)
+        let appUserId = null;
+        if (data.user && data.user.email && data.user.email.toLowerCase().trim() === currentUserEmail) {
+          // This is a user object for the current user
+          appUserId = data.user.id;
+        } else if (data.email && data.email.toLowerCase().trim() === currentUserEmail) {
+          // Direct user response (from /v1/users/:email)
+          appUserId = data.id;
+        }
+        
+        // CRITICAL: DO NOT use reaction.user_id or reaction.AppUser.id - those are OTHER users' IDs!
+        // DO NOT use data.id unless we've verified it's for the current user
+        
+        if (appUserId) {
+          console.log('✅ ROOT CAUSE FIX: Backend returned AppUser UUID for current user:', appUserId);
+          console.log('✅ Storing AppUser UUID in window.currentUser.id');
+          window.currentUser.id = appUserId;
+          window.currentUser.user_id = appUserId;
+        } else {
+          console.log('🔍 APIModule: Skipping UUID assignment - response not for current user or no email match');
+        }
+      }
+      
+      return data;
     } catch (error) {
       console.error('API request failed:', error);
       throw error;
@@ -101,7 +169,7 @@ class MetaLayerAPI {
   async getCommunities() {
     // Get current user to filter communities by membership - use AuthManager
     const user = await window.authManager.getCurrentUser();
-    const userId = user?.email || user?.id;
+    const userId = user?.id || user?.user_id;
     
     const url = userId ? `/communities?userId=${encodeURIComponent(userId)}` : '/communities';
     return this.request(url);
@@ -122,15 +190,15 @@ class MetaLayerAPI {
     let user = null;
     try {
       // First try to get from window.currentUser (set by authentication)
-      if (window.currentUser && window.currentUser.email) {
+      if (window.currentUser && (window.currentUser.id || window.currentUser.user_id)) {
         user = window.currentUser;
-        console.log('🔍 API: Using window.currentUser for authentication:', user.email);
+        console.log('🔍 API: Using window.currentUser for authentication:', user.id || user.user_id);
       } else if (window.authManager && typeof window.authManager.getCurrentUser === 'function') {
         user = await window.authManager.getCurrentUser();
-        console.log('🔍 API: Using authManager for authentication:', user?.email);
+        console.log('🔍 API: Using authManager for authentication:', user?.id || user?.user_id);
       } else if (typeof window.realGoogleAuth !== 'undefined' && window.realGoogleAuth.getCurrentUser) {
         user = await window.realGoogleAuth.getCurrentUser();
-        console.log('🔍 API: Using realGoogleAuth for authentication:', user?.email);
+        console.log('🔍 API: Using realGoogleAuth for authentication:', user?.id || user?.user_id);
       } else {
         console.log('🔍 API: No user authentication available');
       }
@@ -151,15 +219,15 @@ class MetaLayerAPI {
     let user = null;
     try {
       // First try to get from window.currentUser (set by authentication)
-      if (window.currentUser && window.currentUser.email) {
+      if (window.currentUser && (window.currentUser.id || window.currentUser.user_id)) {
         user = window.currentUser;
-        console.log('🔍 API: Using window.currentUser for authentication:', user.email);
+        console.log('🔍 API: Using window.currentUser for authentication:', user.id || user.user_id);
       } else if (window.authManager && typeof window.authManager.getCurrentUser === 'function') {
         user = await window.authManager.getCurrentUser();
-        console.log('🔍 API: Using authManager for authentication:', user?.email);
+        console.log('🔍 API: Using authManager for authentication:', user?.id || user?.user_id);
       } else if (typeof window.realGoogleAuth !== 'undefined' && window.realGoogleAuth.getCurrentUser) {
         user = await window.realGoogleAuth.getCurrentUser();
-        console.log('🔍 API: Using realGoogleAuth for authentication:', user?.email);
+        console.log('🔍 API: Using realGoogleAuth for authentication:', user?.id || user?.user_id);
       } else {
         console.log('🔍 API: No user authentication available');
       }
@@ -180,12 +248,12 @@ class MetaLayerAPI {
     return this.request('/auth/me');
   }
 
-  async sendMessage(userEmail, communityId, content, uri = null, parentId = null, threadId = null, optionalContent = null) {
-    // Simplified to use the working /chat/message endpoint with email-based identification
+  async sendMessage(userId, communityId, content, uri = null, parentId = null, threadId = null, optionalContent = null) {
+    // Simplified to use the working /chat/message endpoint with UUID-based identification
     return this.request('/chat/message', {
       method: 'POST',
       body: JSON.stringify({
-        userEmail,
+        userId,
         communityId,
         content,
         uri,
@@ -244,17 +312,16 @@ class MetaLayerAPI {
       const msgs = messages?.map(msg => ({
         id: msg.id,
         body: msg.content, // Use content field, not body
-        authorId: msg.user_email,
+        authorId: msg.user_id || msg.AppUser?.id,
         conversationId: `conv-${communityId}-${pageId}`,
         createdAt: msg.created_at,
         updatedAt: msg.updated_at,
         parentId: msg.parent_id || null, // Use actual parentId from database
         author: {
-          id: msg.user_email,
-          name: msg.user_email,
-          handle: msg.user_email.split('@')[0],
-          avatarUrl: null,
-          email: msg.user_email,
+          id: msg.AppUser?.id || msg.user_id,
+          name: msg.AppUser?.name || 'Unknown',
+          handle: msg.AppUser?.handle || 'unknown',
+          avatarUrl: msg.AppUser?.avatarUrl || null,
           auraColor: window.currentUser?.auraColor || window.AVATAR_FALLBACK_COLOR
         },
         conversation: {

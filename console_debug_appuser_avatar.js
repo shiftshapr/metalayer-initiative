@@ -131,3 +131,5 @@ console.log('  - forceUpdateDaveroomAvatar() - Force update daveroom avatar');
 console.log('\n🚀 Run: debugAppUserAvatar() to check the AppUser table!');
 
 
+
+

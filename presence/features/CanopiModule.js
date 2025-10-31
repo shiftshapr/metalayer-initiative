@@ -246,9 +246,7 @@ function getSenderName(userId) {
   return `User ${userId.substring(0, 8)}...`;
 }
 
-function getSenderInitial(name) {
-  return (name || 'U').charAt(0).toUpperCase();
-}
+// REMOVED: Duplicate getSenderInitial - using HTML version at line 2595
 
 // Convert URLs to clickable links
 function convertUrlsToLinks(text) {
@@ -259,12 +257,16 @@ function convertUrlsToLinks(text) {
 }
 
 async function getSenderAvatar(author) {
-  if (!author) return getSenderInitial('Unknown');
+  // Use HTML version of getSenderInitial (defined at line 2595)
+  if (!author) {
+    const initial = 'U';
+    return `<div class="avatar-initial" style="width: 32px; height: 32px; border-radius: 50%; background: ${window.AVATAR_FALLBACK_COLOR || '#ccc'}; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold;">${initial}</div>`;
+  }
   
   // COMP METHOD: Always try to get the latest aura color from presence data
   // This ensures cross-profile updates work correctly for ALL users
-  const currentUserEmail = getCurrentUserEmail();
-  if (author.email === currentUserEmail) {
+  const currentUserId = window.currentUser?.id || window.currentUser?.user_id;
+  if ((author.id || author.user_id) === (window.currentUser?.id || window.currentUser?.user_id)) {
     // For current user's messages, use current aura color
     const currentAuraColor = getCurrentUserAvatarBgColor();
     if (currentAuraColor && currentAuraColor !== window.AVATAR_FALLBACK_COLOR) {
@@ -274,31 +276,31 @@ async function getSenderAvatar(author) {
   } else {
     // For other users' messages, try to get the latest aura color from presence data
     // This ensures real-time aura updates for all users
-    const latestAuraColor = getLatestAuraColorFromPresence(author.email);
+    const latestAuraColor = getLatestAuraColorFromPresence(author.id || author.user_id);
     if (latestAuraColor && latestAuraColor !== window.AVATAR_FALLBACK_COLOR) {
       author.auraColor = latestAuraColor;
-      console.log('🔧 AURA: Using real-time aura color for', author.email, ':', latestAuraColor);
+      console.log('🔧 AURA: Using real-time aura color for', author.name || author.id, ':', latestAuraColor);
       } else {
       // Fallback to generated color if no real-time color available
-      console.log('🔧 AURA: No real-time color found for', author.email, ', using generated color');
+      console.log('🔧 AURA: No real-time color found for', author.name || author.id, ', using generated color');
       }
   }
   
   // COMP METHOD: Use unified avatar system for consistency (same as COMP)
   let avatarHTML;
-  const avatarUtils = window.AvatarUtils || AvatarUtils;
-  if (typeof avatarUtils !== 'undefined' && avatarUtils.createUnifiedAvatar) {
-    avatarHTML = await avatarUtils.createUnifiedAvatar(author, {
+  const avatarUtils = window.AvatarUtils || (typeof AvatarUtils !== 'undefined' ? AvatarUtils : null);
+  if (avatarUtils && typeof avatarUtils.createUnifiedAvatar === 'function') {
+    avatarHTML = await avatarUtils.createUnifiedAvatar(author, 'message', {
     size: 32,
     showStatus: true,
     showAura: true,
-    context: 'message',
+    allowGenericOnDeleted: false,
     statusColor: '#22c55e' // Default green for message avatars
   });
   } else {
     console.warn('⚠️ COMP AVATAR: AvatarUtils not available, using fallback');
     // Fallback avatar HTML (same style as COMP)
-    avatarHTML = `<div class="avatar" style="width: 32px; height: 32px; border-radius: 50%; background: ${window.AVATAR_FALLBACK_COLOR}; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 14px;">${(author.name || author.email || 'U').charAt(0).toUpperCase()}</div>`;
+    avatarHTML = `<div class="avatar" style="width: 32px; height: 32px; border-radius: 50%; background: ${window.AVATAR_FALLBACK_COLOR}; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 14px;">${(author.name || 'U').charAt(0).toUpperCase()}</div>`;
   }
   
   // DIAGNOSTIC: Log avatar resolution
@@ -309,7 +311,7 @@ async function getSenderAvatar(author) {
     const isReal = !avatarUrl.includes('default-user');
     
     window.messageDiagnostic.logAvatarResolution(
-      author.email,
+      author.id || author.user_id,
       avatarUrl,
       isReal ? 'real' : 'generic'
     );
@@ -342,13 +344,13 @@ async function refreshMessageAvatarsWithCurrentPresence() {
     if (presenceData && presenceData.active) {
       console.log('🔄 MESSAGE_AVATAR: Found presence data with', presenceData.active.length, 'active users');
       
-      // Create a map of user emails to their current aura colors
+      // Create a map of user IDs to their current aura colors
       const auraColorMap = {};
       presenceData.active.forEach(user => {
-        // Check both email and userId fields for user identification
-        const userEmail = user.email || user.userId || user.id;
-        if (userEmail && user.auraColor) {
-          auraColorMap[userEmail] = user.auraColor;
+        // Use userId for identification (privacy-safe)
+        const userId = user.id || user.userId;
+        if (userId && user.auraColor) {
+          auraColorMap[userId] = user.auraColor;
           }
       });
       
@@ -364,11 +366,11 @@ async function refreshMessageAvatarsWithCurrentPresence() {
             const messageData = window.currentChatData?.find(msg => msg.id === messageId);
             if (messageData && messageData.author) {
               const author = messageData.author;
-              const userEmail = author.email;
+              const userId = author.id || author.user_id;
               
-              if (userEmail && auraColorMap[userEmail]) {
+              if (userId && auraColorMap[userId]) {
                 // Update the author's aura color
-                author.auraColor = auraColorMap[userEmail];
+                author.auraColor = auraColorMap[userId];
                 
                 // Re-render the avatar with the updated aura color
                 const newAvatarHTML = await getSenderAvatar(author);
@@ -404,7 +406,7 @@ async function sendSupabaseMessage(message) {
     console.log('Sending message via Supabase real-time:', {
       type: message.type,
       hasContent: !!message.content,
-      hasUserEmail: !!message.userEmail,
+      hasUserId: !!(message.userId || message.user_id),
       hasAuraColor: !!message.auraColor,
       timestamp: message.timestamp
     });
@@ -470,97 +472,80 @@ async function convertSupabaseMessageToAPIFormat(supabaseMessage) {
   console.log('🔄 CONVERT_MESSAGE: Converting Supabase message to API format');
   console.log('🔄 CONVERT_MESSAGE: Supabase message:', supabaseMessage);
   
-  // Extract user info from email
-  const userEmail = supabaseMessage.user_email;
-  const userName = userEmail.split('@')[0];
-  const userHandle = userEmail.split('@')[0];
+  // Extract user info - UUID-only format (privacy-safe)
+  const userId = supabaseMessage.user_id || supabaseMessage.AppUser?.id || supabaseMessage.authorId;
   
-  // CRITICAL FIX: Fetch author data from user_presence table to get avatar and aura
+  // ROOT CAUSE FIX: Do NOT use Supabase AppUser or author data as source of truth
+  // Always fetch from backend /v1/users/:id to get correct author
+  // Start with minimal data - will be enriched from backend
   let authorData = {
-    name: userName,
-    handle: userHandle,
-    email: userEmail,
-    avatarUrl: null,
-    auraColor: window.currentUser?.auraColor || window.AVATAR_FALLBACK_COLOR // Use user's actual aura color
+    name: supabaseMessage.AppUser?.name || supabaseMessage.author?.name || 'User',
+    handle: supabaseMessage.AppUser?.handle || supabaseMessage.AppUser?.name || 'User',
+    id: userId,
+    user_id: userId,
+    avatarUrl: supabaseMessage.author?.avatarUrl || supabaseMessage.AppUser?.avatar_url || null,
+    auraColor: null // Will be set from backend or visibility data
   };
   
   try {
     console.log('🔄 CONVERT_MESSAGE: Fetching author data from user_presence...');
-    console.log('🔍 REMOTE AVATAR DEBUG: User email:', userEmail);
+    console.log('🔍 REMOTE AVATAR DEBUG: User ID:', userId);
     console.log('🔍 REMOTE AVATAR DEBUG: Page ID:', supabaseMessage.page_id);
     
-    // COMP METHOD FIX: Use a more robust avatar resolution system
+    // ROOT CAUSE FIX: Always fetch author data from backend to get correct author
+    // DO NOT assume matching user_id means current user - always use actual author from database
     let avatarFound = false;
     
-    // First try: Check if we have this user in our current visibility data
-        if (window.currentVisibilityDataUnfiltered && window.currentVisibilityDataUnfiltered.active) {
-          const userInVisibility = window.currentVisibilityDataUnfiltered.active.find(u => u.email === userEmail);
-          if (userInVisibility && userInVisibility.avatarUrl) {
+    // First try: Fetch author from backend /v1/users/:id (source of truth)
+    if (window.api && userId) {
+      try {
+        const resp = await window.api.request(`/v1/users/${encodeURIComponent(userId)}`, { method: 'GET', allow404: true });
+        if (resp) {
+          // ROOT CAUSE FIX: Always use backend response for author data (correct author)
+          authorData.avatarUrl = resp.avatarUrl || authorData.avatarUrl;
+          authorData.name = resp.name || authorData.name;
+          authorData.handle = resp.handle || authorData.handle;
+          avatarFound = true;
+          console.log('✅ CONVERT_MESSAGE: Fetched author from backend /v1/users:', resp.name, resp.avatarUrl);
+        }
+      } catch (e) {
+        console.log('⚠️ CONVERT_MESSAGE: /v1/users lookup failed:', e);
+      }
+    }
+    
+    // Second try: Check if we have this user in our current visibility data (fallback)
+    if (!avatarFound && window.currentVisibilityDataUnfiltered && window.currentVisibilityDataUnfiltered.active) {
+      const userInVisibility = window.currentVisibilityDataUnfiltered.active.find(u => u.id === userId || u.userId === userId);
+      if (userInVisibility && userInVisibility.avatarUrl) {
         console.log('✅ CONVERT_MESSAGE: Found avatar in current visibility data:', userInVisibility.avatarUrl);
-            authorData.avatarUrl = userInVisibility.avatarUrl;
+        authorData.avatarUrl = userInVisibility.avatarUrl;
         authorData.auraColor = userInVisibility.auraColor || window.currentUser?.auraColor || window.AVATAR_FALLBACK_COLOR;
-            authorData.name = userInVisibility.name || authorData.name;
+        authorData.name = userInVisibility.name || authorData.name;
         avatarFound = true;
       }
     }
     
-    // COMP METHOD: Also check if this is the current user (for their own messages)
-    if (!avatarFound && window.currentUser && userEmail === window.currentUser.email) {
-      console.log('✅ CONVERT_MESSAGE: Using current user avatar for own message');
-      authorData.avatarUrl = window.currentUser.avatarUrl || window.currentUser.picture;
-      authorData.auraColor = window.currentUser.auraColor || window.AVATAR_FALLBACK_COLOR;
-      authorData.name = window.currentUser.name || window.currentUser.email.split('@')[0];
+    // Last resort: Only use current user data if userId matches AND we still haven't found author
+    // This should rarely happen - backend should always return author data
+    if (!avatarFound && window.currentUser && (userId === window.currentUser.id || userId === window.currentUser.user_id)) {
+      console.warn('⚠️ CONVERT_MESSAGE: Using current user data as fallback - backend author lookup failed');
+      authorData.avatarUrl = authorData.avatarUrl || window.currentUser.avatarUrl || window.currentUser.picture;
+      authorData.name = authorData.name || window.currentUser.name || 'User';
       avatarFound = true;
     }
     
-    // Second try: Query user_presence table without page_id filter (COMP method)
-    if (!avatarFound) {
-      try {
-        console.log('🔍 REMOTE AVATAR DEBUG: Querying user_presence for:', userEmail);
-        const { data: presenceData, error } = await window.supabase
-          .from('user_presence')
-          .select('avatar_url, aura_color, user_name')
-          .eq('user_email', userEmail)
-          .order('updated_at', { ascending: false })
-          .limit(1);
-        
-        console.log('🔍 REMOTE AVATAR DEBUG: Presence query result:', { presenceData, error });
-        
-        if (presenceData && presenceData.length > 0) {
-          console.log('✅ CONVERT_MESSAGE: Found author data in user_presence:', presenceData[0]);
-      authorData.avatarUrl = presenceData[0].avatar_url;
-      authorData.auraColor = presenceData[0].aura_color || window.currentUser?.auraColor || window.AVATAR_FALLBACK_COLOR;
-      authorData.name = presenceData[0].user_name || authorData.name;
-          avatarFound = true;
-        }
-      } catch (presenceError) {
-        console.log('⚠️ CONVERT_MESSAGE: user_presence query failed:', presenceError);
-      }
-    }
-    
-    // Final fallback: Use a better default avatar system
-    if (!avatarFound) {
-      console.log('🔍 REMOTE AVATAR DEBUG: No avatar found, using enhanced fallback system...');
-      // Create a more personalized fallback avatar
-      const userName = userEmail.split('@')[0];
-      const avatarColors = ['#FF6B6B', '#4ECDC4', window.AVATAR_FALLBACK_COLOR, '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8'];
-      const colorIndex = userName.length % avatarColors.length;
-      const fallbackAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(userName)}&background=${avatarColors[colorIndex].substring(1)}&color=fff&size=32&bold=true`;
-      
-      authorData.avatarUrl = fallbackAvatar;
-      authorData.auraColor = avatarColors[colorIndex];
-      authorData.name = userName;
-      console.log('✅ CONVERT_MESSAGE: Using enhanced fallback avatar:', fallbackAvatar);
-    }
+    // No synthetic fallback here; leave avatarUrl null if not found
   } catch (error) {
     console.warn('⚠️ CONVERT_MESSAGE: Exception fetching author data:', error);
   }
   
   // Convert to API format that addMessageToChat expects
+  // Handle both Supabase format (content) and API format (body)
+  const messageText = supabaseMessage.body || supabaseMessage.content || '';
   const apiMessage = {
     id: supabaseMessage.id,
-    body: supabaseMessage.content,
-    content: supabaseMessage.content, // Also include content field
+    body: messageText,
+    content: messageText, // Also include content field for compatibility
     author: authorData,
     createdAt: supabaseMessage.created_at,
     created_at: supabaseMessage.created_at, // Also include created_at field
@@ -593,10 +578,12 @@ async function loadChatHistory(communityId = null) {
     return;
   }
   
-  // COMP METHOD: Check if messages are already loaded for this page
+  // COMP METHOD: Check if messages are already loaded for this page - return BEFORE any clearing
   const currentPageId = window.currentUrlData?.pageId;
-  if (lastLoadedPageId === currentPageId && document.querySelectorAll('.message').length > 0) {
+  const existingMessages = document.querySelectorAll('.message');
+  if (lastLoadedPageId === currentPageId && existingMessages.length > 0) {
     console.log('🔍 CHAT_LOAD: Messages already loaded for this page, skipping reload');
+    console.log('🔍 CHAT_LOAD: Existing messages:', existingMessages.length);
     return;
   }
   
@@ -607,10 +594,12 @@ async function loadChatHistory(communityId = null) {
     // Continue with normal message loading like COMP method
   }
   
-  // COMP METHOD FIX: Always clear messages when switching pages or when pageId changes
-  if (lastLoadedPageId !== currentPageId) {
+  // COMP METHOD FIX: Clear messages ONLY ONCE when switching pages
+  const chatMessages = document.querySelector('.chat-messages');
+  const pageChanged = lastLoadedPageId !== currentPageId;
+  
+  if (pageChanged) {
     console.log(`🔍 CHAT_LOAD: Page changed from ${lastLoadedPageId} to ${currentPageId}, clearing messages`);
-    const chatMessages = document.querySelector('.chat-messages');
     if (chatMessages) {
       chatMessages.innerHTML = '';
     }
@@ -625,14 +614,17 @@ async function loadChatHistory(communityId = null) {
   isLoadingChatHistory = true;
   lastLoadedPageId = currentPageId;
   
-  // COMP METHOD FIX: Always clear messages before loading to ensure fresh state
-  const chatMessages = document.querySelector('.chat-messages');
-  if (chatMessages) {
-    chatMessages.innerHTML = '';
-  }
-  // Clear global chat data
-  if (window.currentChatData) {
-    window.currentChatData = null;
+  // Only clear messages if page changed (already cleared above) OR if we need a fresh load
+  // DO NOT clear if messages already exist and page didn't change
+  if (chatMessages && pageChanged) {
+    // Already cleared above, just log
+    console.log('🔍 CHAT_LOAD: Messages cleared due to page change');
+  } else if (chatMessages && chatMessages.children.length === 0) {
+    // Container is empty, safe to clear (though it's already empty)
+    console.log('🔍 CHAT_LOAD: Container is empty, ready to load messages');
+  } else if (chatMessages && chatMessages.children.length > 0) {
+    // Messages exist and page didn't change - DO NOT CLEAR
+    console.log('🔍 CHAT_LOAD: Messages already exist on same page, preserving them');
   }
   
   try {
@@ -745,18 +737,10 @@ async function loadChatHistory(communityId = null) {
     }
     console.log('✅ CHAT_LOAD: Found .chat-messages element');
     
-    // Log current messages before clearing
+    // Log current messages before adding new ones
     const currentMessages = chatMessages.querySelectorAll('.message');
     console.log('🔍 CHAT_LOAD: Current message IDs:', Array.from(currentMessages).map(m => m.getAttribute('data-message-id')));
-    
-    // COMP METHOD: Clear messages when switching pages (like COMP does)
-    console.log('🔍 CHAT_LOAD: Clearing messages for page-specific loading');
-    
-    // COMP METHOD: Always clear messages and reload page-specific content
-      chatMessages.innerHTML = '';
-      // Clear global chat data storage
-      window.currentChatData = [];
-    console.log('✅ CHAT_LOAD: Messages cleared for page-specific loading');
+    console.log('🔍 CHAT_LOAD: Adding messages to existing chat container (messages already cleared at start if needed)');
     
     if (allConversations.length === 0) {
       console.warn('⚠️ CHAT_LOAD: NO MESSAGES TO DISPLAY - No conversations found for any active community on this page');
@@ -875,9 +859,18 @@ async function loadChatHistory(communityId = null) {
               }
               
               console.log('🔍 CHAT_LOAD: Calling window.addMessageToChat now...');
+
+              // Ensure author enrichment for history path before render
+              let postForRender = mainThreadPost;
+              try {
+                const needsEnrichment = !postForRender?.author || !postForRender?.author?.avatarUrl;
+                if (needsEnrichment && typeof convertSupabaseMessageToAPIFormat === 'function') {
+                  postForRender = await convertSupabaseMessageToAPIFormat(postForRender);
+                }
+              } catch (_) {}
               
-              // COMP METHOD: Call addMessageToChat directly like COMP does
-              const result = await window.addMessageToChat(mainThreadPost);
+              // Call addMessageToChat with enriched message
+              const result = await window.addMessageToChat(postForRender);
               console.log('🔍 CHAT_LOAD: addMessageToChat returned:', result);
               console.log('✅ CHAT_LOAD: Main thread post added to chat');
             } catch (error) {
@@ -1097,7 +1090,7 @@ function setupReactionSubscription(messageId) {
 }
 
 // COMP METHOD: Handle real-time reaction changes
-window.handleReactionChange = window.handleReactionChange || function(payload) {
+window.handleReactionChange = window.handleReactionChange || async function(payload) {
   console.log('🔔 REACTIONS: COMP METHOD - Processing real-time reaction change:', payload);
   
   const { eventType, new: newRecord, old: oldRecord } = payload;
@@ -1133,23 +1126,51 @@ window.handleReactionChange = window.handleReactionChange || function(payload) {
 
 // COMP METHOD: Add reaction to message display
 function addReactionToMessage(reaction) {
-  const messageId = reaction.message_id;
+  // ROOT CAUSE FIX: Extract messageId from various possible payload structures
+  // Real-time INSERT events may have message_id in different locations
+  let messageId = reaction?.message_id || 
+                  reaction?.messageId ||
+                  reaction?.new?.message_id || 
+                  reaction?.old?.message_id ||
+                  reaction?.new?.messageId || 
+                  reaction?.old?.messageId;
+  
+  // If we have a _payload (from RealtimeManager), try extracting from there
+  if (!messageId && reaction?._payload) {
+    const payload = reaction._payload;
+    messageId = payload?.new?.message_id || 
+                payload?.new?.messageId ||
+                payload?.old?.message_id ||
+                payload?.old?.messageId;
+  }
+  
+  if (!messageId) {
+    console.warn('⚠️ REACTIONS: COMP METHOD - Cannot extract messageId from reaction:', reaction);
+    console.warn('⚠️ REACTIONS: Reaction object keys:', Object.keys(reaction || {}));
+    if (reaction?._payload) {
+      console.warn('⚠️ REACTIONS: Payload keys:', Object.keys(reaction._payload || {}));
+      console.warn('⚠️ REACTIONS: Payload.new keys:', Object.keys(reaction._payload?.new || {}));
+    }
+    return;
+  }
+  
   const messageElement = document.querySelector(`[data-message-id="${messageId}"]`);
   const reactionBtn = messageElement?.querySelector('.reaction-btn');
   
   if (reactionBtn) {
-    console.log('🔔 REACTIONS: Adding reaction to message:', reaction);
+    console.log('🔔 REACTIONS: COMP METHOD - Adding reaction to message:', messageId, reaction);
     
-    // COMP METHOD: Reload all reactions for this message to get accurate count
-    // Increase delay to ensure database has updated and propagated
+    // ROOT CAUSE FIX: Always reload reactions for accurate count (like delete flow)
+    // This ensures counts propagate when OTHER users add reactions via real-time events
+    // Use same delay as delete flow (300ms) for consistency
     setTimeout(async () => {
       try {
         await window.loadMessageReactions(messageId, reactionBtn);
-        console.log('✅ REACTIONS: COMP METHOD - Reaction added to message display:', reaction);
+        console.log('✅ REACTIONS: COMP METHOD - Reaction added to message display, count updated:', messageId);
       } catch (error) {
         console.error('❌ REACTIONS: COMP METHOD - Error reloading reactions:', error);
       }
-    }, 200); // COMP METHOD: Increased delay for better propagation
+    }, 300); // COMP METHOD: Same delay as delete flow for consistency
   } else {
     console.warn('⚠️ REACTIONS: COMP METHOD - Reaction button not found for message:', messageId);
   }
@@ -1179,24 +1200,77 @@ function updateReactionInMessage(reaction) {
 }
 
 // COMP METHOD: Remove reaction from message display
-function removeReactionFromMessage(reaction) {
-  const messageId = reaction.message_id;
+async function removeReactionFromMessage(reaction) {
+  // ROOT CAUSE FIX: Extract messageId from various possible payload structures
+  // Supabase realtime DELETE events may have message_id in different locations
+  let messageId = reaction?.message_id || 
+                  reaction?.messageId ||
+                  reaction?.new?.message_id || 
+                  reaction?.old?.message_id ||
+                  reaction?.new?.messageId || 
+                  reaction?.old?.messageId;
+  
+  // If we have a _payload, try extracting from there
+  if (!messageId && reaction?._payload) {
+    const payload = reaction._payload;
+    messageId = payload?.old?.message_id || 
+                payload?.old?.messageId ||
+                payload?.new?.message_id ||
+                payload?.new?.messageId;
+    // ROOT CAUSE FIX: For DELETE events, oldRecord might be nested differently
+    // Supabase realtime DELETE events have old in payload.old, but message_id might be at payload.old.message_id
+    if (!messageId && payload?.old && typeof payload.old === 'object') {
+      // Try direct access to message_id in old record
+      messageId = payload.old.message_id || payload.old.messageId;
+    }
+  }
+  
+  // ROOT CAUSE FIX: For DELETE events, if messageId is missing, query backend using reaction.id
+  if (!messageId && reaction?.id) {
+    try {
+      console.log('🔍 REACTIONS: Querying backend for messageId from reaction.id:', reaction.id);
+      const reactionData = await window.api.request(`/v1/reactions/by-id/${reaction.id}`, { method: 'GET', allow404: true });
+      if (reactionData && reactionData.message_id) {
+        messageId = reactionData.message_id;
+        console.log('✅ REACTIONS: Retrieved messageId from backend:', messageId);
+      }
+    } catch (error) {
+      console.warn('⚠️ REACTIONS: Could not query backend for messageId:', error);
+    }
+  }
+  
+  // Last resort: If still no messageId, reload all reactions
+  if (!messageId) {
+    console.warn('⚠️ REACTIONS: COMP METHOD - Cannot extract messageId from reaction:', reaction);
+    console.warn('⚠️ REACTIONS: Reaction object keys:', Object.keys(reaction || {}));
+    if (reaction?._payload) {
+      console.warn('⚠️ REACTIONS: Payload keys:', Object.keys(reaction._payload || {}));
+      console.warn('⚠️ REACTIONS: Payload.old:', reaction._payload?.old);
+      console.warn('⚠️ REACTIONS: Payload.old keys:', Object.keys(reaction._payload?.old || {}));
+      console.warn('⚠️ REACTIONS: Payload.old values:', JSON.stringify(reaction._payload?.old, null, 2));
+    }
+    // Fallback: reload all reactions (inefficient but ensures sync)
+    console.warn('⚠️ REACTIONS: Falling back to reloading all reactions');
+    setTimeout(() => window.refreshAllReactionDisplays(), 500);
+    return;
+  }
+  
   const messageElement = document.querySelector(`[data-message-id="${messageId}"]`);
   const reactionBtn = messageElement?.querySelector('.reaction-btn');
   
   if (reactionBtn) {
-    console.log('🔔 REACTIONS: COMP METHOD - Removing reaction from message:', reaction);
+    console.log('🔔 REACTIONS: COMP METHOD - Removing reaction from message:', messageId);
     
     // COMP METHOD: Reload reactions to get accurate state from database
     // Increase delay to ensure database has updated and propagated
     setTimeout(async () => {
       try {
         await window.loadMessageReactions(messageId, reactionBtn);
-        console.log('✅ REACTIONS: COMP METHOD - Reaction removed from message display:', reaction);
+        console.log('✅ REACTIONS: COMP METHOD - Reaction removed from message display:', messageId);
       } catch (error) {
         console.error('❌ REACTIONS: COMP METHOD - Error reloading reactions:', error);
       }
-    }, 200); // COMP METHOD: Increased delay for better propagation
+    }, 300); // Increased delay for better propagation
   } else {
     console.warn('⚠️ REACTIONS: COMP METHOD - Reaction button not found for message:', messageId);
   }
@@ -1220,7 +1294,7 @@ function removeReactionFromMessage(reaction) {
         // Check if user already reacted with this type
         const existingReactions = await window.reactionsIntegration.reactionsManager.getReactions(messageId);
         const userReaction = existingReactions.find(r => 
-          r.user_email === window.currentUser?.email && r.emoji === selectedReaction
+          (r.AppUser?.id || r.user_id) === (window.currentUser?.id || window.currentUser?.user_id) && r.emoji === selectedReaction
         );
         
         if (userReaction) {
@@ -1641,12 +1715,12 @@ async function getMessageActionMenu(message) {
   // Get current user to check ownership - use window.currentUser from direct auth
   const currentUser = window.currentUser;
   
-  // Use email for user identification - NO UUIDs
+  // Use ID for user identification - UUIDs only
   let isOwner = false;
-  if (currentUser && currentUser.email) {
-    // Compare by email - the message should have author email
-    const authorEmail = message.authorEmail || (message.author && message.author.email);
-    isOwner = (authorEmail === currentUser.email);
+  if (currentUser && (currentUser.id || currentUser.user_id)) {
+    // Compare by ID - the message should have author ID
+    const authorId = message.authorId || (message.author && (message.author.id || message.author.user_id));
+    isOwner = (authorId === (currentUser.id || currentUser.user_id));
     }
   
   // Check if user can edit/delete (only if they own the message)
@@ -1678,11 +1752,11 @@ function canUserEditMessage(message) {
   const messageTime = new Date(message.createdAt);
   const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
   
-  // Check against stored user email (not ID) - use window.currentUser
-  const currentUserEmail = window.currentUser?.email;
+  // Check against stored user ID - use window.currentUser
+  const currentUserId = window.currentUser?.id || window.currentUser?.user_id;
   
-  const authorEmail = message.authorEmail || (message.author && message.author.email);
-  return authorEmail === currentUserEmail && messageTime > oneHourAgo;
+  const authorId = message.authorId || (message.author && (message.author.id || message.author.user_id));
+  return authorId === currentUserId && messageTime > oneHourAgo;
 }
 
 
@@ -2141,7 +2215,7 @@ function sendChatMessage() {
     window.requireAuth('send messages', async () => {
       console.log('🔐 SEND_CHAT_MESSAGE: Auth check passed');
       console.log('🔐 SEND_CHAT_MESSAGE: window.currentUser:', window.currentUser);
-      console.log('🔐 SEND_CHAT_MESSAGE: window.currentUser.email:', window.currentUser?.email);
+      console.log('🔐 SEND_CHAT_MESSAGE: window.currentUser.id:', window.currentUser?.id);
       
       // COMP METHOD: Check if we're in edit mode and handle it properly
   if (chatInput.dataset.editingMessageId) {
@@ -2390,55 +2464,58 @@ async function addMessageToChat(message) {
   
   messageDiv.dataset.messageId = message.id;
   messageDiv.dataset.conversationId = message.conversationId;
-  messageDiv.dataset.authorId = message.authorId || message.author?.email || message.author?.id;
+  messageDiv.dataset.authorId = message.authorId || message.author?.id || message.author?.user_id;
   
-  // COMP METHOD: Use direct author data like COMP does
+  // ROOT CAUSE FIX: Always fetch author data from backend (source of truth)
+  // convertSupabaseMessageToAPIFormat might have wrong data, so double-check here
   let author = message.author;
+  const messageUserId = message.user_id || message.AppUser?.id || message.author?.id || message.authorId;
   
-  // If no author data, create from message.user_email (COMP method)
-  if (!author && message.user_email) {
-    const senderEmail = message.user_email;
-    const senderName = senderEmail.split('@')[0];
-    
-    // COMP METHOD: Use simple avatar resolution like COMP
-    let senderAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(senderName)}&background=4ECDC4&color=fff&size=32&bold=true`;
-    
-    // If this is the current user's own message, use their real avatar
-    if (window.currentUser && senderEmail === window.currentUser.email) {
-      senderAvatar = window.currentUser.avatarUrl || window.currentUser.picture || senderAvatar;
+  // ROOT CAUSE FIX: Always fetch from backend if we have userId - backend is source of truth
+  if (window.api && messageUserId && messageUserId !== 'unknown') {
+    try {
+      const resp = await window.api.request(`/v1/users/${encodeURIComponent(messageUserId)}`, { method: 'GET', allow404: true });
+      if (resp) {
+        console.log('✅ ADD_MESSAGE: Fetched author from backend (source of truth):', resp.name);
+        // Always use backend data - it's the correct author
+        author = {
+          name: resp.name || 'Unknown',
+          handle: resp.handle || resp.name || 'Unknown',
+          id: resp.id || messageUserId,
+          user_id: resp.id || messageUserId,
+          avatarUrl: resp.avatarUrl || null,
+          auraColor: author?.auraColor || null // Keep aura color from convertSupabaseMessageToAPIFormat if set
+        };
+      } else {
+        console.warn('⚠️ ADD_MESSAGE: Backend returned no author data for userId:', messageUserId);
+      }
+    } catch (e) {
+      console.warn('⚠️ ADD_MESSAGE: Backend author fetch failed, using existing author data:', e);
     }
-    
+  }
+  
+  // If still no author data, create minimal author from message data
+  if (!author) {
+    const senderName = message.AppUser?.name || message.author?.name || 'Unknown';
+    const senderId = messageUserId || 'unknown';
     author = {
       name: senderName,
-      email: senderEmail,
-      avatarUrl: senderAvatar
+      id: senderId,
+      user_id: senderId,
+      avatarUrl: null // Never use current user data as fallback - fetch from backend if needed
     };
   }
   
-  // Fallback to current user only if this is their own message
-  if (!author && window.currentUser && message.user_email === window.currentUser.email) {
-    author = {
-      name: window.currentUser.name || window.currentUser.email?.split('@')[0] || 'Unknown',
-      email: window.currentUser.email || 'unknown@example.com',
-      avatarUrl: window.currentUser.avatarUrl || window.currentUser.picture
-    };
-  }
-  
-  // Final fallback if still no author data
-  if (!author) {
-    author = { name: 'Unknown', email: 'unknown@example.com', avatarUrl: 'https://ui-avatars.com/api/?name=Unknown&background=4ECDC4&color=fff&size=32&bold=true' };
-  }
-  
-  const senderName = author.name || author.email?.split('@')[0] || 'Unknown User';
+  const senderName = author.name || 'Unknown User';
   
   // COMP RESTORATION: Log resolved author data
   console.log('🔍 ADD_MESSAGE: Resolved author data:');
   console.log('  Author name:', senderName);
-  console.log('  Author email:', author.email);
+  console.log('  Author ID:', author.id || author.user_id);
   console.log('  Author avatar:', author.avatarUrl);
-  console.log('  Message user_email:', message.user_email);
-  console.log('  Current user email:', window.currentUser?.email);
-  console.log('  Cross-profile issue:', author.email !== window.currentUser?.email);
+  console.log('  Message user_id:', messageUserId || message.user_id || message.AppUser?.id || 'N/A');
+  console.log('  Current user ID:', window.currentUser?.id);
+  console.log('  Cross-profile issue:', (author.id || author.user_id) !== (window.currentUser?.id || window.currentUser?.user_id));
   
   // Add reaction and reply buttons with counts
   const reactionCount = message.reactionCount || 0;
@@ -2455,9 +2532,12 @@ async function addMessageToChat(message) {
   }
   
   // COMP METHOD: Use exact COMP message action menu structure
-  const canEdit = message.user_email === window.currentUser?.email || 
-                  message.authorId === window.currentUser?.email || 
-                  message.author?.email === window.currentUser?.email;
+  const canEdit = messageUserId === (window.currentUser?.id || window.currentUser?.user_id) || 
+                  message.user_id === window.currentUser?.id ||
+                  message.authorId === window.currentUser?.id || 
+                  message.authorId === window.currentUser?.user_id ||
+                  (message.author?.id || message.author?.user_id) === (window.currentUser?.id || window.currentUser?.user_id) ||
+                  (message.AppUser?.id || message.AppUser?.user_id) === (window.currentUser?.id || window.currentUser?.user_id);
   const messageActionMenu = canEdit ? `
     <div class="message-actions-new" style="opacity: 1 !important; display: flex !important; visibility: visible !important;">
       <button class="message-action-btn edit-btn" data-message-id="${message.id}" title="Edit message" style="background: none; border: none; cursor: pointer; padding: 4px; border-radius: 4px; font-size: 14px;">✏️</button>
@@ -2468,8 +2548,39 @@ async function addMessageToChat(message) {
   // Convert URLs to clickable links
   const contentWithLinks = convertUrlsToLinks(message.body || message.content);
   
+  // Always render an <img> for the avatar to keep layout stable; fill with real URL
+  let resolvedAvatarUrl = null;
+  try {
+    if (window.AvatarUtils && typeof window.AvatarUtils.getAvatarUrl === 'function') {
+      const data = await window.AvatarUtils.getAvatarUrl(author, 'message');
+      resolvedAvatarUrl = data?.avatarUrl || null;
+    }
+  } catch (_) {}
+  // Last-mile enrichment if still missing: try visibility/AppUser directly
+  if (!resolvedAvatarUrl) {
+    try {
+      const authorId = author?.id || author?.user_id || message.user_id || message.authorId;
+      if (authorId && window.currentVisibilityDataUnfiltered?.active) {
+        const v = window.currentVisibilityDataUnfiltered.active.find(u => u.id === authorId || u.userId === authorId);
+        if (v?.avatarUrl && !v.avatarUrl.includes('default-user')) {
+          resolvedAvatarUrl = v.avatarUrl;
+        }
+      }
+      // Final attempt: backend API resolver (joins AppUser)
+      if (!resolvedAvatarUrl && authorId && window.api?.request) {
+        try {
+          const userResp = await window.api.request(`/v1/users/${encodeURIComponent(authorId)}`, { method: 'GET', allow404: true });
+          if (userResp && userResp.avatarUrl) {
+            resolvedAvatarUrl = userResp.avatarUrl;
+          }
+        } catch (_) {}
+      }
+    } catch (_) {}
+  }
+  resolvedAvatarUrl = resolvedAvatarUrl || author.avatarUrl || '';
+
   messageDiv.innerHTML = `
-    <div class="avatar-container">${await getSenderAvatar(author)}</div>
+    <div class="avatar-container"><img src="${resolvedAvatarUrl}" alt="${senderName}" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 2px solid ${author.auraColor || window.AVATAR_FALLBACK_COLOR};" referrerpolicy="no-referrer" data-author-id="${author.id || author.user_id || ''}"></div>
     <div class="message-content-wrapper">
       <div class="message-header-new">
         <span class="message-sender-name">${senderName}${communityName ? ` • ${communityName}` : ''}</span>
@@ -2590,32 +2701,8 @@ function formatMessageTime(createdAt) {
   return new Date(createdAt).toLocaleTimeString();
 }
 
-// Function to check if user can edit message
-function canUserEditMessage(message) {
-  if (!window.currentUser) return false;
-  
-  const now = new Date();
-  const messageDate = new Date(message.createdAt);
-  const diffMs = now - messageDate;
-  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-  
-  // Can edit within 1 hour and is the author
-  return diffHours < 1 && message.authorId === window.currentUser.email;
-}
-
-// Function to get message action menu
-async function getMessageActionMenu(message) {
-  const canEdit = canUserEditMessage(message);
-  
-  if (!canEdit) return '';
-  
-  return `
-    <div class="message-actions" style="opacity: 0; transition: opacity 0.2s; position: relative; z-index: 1000;">
-      <button class="message-action-btn edit-btn" data-message-id="${message.id}" title="Edit message" style="margin-right: 4px;">✏️</button>
-      <button class="message-action-btn delete-btn" data-message-id="${message.id}" title="Delete message">🗑️</button>
-    </div>
-  `;
-}
+// REMOVED: Duplicate canUserEditMessage and getMessageActionMenu functions
+// Using the complete versions defined earlier (lines 1666 and 1624)
 
 // Function to add message action listeners
 function addMessageActionListeners(messageDiv, message) {
@@ -2787,10 +2874,10 @@ async function handleReaction(message) {
     
     // Send remove reaction event
     try {
-      const userEmail = window.currentUser?.email;
+      const userId = window.currentUser?.id || window.currentUser?.user_id;
       const reactionData = {
         message_id: message.id,
-        user_email: userEmail,
+        user_id: userId,
         emoji: '',
         timestamp: new Date().toISOString()
       };
@@ -2799,7 +2886,7 @@ async function handleReaction(message) {
       
       // Emit real-time event for reaction removal
       if (window.reactionsIntegration && window.reactionsIntegration.isInitialized) {
-        window.reactionsIntegration.removeReaction(message.id, currentReaction, userEmail);
+        window.reactionsIntegration.removeReaction(message.id, currentReaction);
       }
       
       return;
@@ -2880,10 +2967,10 @@ async function handleReaction(message) {
         
         // Toggle reaction via API (store in message data)
         // Since reactions table doesn't exist, we'll use a simple approach
-        const userEmail = window.currentUser?.email;
+        const userId = window.currentUser?.id || window.currentUser?.user_id;
         const reactionData = {
           message_id: message.id,
-          user_email: userEmail,
+          user_id: userId,
           emoji: selectedReaction,
           timestamp: new Date().toISOString()
         };
@@ -2893,7 +2980,7 @@ async function handleReaction(message) {
         
         // Emit real-time event for reaction addition
         if (window.reactionsIntegration && window.reactionsIntegration.isInitialized) {
-          window.reactionsIntegration.addReaction(message.id, selectedReaction, userEmail);
+          window.reactionsIntegration.addReaction(message.id, selectedReaction);
         }
         
       } catch (error) {
@@ -3011,11 +3098,11 @@ window.handleReaction = async function(message) {
   
   try {
     // Get current user
-    const currentUser = window.currentUser || { email: 'user@example.com' };
+    const currentUser = window.currentUser || { id: 'unknown', user_id: 'unknown' };
     
     // Check if user already reacted
     const existingReactions = message.reactions || [];
-    const userReaction = existingReactions.find(r => r.user_email === currentUser.email);
+    const userReaction = existingReactions.find(r => (r.AppUser?.id || r.user_id) === (currentUser.id || currentUser.user_id));
     
     if (userReaction) {
       // Remove reaction
@@ -3037,16 +3124,14 @@ window.addReaction = async function(messageId, reactionType) {
   console.log('🔧 REACTIONS: COMP METHOD - Adding reaction:', reactionType, 'to message:', messageId);
   
   try {
-    const currentUser = window.currentUser || { email: 'user@example.com' };
+    const currentUser = window.currentUser || { id: 'unknown', user_id: 'unknown' };
     
-    // Use the correct API endpoint
-    const response = await fetch('/v1/reactions', {
+    // Use centralized API client (adds identity headers)
+    const response = await window.api.request('/v1/reactions', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         messageId: messageId,
-        emoji: reactionType,
-        userEmail: currentUser.email
+        emoji: reactionType
       })
     });
     
@@ -3071,16 +3156,14 @@ window.removeReaction = async function(messageId, reactionType) {
   console.log('🔧 REACTIONS: COMP METHOD - Removing reaction:', reactionType, 'from message:', messageId);
   
   try {
-    const currentUser = window.currentUser || { email: 'user@example.com' };
+    const currentUser = window.currentUser || { id: 'unknown', user_id: 'unknown' };
     
-    // Use the same API endpoint as addReaction (backend handles toggling)
-    const response = await fetch('/v1/reactions', {
+    // Use centralized API client (adds identity headers)
+    const response = await window.api.request('/v1/reactions', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         messageId: messageId,
-        emoji: reactionType,
-        userEmail: currentUser.email
+        emoji: reactionType
       })
     });
     
@@ -3134,12 +3217,64 @@ window.updateReactionDisplay = async function(messageId, reactions) {
   if (!reactionBtn) return;
   
   // COMP METHOD: Find current user's reaction (only one per user)
+  const currentUserId = window.currentUser?.id || window.currentUser?.user_id;
   const currentUserEmail = window.currentUser?.email;
-  const userReaction = reactions.find(r => r.user_email === currentUserEmail);
   
+  // ROOT CAUSE FIX: Enhanced debugging for user ID mismatch issues
+  // CRITICAL: Warn if currentUserId is the same across different profiles
+  if (currentUserEmail && currentUserId) {
+    const storedEmailKey = `lastUserEmail_${currentUserId}`;
+    const lastEmail = sessionStorage.getItem(storedEmailKey);
+    if (lastEmail && lastEmail !== currentUserEmail) {
+      console.error('🚨 REACTIONS: USER ID MISMATCH DETECTED!');
+      console.error('🚨 Same user ID', currentUserId, 'used by different emails:');
+      console.error('   Previous email:', lastEmail);
+      console.error('   Current email:', currentUserEmail);
+      console.error('🚨 This causes reactions to display identically across profiles!');
+    }
+    sessionStorage.setItem(storedEmailKey, currentUserEmail);
+  }
+  
+  // Debug: Log all reaction user IDs for comparison
+  console.log('🔧 REACTIONS: Current user ID:', currentUserId);
+  console.log('🔧 REACTIONS: Current user ID type:', typeof currentUserId);
   console.log('🔧 REACTIONS: Current user email:', currentUserEmail);
-  console.log('🔧 REACTIONS: User reaction found:', userReaction);
-  console.log('🔧 REACTIONS: Total reactions for user:', reactions.filter(r => r.user_email === currentUserEmail).length);
+  console.log('🔧 REACTIONS: Reaction user IDs:', reactions.map(r => {
+    const reactionUserId = r.AppUser?.id || r.user_id;
+    const matches = currentUserId && reactionUserId ? String(reactionUserId) === String(currentUserId) : false;
+    return {
+      AppUser_id: r.AppUser?.id,
+      user_id: r.user_id,
+      AppUser_email: r.AppUser?.email,
+      emoji: r.emoji,
+      reactionUserId: reactionUserId,
+      currentUserId: currentUserId,
+      matches: matches
+    };
+  }));
+  
+  // ROOT CAUSE FIX: Find user reaction by ID - must match exactly
+  // Ensure strict UUID comparison - no fuzzy matching
+  const userReaction = reactions.find(r => {
+    const reactionUserId = r.AppUser?.id || r.user_id;
+    // Normalize both IDs to strings for comparison
+    if (!reactionUserId || !currentUserId) {
+      return false;
+    }
+    const reactionIdStr = String(reactionUserId).trim();
+    const currentIdStr = String(currentUserId).trim();
+    const matches = reactionIdStr === currentIdStr;
+    if (matches) {
+      console.log('🔧 REACTIONS: MATCH FOUND - Reaction user ID matches current user ID:', reactionIdStr);
+    }
+    return matches;
+  });
+  
+  console.log('🔧 REACTIONS: User reaction found:', userReaction ? 'YES' : 'NO');
+  console.log('🔧 REACTIONS: User reaction emoji:', userReaction?.emoji);
+  if (!userReaction && currentUserId) {
+    console.log('🔧 REACTIONS: No match found - current user ID:', currentUserId, 'did not match any reaction user IDs');
+  }
   
   // Aggregate reactions by emoji type
   const reactionCounts = {};
@@ -3155,26 +3290,75 @@ window.updateReactionDisplay = async function(messageId, reactions) {
   // Calculate total reaction count
   const totalReactionCount = reactions.length;
   
-  // COMP METHOD: Determine which emoji to display (user can only see their own reaction)
-  let displayEmoji = '🔘'; // Default state
+  // CRITICAL USER PREFERENCE: Show user's own reaction if they have one, otherwise ALWAYS blank (🔘)
+  // NEVER show other users' reactions when current user has no reaction - user explicitly does not want this
+  let displayEmoji = '🔘'; // Default blank state
   if (userReaction) {
-    // COMP METHOD: If user has a reaction, show their reaction only
+    // User has a reaction - show it
     displayEmoji = userReaction.emoji;
-    console.log('🔧 REACTIONS: COMP METHOD - Showing user reaction:', displayEmoji);
+    console.log('🔧 REACTIONS: COMP METHOD - Showing user\'s own reaction:', displayEmoji);
   } else {
-    // COMP METHOD: If user has no reaction, always show default regardless of others' reactions
+    // User has NO reaction - ALWAYS show blank (🔘), regardless of other users' reactions
     displayEmoji = '🔘';
-    console.log('🔧 REACTIONS: COMP METHOD - User has no reaction, showing default');
+    console.log('🔧 REACTIONS: COMP METHOD - User has no reaction, showing blank (🔘)');
   }
   
-  // Update reaction button state - preserve count span
+  // ROOT CAUSE FIX: Preserve user's optimistic selection only if they JUST added a reaction
+  // Do NOT preserve if they removed a reaction (should show blank)
+  // CRITICAL: Only check userSelectedEmoji if userReaction doesn't exist (DB hasn't synced yet)
+  const userSelectedEmoji = reactionBtn.dataset.selectedEmoji;
+  const lastUpdated = parseInt(reactionBtn.dataset.lastUpdated) || 0;
+  const timeSinceUpdate = Date.now() - lastUpdated;
+  const shouldPreserveUserSelection = userSelectedEmoji && !userReaction && timeSinceUpdate < 3000;
+  
+  // ROOT CAUSE FIX: Preserve optimistic selection only if user just added (not removed) a reaction
+  // CRITICAL: Only override displayEmoji if userReaction doesn't exist (user hasn't reacted yet in DB)
+  // We already set displayEmoji to '🔘' above if no userReaction - only override for optimistic updates
+  if (!userReaction) {
+    // No user reaction in DB - check if we should preserve optimistic selection (user just added)
+    if (shouldPreserveUserSelection) {
+      displayEmoji = userSelectedEmoji;
+      console.log('🔧 REACTIONS: Preserving user selection', userSelectedEmoji, 'while DB syncs');
+    }
+    // Otherwise displayEmoji is already '🔘' from above (user preference: never show others' reactions)
+  }
+  // CRITICAL: If userReaction exists, displayEmoji is already correctly set to userReaction.emoji above
+  // DO NOT override it!
+  
   const countSpan = reactionBtn.querySelector('.icon-count');
   const existingCountText = countSpan ? countSpan.outerHTML : '';
   
   // Update the emoji while preserving the count span
-  reactionBtn.innerHTML = displayEmoji + existingCountText;
-  reactionBtn.dataset.reaction = userReaction ? userReaction.emoji : '';
-  reactionBtn.dataset.selectedEmoji = userReaction ? userReaction.emoji : '';
+  reactionBtn.innerHTML = displayEmoji;
+  if (countSpan) {
+    reactionBtn.appendChild(countSpan);
+  } else if (totalReactionCount > 0) {
+    const newCountSpan = document.createElement('span');
+    newCountSpan.className = 'icon-count';
+    newCountSpan.style.cssText = 'font-size: 9px; margin-left: 2px; font-weight: normal; color: #666;';
+    newCountSpan.textContent = totalReactionCount;
+    newCountSpan.style.display = 'inline';
+    reactionBtn.appendChild(newCountSpan);
+  }
+  
+  // CRITICAL FIX: Always preserve user's selected emoji if they just selected it
+  if (userReaction) {
+    // User reaction found in DB - use it
+    reactionBtn.dataset.reaction = userReaction.emoji;
+    reactionBtn.dataset.selectedEmoji = userReaction.emoji;
+    console.log('✅ REACTIONS: Using user reaction from DB:', userReaction.emoji);
+  } else if (userSelectedEmoji && (Date.now() - (parseInt(reactionBtn.dataset.lastUpdated) || 0)) < 3000) {
+    // User just selected - preserve it even if not in DB yet
+    reactionBtn.dataset.selectedEmoji = userSelectedEmoji;
+    reactionBtn.dataset.reaction = userSelectedEmoji;
+    console.log('✅ REACTIONS: Preserving user selection:', userSelectedEmoji);
+  } else {
+    // No user reaction and no recent selection - clear
+    reactionBtn.dataset.reaction = '';
+    reactionBtn.dataset.selectedEmoji = '';
+  }
+  
+  reactionBtn.dataset.lastUpdated = Date.now().toString();
   
   // Update reaction count - show total count of all reactions
   const updatedCountSpan = reactionBtn.querySelector('.icon-count');
@@ -3268,7 +3452,7 @@ function storeReactionLocally(messageId, reactionType) {
   const currentUser = window.currentUser || { email: 'user@example.com' };
   const reactionData = {
     messageId: messageId,
-    userId: currentUser.email,
+    userId: currentUser.id || currentUser.user_id,
     reactionType: reactionType,
     timestamp: new Date().toISOString(),
     local: true
@@ -3341,8 +3525,8 @@ if (typeof window.addMessageToChat === 'function') {
 }
 
 // COMP METHOD: Update user aura color in UI (from COMP)
-async function updateUserAuraInUI(userEmail, auraColor) {
-  console.log('🔧 AURA: COMP METHOD - Updating aura color in UI:', userEmail, auraColor);
+async function updateUserAuraInUI(userId, auraColor) {
+  console.log('🔧 AURA: COMP METHOD - Updating aura color in UI:', userId, auraColor);
   
   try {
     // Update message avatars for this user
@@ -3355,7 +3539,7 @@ async function updateUserAuraInUI(userEmail, auraColor) {
         const messageId = messageContainer.getAttribute('data-message-id');
         if (messageId) {
           const messageData = window.currentChatData?.find(msg => msg.id === messageId);
-          if (messageData && messageData.author && messageData.author.email === userEmail) {
+          if (messageData && messageData.author && (messageData.author.id === userId || messageData.author.user_id === userId)) {
             // Update the author's aura color
             messageData.author.auraColor = auraColor;
             
@@ -3364,21 +3548,21 @@ async function updateUserAuraInUI(userEmail, auraColor) {
             avatarContainer.innerHTML = newAvatarHTML;
             
             messageAvatarsUpdated++;
-            console.log('🔧 AURA: Updated message avatar for', userEmail, 'with color', auraColor);
+            console.log('🔧 AURA: Updated message avatar for', userId, 'with color', auraColor);
           }
         }
       }
     }
     
-    console.log('🔧 AURA: Updated', messageAvatarsUpdated, 'message avatars for', userEmail);
+    console.log('🔧 AURA: Updated', messageAvatarsUpdated, 'message avatars for', userId);
     
     // Update visibility avatars
     const visibilityAvatars = document.querySelectorAll('.user-avatar');
     let visibilityAvatarsUpdated = 0;
     
     visibilityAvatars.forEach((avatarElement) => {
-      const userEmailAttr = avatarElement.getAttribute('data-user-email');
-      if (userEmailAttr === userEmail) {
+      const userIdAttr = avatarElement.getAttribute('data-user-id');
+      if (userIdAttr === userId) {
         // Update the aura ring color
         const auraRing = avatarElement.querySelector('.aura-ring');
         if (auraRing) {
@@ -3390,11 +3574,11 @@ async function updateUserAuraInUI(userEmail, auraColor) {
         avatarElement.style.borderColor = auraColor;
         
         visibilityAvatarsUpdated++;
-        console.log('🔧 AURA: Updated visibility avatar for', userEmail, 'with color', auraColor);
+        console.log('🔧 AURA: Updated visibility avatar for', userId, 'with color', auraColor);
       }
     });
     
-    console.log('🔧 AURA: Updated', visibilityAvatarsUpdated, 'visibility avatars for', userEmail);
+    console.log('🔧 AURA: Updated', visibilityAvatarsUpdated, 'visibility avatars for', userId);
     
   } catch (error) {
     console.error('❌ AURA: Error updating aura color in UI:', error);
@@ -3474,8 +3658,8 @@ async function showReactionModalGlobal(messageId) {
   
   // COMP METHOD: Check actual database state for user's current reaction
   console.log('🔍 REACTIONS: COMP METHOD - Checking database for current user reaction...');
-  const userEmail = window.currentUser?.email;
-  if (!userEmail) {
+  const userId = window.currentUser?.id || window.currentUser?.user_id;
+  if (!userId) {
     console.warn('⚠️ REACTIONS: No authenticated user found');
     return;
   }
@@ -3485,8 +3669,8 @@ async function showReactionModalGlobal(messageId) {
     const data = await window.api.request(`/v1/reactions/${messageId}`);
     
     if (data.success && data.reactions) {
-      // Find current user's reaction
-      const userReaction = data.reactions.find(r => r.user_email === userEmail);
+      // Find current user's reaction (handle both new AppUser structure and legacy user_email)
+      const userReaction = data.reactions.find(r => (r.AppUser?.id || r.user_id) === userId);
       
       if (userReaction) {
         // User has an existing reaction - remove it (toggle off)
@@ -3504,23 +3688,32 @@ async function showReactionModalGlobal(messageId) {
             method: 'POST',
             body: JSON.stringify({
               messageId: messageId,
-              emoji: userReaction.emoji,
-              userEmail: userEmail
+              emoji: userReaction.emoji
             })
           });
         }
         console.log('✅ REACTION: COMP METHOD - Reaction removed:', removeResult);
         
-        // Update UI - reset to default (preserve count span)
-        const countSpan = reactionBtn.querySelector('.icon-count');
-        const existingCountText = countSpan ? countSpan.outerHTML : '';
-        reactionBtn.innerHTML = '🔘' + existingCountText;
+        // ROOT CAUSE FIX: Clear user selection immediately so updateReactionDisplay shows blank
         reactionBtn.dataset.reaction = '';
         reactionBtn.dataset.selectedEmoji = '';
+        reactionBtn.dataset.lastUpdated = Date.now().toString();
+        
+        // Update UI optimistically - show blank (🔘) immediately
+        const countSpan = reactionBtn.querySelector('.icon-count');
+        if (countSpan) {
+          // Keep count span for now, will be updated by reload
+          reactionBtn.innerHTML = '🔘';
+          reactionBtn.appendChild(countSpan);
+        } else {
+          reactionBtn.innerHTML = '🔘';
+        }
         
         // CRITICAL FIX: Reload reactions to get accurate count from database
         console.log('🔧 REACTIONS: COMP METHOD - Reloading reactions after removal for accurate count');
-        window.loadMessageReactions(messageId, reactionBtn);
+        setTimeout(() => {
+          window.loadMessageReactions(messageId, reactionBtn);
+        }, 300); // Delay to ensure DB has updated
         
         return; // Don't show modal, just remove reaction
       }
@@ -3621,13 +3814,12 @@ async function showReactionModalGlobal(messageId) {
         result = { success: success, action: success ? 'added' : 'failed' };
       } else {
         console.log('🔧 REACTIONS: COMP METHOD - ReactionsIntegration not available, using direct API...');
+        // Backend uses authenticated user from headers - only send messageId and emoji
         result = await window.api.request('/v1/reactions', {
           method: 'POST',
           body: JSON.stringify({
             messageId: messageId,
-            emoji: selectedReaction,
-            userEmail: userEmail,
-            avatarUrl: chromeAvatarUrl // Include Chrome profile avatar URL
+            emoji: selectedReaction
           })
         });
       }
@@ -3655,19 +3847,58 @@ async function showReactionModalGlobal(messageId) {
             window.loadMessageReactions(messageId, reactionBtn);
           }, 200); // COMP METHOD: Delay for database propagation
         } else if (result.action === 'added' || result.action === 'replaced') {
-          // Reaction was added or replaced - update UI (preserve count span)
+          // Reaction was added or replaced - update UI immediately
           const countSpan = reactionBtn.querySelector('.icon-count');
-          const existingCountText = countSpan ? countSpan.outerHTML : '';
-          reactionBtn.innerHTML = selectedReaction + existingCountText;
-          reactionBtn.dataset.reaction = selectedReaction;
-          reactionBtn.dataset.selectedEmoji = selectedReaction;
           
-          // CRITICAL FIX: Reload reactions to get accurate count from database
-          console.log('🔧 REACTIONS: COMP METHOD - Reloading reactions after addition for accurate count');
-          // Add delay to ensure database has updated
+          // CRITICAL FIX: Show user's own reaction immediately with count
+          // Store the selected emoji in dataset so reload preserves it
+          reactionBtn.dataset.selectedEmoji = selectedReaction;
+          reactionBtn.dataset.reaction = selectedReaction;
+          reactionBtn.dataset.lastUpdated = Date.now().toString();
+          
+          // Update emoji immediately
+          const currentCount = parseInt(countSpan?.textContent) || 0;
+          const newCount = result.action === 'replaced' ? currentCount : currentCount + 1;
+          
+          // Create count span if it doesn't exist
+          if (!countSpan) {
+            const newCountSpan = document.createElement('span');
+            newCountSpan.className = 'icon-count';
+            newCountSpan.style.cssText = 'font-size: 9px; margin-left: 2px; font-weight: normal; color: #666;';
+            reactionBtn.appendChild(newCountSpan);
+          }
+          
+          // Update display immediately
+          const updatedCountSpan = reactionBtn.querySelector('.icon-count');
+          reactionBtn.innerHTML = selectedReaction;
+          if (updatedCountSpan) {
+            updatedCountSpan.textContent = newCount;
+            updatedCountSpan.style.display = 'inline';
+            reactionBtn.appendChild(updatedCountSpan);
+          }
+          
+          console.log('✅ REACTIONS: COMP METHOD - Updated UI immediately with:', selectedReaction, 'count:', newCount);
+          
+          // ROOT CAUSE FIX #2: Track reaction ID if returned from API, so we can ignore its DELETE event
+          if (result.reaction?.id) {
+            if (!window.userCreatedReactionIds) {
+              window.userCreatedReactionIds = new Set();
+            }
+            window.userCreatedReactionIds.add(result.reaction.id);
+            setTimeout(() => window.userCreatedReactionIds.delete(result.reaction.id), 5000);
+          }
+          
+          // Real-time handler will reload reactions when event arrives
+          // Only reload if real-time doesn't fire within reasonable time
           setTimeout(() => {
-            window.loadMessageReactions(messageId, reactionBtn);
-          }, 200); // COMP METHOD: Delay for database propagation
+            const currentBtn = document.querySelector(`[data-message-id="${messageId}"] .reaction-btn`);
+            // Only reload if UI still shows optimistic update (real-time didn't fire)
+            if (currentBtn && currentBtn.dataset.selectedEmoji === selectedReaction && 
+                Date.now() - parseInt(currentBtn.dataset.lastUpdated) < 500) {
+              console.log('🔧 REACTIONS: COMP METHOD - Real-time event didn\'t arrive, reloading for sync');
+              window.loadMessageReactions(messageId, currentBtn);
+            }
+          }, 400);
         } else {
           console.log('⚠️ REACTIONS: COMP METHOD - Unknown action in API response:', result.action);
         }
@@ -3701,19 +3932,7 @@ async function showReactionModalGlobal(messageId) {
 window.showReactionModal = showReactionModalGlobal;
 // Duplicate definition removed - using the one defined earlier
 
-window.addReactionToMessage = window.addReactionToMessage || function(reaction) {
-  const messageId = reaction.message_id;
-  const reactionBtn = document.querySelector(`[data-message-id="${messageId}"].reaction-btn`);
-  
-  if (reactionBtn) {
-    console.log('🔔 REACTIONS: Adding reaction to message:', reaction);
-    
-    // Reload all reactions for this message to get accurate count
-    window.loadMessageReactions(messageId, reactionBtn);
-    
-    console.log('✅ REACTIONS: COMP METHOD - Reaction added to message display:', reaction);
-  }
-};
+// Duplicate definition removed - using the main function defined above (line 1128)
 
 window.updateReactionInMessage = window.updateReactionInMessage || function(reaction) {
   console.log('🔄 REACTIONS: COMP METHOD - Updating reaction in message:', reaction);
@@ -3725,21 +3944,40 @@ window.updateReactionInMessage = window.updateReactionInMessage || function(reac
 };
 
 window.removeReactionFromMessage = window.removeReactionFromMessage || function(reaction) {
-  const messageId = reaction.message_id;
-  const reactionBtn = document.querySelector(`[data-message-id="${messageId}"].reaction-btn`);
+  // CRITICAL FIX: Handle different payload structures
+  const messageId = reaction?.message_id || reaction?.messageId || reaction?.message_id || 
+                    (reaction?.old && reaction.old.message_id) ||
+                    (reaction?.new && reaction.new.message_id);
+  
+  if (!messageId) {
+    console.warn('⚠️ REACTIONS: COMP METHOD - No message ID in reaction payload:', reaction);
+    return;
+  }
+  
+  const messageElement = document.querySelector(`[data-message-id="${messageId}"]`);
+  const reactionBtn = messageElement?.querySelector('.reaction-btn');
   
   if (reactionBtn) {
-    console.log('🔔 REACTIONS: COMP METHOD - Removing reaction from message:', reaction);
+    console.log('🔔 REACTIONS: COMP METHOD - Removing reaction from message:', messageId);
     
     // COMP METHOD: Reload reactions to get accurate state from database
     console.log('🔧 REACTIONS: COMP METHOD - Reloading reactions after real-time removal');
-    window.loadMessageReactions(messageId, reactionBtn);
+    setTimeout(() => {
+      window.loadMessageReactions(messageId, reactionBtn);
+    }, 300);
     
-    console.log('✅ REACTIONS: COMP METHOD - Reaction removed from message display:', reaction);
+    console.log('✅ REACTIONS: COMP METHOD - Reaction removed from message display:', messageId);
+  } else {
+    console.warn('⚠️ REACTIONS: COMP METHOD - Reaction button not found for message:', messageId);
   }
 };
 
-window.handleReactionChange = window.handleReactionChange || function(payload) {
+// ROOT CAUSE FIX: Track reaction IDs user just created to ignore their DELETE events from replace operations
+if (!window.userCreatedReactionIds) {
+  window.userCreatedReactionIds = new Set();
+}
+
+window.handleReactionChange = window.handleReactionChange || async function(payload) {
   console.log('🔔 REACTIONS: COMP METHOD - Processing real-time reaction change:', payload);
   
   const { eventType, new: newRecord, old: oldRecord } = payload;
@@ -3750,28 +3988,45 @@ window.handleReactionChange = window.handleReactionChange || function(payload) {
     return;
   }
   
-  console.log('🔔 REACTIONS: COMP METHOD - Event type:', eventType);
-  console.log('🔔 REACTIONS: COMP METHOD - Message ID:', messageId);
+  const currentUserId = window.currentUser?.id || window.currentUser?.user_id;
+  const reactionUserId = newRecord?.user_id || oldRecord?.user_id;
+  const deletedReactionId = oldRecord?.id;
+  const newReactionId = newRecord?.id;
   
-  // COMP METHOD: Always reload reactions from database for accurate state
-  const reactionBtn = document.querySelector(`[data-message-id="${messageId}"] .reaction-btn`);
-  if (reactionBtn) {
-    console.log('🔧 REACTIONS: COMP METHOD - Reloading reactions after real-time change');
-    
-    // Force immediate UI update with timeout
-    setTimeout(() => {
-      window.loadMessageReactions(messageId, reactionBtn);
-    }, 50);
-    
-    // Also refresh all reaction displays to ensure consistency
-    setTimeout(() => {
-      if (window.refreshAllReactionDisplays) {
-        window.refreshAllReactionDisplays();
-      }
-    }, 100);
-  } else {
-    console.warn('⚠️ REACTIONS: COMP METHOD - Reaction button not found for message:', messageId);
+  // ROOT CAUSE FIX: Backend REPLACE operation does UPDATE, not DELETE+INSERT
+  // But if we see DELETE for a reaction user just created, it's from a replace - ignore it
+  if (eventType === 'DELETE' && deletedReactionId && window.userCreatedReactionIds.has(deletedReactionId)) {
+    console.log('🔧 REACTIONS: COMP METHOD - Ignoring DELETE for replaced reaction:', deletedReactionId);
+    window.userCreatedReactionIds.delete(deletedReactionId);
+    return;
   }
+  
+  // Track newly created reactions from current user
+  if (eventType === 'INSERT' && newReactionId && reactionUserId && currentUserId && 
+      String(reactionUserId) === String(currentUserId)) {
+    window.userCreatedReactionIds.add(newReactionId);
+    setTimeout(() => window.userCreatedReactionIds.delete(newReactionId), 3000);
+  }
+  
+  const messageElement = document.querySelector(`[data-message-id="${messageId}"]`);
+  const reactionBtn = messageElement?.querySelector('.reaction-btn');
+  
+  if (!reactionBtn) {
+    console.log('🔧 REACTIONS: COMP METHOD - No reaction button found, skipping');
+    return;
+  }
+  
+  // If user just acted and this is their INSERT/UPDATE event, skip (UI already updated)
+  const lastUpdated = parseInt(reactionBtn.dataset.lastUpdated) || 0;
+  if (Date.now() - lastUpdated < 500 && (eventType === 'INSERT' || eventType === 'UPDATE') && 
+      reactionUserId && currentUserId && String(reactionUserId) === String(currentUserId)) {
+    console.log('🔧 REACTIONS: COMP METHOD - User action just happened, UI updated, skipping', eventType);
+    return;
+  }
+  
+  // Process all events normally
+  console.log('🔧 REACTIONS: COMP METHOD - Reloading reactions after real-time change');
+  window.loadMessageReactions(messageId, reactionBtn);
 };
 
 window.refreshAllReactionDisplays = window.refreshAllReactionDisplays || async function() {
@@ -3806,46 +4061,162 @@ window.refreshAllReactionDisplays = window.refreshAllReactionDisplays || async f
         // Extract user email from the message element
         const authorElement = messageElement.querySelector('.message-author');
         if (authorElement) {
-          const userEmail = authorElement.textContent.trim();
-          console.log('🔧 AVATARS: Refreshing avatar for user:', userEmail);
+          const userId = authorElement.getAttribute('data-author-id') || authorElement.textContent.trim();
+          console.log('🔧 AVATARS: Refreshing avatar for user:', userId);
           
           // COMP METHOD: Use the same avatar resolution logic as message creation
           try {
             const author = {
-              email: userEmail,
-              name: userEmail.split('@')[0],
+              id: userId,
+              user_id: userId,
+              name: userId,
               avatarUrl: null
             };
             
             // Get the latest aura color from presence data
-            const currentUserEmail = getCurrentUserEmail();
-            if (author.email === currentUserEmail) {
+            const currentUserId = window.currentUser?.id || window.currentUser?.user_id;
+            if ((author.id || author.user_id) === (window.currentUser?.id || window.currentUser?.user_id)) {
               const currentAuraColor = getCurrentUserAvatarBgColor();
               if (currentAuraColor && currentAuraColor !== window.AVATAR_FALLBACK_COLOR) {
                 author.auraColor = currentAuraColor;
                 console.log('🔧 AVATARS: Using current user aura color:', currentAuraColor);
               }
             } else {
-              const latestAuraColor = getLatestAuraColorFromPresence(author.email);
+              const latestAuraColor = getLatestAuraColorFromPresence(author.id || author.user_id);
               if (latestAuraColor && latestAuraColor !== window.AVATAR_FALLBACK_COLOR) {
                 author.auraColor = latestAuraColor;
-                console.log('🔧 AVATARS: Using real-time aura color for', author.email, ':', latestAuraColor);
+                console.log('🔧 AVATARS: Using real-time aura color for', author.id || author.user_id, ':', latestAuraColor);
               }
             }
             
             // Recreate avatar with updated data
             const newAvatarHTML = await getSenderAvatar(author);
             avatarElement.innerHTML = newAvatarHTML;
-            console.log('✅ AVATARS: Updated avatar for', userEmail);
+            console.log('✅ AVATARS: Updated avatar for', userId);
           } catch (error) {
-            console.error('❌ AVATARS: Error refreshing avatar for', userEmail, ':', error);
+            console.error('❌ AVATARS: Error refreshing avatar for', userId, ':', error);
           }
         }
       }
     }
     
     console.log('✅ AVATARS: COMP METHOD - All message avatars refreshed');
+  }
+  
+  // ROOT CAUSE FIX: Comprehensive diagnostic function for reaction display issues
+  window.diagnoseReactionDisplayIssue = async function(messageId) {
+    console.log('🔍 === REACTION DISPLAY DIAGNOSTIC START ===');
+    
+    if (!messageId) {
+      const firstMsg = document.querySelector('[data-message-id]');
+      if (firstMsg) {
+        messageId = firstMsg.dataset.messageId;
+        console.log('📌 Using first message ID:', messageId);
+      } else {
+        console.error('❌ No message ID provided and no messages found');
+        return;
+      }
+    }
+    
+    const msgEl = document.querySelector(`[data-message-id="${messageId}"]`);
+    if (!msgEl) {
+      console.error('❌ Message not found:', messageId);
+      return;
+    }
+    
+    const btn = msgEl.querySelector('.reaction-btn');
+    if (!btn) {
+      console.error('❌ Reaction button not found');
+      return;
+    }
+    
+    const currentUserId = window.currentUser?.id || window.currentUser?.user_id;
+    const currentUserEmail = window.currentUser?.email;
+    
+    console.log('\n--- Current User Context ---');
+    console.log('User ID:', currentUserId, `(Type: ${typeof currentUserId})`);
+    console.log('User Email:', currentUserEmail);
+    console.log('window.currentUser object:', window.currentUser);
+    
+    console.log('\n--- UI State ---');
+    const uiEmoji = btn.textContent.trim().replace(/\d+/, '').trim();
+    const uiCount = parseInt(btn.querySelector('.icon-count')?.textContent) || 0;
+    console.log('Displayed Emoji:', uiEmoji);
+    console.log('Displayed Count:', uiCount);
+    console.log('data-reaction:', btn.dataset.reaction);
+    console.log('data-selected-emoji:', btn.dataset.selectedEmoji);
+    console.log('data-last-updated:', btn.dataset.lastUpdated);
+    
+    console.log('\n--- Backend State ---');
+    try {
+      const resp = await window.api.request(`/v1/reactions/${messageId}`);
+      const reactions = resp?.reactions || [];
+      
+      console.log('Total reactions:', reactions.length);
+      console.log('All reactions:', reactions.map(r => ({
+        id: r.id,
+        emoji: r.emoji,
+        user_id: r.user_id || r.AppUser?.id,
+        user_email: r.AppUser?.email,
+        created_at: r.created_at
+      })));
+      
+      const userReaction = reactions.find(r => {
+        const rId = r.AppUser?.id || r.user_id;
+        return rId && String(rId) === String(currentUserId);
+      });
+      
+      console.log('Current user\'s reaction:', userReaction ? userReaction.emoji : 'NONE');
+      
+      const reactionCounts = {};
+      reactions.forEach(r => {
+        reactionCounts[r.emoji] = (reactionCounts[r.emoji] || 0) + 1;
+      });
+      console.log('Reaction counts by emoji:', reactionCounts);
+      
+      console.log('\n--- User ID Matching Analysis ---');
+      reactions.forEach(r => {
+        const rId = r.AppUser?.id || r.user_id;
+        const matches = rId && String(rId) === String(currentUserId);
+        console.log(`  Reaction ${r.emoji}: User ID ${rId} ${matches ? '✅ MATCHES' : '❌ DOES NOT MATCH'} current user ${currentUserId}`);
+        if (r.AppUser?.email) {
+          console.log(`    Email: ${r.AppUser.email}`);
+        }
+      });
+      
+      console.log('\n--- Expected vs Actual ---');
+      const expectedEmoji = userReaction ? userReaction.emoji : '🔘';
+      const expectedCount = reactions.length;
+      console.log('Expected emoji:', expectedEmoji, uiEmoji === expectedEmoji ? '✅' : '❌');
+      console.log('Actual emoji:', uiEmoji);
+      console.log('Expected count:', expectedCount, String(expectedCount) === String(uiCount) ? '✅' : '❌');
+      console.log('Actual count:', uiCount);
+      
+      if (uiEmoji !== expectedEmoji || String(expectedCount) !== String(uiCount)) {
+        console.log('\n🔧 Attempting to fix display...');
+        await window.loadMessageReactions(messageId, btn);
+        setTimeout(() => {
+          const newEmoji = btn.textContent.trim().replace(/\d+/, '').trim();
+          const newCount = parseInt(btn.querySelector('.icon-count')?.textContent) || 0;
+          console.log('✅ After fix - Emoji:', newEmoji, newEmoji === expectedEmoji ? '✅' : '❌');
+          console.log('✅ After fix - Count:', newCount, newCount === expectedCount ? '✅' : '❌');
+        }, 500);
+      }
+      
+      return {
+        messageId,
+        currentUser: { id: currentUserId, email: currentUserEmail },
+        ui: { emoji: uiEmoji, count: uiCount },
+        backend: { userReaction: userReaction?.emoji || null, totalCount: expectedCount, allReactions: reactions },
+        issuesFound: uiEmoji !== expectedEmoji || String(expectedCount) !== String(uiCount)
+      };
+    } catch (error) {
+      console.error('❌ Error fetching reactions:', error);
+      return { error: error.message };
+    }
   };
+  
+  console.log('✅ Diagnostic function loaded: window.diagnoseReactionDisplayIssue(messageId)');
 
 // COMP METHOD: Ensure all functions are globally available
 window.addReactionToMessage = addReactionToMessage;

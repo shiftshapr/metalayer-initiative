@@ -32,29 +32,63 @@ router.post('/normalize-url', async (req, res) => {
 
 // Middleware to ensure user is authenticated
 const authenticateUser = async (req, res, next) => {
-  const userEmail = req.headers['x-user-email'];
-  const userName = req.headers['x-user-name'];
-  const userAvatarUrl = req.headers['x-user-avatar'];
-  
-  if (!userEmail) {
-    return res.status(401).json({ error: 'Unauthorized: x-user-email header required' });
+  // Node lowercases header keys; read canonical names and fallbacks
+  const rawUserId = req.headers['x-user-id'] || null; // canonical
+  const rawEmail = req.headers['x-user-email'] || null; // canonical (may be comma-separated)
+  let rawUserEmail = null;
+  if (rawEmail) {
+    const first = rawEmail.includes(',') ? rawEmail.split(',')[0] : rawEmail;
+    const normalized = first.trim().toLowerCase();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (emailRegex.test(normalized)) {
+      rawUserEmail = normalized;
+    }
   }
-  
+  const userName = req.headers['x-user-name'] || null;
+  const userAvatarUrl = req.headers['x-user-avatar'] || null;
+
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const validUuid = typeof rawUserId === 'string' && uuidRegex.test(rawUserId);
+
+  // Debug logging for incoming auth headers
   try {
-    // Look up user by email in database
-    const user = await prisma.appUser.findUnique({
-      where: { email: userEmail }
+    console.log('🔐 AUTH_MW: Headers received:', {
+      'x-user-id': rawUserId,
+      'x-user-email': rawUserEmail,
+      'x-user-name': userName,
+      'x-user-avatar': userAvatarUrl
     });
-    
+  } catch (_) {}
+
+  if (!validUuid && !rawUserEmail) {
+    return res.status(401).json({ error: 'Unauthorized: X-User-Id (UUID) or X-User-Email required' });
+  }
+
+  try {
+    let user = null;
+
+    if (validUuid) {
+      console.log('🔐 AUTH_MW: Looking up user by UUID');
+      user = await prisma.appUser.findUnique({ where: { id: rawUserId } });
+    }
+
+    // Fallback to email lookup if UUID not provided/invalid or not found
+    if (!user && rawUserEmail) {
+      console.log('🔐 AUTH_MW: Looking up user by email');
+      user = await prisma.appUser.findUnique({ where: { email: rawUserEmail } });
+    }
+
     if (!user) {
       return res.status(401).json({ error: 'User not found in database' });
     }
-    
-    req.user = { email: userEmail, id: user.id, name: userName, avatarUrl: userAvatarUrl };
+
+    req.user = { id: user.id, email: user.email, name: userName, avatarUrl: userAvatarUrl };
     next();
   } catch (error) {
     console.error('Error authenticating user:', error);
-    return res.status(500).json({ error: 'Internal server error' });
+    const code = error.code || error.name;
+    const message = error.message || 'Unknown error';
+    return res.status(500).json({ error: 'Internal server error', code, message });
   }
 };
 
@@ -93,7 +127,9 @@ router.post('/event', authenticateUser, async (req, res) => {
     res.json(presenceEvent);
   } catch (error) {
     console.error('Error recording presence event:', error);
-    res.status(500).json({ error: 'Failed to record presence event' });
+    const code = error.code || error.name;
+    const message = error.message;
+    res.status(500).json({ error: 'Failed to record presence event', code, message });
   }
 });
 
@@ -156,56 +192,22 @@ router.get('/url', authenticateUser, async (req, res) => {
   }
 
   try {
-    
-    // Find or create the page for this URL
-    // First try to find the page with the correct ID format (frontend-generated)
-    const frontendPageId = url.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 100);
-    let page = await prisma.page.findFirst({
-      where: {
-        id: frontendPageId
-      }
-    });
-    
-    // If not found, try to find any page with this URL
-    if (!page) {
-      page = await prisma.page.findFirst({
-        where: {
-          OR: [
-            { url: url },
-            { canonicalUrl: url }
-          ]
-        }
-      });
-    }
+    // Normalize URL exactly like frontend using UrlNormalizationService
+    const UrlNormalizationService = require('../services/urlNormalizationService');
+    const urlNormalizationService = new UrlNormalizationService();
+    const { normalizedUrl, pageId } = await urlNormalizationService.normalizeUrl(url);
 
-    if (!page) {
-      // Generate a pageId using the same logic as the frontend
-      const pageId = url.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 100);
-      
-      // Create the page
-      page = await prisma.page.create({
-        data: {
-          id: pageId,
-          url: url,
-          canonicalUrl: url,
-          title: extractTitleFromUrl(url),
-          spaceId: null
-        }
-      });
-    }
-
-    // Get active users for this page
     const activeUsers = await presenceService.getActiveUsers(
-      page.id,
-      communityIds ? communityIds.split(',')[0] : null, // Use first community for now
-      parseFloat(minutes), // Use parseFloat instead of parseInt to preserve decimal values
+      pageId,
+      communityIds ? communityIds.split(',')[0] : null,
+      parseFloat(minutes),
       currentUserId
     );
-    
-    res.json({ 
-      active: activeUsers, 
-      pageId: page.id, 
-      url: url
+
+    res.json({
+      active: activeUsers,
+      pageId,
+      url: normalizedUrl
     });
   } catch (error) {
     console.error('Error getting active users for URL:', error);

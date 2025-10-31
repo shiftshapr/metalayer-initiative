@@ -143,7 +143,7 @@ window.testReactionPropagation = async function() {
       new: {
         message_id: 'test-message-id',
         emoji: '👍',
-        user_email: 'test@example.com'
+        user_id: 'test-user-123'
       },
       old: null
     };

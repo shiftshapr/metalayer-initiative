@@ -26,56 +26,149 @@ class PresenceService {
     try {
       console.log(`🔍 PRESENCE_EVENT: Recording ${kind} event for user ${userId} on page ${pageId}`);
       
-      // Find the user first, create AppUser if needed
-      let user = await this.prisma.appUser.findUnique({
-        where: { email: userId }
-      });
+      // Determine if userId is an email or UUID
+      const isEmail = userId && userId.includes('@');
+      const isUUID = userId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId);
+      let user;
       
-      if (!user) {
-        // Create AppUser record for new user
-        console.log(`🔍 PRESENCE_EVENT: Creating new AppUser record for ${userId}`);
-        user = await this.prisma.appUser.create({
-              data: {
-            id: require('crypto').randomUUID(),
-            handle: userId.split('@')[0],
-            email: userId,
-            name: userId.split('@')[0],
-            avatarUrl: '', // Will be updated by auth service
-            auraColor: '#ffffff', // Default white
-            createdAt: new Date(),
-            updatedAt: new Date()
-          }
+      // Validate userId
+      if (!userId || userId === 'null' || userId === '' || (!isEmail && !isUUID)) {
+        throw new Error('Invalid userId: must be a valid email address or UUID');
+      }
+      
+      if (isEmail) {
+        // userId is an email - find by email; DO NOT auto-create here
+        user = await this.prisma.AppUser.findUnique({
+          where: { email: userId }
         });
-        console.log(`✅ PRESENCE_EVENT: Created AppUser record for ${userId}`);
+        if (!user) {
+          // Only Chrome-auth flow may create users; presence must not create users
+          throw new Error('Unauthorized: user not found. Authenticate via Chrome to provision account.');
+        }
+      } else if (isUUID) {
+        // userId is a UUID - find by id
+        user = await this.prisma.AppUser.findUnique({
+          where: { id: userId }
+        });
+        
+        if (!user) {
+          console.error(`❌ PRESENCE_EVENT: User with UUID ${userId} not found in database`);
+          throw new Error(`User with UUID ${userId} not found`);
+        }
       }
       
       // Determine if user is active based on event kind
       const isActive = kind === 'ENTER';
       
       // Upsert UserPresence record using UUID foreign key
-      const userPresence = await this.prisma.user_presence.upsert({
-            where: {
-          unique_user_presence_user_page: {
+      let userPresence;
+      try {
+        userPresence = await this.prisma.user_presence.upsert({
+          where: {
+            user_id_page_id: {
+              user_id: user.id,
+              page_id: pageId
+            }
+          },
+          update: {
+            is_active: isActive,
+            last_seen: new Date(),
+            page_url: pageUrl || pageId,
+            user_name: user.name || user.email?.split('@')[0] || 'User'
+          },
+          create: {
             user_id: user.id,
-            page_id: pageId
+            user_name: user.name || user.email?.split('@')[0] || 'User',
+            page_id: pageId,
+            page_url: pageUrl || pageId,
+            is_active: isActive,
+            last_seen: new Date()
+          }
+        });
+      } catch (prismaError) {
+        // Fallback path for schema differences (e.g., missing composite unique)
+        console.error('⚠️ Prisma upsert failed:', { code: prismaError.code, message: prismaError.message });
+
+        // First try a minimal column path (only required columns), attempting with page_url then without
+        try {
+          const existingMin = await this.prisma.user_presence.findFirst({
+            where: { user_id: user.id, page_id: pageId }
+          });
+          if (existingMin) {
+            try {
+              userPresence = await this.prisma.user_presence.update({
+                where: { id: existingMin.id },
+                data: {
+                  is_active: isActive,
+                  last_seen: new Date(),
+                  page_url: pageUrl || pageId
+                }
+              });
+            } catch (updateWithUrlError) {
+              console.error('⚠️ Update with page_url failed, retrying without page_url:', { code: updateWithUrlError.code, message: updateWithUrlError.message });
+              userPresence = await this.prisma.user_presence.update({
+                where: { id: existingMin.id },
+                data: {
+                  is_active: isActive,
+                  last_seen: new Date()
+                }
+              });
+            }
+          } else {
+            try {
+              userPresence = await this.prisma.user_presence.create({
+                data: {
+                  user_id: user.id,
+                  page_id: pageId,
+                  page_url: pageUrl || pageId,
+                  is_active: isActive,
+                  last_seen: new Date()
+                }
+              });
+            } catch (createWithUrlError) {
+              console.error('⚠️ Create with page_url failed, retrying without page_url:', { code: createWithUrlError.code, message: createWithUrlError.message });
+              userPresence = await this.prisma.user_presence.create({
+                data: {
+                  user_id: user.id,
+                  page_id: pageId,
+                  is_active: isActive,
+                  last_seen: new Date()
+                }
+              });
+            }
+          }
+        } catch (minimalError) {
+          console.error('⚠️ Minimal-path write failed:', { code: minimalError.code, message: minimalError.message });
+
+          // As a last resort, try extended fields via find/update/create
+          const existing = await this.prisma.user_presence.findFirst({
+            where: { user_id: user.id, page_id: pageId }
+          });
+
+          if (existing) {
+            userPresence = await this.prisma.user_presence.update({
+              where: { id: existing.id },
+              data: {
+                is_active: isActive,
+                last_seen: new Date(),
+                page_url: pageUrl || pageId,
+                user_name: user.name || user.email?.split('@')[0] || 'User'
               }
-            },
-            update: {
-          is_active: isActive,
-          last_seen: new Date(),
-          // Don't update aura_color on presence updates - keep existing database value
-          page_url: pageUrl || pageId,
-          user_name: user.user_metadata?.full_name || user.name || user.email?.split('@')[0] || 'User'
-            },
-            create: {
-          user_id: user.id,
-          user_name: user.user_metadata?.full_name || user.name || user.email?.split('@')[0] || 'User',
-          page_id: pageId,
-          page_url: pageUrl || pageId,
-          is_active: isActive,
-          last_seen: new Date()
+            });
+          } else {
+            userPresence = await this.prisma.user_presence.create({
+              data: {
+                user_id: user.id,
+                user_name: user.name || user.email?.split('@')[0] || 'User',
+                page_id: pageId,
+                page_url: pageUrl || pageId,
+                is_active: isActive,
+                last_seen: new Date()
+              }
+            });
+          }
         }
-      });
+      }
       
       console.log(`✅ PRISMA_METHOD: Successfully recorded user presence with ID: ${userPresence.id}`);
       
@@ -90,7 +183,8 @@ class PresenceService {
       
     } catch (error) {
       console.error('❌ Error recording presence event:', error);
-      throw new Error('Failed to record presence event');
+      // Re-throw original error so the route can surface details
+      throw error;
     }
   }
 

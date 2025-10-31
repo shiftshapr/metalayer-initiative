@@ -173,3 +173,5 @@ SELECT
 FROM messages m
 JOIN "AppUser" au ON m.user_id = au.id
 LIMIT 5;
+
+
