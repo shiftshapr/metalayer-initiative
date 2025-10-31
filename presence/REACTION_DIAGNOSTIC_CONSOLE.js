@@ -138,3 +138,4 @@ window.diagnoseReactionDisplay = async function(messageId) {
 console.log('✅ Diagnostic function loaded: window.diagnoseReactionDisplay(messageId)');
 console.log('💡 Example: window.diagnoseReactionDisplay("43dbb2d7-669e-464b-a227-38afb063492d")');
 
+

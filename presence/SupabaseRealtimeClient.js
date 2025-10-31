@@ -358,17 +358,23 @@ class SupabaseRealtimeClient {
           if (resp.ok) {
             const j = await resp.json();
             const active = Array.isArray(j?.active) ? j.active : [];
-            // Map to legacy shape used by visibility pipeline
+            // COMP METHOD: Map to legacy shape used by visibility pipeline
+            // ROOT CAUSE FIX: Preserve status, isActive, and enterTime from backend response
             const serverUsers = active.map(u => ({
               user_email: u.email || u.handle || 'unknown@unknown',
               user_id: u.id || u.userId,
-              is_active: u.isActive !== false,
+              is_active: u.isActive !== undefined ? u.isActive : (u.isActive !== false), // ROOT CAUSE FIX: Use actual isActive value
               last_seen: u.lastSeen || null,
-              enter_time: u.enterTime || null,
+              enter_time: u.enterTime || u.lastSeen || null, // ROOT CAUSE FIX: Include enterTime for "Online for X" display
               aura_color: u.auraColor || '#ffffff',
               // Extra fields for AvatarUtils if needed
               name: u.name,
-              avatar_url: u.avatarUrl
+              avatar_url: u.avatarUrl,
+              // ROOT CAUSE FIX: Preserve status and isActive from backend (for COMP method compatibility)
+              status: u.status || (u.isActive ? 'online' : (u.lastSeen ? 'recently_seen' : 'offline')),
+              isActive: u.isActive, // Preserve camelCase for frontend
+              enterTime: u.enterTime || u.lastSeen, // Preserve camelCase for frontend
+              lastSeen: u.lastSeen // Preserve camelCase for frontend
             }));
             console.log('✅ SUPABASE_CLIENT: Using server-enriched presence users:', serverUsers.length);
             return serverUsers;
@@ -380,11 +386,14 @@ class SupabaseRealtimeClient {
         console.warn('⚠️ SUPABASE_CLIENT: presence/url error:', serverErr?.message || serverErr);
       }
 
+      // ROOT CAUSE FIX: Query ALL users on page (within 24h), not just active ones
+      // COMP METHOD: Include recently seen users so visibility works even if one user is slightly stale
+      const recentlySeenCutoffTime = new Date(Date.now() - (24 * 60 * 60 * 1000)); // 24 hours
       const { data, error } = await this.supabase
         .from('user_presence')
         .select('*')
         .eq('page_id', pageId)
-        .eq('is_active', true)
+        .gte('last_seen', recentlySeenCutoffTime.toISOString()) // COMP METHOD: Include users seen within 24h
         .order('last_seen', { ascending: false });
 
       if (error) {

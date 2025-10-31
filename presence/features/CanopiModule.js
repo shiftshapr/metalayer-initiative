@@ -1226,6 +1226,7 @@ async function removeReactionFromMessage(reaction) {
   }
   
   // ROOT CAUSE FIX: For DELETE events, if messageId is missing, query backend using reaction.id
+  // NOTE: If reaction was already deleted, this will 404 - that's expected, skip lookup
   if (!messageId && reaction?.id) {
     try {
       console.log('🔍 REACTIONS: Querying backend for messageId from reaction.id:', reaction.id);
@@ -1233,9 +1234,17 @@ async function removeReactionFromMessage(reaction) {
       if (reactionData && reactionData.message_id) {
         messageId = reactionData.message_id;
         console.log('✅ REACTIONS: Retrieved messageId from backend:', messageId);
+      } else {
+        // Reaction already deleted (404) - this is expected, messageId lookup not needed
+        console.log('🔍 REACTIONS: Reaction already deleted (404), messageId lookup not needed');
       }
     } catch (error) {
-      console.warn('⚠️ REACTIONS: Could not query backend for messageId:', error);
+      // 404 is expected for deleted reactions - don't log as error
+      if (error.status === 404 || (error.message && error.message.includes('404'))) {
+        console.log('🔍 REACTIONS: Reaction already deleted (404), skipping messageId lookup');
+      } else {
+        console.warn('⚠️ REACTIONS: Could not query backend for messageId:', error);
+      }
     }
   }
   

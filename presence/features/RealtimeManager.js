@@ -505,29 +505,62 @@ function startRealTimeFeatures() {
 }
 
 // Handle real-time presence changes from Supabase
-function handlePresenceChange(payload) {
+// ROOT CAUSE FIX: This must trigger refreshVisibilityAvatars() to update UI when users move pages
+async function handlePresenceChange(payload) {
   console.log('🔔 PRESENCE_CHANGE: Processing real-time update:', payload);
   
   const { eventType, new: newRecord, old: oldRecord } = payload;
   
+  // ROOT CAUSE FIX: Declare currentPageId at function scope to avoid ReferenceError
+  // COMP METHOD: Get current page ID once at the start for all cases
+  const currentPageId = window.currentUrlData?.pageId;
+  
+  // ROOT CAUSE FIX: Always refresh visibility after any presence change
+  // This ensures users see updates when others move pages
+  let shouldRefresh = false;
+  
   switch (eventType) {
     case 'INSERT':
       console.log('👋 PRESENCE: User joined:', newRecord);
-      addUserToVisibility(newRecord);
+      // COMP METHOD: Check if this user is on the current page
+      if (newRecord?.page_id === currentPageId) {
+        console.log('✅ PRESENCE_CHANGE: User joined current page, refreshing visibility');
+        shouldRefresh = true;
+      }
       break;
       
     case 'UPDATE':
       console.log('🔄 PRESENCE: User updated:', newRecord);
-      updateUserInVisibility(newRecord);
+      // COMP METHOD: Refresh if user updated on current page or left current page
+      const updatedPageId = newRecord?.page_id;
+      const oldPageId = oldRecord?.page_id;
+      if (updatedPageId === currentPageId || oldPageId === currentPageId) {
+        console.log('✅ PRESENCE_CHANGE: User page changed, refreshing visibility');
+        shouldRefresh = true;
+      }
       break;
       
     case 'DELETE':
       console.log('👋 PRESENCE: User left:', oldRecord);
-      removeUserFromVisibility(oldRecord);
+      // COMP METHOD: Refresh if user left current page
+      if (oldRecord?.page_id === currentPageId) {
+        console.log('✅ PRESENCE_CHANGE: User left current page, refreshing visibility');
+        shouldRefresh = true;
+      }
       break;
       
     default:
       console.log('❓ PRESENCE: Unknown event type:', eventType);
+  }
+  
+  // ROOT CAUSE FIX: Refresh visibility UI when presence changes affect current page
+  if (shouldRefresh && typeof window.refreshVisibilityAvatars === 'function') {
+    console.log('🔄 PRESENCE_CHANGE: Calling refreshVisibilityAvatars() to update UI');
+    // Use setTimeout to debounce rapid updates
+    clearTimeout(window.presenceChangeRefreshTimeout);
+    window.presenceChangeRefreshTimeout = setTimeout(async () => {
+      await window.refreshVisibilityAvatars();
+    }, 500); // 500ms debounce
   }
 }
 

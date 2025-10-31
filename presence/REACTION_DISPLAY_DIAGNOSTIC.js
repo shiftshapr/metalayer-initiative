@@ -124,3 +124,4 @@ console.log('✅ Diagnostic function loaded:');
 console.log('  window.diagnoseReactionIssues(messageId)');
 console.log('💡 Example: window.diagnoseReactionIssues("12c72d07-ec8e-4e66-a372-0f975a71baa2")');
 
+

@@ -398,20 +398,31 @@ async function setupModernCrossProfileCommunication() {
 async function updateVisibleTab(avatars) {
   console.log('🔍 VISIBILITY: updateVisibleTab called with avatars:', JSON.stringify(avatars, null, 2));
   
-  // CRITICAL FIX: Add current user to visibility list if not already present
+  // ROOT CAUSE FIX: Add current user to visibility list if not already present
+  // CRITICAL: Include isActive and lastSeen fields so status displays correctly
   if (window.currentUser && (window.currentUser.id || window.currentUser.user_id)) {
+    const currentUserId = window.currentUser.id || window.currentUser.user_id;
     const currentUserEmail = window.currentUser.email;
-    const isCurrentUserInList = avatars.some(avatar => avatar.email === currentUserEmail);
+    // Check by UUID, not email (different profiles may have same email)
+    const isCurrentUserInList = avatars.some(avatar => {
+      const avatarId = avatar.id || avatar.userId || avatar.user_id;
+      return avatarId && currentUserId && String(avatarId) === String(currentUserId);
+    });
     
     if (!isCurrentUserInList) {
       console.log('🔍 VISIBILITY: Adding current user to visibility list');
       const currentUserAvatar = {
+        id: currentUserId,
+        userId: currentUserId,
+        user_id: currentUserId,
         email: currentUserEmail,
         name: window.currentUser.name || (currentUserEmail ? currentUserEmail.split('@')[0] : 'User'),
         avatarUrl: window.currentUser.avatarUrl, // Use the real Google avatar URL
         auraColor: window.currentUser.auraColor || window.AVATAR_FALLBACK_COLOR,
+        isActive: true, // ROOT CAUSE FIX: Set isActive so status displays correctly
         status: 'online',
-        enterTime: new Date().toISOString()
+        enterTime: new Date().toISOString(),
+        lastSeen: new Date().toISOString() // ROOT CAUSE FIX: Include lastSeen for consistency
       };
       avatars.unshift(currentUserAvatar); // Add to beginning of list
     }
@@ -434,14 +445,18 @@ async function updateVisibleTab(avatars) {
   const currentUserEmail = window.currentUser ? window.currentUser.email : null;
   console.log('🔍 VISIBILITY: Current user email:', currentUserEmail);
   
-  // Filter out ONLY the current user - show all other users
+  // ROOT CAUSE FIX: Filter out ONLY the current user - show all other users
+  // CRITICAL: Use UUID matching, not email matching - different profiles may have same email
+  const currentUserId = window.currentUser?.id || window.currentUser?.user_id;
   const usersWithAvatars = avatars.filter(avatar => {
-    const isCurrentUser = avatar.email === currentUserEmail || 
-                        avatar.userId === currentUserEmail ||
-                        avatar.name === currentUserEmail?.split('@')[0];
+    // Match by UUID (primary) or email (fallback if UUID not available)
+    const avatarId = avatar.id || avatar.userId || avatar.user_id;
+    const isCurrentUser = (currentUserId && avatarId && String(avatarId) === String(currentUserId)) ||
+                        (!currentUserId && avatar.email === currentUserEmail);
     
     if (isCurrentUser) {
       console.log('🔍 VISIBILITY: 🚫 FILTERING OUT current user from their own visibility list');
+      console.log('🔍 VISIBILITY: Current user ID:', currentUserId, 'Avatar ID:', avatarId);
       return false;
     }
     
@@ -471,7 +486,9 @@ async function updateVisibleTab(avatars) {
             <div class="user-info" style="flex: 1;">
               <div class="user-name" style="font-weight: bold; color: var(--text-primary); font-size: 12px;">${avatar.name || avatar.email}</div>
               <div class="user-status" style="color: var(--text-secondary); font-size: 10px;">
-                ${avatar.isActive ? formatTimeDisplay(avatar.enterTime) : (avatar.lastSeen ? formatLastSeenDisplay(avatar.lastSeen) : 'offline')}
+                ${(avatar.isActive || avatar.status === 'online') && avatar.enterTime ? formatTimeDisplay(avatar.enterTime) : 
+                  ((avatar.status === 'recently_seen' || (!avatar.isActive && avatar.lastSeen)) && avatar.lastSeen ? formatLastSeenDisplay(avatar.lastSeen) : 
+                  'offline')}
               </div>
             </div>
           </li>
@@ -487,6 +504,22 @@ async function updateVisibleTab(avatars) {
     console.log('🔧 VISIBILITY: Refreshing all message avatars with updated visibility data');
     window.refreshAllMessageAvatars();
   }
+  
+  // ROOT CAUSE FIX: Start periodic status refresh to update "Now" to "Online for X mins"
+  // Clear any existing interval to prevent duplicates
+  if (window.visibilityStatusRefreshInterval) {
+    clearInterval(window.visibilityStatusRefreshInterval);
+  }
+  
+  // Refresh status display every 30 seconds to update "Now" -> "Online for X mins"
+  window.visibilityStatusRefreshInterval = setInterval(() => {
+    const visibleTab = document.getElementById('canopi-visible');
+    if (visibleTab && window.currentVisibilityData?.active && window.currentVisibilityData.active.length > 0) {
+      console.log('🔄 VISIBILITY: Periodic status refresh - updating time displays');
+      // Re-render the visible tab to update status times
+      window.updateVisibleTab(window.currentVisibilityData.active);
+    }
+  }, 30000); // Every 30 seconds
 }
 
 // ===== COMP METHOD: Message handling moved to CanopiModule.js =====
@@ -519,42 +552,24 @@ async function refreshVisibilityAvatars() {
     if (client && pageId) {
       console.log('🔄 REFRESH_VISIBILITY: === STARTING ENHANCED VISIBILITY REFRESH ===');
       
-      // Use backend presence enrichment endpoint - server expects 'url' parameter (not pageId/pageUrl)
-      const pageUrl = (window.currentUrlData && window.currentUrlData.rawUrl) || location.href;
-      // Skip presence URL call for chrome:// pages (server rejects non-http(s))
-      if (typeof pageUrl === 'string' && pageUrl.startsWith('chrome://')) {
-        console.warn('Skipping presence/url for chrome:// page');
+      // COMP METHOD: Use client.getPageUsers() exactly like CommunitiesModule.js does
+      // This ensures consistency with COMP implementation
+      const client = window.supabaseRealtimeClient || window.supabase;
+      if (!client || typeof client.getPageUsers !== 'function') {
+        console.error('❌ REFRESH_VISIBILITY: Client or getPageUsers not available');
         return [];
       }
-      // Backend expects 'url' parameter and returns { active: [...], pageId, url: normalizedUrl }
-      let presenceResp = null;
+      
+      console.log('🌐 REFRESH_VISIBILITY: Using COMP method - client.getPageUsers()');
       let users = [];
       try {
-        presenceResp = await window.api.request(`/v1/presence/url?url=${encodeURIComponent(pageUrl)}`, { method: 'GET', allow404: false });
-        users = presenceResp?.active || [];
-        console.log('✅ REFRESH_VISIBILITY: API call succeeded, users:', users.length);
-      } catch (apiError) {
-        // Gracefully handle 400/401/500 errors - don't break avatar flow
-        const errorMsg = apiError?.message || String(apiError);
-        if (errorMsg.includes('401') || errorMsg.includes('Unauthorized')) {
-          console.warn('⚠️ REFRESH_VISIBILITY: Auth failed (401) - user may not be authenticated:', errorMsg);
-          console.warn('⚠️ REFRESH_VISIBILITY: Current user:', window.currentUser?.id || window.currentUser?.email || 'none');
-          // Continue without presence data - avatars will use existing visibility data
-          return [];
-        } else if (errorMsg.includes('400') || errorMsg.includes('Bad Request')) {
-          console.warn('⚠️ REFRESH_VISIBILITY: Bad request (400) - invalid URL or missing params:', errorMsg);
-          console.warn('⚠️ REFRESH_VISIBILITY: URL sent:', pageUrl);
-          // Continue without presence data - avatars will use existing visibility data
-          return [];
-        } else {
-          console.error('❌ REFRESH_VISIBILITY: API call failed:', errorMsg);
-          // Continue without presence data - avatars will use existing visibility data
-          return [];
-        }
+        users = await client.getPageUsers(pageId);
+        console.log('✅ REFRESH_VISIBILITY: COMP method returned users:', users.length);
+        console.log('👁️ REFRESH_VISIBILITY: Users:', users.map(u => `${u.user_id || u.user_email} (is_active:${u.is_active} status:${u.status})`));
+      } catch (compError) {
+        console.error('❌ REFRESH_VISIBILITY: COMP method failed:', compError);
+        return [];
       }
-      
-      console.log('👁️ REFRESH_VISIBILITY: Enhanced query returned users:', users.length);
-      console.log('👁️ REFRESH_VISIBILITY: Users:', users.map(u => `${u.user_id || u.id} (${u.is_active ? 'ACTIVE' : 'INACTIVE'})`));
       
       if (users && users.length > 0) {
         console.log('🔄 REFRESH_VISIBILITY: Processing enhanced query results...');
@@ -606,17 +621,30 @@ async function refreshVisibilityAvatars() {
             console.error('❌ REFRESH_VISIBILITY: Error getting avatar for user:', userId, error);
           }
           
+          // COMP METHOD: Preserve status from backend API response (via COMP client.getPageUsers)
+          // Backend calculates status based on dual cutoff times (30s for active, 24h for recently seen)
+          // COMP already preserves status field, so use it directly
+          const finalStatus = user.status || 
+                              (user.isActive !== undefined ? (user.isActive ? 'online' : 'recently_seen') :
+                              (user.is_active ? 'online' :
+                              (user.lastSeen || user.last_seen ? 'recently_seen' : 'offline')));
+          
+          // COMP METHOD: Map from COMP format to visibility format
+          // COMP returns: { user_email, user_id, is_active, last_seen, enter_time, status, isActive, enterTime, lastSeen, name, avatar_url }
           return {
             userId: user.id || user.user_id || 'unknown',
             handle: userHandle,
             name: userName,
             id: userId,
             avatarUrl: avatarUrl,
-            auraColor: user.aura_color || window.AVATAR_FALLBACK_COLOR,
-            isActive: user.is_active,
-            enterTime: user.enter_time,
-            lastSeen: user.last_seen,
-            status: user.is_active ? 'online' : 'offline'
+            auraColor: user.aura_color || user.auraColor || window.AVATAR_FALLBACK_COLOR,
+            // ROOT CAUSE FIX: Use isActive from COMP response (preserved from backend)
+            isActive: user.isActive !== undefined ? user.isActive : (user.is_active !== undefined ? user.is_active : false),
+            // ROOT CAUSE FIX: Include enterTime for "Online for X" display
+            enterTime: user.enterTime || user.enter_time || user.lastSeen || user.last_seen,
+            lastSeen: user.lastSeen || user.last_seen,
+            // ROOT CAUSE FIX: Use status from COMP response (preserved from backend)
+            status: user.status || finalStatus
           };
         }));
         

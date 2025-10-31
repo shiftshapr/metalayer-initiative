@@ -70,3 +70,4 @@ This will:
 3. Check if backend `authenticateUser` is falling back to email lookup
 4. Verify `X-User-Id` header is being sent correctly from `APIModule.js`
 
+
