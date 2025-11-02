@@ -50,6 +50,12 @@ class AgentModule {
 // async function testA// ===== AGENT FUNCTIONALITY =====
 // Agent tab functionality for AI-powered page analysis
 
+// Define AGENT_API_URL using config system or fallback
+const AGENT_API_URL = (typeof window !== 'undefined' && window.configManager && typeof window.configManager.get === 'function')
+  ? `${window.configManager.get('apiUrl')}/api/agent`
+  : (typeof window !== 'undefined' && window.METALAYER_API_URL)
+    ? `${window.METALAYER_API_URL}/api/agent`
+    : 'http://216.238.91.120:3002/api/agent';
 
 let pageContentCache = null;
 let contentHash = null;
@@ -545,9 +551,9 @@ function initializeAgentTab() {
           <button class="suggestion-btn" data-question="What are the key takeaways?">What are the key takeaways?</button>
           <button class="suggestion-btn" data-question="Explain this in simple terms">Explain this in simple terms</button>
           <button class="suggestion-btn" data-question="What questions should I ask about this?">What questions should I ask?</button>
-              </div>
-    </div>
-  `;
+        </div>
+      </div>
+    `;
   
     // Add event listeners to suggestion buttons
     const suggestionButtons = agentOutput.querySelectorAll('.suggestion-btn');
@@ -556,8 +562,8 @@ function initializeAgentTab() {
         const question = button.getAttribute('data-question');
         console.log("Suggestion button clicked:", question);
         testAgent(question);
+      });
     });
-  });
     console.log("Agent welcome message set up!");
   }
   
@@ -621,9 +627,11 @@ function initializeAgentTab() {
           button.addEventListener('click', () => {
             const question = button.getAttribute('data-question');
             testAgent(question);
+          });
+        });
+      }
+      agentClearButton.setAttribute('data-initialized', 'true');
     });
-    });
-    agentClearButton.setAttribute('data-initialized', 'true');
   }
   
   // Set up Refresh button
@@ -654,8 +662,6 @@ function initializeAgentTab() {
   loadPageContent();
   
   console.log('=== AGENT TAB INITIALIZATION COMPLETE ===');
-  })
-}
 }
 
 // Debug function for testing agent functionality
@@ -704,3 +710,4 @@ window.debugAgent = function() {
 
 // Export for global access
 window.AgentModule = AgentModule;
+window.initializeAgentTab = initializeAgentTab;
