@@ -1,0 +1,10 @@
+
+# Additional security - Environment files (comprehensive)
+.env
+.env.local
+.env.*.local
+*.env
+.env.production
+.env.development
+server/.env
+server/.env.local
