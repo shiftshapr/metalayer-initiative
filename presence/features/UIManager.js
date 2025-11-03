@@ -712,9 +712,19 @@ class UIManager {
           targetTabContent.classList.add('active');
           console.log(`✅ TAB_NAVIGATION: Activated content: #${targetTabId}`);
           
+          // Remove agent-tab-active class when switching tabs (will be re-added if agent tab)
+          const sidebarContent = document.querySelector('.sidebar-content');
+          if (sidebarContent) {
+            sidebarContent.classList.remove('agent-tab-active');
+          }
+          
           // Initialize specific tab functionality
           if (targetTabId === 'agent-tab') {
             console.log('🎯 TAB_NAVIGATION: Agent tab activated! Initializing agent...');
+            // Add class to sidebar-content to prevent it from scrolling
+            if (sidebarContent) {
+              sidebarContent.classList.add('agent-tab-active');
+            }
             try {
               if (typeof window.initializeAgentTab === 'function') {
                 window.initializeAgentTab();
@@ -722,6 +732,19 @@ class UIManager {
               }
             } catch (error) {
               console.error('❌ TAB_NAVIGATION: Agent tab initialization failed:', error);
+            }
+          } else if (targetTabId === 'people-tab') {
+            console.log('👥 TAB_NAVIGATION: People tab activated! Loading people data...');
+            try {
+              if (typeof window.initializePeopleTab === 'function') {
+                window.initializePeopleTab();
+                console.log('✅ TAB_NAVIGATION: People tab initialization completed successfully');
+              } else {
+                console.error('❌ TAB_NAVIGATION: initializePeopleTab function not found');
+              }
+            } catch (error) {
+              console.error('❌ TAB_NAVIGATION: People tab initialization failed:', error);
+              console.error('❌ TAB_NAVIGATION: Error stack:', error.stack);
             }
           }
         } else {

@@ -829,6 +829,13 @@ body {
     overflow-y: auto; /* Enable scrolling for content */
     display: flex;
     flex-direction: column; /* Ensure content divs stack */
+    min-height: 0; /* Critical for flexbox scrolling */
+}
+
+/* When agent tab is active, prevent sidebar-content from scrolling */
+.sidebar-content.agent-tab-active {
+    overflow-y: hidden; /* Let agent tab handle its own scrolling */
+    pointer-events: auto; /* Ensure clicks still work */
 }
 
 .main-tab-content {
@@ -2121,15 +2128,20 @@ div.message.message-reply.visible div.message-content-wrapper div.message-header
 }
 
 /* --- Agent Tab --- */
-#agent-tab {
+#agent-tab.active {
+    display: flex;
     flex-direction: column;
-    height: 100%;
+    flex: 1; /* Take all available space in sidebar-content */
+    min-height: 0; /* Critical for flexbox scrolling */
+    overflow: hidden; /* Prevent agent-tab itself from scrolling */
+    height: 100%; /* Ensure it takes full height */
 }
 
 .agent-header {
     padding: 15px;
     border-bottom: 1px solid var(--border-color);
     background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+    flex-shrink: 0; /* Prevent header from shrinking */
 }
 
 .agent-header h3 {
@@ -2168,6 +2180,7 @@ div.message.message-reply.visible div.message-content-wrapper div.message-header
     background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
     gap: 10px;
     align-items: center;
+    flex-shrink: 0; /* Prevent input area from shrinking */
 }
 
 .agent-input-area input {
@@ -2218,8 +2231,33 @@ div.message.message-reply.visible div.message-content-wrapper div.message-header
 .agent-output {
     flex: 1;
     overflow-y: auto;
+    overflow-x: hidden;
     padding: 15px;
+    padding-bottom: 80px; /* Add padding to prevent content from scrolling under the fixed footer */
     background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+    min-height: 0; /* Critical for flexbox scrolling - allows flex item to shrink below content size */
+    flex-basis: 0; /* Allow flex to calculate size properly */
+    scrollbar-width: thin;
+    scrollbar-color: #ccc #f1f1f1;
+}
+
+/* Custom scrollbar styling for agent output */
+.agent-output::-webkit-scrollbar {
+    width: 8px;
+}
+
+.agent-output::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+.agent-output::-webkit-scrollbar-thumb {
+    background: #ccc;
+    border-radius: 4px;
+}
+
+.agent-output::-webkit-scrollbar-thumb:hover {
+    background: #999;
 }
 
 .agent-welcome {
