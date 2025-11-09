@@ -132,8 +132,9 @@ class RealGoogleAuth {
           console.log('🔍 REAL_GOOGLE_AUTH: Chrome identity API is available, calling getProfileUserInfo...');
           
           // COMP METHOD: Chrome identity API - get signed-in Google user profile info directly
+          // CRITICAL FIX: Manifest V3 requires accountStatus parameter
           const profileInfo = await new Promise((resolve, reject) => {
-            chrome.identity.getProfileUserInfo((profileInfo) => {
+            chrome.identity.getProfileUserInfo({ accountStatus: 'ANY' }, (profileInfo) => {
               console.log('🔍 REAL_GOOGLE_AUTH: Chrome profile info callback:', profileInfo);
               console.log('🔍 REAL_GOOGLE_AUTH: Chrome runtime last error:', chrome.runtime.lastError);
               

@@ -498,52 +498,7 @@
   <script src="ui-realtime-bindings.js"></script>
 
   <!-- CRITICAL: Initialize user data before showing interface -->
-  <script>
-    // Hide body initially to prevent flash
-    document.body.style.display = 'none';
-
-    // Initialize pre-render data
-    (async function() {
-      try {
-        console.log('🚀 Starting pre-render initialization...');
-
-        // Wait for PreRenderInitializer to be available
-        let attempts = 0;
-        while (!window.preRenderInitializer && attempts < 100) {
-          await new Promise(resolve => setTimeout(resolve, 50));
-          attempts++;
-          console.log(`⏳ Waiting for PreRenderInitializer... (${attempts}/100)`);
-        }
-
-        if (!window.preRenderInitializer) {
-          throw new Error('PreRenderInitializer not available after waiting');
-        }
-
-        console.log('✅ PreRenderInitializer found, starting initialization...');
-        await window.preRenderInitializer.initialize();
-        console.log('✅ Pre-render initialization complete');
-
-        // Log the results
-        const data = window.preRenderInitializer.getPreRenderData();
-        console.log('📊 Pre-render data:', {
-          isInitialized: data.isInitialized,
-          hasAuraColor: !!data.auraColor,
-          hasAvatarUrl: !!data.avatarUrl,
-          auraColor: data.auraColor,
-          avatarUrl: data.avatarUrl?.substring(0, 50) + '...'
-        });
-
-      } catch (error) {
-        console.error('❌ Pre-render initialization failed:', error);
-        console.error('Error details:', error.message);
-        console.error('Stack:', error.stack);
-      } finally {
-        // Show body regardless of success/failure
-        document.body.style.display = '';
-        console.log('👁️ Interface now visible');
-      }
-    })();
-  </script>
+  <script src="pre-render-init.js"></script>
 
   <!-- Load test scripts for debugging -->
   <script src="test-pre-render-init.js"></script>
