@@ -103,9 +103,38 @@ class RealtimeFoundation {
    * Emit an event
    */
   emit(eventName, data) {
-    const event = new CustomEvent(eventName, { detail: data });
-    this.eventBus.dispatchEvent(event);
-    this.logger.console.log(`Event emitted: ${eventName}`, data);
+    // COMP METHOD: Dispatch event first (critical functionality) - separate from logging
+    try {
+      const event = new CustomEvent(eventName, { detail: data });
+      if (this.eventBus && typeof this.eventBus.dispatchEvent === 'function') {
+        this.eventBus.dispatchEvent(event);
+      } else {
+        console.error('[RealtimeFoundation] Critical: eventBus not available');
+      }
+    } catch (eventError) {
+      console.error('[RealtimeFoundation] Critical: Event dispatch failed:', eventError);
+      return; // Don't continue if event dispatch fails
+    }
+    
+    // COMP METHOD: Logging is non-critical - wrap in try-catch to prevent crashes
+    try {
+      // Safe logger access with multiple fallbacks
+      if (this.logger) {
+        if (typeof this.logger.log === 'function') {
+          this.logger.log(`Event emitted: ${eventName}`, data);
+        } else if (typeof this.logger.info === 'function') {
+          this.logger.info(`Event emitted: ${eventName}`, data);
+        } else {
+          console.log(`[RealtimeFoundation] Event emitted: ${eventName}`, data);
+        }
+      } else {
+        // Logger not initialized - use console directly
+        console.log(`[RealtimeFoundation] Event emitted: ${eventName}`, data);
+      }
+    } catch (logError) {
+      // COMP METHOD: Don't fail on logging errors - event was already dispatched
+      console.warn('[RealtimeFoundation] Logger error (non-blocking):', logError);
+    }
   }
 
   /**
@@ -121,7 +150,13 @@ class RealtimeFoundation {
    */
   off(eventName, callback) {
     this.eventBus.removeEventListener(eventName, callback);
-    this.logger.console.log(`Event listener removed: ${eventName}`);
+    if (this.logger && typeof this.logger.log === 'function') {
+      this.logger.log(`Event listener removed: ${eventName}`);
+    } else if (this.logger && typeof this.logger.info === 'function') {
+      this.logger.info(`Event listener removed: ${eventName}`);
+    } else {
+      console.log(`[RealtimeFoundation] Event listener removed: ${eventName}`);
+    }
   }
 
   /**

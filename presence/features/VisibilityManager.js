@@ -428,95 +428,203 @@ function formatLastSeenDisplay(lastSeen) {
 async function updateVisibleTab(avatars) {
   console.log('🔍 VISIBILITY: updateVisibleTab called with avatars:', JSON.stringify(avatars, null, 2));
   
-  // COMP METHOD: Do NOT add current user to visibility list - they should not see themselves
-  console.log('🔍 VISIBILITY: Current user should not appear in their own visibility list');
-  
   // Store visibility data globally for real-time aura color access
   window.currentVisibilityData = { active: avatars };
+  window.currentVisibilityDataUnfiltered = { active: avatars };
+  console.log('🔄 VISIBILITY: Stored visibility data globally for real-time aura access');
   
   // Clear any existing visibility update timer
   if (window.visibilityUpdateTimer) {
     clearInterval(window.visibilityUpdateTimer);
   }
   
-  console.log('🔄 VISIBILITY: Stored visibility data globally for real-time aura access');
+  // SD4 ARCHITECTURE FIX: Use TabContextManager to ensure scoped operation
+  let visibleTab;
+  if (window.tabContextManager) {
+    visibleTab = window.tabContextManager.getTabContainer('visibility-tab');
+    if (!visibleTab) {
+      console.warn('⚠️ VISIBILITY: visibility-tab not found or not active');
+      visibleTab = document.getElementById('visibility-tab');
+    }
+  } else {
+    visibleTab = document.getElementById('visibility-tab');
+  }
   
-  const visibleTab = document.getElementById('canopi-visible');
   if (!visibleTab) {
     console.log('❌ VISIBILITY: visibleTab element not found');
     return;
   }
   
-  console.log(`VISIBILITY: Updating visible tab with ${avatars.length} avatars`);
+  // UI UPGRADE: Ensure we're not accidentally updating discuss tab
+  if (visibleTab.id !== 'visibility-tab') {
+    console.error('❌ VISIBILITY: Wrong tab element passed to updateVisibleTab');
+    return;
+  }
   
-  // Get current user email for filtering
-  const currentUserEmail = await getCurrentUserEmail();
-  console.log(`VISIBILITY: Current user email: ${currentUserEmail}`);
+  // SD4 ARCHITECTURE FIX: Do NOT update tab if it's not active
+  const isVisibilityTabActive = document.getElementById('visibility-tab')?.classList.contains('active');
+  if (!isVisibilityTabActive) {
+    console.warn('⚠️ VISIBILITY: Attempting to update visibility-tab when it is not active - SKIPPING');
+    return;
+  }
   
-  // Store the UNFILTERED data globally BEFORE filtering out current user
-  window.currentVisibilityDataUnfiltered = { active: avatars };
-  console.log(`VISIBILITY_UNFILTERED: Stored ${avatars.length} avatars (including current user) for profile avatar lookup`);
+  // Double-check with TabContextManager if available
+  if (window.tabContextManager && !window.tabContextManager.isTabActive('visibility-tab')) {
+    console.warn('⚠️ VISIBILITY: TabContextManager confirms tab is not active - SKIPPING');
+    return;
+  }
   
-  // COMP METHOD: Strict filtering - remove current user completely
+  console.log('🔍 VISIBILITY: Updating visible tab with', avatars.length, 'avatars');
+  
+  // Get current user for filtering
+  const currentUserEmail = window.currentUser ? window.currentUser.email : await getCurrentUserEmail();
+  const currentUserId = window.currentUser?.id || window.currentUser?.user_id;
+  console.log('🔍 VISIBILITY: Current user email:', currentUserEmail, 'ID:', currentUserId);
+  
+  // ROOT CAUSE FIX: Filter out ONLY the current user - show all other users
+  // CRITICAL: Use UUID matching, not email matching - different profiles may have same email
   const usersWithAvatars = avatars.filter(avatar => {
-    const userIdMatch = avatar.userId === currentUserEmail;
-    const handleMatch = avatar.handle === currentUserEmail.split('@')[0];
-    const nameMatch = avatar.name === currentUserEmail.split('@')[0];
-    const emailMatch = avatar.email === currentUserEmail;
-    const idMatch = avatar.id === currentUserEmail;
-    
-    const isCurrentUser = userIdMatch || handleMatch || nameMatch || emailMatch || idMatch;
+    // Match by UUID (primary) or email (fallback if UUID not available)
+    const avatarId = avatar.id || avatar.userId || avatar.user_id;
+    const isCurrentUser = (currentUserId && avatarId && String(avatarId) === String(currentUserId)) ||
+                        (!currentUserId && avatar.email === currentUserEmail);
     
     if (isCurrentUser) {
-      console.log(`🔧 VISIBILITY: COMP METHOD - Strictly filtering out current user:`, avatar.name);
+      console.log('🔍 VISIBILITY: 🚫 FILTERING OUT current user from their own visibility list');
+      console.log('🔍 VISIBILITY: Current user ID:', currentUserId, 'Avatar ID:', avatarId);
       return false;
     }
     
-    console.log(`🔧 VISIBILITY: COMP METHOD - Keeping avatar: ${avatar.name} (${avatar.userId})`);
     return true;
   });
   
-  console.log(`🔧 VISIBILITY: COMP METHOD - Strictly filtered avatars:`, usersWithAvatars.length, 'of', avatars.length);
+  console.log('🔍 VISIBILITY: Showing', usersWithAvatars.length, 'users with real avatars (filtered from', avatars.length, 'total)');
   
-  console.log(`VISIBILITY: Showing ${usersWithAvatars.length} users with real avatars (filtered from ${avatars.length} total)`);
+  // COMP METHOD: Create visible users UI with unified avatars (aura ring behind image)
+  const avatarHTMLPromises = usersWithAvatars.map(async (avatar) => {
+    // RED-LINE: Standardize auraColor - convert snake_case if present
+    if (avatar.aura_color && !avatar.auraColor) {
+      avatar.auraColor = avatar.aura_color;
+      delete avatar.aura_color;
+    }
+    
+    // COMP METHOD: Use unified avatar structure with aura ring behind image
+    let avatarHTML = '';
+    try {
+      if (window.AvatarUtils && typeof window.AvatarUtils.createUnifiedAvatar === 'function') {
+        avatarHTML = await window.AvatarUtils.createUnifiedAvatar(avatar, 'visibility', {
+          size: 24,
+          showAura: true,
+          showStatus: true
+        });
+      } else {
+        // Fallback to simple img if AvatarUtils not available
+        avatarHTML = `<img src="${avatar.avatarUrl}" alt="${avatar.name || avatar.email}" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover; border: 2px solid ${avatar.auraColor || window.AVATAR_FALLBACK_COLOR};">`;
+      }
+    } catch (error) {
+      console.error('❌ VISIBILITY: Error creating unified avatar:', error);
+      avatarHTML = `<img src="${avatar.avatarUrl}" alt="${avatar.name || avatar.email}" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover; border: 2px solid ${avatar.aura_color || window.AVATAR_FALLBACK_COLOR};">`;
+    }
+    
+    return `
+      <li class="item" style="display: flex; align-items: center; gap: 8px; padding: 8px; border-bottom: 1px solid var(--border-color);">
+        <div class="avatar-container" style="position: relative;">
+          ${avatarHTML}
+        </div>
+        <div class="user-info" style="flex: 1;">
+          <div class="user-name" style="font-weight: bold; color: var(--text-primary); font-size: 12px;">${avatar.name || avatar.email}</div>
+          <div class="user-status" style="color: var(--text-secondary); font-size: 10px;">
+            ${(() => {
+              if ((avatar.isActive || avatar.status === 'online') && avatar.enterTime) {
+                return formatTimeDisplay(avatar.enterTime);
+              } else if ((avatar.status === 'recently_seen' || (!avatar.isActive && avatar.lastSeen)) && avatar.lastSeen) {
+                return formatLastSeenDisplay(avatar.lastSeen);
+              } else {
+                return 'offline';
+              }
+            })()}
+          </div>
+        </div>
+      </li>
+    `;
+  });
   
-  // Create a compact header with search, count, and go invisible button
+  const avatarHTMLStrings = await Promise.all(avatarHTMLPromises);
+  
+  // TAB ISOLATION: Ensure no visibility content exists in discuss-tab before adding
+  const discussTab = document.getElementById('discuss-tab');
+  if (discussTab) {
+    const leakedVisibility = discussTab.querySelectorAll('.visible-users, .visible-header, .visible-count, #visible-search, #go-invisible-btn, [class*="visible"], [id*="visible"]');
+    leakedVisibility.forEach(el => {
+      el.style.display = 'none';
+      el.style.visibility = 'hidden';
+      el.remove();
+    });
+    if (leakedVisibility.length > 0) {
+      console.log('🧹 TAB ISOLATION: Removed', leakedVisibility.length, 'leaked visibility elements from #discuss-tab');
+    }
+  }
+  
+  // SD4 ARCHITECTURE FIX: Clear tab and ensure top alignment
+  visibleTab.innerHTML = '';
+  visibleTab.style.padding = '0';
+  visibleTab.style.margin = '0';
+  
+  // SD4 FIX: Top-aligned with margin-top: 0 and padding-top for header
   visibleTab.innerHTML = `
-    <div class="visible-users">
-      <div class="visible-header" style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px; padding: 8px; background: var(--background-secondary); border-radius: 6px;">
+    <div class="visible-users" style="padding: 0; margin: 0; width: 100%;">
+      <div class="visible-header" style="display: flex; align-items: center; gap: 10px; margin-top: 0 !important; margin-bottom: 10px; padding: 8px; background: var(--background-secondary); border-radius: 6px;">
         <div class="visible-count" style="font-weight: bold; color: var(--text-primary);">
           ${usersWithAvatars.length} visible
         </div>
         <input type="text" id="visible-search" placeholder="Search users..." style="flex: 1; padding: 4px 8px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--background-primary); color: var(--text-primary); font-size: 12px;">
         <button id="go-invisible-btn" style="padding: 4px 8px; background: var(--accent-color); color: white; border: none; border-radius: 4px; font-size: 12px; cursor: pointer;">Go Invisible</button>
       </div>
-      <ul class="item-list">
-        ${usersWithAvatars.map((avatar, index) => {
-          const isActive = avatar.isActive === true;
-          const hasLeft = avatar.status === 'offline' || !isActive;
-          
-          return `
-            <li class="item" style="display: flex; align-items: center; gap: 8px; padding: 8px; border-bottom: 1px solid var(--border-color);">
-              <div class="avatar-container" style="position: relative; width: 32px; height: 32px;">
-                <img src="${avatar.avatarUrl || '/icons/default-user.svg'}" 
-                     alt="${avatar.name}" 
-                     style="width: 32px; height: 32px; border-radius: 50%; border: 2px solid ${avatar.auraColor || window.AVATAR_FALLBACK_COLOR};">
-              </div>
-              <div class="user-info" style="flex: 1; min-width: 0;">
-                <div class="user-name" style="font-weight: bold; color: var(--text-primary); font-size: 14px;">${avatar.name}</div>
-                <div class="user-status" style="font-size: 12px; color: ${isActive ? 'var(--success-color)' : 'var(--text-secondary)'};">
-                  ${isActive ? 
-                    (avatar.enterTime ? formatTimeDisplay(avatar.enterTime) : 'Online') : 
-                    (avatar.lastSeen ? formatLastSeenDisplay(avatar.lastSeen) : 'Never seen')
-                  }
-                </div>
-              </div>
-            </li>
-          `;
-        }).join('')}
+      <ul class="item-list" style="margin-top: 0 !important; padding-top: 0 !important;">
+        ${avatarHTMLStrings.join('')}
       </ul>
     </div>
   `;
+  
+  // ARCHITECTURE FIX: CRITICAL validation - verify discuss-tab doesn't have visibility content
+  if (discussTab) {
+    const hasVisibilityContent = discussTab.querySelector('.visible-users, .visible-header, .visible-count, #visible-search, #go-invisible-btn');
+    if (hasVisibilityContent) {
+      console.error('🚨 TAB_ISOLATION: CRITICAL - Visibility content found in discuss-tab! Removing immediately...');
+      discussTab.querySelectorAll('.visible-users, .visible-header, .visible-count, #visible-search, #go-invisible-btn, [class*="visible"], [id*="visible"]').forEach(el => el.remove());
+    }
+  }
+  
+  console.log('✅ VISIBILITY: Visible tab updated successfully');
+  
+  // COMP METHOD: Refresh all message avatars now that visibility data is available
+  if (typeof window.refreshAllMessageAvatars === 'function') {
+    console.log('🔧 VISIBILITY: Refreshing all message avatars with updated visibility data');
+    try {
+      await window.refreshAllMessageAvatars();
+    } catch (error) {
+      console.error('❌ VISIBILITY: Error refreshing message avatars:', error);
+    }
+  }
+  
+  // ROOT CAUSE FIX: Start periodic status refresh to update "Now" to "Online for X mins"
+  // Clear any existing interval to prevent duplicates
+  if (window.visibilityStatusRefreshInterval) {
+    clearInterval(window.visibilityStatusRefreshInterval);
+  }
+  
+  // Refresh status display every 30 seconds to update "Now" -> "Online for X mins"
+  window.visibilityStatusRefreshInterval = setInterval(async () => {
+    const visibleTab = document.getElementById('visibility-tab');
+    if (visibleTab && window.currentVisibilityData?.active && window.currentVisibilityData.active.length > 0) {
+      console.log('🔄 VISIBILITY: Periodic status refresh - updating time displays');
+      try {
+        await window.updateVisibleTab(window.currentVisibilityData.active);
+      } catch (error) {
+        console.error('❌ VISIBILITY: Error in periodic refresh:', error);
+      }
+    }
+  }, 30000); // Every 30 seconds
   
   // Add search functionality
   const searchInput = document.getElementById('visible-search');
@@ -543,13 +651,21 @@ async function updateVisibleTab(avatars) {
 }
 
 
-// Make available globally
+// Make available globally IMMEDIATELY (before any async operations)
 if (typeof window !== 'undefined') {
   window.VisibilityManager = VisibilityManager;
   window.updateVisibleTab = updateVisibleTab;
+  console.log('✅ VisibilityManager exported to window immediately');
 }
 
-console.log('✅ VisibilityManager initialized');
+// Wait for DOM ready before logging full initialization
+if (typeof window !== 'undefined' && document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => {
+    console.log('✅ VisibilityManager initialized (DOM ready)');
+  });
+} else {
+  console.log('✅ VisibilityManager initialized');
+}
 
 
 

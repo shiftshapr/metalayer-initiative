@@ -174,6 +174,12 @@ class AvatarUtils {
    */
   static async createUnifiedAvatar(user, context = 'visibility', options = {}) {
     console.log(`Creating unified avatar for ${user.id || user.user_id || user.name || 'unknown'} in context: ${context}`);
+    console.log(`🎨 AVATAR_UTILS: User aura color data:`, {
+      auraColor: user.auraColor,
+      aura_color: user.aura_color,
+      context: context,
+      options: options
+    });
 
     const avatarData = await this.getAvatarUrl(user, context);
     const {
@@ -190,9 +196,10 @@ class AvatarUtils {
         const auraColor = user.aura_color || user.auraColor || window.AVATAR_FALLBACK_COLOR;
         let html = `<div style="position: relative; width: ${size}px; height: ${size}px;" data-user-id="${user.id || user.user_id || user.userId}">`;
         if (options.showAura !== false) {
-          html += `<div style="position: absolute; top: -2px; left: -2px; width: ${size + 4}px; height: ${size + 4}px; border-radius: 50%; background-color: ${auraColor}; z-index: 1; border: 2px solid ${auraColor};"></div>`;
+          // CRITICAL FIX: Enhanced aura ring - larger size, positioned to extend around image, with class for CSS targeting
+          html += `<div class="avatar-aura" style="position: absolute; top: -2px; left: -2px; width: ${size + 4}px; height: ${size + 4}px; border-radius: 50%; background-color: ${auraColor}; z-index: 1; border: 2px solid ${auraColor}; box-sizing: border-box;"></div>`;
         }
-        html += `<img src="https://lh3.googleusercontent.com/a/default-user=s96-c" alt="${userName}" style="position: relative; z-index: 2; width: ${size}px; height: ${size}px; border-radius: 50%; object-fit: cover; border: 2px solid ${auraColor};" data-avatar-source="generic-fallback" data-user-id="${user.id || user.user_id || user.userId}">`;
+        html += `<img src="https://lh3.googleusercontent.com/a/default-user=s96-c" alt="${userName}" style="position: relative; z-index: 2; width: ${size}px; height: ${size}px; border-radius: 50%; object-fit: cover; border: none !important;" data-avatar-source="generic-fallback" data-user-id="${user.id || user.user_id || user.userId}">`;
         if (options.showStatus !== false) {
           const statusDotColor = user.is_active ? '#22c55e' : '#6b7280';
           html += `<div style="position: absolute; bottom: -2px; right: -2px; width: 8px; height: 8px; border-radius: 50%; background-color: ${statusDotColor}; border: 2px solid white; z-index: 3;"></div>`;
@@ -208,9 +215,9 @@ class AvatarUtils {
       const auraColor = user.aura_color || user.auraColor || window.AVATAR_FALLBACK_COLOR;
       let html = `<div style="position: relative; width: ${size}px; height: ${size}px;" data-user-id="${user.id || user.user_id || user.userId}">`;
       if (options.showAura !== false) {
-        html += `<div style="position: absolute; top: -2px; left: -2px; width: ${size + 4}px; height: ${size + 4}px; border-radius: 50%; background-color: ${auraColor}; z-index: 1; border: 2px solid ${auraColor};"></div>`;
+        html += `<div style="position: absolute; top: -1px; left: -1px; width: ${size + 2}px; height: ${size + 2}px; border-radius: 50%; background-color: ${auraColor}; z-index: 1; border: 1px solid ${auraColor};"></div>`;
       }
-      html += `<img src="" alt="${userName}" style="position: relative; z-index: 2; width: ${size}px; height: ${size}px; border-radius: 50%; object-fit: cover; border: 2px solid ${auraColor};" data-avatar-source="none" data-user-id="${user.id || user.user_id || user.userId}" referrerpolicy="no-referrer">`;
+      html += `<img src="" alt="${userName}" style="position: relative; z-index: 2; width: ${size}px; height: ${size}px; border-radius: 50%; object-fit: cover; border: none !important;" data-avatar-source="none" data-user-id="${user.id || user.user_id || user.userId}" referrerpolicy="no-referrer">`;
       if (options.showStatus !== false) {
         const statusDotColor = user.is_active ? '#22c55e' : '#6b7280';
         html += `<div style="position: absolute; bottom: -2px; right: -2px; width: 8px; height: 8px; border-radius: 50%; background-color: ${statusDotColor}; border: 2px solid white; z-index: 3;"></div>`;
@@ -220,7 +227,40 @@ class AvatarUtils {
     }
 
     // COMP METHOD: Only use white fallback when auraColor is null/undefined
-    const auraColor = user.aura_color || user.auraColor || window.AVATAR_FALLBACK_COLOR;
+    // CRITICAL FIX: Check camelCase first (from API/backend), then snake_case (from database), then fallback
+    // This ensures API-provided auraColor takes precedence over database aura_color
+    // CRITICAL FIX: Resolve Promise if auraColor is a Promise (e.g., from window.currentUser.auraColor)
+    let auraColorRaw = user.auraColor || user.aura_color || window.AVATAR_FALLBACK_COLOR;
+    let auraColor = auraColorRaw;
+    
+    // CRITICAL FIX: If auraColor is a Promise, await it (since createUnifiedAvatar is async)
+    if (auraColorRaw && typeof auraColorRaw === 'object' && typeof auraColorRaw.then === 'function') {
+      // It's a Promise - await it
+      console.log(`🔧 AVATAR_UTILS: auraColor is a Promise, awaiting resolution...`);
+      try {
+        auraColor = await auraColorRaw;
+        console.log(`✅ AVATAR_UTILS: Resolved auraColor Promise: ${auraColor}`);
+      } catch (e) {
+        console.warn(`⚠️ AVATAR_UTILS: Error resolving auraColor Promise, using fallback:`, e);
+        auraColor = window.AVATAR_FALLBACK_COLOR || '#ffffff';
+      }
+    }
+    
+    // CRITICAL FIX: Ensure auraColor is a string (not Promise, object, etc.)
+    if (typeof auraColor !== 'string' || !auraColor.match(/^#[0-9A-Fa-f]{6}$/)) {
+      // Not a valid hex color, use fallback
+      console.warn(`⚠️ AVATAR_UTILS: Invalid auraColor value: ${auraColor} (type: ${typeof auraColor}), using fallback`);
+      auraColor = window.AVATAR_FALLBACK_COLOR || '#ffffff';
+    }
+    
+    // CRITICAL FIX: Log aura color source for debugging
+    if (user.auraColor && typeof user.auraColor !== 'object') {
+      console.log(`✅ AVATAR_UTILS: Using auraColor (camelCase) from user object: ${auraColor}`);
+    } else if (user.aura_color) {
+      console.log(`✅ AVATAR_UTILS: Using aura_color (snake_case) from user object: ${auraColor}`);
+    } else {
+      console.log(`⚠️ AVATAR_UTILS: No aura color in user object, using fallback: ${auraColor}`);
+    }
     const showAura = options.showAura !== false;
     const size = options.size || (context === 'profile' ? 32 : 24);
     const showStatus = options.showStatus !== false;
@@ -233,11 +273,14 @@ class AvatarUtils {
     let html = `<div style="position: relative; width: ${size}px; height: ${size}px;" data-user-id="${user.id || user.user_id || user.userId}">`;
     
     if (showAura) {
-      html += `<div style="position: absolute; top: -2px; left: -2px; width: ${size + 4}px; height: ${size + 4}px; border-radius: 50%; background-color: ${auraColor}; z-index: 1; border: 2px solid ${auraColor};"></div>`;
+      // CRITICAL FIX: Enhanced aura ring - larger size, positioned to extend around image, with class for CSS targeting
+      // Size is image size + 4px (2px on each side) to create visible ring effect
+      html += `<div class="avatar-aura" style="position: absolute; top: -2px; left: -2px; width: ${size + 4}px; height: ${size + 4}px; border-radius: 50%; background-color: ${auraColor}; z-index: 1; border: 2px solid ${auraColor}; box-sizing: border-box;"></div>`;
     }
     
     // For message avatars, set src immediately.
-    html += `<img src="${avatarUrl}" alt="${userName}" style="position: relative; z-index: 2; width: ${size}px; height: ${size}px; border-radius: 50%; object-fit: cover; border: 2px solid ${auraColor};" data-avatar-source="${avatarSource}" data-user-id="${user.id || user.user_id || user.userId}">`;
+    // CRITICAL FIX: Remove border from img - aura ring provides the colored border, img border covers it
+    html += `<img src="${avatarUrl}" alt="${userName}" style="position: relative; z-index: 2; width: ${size}px; height: ${size}px; border-radius: 50%; object-fit: cover; border: none !important;" data-avatar-source="${avatarSource}" data-user-id="${user.id || user.user_id || user.userId}">`;
     
     if (showStatus) {
       html += `<div style="position: absolute; bottom: -2px; right: -2px; width: 8px; height: 8px; border-radius: 50%; background-color: ${statusDotColor}; border: 2px solid white; z-index: 3;"></div>`;
@@ -363,4 +406,11 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = AvatarUtils;
 }
 
-console.log('AvatarUtils initialized');
+// Self-validation on load
+if (window.AvatarUtils && typeof window.AvatarUtils.createUnifiedAvatar === 'function') {
+  console.log('✅ AvatarUtils initialized successfully');
+} else {
+  console.error('❌ CRITICAL: AvatarUtils failed to initialize properly');
+  console.error('  window.AvatarUtils:', window.AvatarUtils);
+  console.error('  typeof createUnifiedAvatar:', typeof window.AvatarUtils?.createUnifiedAvatar);
+}

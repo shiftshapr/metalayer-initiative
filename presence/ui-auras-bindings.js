@@ -31,11 +31,31 @@
    * Handle aura real-time updates
    */
   function handleAuraUpdate(event) {
-    const { type, data, pageId, timestamp } = event.detail;
+    // COMP METHOD: Handle both event.detail and direct event structure
+    const eventDetail = event.detail || event;
+    const { type, data, pageId, timestamp } = eventDetail;
     
     console.log('🔍 UI AURAS: Received aura update:', { type, data, pageId, timestamp });
     
     try {
+      // COMP METHOD: For UPDATE events, ensure handleAuraChange is called
+      if (type === 'UPDATE' && data) {
+        // Extract user_id and aura_color from data object
+        const userId = data.user_id || data.userId;
+        const auraColor = data.aura_color || data.auraColor;
+        
+        if (userId && auraColor && typeof window.handleAuraChange === 'function') {
+          console.log(`🎨 UI AURAS: Calling handleAuraChange from UPDATE event for user ${userId} with color ${auraColor}`);
+          window.handleAuraChange({
+            userId: userId,
+            auraColor: auraColor,
+            source: 'realtimeFoundation'
+          }).catch(error => {
+            console.error('❌ UI AURAS: Error in handleAuraChange:', error);
+          });
+        }
+      }
+      
       switch (type) {
         case 'INSERT':
           handleAuraAdded(data);
@@ -73,8 +93,29 @@
   function handleAuraUpdated(auraData) {
     console.log('🔄 UI AURAS: Aura updated:', auraData);
     
-    // Update user aura display
-    updateUserAuraDisplay(auraData.user_email, auraData);
+    // COMP METHOD: Extract user_id and aura_color from event data
+    const userId = auraData.user_id || auraData.userId;
+    const auraColor = auraData.aura_color || auraData.auraColor;
+    
+    // COMP METHOD: Call handleAuraChange to update visibility data and DOM avatars
+    // This is critical for real-time propagation
+    if (userId && auraColor && typeof window.handleAuraChange === 'function') {
+      console.log(`🎨 UI AURAS: Calling handleAuraChange for user ${userId} with color ${auraColor}`);
+      window.handleAuraChange({
+        userId: userId,
+        auraColor: auraColor,
+        source: 'realtimeFoundation'
+      }).catch(error => {
+        console.error('❌ UI AURAS: Error in handleAuraChange:', error);
+      });
+    } else {
+      console.warn('⚠️ UI AURAS: Cannot call handleAuraChange - missing userId/auraColor or handler');
+    }
+    
+    // Update user aura display (legacy UI-only update)
+    if (auraData.user_email) {
+      updateUserAuraDisplay(auraData.user_email, auraData);
+    }
     
     // Update aura indicators
     updateAuraIndicators();

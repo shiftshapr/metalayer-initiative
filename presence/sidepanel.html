@@ -19,13 +19,15 @@
   <!-- Load Enhanced Logger System -->
   <!-- Load Avatar Utilities FIRST (CRITICAL DEPENDENCY) -->
   <script src="utils/AvatarUtils.js"></script>
-  <script src="utils/AvatarUtilsChecker.js"></script>
+  <!-- CRITICAL: Load Pre-Render Initializer EARLY for theme and avatar data -->
+  <script src="PreRenderInitializer.js"></script>
+  <!-- AvatarUtilsChecker.js removed - AvatarUtils.js now self-validates -->
   <!-- Load Error Handler -->
   <script src="utils/ErrorHandler.js"></script>
   <!-- Load Message Diagnostic Manager -->
   <script src="MessageDiagnosticManager.js"></script>
-  <!-- Load Robust Message Operations Manager -->
-  <script src="RobustMessageOperationsManager.js"></script>
+  <!-- Load Tab Context Manager (Architecture-First Approach) -->
+  <script src="TabContextManager.js"></script>
   
   <!-- Load Supabase Service -->
   <script src="services/SupabaseService.js"></script>
@@ -33,7 +35,7 @@
   <script src="SupabaseRealtimeClient.js"></script>
   <!-- Load Unified Authentication System -->
   <script src="unified-auth.js"></script>
-  <!-- Load Visibility Manager -->
+  <!-- Load Visibility Manager (MUST load before sidepanel.js) -->
   <script src="features/VisibilityManager.js"></script>
   <!-- Load Sidepanel Core -->
   <script src="core/SidepanelCore.js"></script>
@@ -45,7 +47,21 @@
   <script src="features/ProfileManager.js"></script>
   <script src="utils/AvatarConfig.js"></script>
   <script src="features/UIManager.js"></script>
+  <!-- UNIFIED RENDERING: Load unified message renderer BEFORE CanopiModule -->
+  <script src="utils/UnifiedMessageRenderer.js"></script>
+  <!-- MODULAR ARCHITECTURE: Load utility modules BEFORE CanopiModule -->
+  <!-- Unified Message Renderer - ensures consistency between default and focus mode -->
+  <script src="utils/MessageRenderer.js"></script>
+  <!-- Reply Loader - handles reply loading and formatting (MODULAR ARCHITECTURE) -->
+  <script src="utils/ReplyLoader.js"></script>
+  <!-- Message Visibility Manager - handles CSS class management and visibility (MODULAR ARCHITECTURE) -->
+  <script src="utils/MessageVisibilityManager.js"></script>
+  <!-- CRITICAL FIX: Load CanopiModule synchronously to ensure loadChatHistory is available -->
   <script src="features/CanopiModule.js"></script>
+  <!-- CRITICAL FIX: Verify CanopiModule loaded after script tag (moved to external file to fix CSP) -->
+  <script src="utils/LoadChatHistoryVerifier.js"></script>
+  <!-- CRITICAL FIX: Diagnostic script for debugging issues -->
+  <script src="utils/CanopiDiagnostic.js"></script>
   <script src="features/AuthModule.js"></script>
   <script src="features/AgentModule.js"></script>
   <script src="features/AuthManager.js"></script>
@@ -135,33 +151,80 @@
     </header>
     
     <!-- Main Navigation Tabs -->
-    <div class="sidebar-nav-main">
-      <button class="main-nav-tab active" data-tab="canopi-tab">Canopi</button>
-      <button class="main-nav-tab" data-tab="rooms-tab">Rooms</button>
-      <button class="main-nav-tab" data-tab="people-tab">People</button>
-      <button class="main-nav-tab" data-tab="agent-tab">Agent</button>
-      <button class="main-nav-tab" data-tab="settings-tab">Settings</button>
+    <!-- PURPLE HAT: Accessibility - Add tablist role and tab roles -->
+    <div class="sidebar-nav-main" role="tablist" aria-label="Main navigation">
+      <button class="main-nav-tab active" 
+              data-tab="discuss-tab"
+              role="tab"
+              aria-selected="true"
+              aria-controls="discuss-tab"
+              aria-label="Discuss tab, active">Discuss</button>
+      <button class="main-nav-tab" 
+              data-tab="visibility-tab"
+              role="tab"
+              aria-selected="false"
+              aria-controls="visibility-tab"
+              aria-label="Visibility tab">Visibility</button>
+      <button class="main-nav-tab" 
+              data-tab="rooms-tab"
+              role="tab"
+              aria-selected="false"
+              aria-controls="rooms-tab"
+              aria-label="Rooms tab">Rooms</button>
+      <button class="main-nav-tab" 
+              data-tab="people-tab"
+              role="tab"
+              aria-selected="false"
+              aria-controls="people-tab"
+              aria-label="People tab">People</button>
+      <button class="main-nav-tab" 
+              data-tab="agent-tab"
+              role="tab"
+              aria-selected="false"
+              aria-controls="agent-tab"
+              aria-label="Agent tab">Agent</button>
+      <button class="main-nav-tab" 
+              data-tab="settings-tab"
+              role="tab"
+              aria-selected="false"
+              aria-controls="settings-tab"
+              aria-label="Settings tab">Settings</button>
     </div>
     
     <!-- Main Tab Contents -->
     <div class="sidebar-content">
-      <!-- Canopi Tab Content -->
-      <div id="canopi-tab" class="main-tab-content active">
-        <div class="sidebar-nav-sub">
-          <button class="sub-nav-tab active" data-subtab="canopi-live-chat">Conversations</button>
-          <button class="sub-nav-tab" data-subtab="canopi-visible">Visible</button>
+      <!-- Discuss Tab Content (formerly Conversations in Canopi tab) -->
+      <div id="discuss-tab" class="main-tab-content active">
+        <!-- Chat Input Area - Moved to top (UI UPGRADE) -->
+        <div class="chat-input-area">
+          <!-- PURPLE HAT: Accessibility - Add label for screen readers -->
+          <label for="chat-textarea" class="sr-only">Message input</label>
+          <textarea id="chat-textarea" 
+                    aria-label="Start thread in Public Square"
+                    placeholder="Start thread in Public Square" 
+                    style="width: 100%; padding: 12px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 14px; resize: none; min-height: 20px; max-height: 120px; font-family: inherit; box-sizing: border-box; background: var(--background-primary); color: var(--text-primary);"></textarea>
         </div>
-        <div id="canopi-live-chat" class="sub-tab-content active">
-          <div class="chat-messages">
-             <p style="text-align: center; color: var(--text-secondary); padding: 20px;">Chat history appears here.</p>
-          </div>
+        <!-- Context Bar for Reply/Edit - UI UPGRADE: Positioned below input area -->
+        <!-- PURPLE HAT: Accessibility - Add aria-live for screen reader announcements -->
+        <div id="context-bar" 
+             role="status"
+             aria-live="polite"
+             aria-atomic="true"
+             style="display: none; position: relative; background: #e8f4fd; padding: 2px 8px; border-bottom: 1px solid #b3d9ff; font-size: 10px; color: #0066cc; line-height: 1.2; height: 18px; overflow: hidden; flex-shrink: 0;">
+          <span id="context-text" style="font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: calc(100% - 20px); display: inline-block;"></span>
+          <button id="cancel-context" 
+                  aria-label="Cancel reply or edit"
+                  style="float: right; background: none; border: none; color: #0066cc; cursor: pointer; font-size: 10px; padding: 0; margin-left: 4px; width: 12px; height: 12px; line-height: 1;">✕</button>
         </div>
-        <div id="canopi-visible" class="sub-tab-content">
-          <h3>Canopi Visible Content</h3>
-          <ul class="user-list" style="list-style: none; padding: 0; margin: 0;">
-            <!-- User list items will be populated here -->
-          </ul>
+        <!-- Messages Container - Latest messages at top (UI UPGRADE) -->
+        <div class="chat-messages">
+           <p style="text-align: center; color: var(--text-secondary); padding: 20px;">Chat history appears here.</p>
         </div>
+      </div>
+      
+      <!-- Visibility Tab Content (formerly Visible in Canopi tab) -->
+      <div id="visibility-tab" class="main-tab-content">
+        <!-- Content will be populated by updateVisibleTab() -->
       </div>
       
       <!-- Rooms Tab Content -->
@@ -270,16 +333,8 @@
   <!-- Include the main sidebar JavaScript -->
   <script src="sidepanel.js"></script>
 
-  <!-- Context Bar for Reply/Edit - Separate row above input -->
-  <div id="context-bar" style="display: none; position: fixed; bottom: 60px; left: 0; right: 0; background: #e8f4fd; padding: 2px 8px; border-bottom: 1px solid #b3d9ff; font-size: 10px; color: #0066cc; line-height: 1.2; height: 18px; overflow: hidden; z-index: 1001;">
-    <span id="context-text" style="font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: calc(100% - 20px); display: inline-block;"></span>
-    <button id="cancel-context" style="float: right; background: none; border: none; color: #0066cc; cursor: pointer; font-size: 10px; padding: 0; margin-left: 4px; width: 12px; height: 12px; line-height: 1;">✕</button>
-  </div>
-
-  <!-- Chat Input Area - Fixed at bottom -->
-  <div class="chat-input-area" style="position: fixed; bottom: 0; left: 0; right: 0; background: #f8f9fa; border-top: 1px solid #dee2e6; z-index: 1000; padding: 0; width: 100% !important;">
-    <textarea id="chat-textarea" placeholder="Start thread in Public Square" style="width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 0; font-size: 14px; resize: none; min-height: 20px; font-family: inherit; box-sizing: border-box; margin: 0; border-left: none; border-right: none; border-bottom: none; overflow-y: hidden;"></textarea>
-  </div>
+  <!-- ARCHIVED: Context Bar - Moved inside discuss-tab (see discuss-tab section) -->
+  <!-- ARCHIVED: Chat Input Area - Fixed at bottom (moved to top inside discuss-tab) -->
 
 
   <!-- Magic Link Modal -->
@@ -441,5 +496,58 @@
   <!-- Load Real-time Diagnostic Tools -->
   <!-- Bind robust realtime events to UI refresh -->
   <script src="ui-realtime-bindings.js"></script>
+
+  <!-- CRITICAL: Initialize user data before showing interface -->
+  <script>
+    // Hide body initially to prevent flash
+    document.body.style.display = 'none';
+
+    // Initialize pre-render data
+    (async function() {
+      try {
+        console.log('🚀 Starting pre-render initialization...');
+
+        // Wait for PreRenderInitializer to be available
+        let attempts = 0;
+        while (!window.preRenderInitializer && attempts < 100) {
+          await new Promise(resolve => setTimeout(resolve, 50));
+          attempts++;
+          console.log(`⏳ Waiting for PreRenderInitializer... (${attempts}/100)`);
+        }
+
+        if (!window.preRenderInitializer) {
+          throw new Error('PreRenderInitializer not available after waiting');
+        }
+
+        console.log('✅ PreRenderInitializer found, starting initialization...');
+        await window.preRenderInitializer.initialize();
+        console.log('✅ Pre-render initialization complete');
+
+        // Log the results
+        const data = window.preRenderInitializer.getPreRenderData();
+        console.log('📊 Pre-render data:', {
+          isInitialized: data.isInitialized,
+          hasAuraColor: !!data.auraColor,
+          hasAvatarUrl: !!data.avatarUrl,
+          auraColor: data.auraColor,
+          avatarUrl: data.avatarUrl?.substring(0, 50) + '...'
+        });
+
+      } catch (error) {
+        console.error('❌ Pre-render initialization failed:', error);
+        console.error('Error details:', error.message);
+        console.error('Stack:', error.stack);
+      } finally {
+        // Show body regardless of success/failure
+        document.body.style.display = '';
+        console.log('👁️ Interface now visible');
+      }
+    })();
+  </script>
+
+  <!-- Load test scripts for debugging -->
+  <script src="test-pre-render-init.js"></script>
+  <script src="test-pre-render-aura.js"></script>
+
         </body>
         </html>

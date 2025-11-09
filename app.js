@@ -18,6 +18,12 @@ app.use(express.json());
 // Serve static files from public directory
 app.use(express.static('public'));
 
+// Serve share message resolver page
+const path = require('path');
+app.get('/share-message', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'share-message.html'));
+});
+
 // Session configuration
 app.use(session({
   secret: process.env.SESSION_SECRET || 'your-session-secret',
@@ -56,10 +62,24 @@ app.use('/chat', require('./routes/chat'));
 app.use('/v1/presence', require('./routes/presence')); // CRITICAL FIX: Register presence routes
 app.use('/v1/users', require('./routes/users')); // CRITICAL FIX: Register users routes
 app.use('/v1/reactions', require('./routes/reactions')); // CRITICAL FIX: Register reactions routes
+app.use('/v1/bookmarks', require('./routes/bookmarks')); // Register bookmarks routes
 app.use(require('./routes/interaction'));
 app.use('/policy/enforce', require('./routes/policy'));
 // X-Owlz dynamic NFT endpoints
 app.use('/', require('./routes/xowlz'));
+
+// Add Canopi2Controller for posts and share functionality
+const { PrismaClient } = require('./generated/prisma');
+const Canopi2Controller = require('./controllers/canopi2Controller');
+const prisma = new PrismaClient();
+const canopi2Controller = new Canopi2Controller(prisma);
+
+// Posts API endpoints
+app.post('/v1/posts', (req, res) => canopi2Controller.createPost(req, res));
+app.get('/v1/posts/:id', (req, res) => canopi2Controller.getPost(req, res));
+app.get('/v1/posts/:id/share', (req, res) => canopi2Controller.getPostForShare(req, res));
+app.put('/v1/posts/:id', (req, res) => canopi2Controller.updatePost(req, res));
+app.delete('/v1/posts/:id', (req, res) => canopi2Controller.deletePost(req, res));
 
 // Google Auth routes
 app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));

@@ -19,7 +19,7 @@ model message_deletions {
   page_id    String
   created_at DateTime? @default(now()) @db.Timestamptz(6)
 
-  AppUser    AppUser?  @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  AppUser AppUser? @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@index([deleted_at], map: "idx_message_deletions_deleted_at")
   @@index([message_id], map: "idx_message_deletions_message_id")
@@ -30,23 +30,27 @@ model message_deletions {
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model messages {
-  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  page_id      String
-  user_id      String    @db.Uuid
-  content      String
-  created_at   DateTime? @default(now()) @db.Timestamptz(6)
-  updated_at   DateTime? @default(now()) @db.Timestamptz(6)
-  community_id String    @default("comm-001")
-  parent_id    String?
+  id                      String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  page_id                 String
+  user_id                 String    @db.Uuid
+  content                 String
+  created_at              DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at              DateTime? @default(now()) @db.Timestamptz(6)
+  community_id            String    @default("comm-001")
+  parent_id               String?
+  quote_id                String?   @db.Uuid
+  reposted_to_communities String[]
 
-  AppUser      AppUser   @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  reactions    reactions[]
+  AppUser   AppUser     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  reactions reactions[]
+  bookmarks bookmarks[]
 
   @@index([community_id], map: "idx_messages_community_id")
   @@index([page_id, community_id], map: "idx_messages_page_community")
   @@index([page_id], map: "idx_messages_page_id")
   @@index([parent_id], map: "idx_messages_parent_id")
   @@index([user_id], map: "idx_messages_user_id")
+  @@index([quote_id], map: "idx_messages_quote_id")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -57,8 +61,8 @@ model reactions {
   user_id    String    @db.Uuid
   created_at DateTime? @default(now()) @db.Timestamptz(6)
 
-  AppUser    AppUser   @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  message    messages  @relation(fields: [message_id], references: [id], onDelete: Cascade)
+  AppUser AppUser  @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  message messages @relation(fields: [message_id], references: [id], onDelete: Cascade)
 
   @@index([message_id], map: "idx_reactions_message")
   @@index([user_id], map: "idx_reactions_user_id")
@@ -77,8 +81,8 @@ model user_presence {
   created_at DateTime? @default(now()) @db.Timestamptz(6)
   updated_at DateTime? @default(now()) @db.Timestamptz(6)
   enter_time DateTime? @db.Timestamptz(6)
-  
-  AppUser    AppUser   @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  AppUser AppUser @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@unique([user_id, page_id], map: "unique_user_presence_user_page")
   @@index([page_id, user_id], map: "idx_presence_page_user")
@@ -110,24 +114,26 @@ model AppUser {
   handle           String             @unique
   email            String?            @unique
   name             String?
-  avatarUrl        String             // Changed from String? to String (non-null required)
+  avatarUrl        String // Changed from String? to String (non-null required)
   isVerified       Boolean            @default(false)
   isSuperAdmin     Boolean            @default(false)
   createdAt        DateTime           @default(now())
   updatedAt        DateTime
   auraColor        String?
+  preferences      Json?              // User preferences (theme, etc.) - stored as JSON
   Conversation     Conversation[]
   ModerationAction ModerationAction[]
   Post             Post[]
   PresenceEvent    PresenceEvent[]
   Reaction         Reaction[]
   SpaceMember      SpaceMember[]
-  
+
   // Updated relationships using UUID foreign keys
   message_deletions message_deletions[]
   messages          messages[]
   reactions         reactions[]
   user_presence     user_presence[]
+  bookmarks         bookmarks[]
 }
 
 model Conversation {
@@ -331,4 +337,55 @@ enum Visibility {
   GROUP
   PRIVATE
   CUSTOM
+}
+
+/// Meta-community waitlist submissions
+model MetaCommunityWaitlist {
+  id                     String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                   String
+  email                  String
+  phone                  String?
+  purpose                String    @db.Text
+  codeOfConduct          String    @db.Text
+  logoUrl                String?
+  communityLink          String?
+  onboardingInstructions String    @db.Text
+  status                 String    @default("pending") // pending, approved, rejected
+  submittedAt            DateTime  @default(now()) @db.Timestamptz(6)
+  reviewedAt             DateTime? @db.Timestamptz(6)
+  reviewedBy             String?   @db.Uuid
+  reviewNotes            String?   @db.Text
+
+  @@index([status])
+  @@index([submittedAt])
+}
+
+/// User bookmarks for messages
+model bookmarks {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id     String    @db.Uuid
+  message_id  String    @db.Uuid
+  category_id String?   @db.Uuid // Future: For organizing bookmarks into categories
+  comments    String?   @db.Text // Future: User notes/comments on the bookmark
+  is_private  Boolean   @default(true) // Future: For sharing bookmarks
+  tags        String[]  @default([]) // Future: For tagging/organizing bookmarks
+  priority    Int? // Future: For sorting/importance (1-5, etc.)
+  sort_order  Int? // Future: Custom sort order within category
+  archived    Boolean   @default(false) // Future: Archive without deleting
+  created_at  DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at  DateTime  @default(now()) @db.Timestamptz(6)
+  deleted_at  DateTime? @db.Timestamptz(6) // Soft delete
+
+  AppUser AppUser  @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  message messages @relation(fields: [message_id], references: [id], onDelete: Cascade)
+
+  // Unique constraint: one bookmark per user per message
+  @@unique([user_id, message_id], map: "unique_user_message_bookmark")
+  // Indexes for common queries
+  @@index([user_id], map: "idx_bookmarks_user_id")
+  @@index([message_id], map: "idx_bookmarks_message_id")
+  @@index([category_id], map: "idx_bookmarks_category_id")
+  @@index([user_id, deleted_at], map: "idx_bookmarks_user_deleted")
+  @@index([user_id, archived, deleted_at], map: "idx_bookmarks_user_active")
+  @@index([created_at], map: "idx_bookmarks_created_at")
 }

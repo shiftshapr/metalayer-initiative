@@ -33,6 +33,118 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       });
     });
   }
+
+  
+  // Handle shared message - open tab with sidebar
+  if (request.type === 'OPEN_SHARED_MESSAGE') {
+    console.log('🔗 BACKGROUND: Opening shared message:', request.messageId, 'URL:', request.url);
+    
+    // CRITICAL FIX: Handle async operation properly
+    (async () => {
+      // CRITICAL FIX: If URL is provided and contains a hash, extract the page URL
+      // Otherwise, fetch message data to get the page URL
+      let targetUrl = request.url;
+      let messageId = request.messageId;
+      
+      // If URL contains hash with message, extract the base URL
+      if (targetUrl && targetUrl.includes('#message=')) {
+        try {
+          const urlObj = new URL(targetUrl);
+          messageId = urlObj.hash.match(/message=([^&]+)/)?.[1] || messageId;
+          // Use the base URL (without hash) - this should be the page URL
+          urlObj.hash = '';
+          targetUrl = urlObj.toString();
+          console.log('🔗 BACKGROUND: Extracted page URL from hash:', targetUrl);
+        } catch (e) {
+          console.warn('🔗 BACKGROUND: Could not parse URL, using as-is:', e);
+        }
+      }
+      
+      // If we still don't have a valid page URL, try to fetch from API
+      if (!targetUrl || targetUrl.includes('api.themetalayer.org') || targetUrl.includes('share-message')) {
+        console.log('🔗 BACKGROUND: Fetching message data to get page URL...');
+        try {
+          // Try to get API base URL from storage or use default
+          const apiBase = 'https://api.themetalayer.org';
+          const response = await fetch(`${apiBase}/v1/posts/${messageId}`);
+          
+          if (response.ok) {
+            const messageData = await response.json();
+            const pageUrl = messageData.conversation?.page?.url || 
+                           messageData.pageUrl || 
+                           'https://www.google.com'; // Fallback
+            
+            // Remove hash if present and add message hash
+            const urlObj = new URL(pageUrl);
+            urlObj.hash = '';
+            targetUrl = `${urlObj.toString()}#message=${messageId}&conversation=${messageData.conversationId || ''}`;
+            console.log('🔗 BACKGROUND: Got page URL from API:', targetUrl);
+          } else {
+            console.warn('🔗 BACKGROUND: Could not fetch message data, using fallback');
+            // Fallback to google.com if we can't get the page URL
+            targetUrl = `https://www.google.com/#message=${messageId}`;
+          }
+        } catch (fetchError) {
+          console.error('🔗 BACKGROUND: Error fetching message data:', fetchError);
+          // Fallback to google.com
+          targetUrl = `https://www.google.com/#message=${messageId}`;
+        }
+      }
+      
+      console.log('🔗 BACKGROUND: Opening tab with URL:', targetUrl);
+      
+      // Open the URL in a new tab
+      chrome.tabs.create({ url: targetUrl }, (tab) => {
+        console.log('✅ BACKGROUND: Opened tab:', tab.id);
+        
+        // Wait for tab to load, then open sidebar
+        chrome.tabs.onUpdated.addListener(function listener(tabId, changeInfo) {
+          if (tabId === tab.id && changeInfo.status === 'complete') {
+            chrome.tabs.onUpdated.removeListener(listener);
+            
+            // Small delay to ensure page is fully loaded
+            setTimeout(() => {
+              // Open sidebar
+              chrome.sidePanel.open({ tabId: tab.id }).then(() => {
+                console.log('✅ BACKGROUND: Sidebar opened for shared message');
+                
+                // Send message to sidebar to scroll to and highlight the message
+                setTimeout(() => {
+                  chrome.runtime.sendMessage({
+                    type: 'HIGHLIGHT_SHARED_MESSAGE',
+                    messageId: messageId,
+                    tabId: tab.id
+                  }).catch(err => {
+                    console.log('🔗 BACKGROUND: Could not send highlight message (sidebar may not be ready):', err.message);
+                  });
+                }, 1000); // Give sidebar time to initialize
+                
+                sendResponse({ success: true, url: targetUrl });
+              }).catch((error) => {
+                console.error('❌ BACKGROUND: Failed to open sidebar:', error);
+                sendResponse({ success: false, error: error.message });
+              });
+            }, 500);
+          }
+        });
+      });
+    })();
+    
+    return true; // Keep channel open for async response
+  }
+  
+  // Handle message highlighting from background
+  if (request.type === 'HIGHLIGHT_SHARED_MESSAGE') {
+    // This will be handled by the sidepanel
+    console.log('🔗 BACKGROUND: Received highlight request for message:', request.messageId);
+  }
+
+  // Handle extension detection ping
+  if (request.type === 'PING') {
+    console.log('🔍 BACKGROUND: Received PING, responding');
+    sendResponse({ success: true, extensionId: chrome.runtime.id });
+    return true;
+  }
   
   // CRITICAL FIX: Echo back TAB_UPDATED, TAB_CHANGED, TAB_CLOSED messages
   // When tests send these messages, they come FROM the sidepanel TO the background

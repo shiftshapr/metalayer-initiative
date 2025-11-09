@@ -19,20 +19,26 @@ router.post('/', createCommunity);
 router.put('/:id', updateCommunity);
 router.delete('/:id', deleteCommunity);
 
-// Legacy route for backward compatibility
-router.post('/select', (req, res) => {
-  const { userId, communityId } = req.body;
-  if (!userId || !communityId) {
-    return res.status(400).json({ error: 'Missing userId or communityId' });
+// Select community route (sets as primary and active)
+router.post('/select', async (req, res) => {
+  try {
+    const { userId, communityId, tabId } = req.body;
+    if (!userId || !communityId) {
+      return res.status(400).json({ error: 'Missing userId or communityId' });
+    }
+
+    // Use the controller method which handles database updates
+    const { selectCommunity } = require('../controllers/communitiesController');
+    
+    // Update request body to include tabId
+    req.body = { userId, communityId, tabId };
+    
+    // Call controller (it will handle the response)
+    await selectCommunity(req, res);
+  } catch (error) {
+    console.error('Error in /select route:', error);
+    res.status(500).json({ error: 'Failed to select community' });
   }
-
-  avatarStore.setActive(userId, communityId);
-
-  res.json({
-    message: 'Community selected',
-    userId,
-    communityId
-  });
 });
 
 module.exports = router;

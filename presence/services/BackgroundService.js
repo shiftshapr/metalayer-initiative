@@ -484,8 +484,40 @@ function setupCrossProfileCommunication() {
     const mainTabs = document.querySelectorAll('.main-nav-tab');
     const mainTabContents = document.querySelectorAll('.main-tab-content');
     
-    const communityDropdownTrigger = document.querySelector('.community-dropdown-trigger');
-    const communityDropdownPanel = document.getElementById('community-dropdown-panel');
+    // CRITICAL FIX: Query elements with retry mechanism in case DOM not fully ready
+    let communityDropdownTrigger = document.querySelector('.community-dropdown-trigger');
+    let communityDropdownPanel = document.getElementById('community-dropdown-panel');
+    
+    // CRITICAL FIX: Multiple retry attempts with increasing delays
+    const setupWithRetry = (attempt = 0, maxAttempts = 5) => {
+      if (attempt >= maxAttempts) {
+        console.error('❌ COMMUNITY_DROPDOWN: Failed to find elements after', maxAttempts, 'attempts');
+        return;
+      }
+      
+      communityDropdownTrigger = document.querySelector('.community-dropdown-trigger');
+      communityDropdownPanel = document.getElementById('community-dropdown-panel');
+      
+      if (communityDropdownTrigger && communityDropdownPanel) {
+        const success = setupCommunityDropdown(communityDropdownTrigger, communityDropdownPanel);
+        if (success) {
+          console.log('✅ COMMUNITY_DROPDOWN: Successfully set up on attempt', attempt + 1);
+          // CRITICAL FIX: Ensure CSS properties are set
+          communityDropdownTrigger.style.pointerEvents = 'auto';
+          communityDropdownTrigger.style.cursor = 'pointer';
+          communityDropdownTrigger.style.userSelect = 'none';
+        } else {
+          console.warn('⚠️ COMMUNITY_DROPDOWN: Setup failed, retrying...');
+          setTimeout(() => setupWithRetry(attempt + 1, maxAttempts), 500 * (attempt + 1));
+        }
+      } else {
+        console.log('⚠️ COMMUNITY_DROPDOWN: Elements not found, retrying... (attempt', attempt + 1, ')');
+        setTimeout(() => setupWithRetry(attempt + 1, maxAttempts), 500 * (attempt + 1));
+      }
+    };
+    
+    setupWithRetry();
+    
     const closeCommunityDropdownButton = document.getElementById('close-community-dropdown');
     const closeSidebarButton = document.getElementById('close-sidebar-btn');
   
@@ -567,29 +599,61 @@ function setupCrossProfileCommunication() {
     });
   
     // --- Community Dropdown Logic ---
-    if (communityDropdownTrigger) {
-      communityDropdownTrigger.addEventListener('click', (event) => {
-        console.log('Community dropdown clicked');
+    // CRITICAL FIX: Extract to function for reuse and better error handling
+    function setupCommunityDropdown(trigger, panel) {
+      if (!trigger || !panel) {
+        console.error('❌ COMMUNITY_DROPDOWN: Trigger or panel not found');
+        return false;
+      }
+      
+      // CRITICAL FIX: Remove any existing listeners by cloning
+      const newTrigger = trigger.cloneNode(true);
+      if (trigger.parentNode) {
+        trigger.parentNode.replaceChild(newTrigger, trigger);
+      }
+      
+      // CRITICAL FIX: Use mousedown instead of click to avoid conflicts
+      newTrigger.addEventListener('mousedown', (event) => {
+        console.log('✅ COMMUNITY_DROPDOWN: Trigger mousedown');
+        event.stopPropagation();
+        event.preventDefault();
+      });
+      
+      newTrigger.addEventListener('click', (event) => {
+        console.log('✅ COMMUNITY_DROPDOWN: Trigger clicked');
         event.stopPropagation(); // Prevent click from immediately closing dropdown
+        event.preventDefault();
         
-        // Require authentication to access community selector
-        if (!requireAuth('access community settings', () => {
-          console.log('Auth passed, toggling community dropdown');
-        if (communityDropdownPanel) {
-          // Toggle visibility
-          if (communityDropdownPanel.style.display === 'block') {
-            communityDropdownPanel.style.display = 'none';
-            console.log("Community dropdown hidden", null, 'general');
-          } else {
-            communityDropdownPanel.style.display = 'block';
-            console.log("Community dropdown shown", null, 'general');
-          }
-          }
-        })) {
-          console.log('Auth failed for community dropdown');
-          return; // Stop execution if not authenticated
+        // Toggle visibility
+        const isVisible = panel.style.display === 'block' || panel.style.display === '';
+        if (isVisible) {
+          panel.style.display = 'none';
+          console.log("✅ COMMUNITY_DROPDOWN: Hidden", null, 'general');
+        } else {
+          panel.style.display = 'block';
+          console.log("✅ COMMUNITY_DROPDOWN: Shown", null, 'general');
         }
       });
+      
+      // CRITICAL FIX: Ensure pointer events are enabled
+      newTrigger.style.pointerEvents = 'auto';
+      newTrigger.style.cursor = 'pointer';
+      newTrigger.style.userSelect = 'none';
+      
+      console.log('✅ COMMUNITY_DROPDOWN: Event listener attached to:', newTrigger);
+      console.log('✅ COMMUNITY_DROPDOWN: Trigger computed styles:', {
+        pointerEvents: window.getComputedStyle(newTrigger).pointerEvents,
+        cursor: window.getComputedStyle(newTrigger).cursor,
+        display: window.getComputedStyle(newTrigger).display
+      });
+      
+      return true;
+    }
+    
+    if (communityDropdownTrigger && communityDropdownPanel) {
+      setupCommunityDropdown(communityDropdownTrigger, communityDropdownPanel);
+    } else {
+      console.error('❌ COMMUNITY_DROPDOWN: Trigger or panel element not found');
     }
   
     if (closeCommunityDropdownButton && communityDropdownPanel) {
@@ -897,18 +961,20 @@ function setupCrossProfileCommunication() {
                 }
                 
                 console.log('🔍 SEND_CHAT_MESSAGE: === STEP 4: CHECKING FOR REPLY/THREAD ===');
-                // Check if this is a reply or thread
+                // COMP METHOD: Check if this is a reply or thread - use replyingTo only
                 let parentId = null;
                 let threadId = null;
                 
-                if (chatInput.dataset.replyTo) {
-                  parentId = chatInput.dataset.replyTo;
+                // COMP METHOD: Use replyingTo dataset attribute only
+                const replyParentId = chatInput.dataset.replyingTo;
+                if (replyParentId) {
+                  parentId = replyParentId; // Parent message UUID
                   threadId = chatInput.dataset.replyToConversation; // Use the conversation ID as thread ID
-                  console.log('🔍 SEND_CHAT_MESSAGE: Reply detected:', { parentId, threadId });
+                  console.log('🔍 SEND_CHAT_MESSAGE: COMP METHOD - Reply detected with parent UUID:', { parentId, threadId });
                   console.log(`Reply detected: parentId=${parentId}, threadId=${threadId}`);
                   console.log('Reply detected:', { parentId, threadId });
                   // Clear the reply data
-                  delete chatInput.dataset.replyTo;
+                  delete chatInput.dataset.replyingTo;
                   delete chatInput.dataset.replyToConversation;
                   delete chatInput.dataset.contextMode;
                 } else if (chatInput.dataset.threadId) {

@@ -25,11 +25,11 @@ class PostService {
             visibilityOverride
           },
           include: {
-            author: {
+            AppUser: {
               select: { id: true, handle: true, name: true, avatarUrl: true }
             },
-            parent: parentId ? {
-              select: { id: true, body: true, author: { select: { handle: true } } }
+            Post: parentId ? {
+              select: { id: true, body: true, AppUser: { select: { handle: true } } }
             } : undefined
           }
         });
@@ -57,41 +57,47 @@ class PostService {
     try {
       const post = await this.prisma.post.findUnique({
         where: { id: postId },
-        include: {
-          author: {
-            select: { id: true, handle: true, name: true, avatarUrl: true }
-          },
-          conversation: {
-            select: { id: true, title: true, page: { select: { url: true } } }
-          },
-          parent: {
-            select: { id: true, body: true, author: { select: { handle: true } } }
-          },
-          children: {
-            include: {
-              author: {
-                select: { id: true, handle: true, name: true, avatarUrl: true }
+          include: {
+            AppUser: {
+              select: { id: true, handle: true, name: true, avatarUrl: true }
+            },
+            Conversation: {
+              select: { id: true, title: true, Page: { select: { url: true } } }
+            },
+            Post: {
+              select: { id: true, body: true, AppUser: { select: { handle: true } } }
+            },
+            other_Post: {
+              include: {
+                AppUser: {
+                  select: { id: true, handle: true, name: true, avatarUrl: true }
+                }
+              },
+              orderBy: { createdAt: 'asc' }
+            },
+            Reaction: {
+              include: {
+                AppUser: {
+                  select: { id: true, handle: true }
+                }
               }
             },
-            orderBy: { createdAt: 'asc' }
-          },
-          reactions: {
-            include: {
-              user: {
-                select: { id: true, handle: true }
-              }
+            _count: {
+              select: { Reaction: true, other_Post: true }
             }
-          },
-          _count: {
-            select: { reactions: true, children: true }
           }
-        }
       });
 
       return post;
     } catch (error) {
       console.error('Error getting post:', error);
-      throw new Error('Failed to get post');
+      console.error('Error details:', {
+        message: error.message,
+        code: error.code,
+        meta: error.meta,
+        stack: error.stack?.split('\n').slice(0, 5).join('\n')
+      });
+      throw new Error(`Failed to get post: ${error.message}`);
     }
   }
 
@@ -107,7 +113,7 @@ class PostService {
           editedAt: new Date()
         },
         include: {
-          author: {
+          AppUser: {
             select: { id: true, handle: true, name: true, avatarUrl: true }
           }
         }
@@ -154,21 +160,21 @@ class PostService {
       const posts = await this.prisma.post.findMany({
         where,
         include: {
-          author: {
+          AppUser: {
             select: { id: true, handle: true, name: true, avatarUrl: true }
           },
-          parent: {
-            select: { id: true, body: true, author: { select: { handle: true } } }
+          Post: {
+            select: { id: true, body: true, AppUser: { select: { handle: true } } }
           },
-          reactions: {
+          Reaction: {
             include: {
-              user: {
+              AppUser: {
                 select: { id: true, handle: true }
               }
             }
           },
           _count: {
-            select: { reactions: true, children: true }
+            select: { Reaction: true, other_Post: true }
           }
         },
         orderBy: { createdAt: 'asc' },
@@ -197,18 +203,18 @@ class PostService {
       const posts = await this.prisma.post.findMany({
         where,
         include: {
-          conversation: {
-            select: { id: true, title: true, page: { select: { url: true } } }
+          Conversation: {
+            select: { id: true, title: true, Page: { select: { url: true } } }
           },
-          reactions: {
+          Reaction: {
             include: {
-              user: {
+              AppUser: {
                 select: { id: true, handle: true }
               }
             }
           },
           _count: {
-            select: { reactions: true }
+            select: { Reaction: true }
           }
         },
         orderBy: { createdAt: 'desc' },
@@ -220,6 +226,107 @@ class PostService {
     } catch (error) {
       console.error('Error getting posts by author:', error);
       throw new Error('Failed to get posts by author');
+    }
+  }
+
+  /**
+   * Recursively get all descendants (progeny) of a post
+   */
+  async getAllProgeny(postId) {
+    try {
+      const directChildren = await this.prisma.post.findMany({
+        where: {
+          parentId: postId,
+          deletedAt: null
+        },
+        include: {
+          AppUser: {
+            select: { id: true, handle: true, name: true, avatarUrl: true }
+          },
+          Reaction: {
+            include: {
+              AppUser: {
+                select: { id: true, handle: true }
+              }
+            }
+          },
+          _count: {
+            select: { Reaction: true, other_Post: true }
+          }
+        },
+        orderBy: { createdAt: 'asc' }
+      });
+
+      // Recursively get children of each child
+      const allProgeny = [];
+      for (const child of directChildren) {
+        allProgeny.push(child);
+        const nestedProgeny = await this.getAllProgeny(child.id);
+        allProgeny.push(...nestedProgeny);
+      }
+
+      return allProgeny;
+    } catch (error) {
+      console.error('Error getting progeny:', error);
+      throw new Error('Failed to get progeny');
+    }
+  }
+
+  /**
+   * Get post with all related data for sharing (parent, quotes, progeny)
+   */
+  async getPostForShare(postId) {
+    try {
+      const post = await this.getPost(postId);
+      
+      if (!post) {
+        return null;
+      }
+
+      // Get all progeny (recursive descendants)
+      const progeny = await this.getAllProgeny(postId);
+
+      // Get full parent chain if this is a reply
+      let parentChain = [];
+      let currentParentId = post.parentId;
+      while (currentParentId) {
+        const parent = await this.prisma.post.findUnique({
+          where: { id: currentParentId },
+          include: {
+            AppUser: {
+              select: { id: true, handle: true, name: true, avatarUrl: true }
+            },
+            Reaction: {
+              include: {
+                AppUser: {
+                  select: { id: true, handle: true }
+                }
+              }
+            },
+            _count: {
+              select: { Reaction: true, other_Post: true }
+            }
+          }
+        });
+        if (parent && !parent.deletedAt) {
+          parentChain.push(parent);
+          currentParentId = parent.parentId;
+        } else {
+          break;
+        }
+      }
+
+      // Reverse parent chain to show oldest first
+      parentChain.reverse();
+
+      return {
+        ...post,
+        parentChain,
+        progeny
+      };
+    } catch (error) {
+      console.error('Error getting post for share:', error);
+      throw new Error('Failed to get post for share');
     }
   }
 }

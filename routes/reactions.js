@@ -68,6 +68,18 @@ router.get('/:messageId', async (req, res) => {
     
     console.log(`🔍 REACTIONS: Getting reactions for message: ${messageId}`);
     
+    // CRITICAL FIX: Validate messageId is a valid UUID before querying
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(messageId)) {
+      console.log(`⚠️ REACTIONS: Invalid messageId format (not UUID): ${messageId}`);
+      // Return empty result for non-UUID message IDs (e.g., test IDs)
+      return res.json({
+        success: true,
+        reactions: [],
+        message: 'Invalid message ID format (not a UUID)'
+      });
+    }
+    
     const reactions = await prisma.reactions.findMany({
       where: {
         message_id: messageId

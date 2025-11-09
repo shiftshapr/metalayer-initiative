@@ -1103,52 +1103,111 @@ function setupMessageInputEventListeners() {
 console.log('UIManager module loaded', null, 'ui');
 
 // ===== THEME FUNCTIONS (FROM COMP) =====
-function initializeTheme() {
-  // Load saved theme from storage or default to light
-  // Modernized: Use StateManager instead of Chrome Storage
-  if (typeof window.getState === 'function') {
+async function initializeTheme() {
+  // Load saved theme from database only - no localStorage fallback
+  // Default to light mode if not found in database
+  let savedTheme = 'light';
+  
+  // Load from database API if user is authenticated
+  if (window.currentUser?.id && window.api) {
     try {
-      window.getState('theme').then((theme) => {
-        const savedTheme = theme || 'light';
-        setTheme(savedTheme);
-      }).catch(() => {
-        setTheme('light');
-      });
+      console.log('🔧 THEME: Loading theme from database for user:', window.currentUser.id);
+      
+      // Validate UUID format
+      const userId = window.currentUser.id;
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (uuidRegex.test(userId)) {
+        const response = await window.api.request('/v1/users/preferences', {
+          method: 'GET',
+          headers: {
+            'X-User-Id': userId
+          }
+        });
+        
+        if (response && response.preferences && response.preferences.theme) {
+          savedTheme = response.preferences.theme;
+          console.log('✅ THEME: Loaded theme from database:', savedTheme);
+        } else {
+          console.log('ℹ️ THEME: No theme preference in database, using default: light');
+        }
+      } else {
+        console.warn('⚠️ THEME: Invalid userId format, using default: light');
+      }
     } catch (error) {
-      console.log('Theme initialization failed, using default:', error);
-      setTheme('light');
+      console.warn('⚠️ THEME: Failed to load from database, using default: light', error);
+      // No fallback - just use default
     }
   } else {
-    // Fallback to light theme if getState is not available
-    setTheme('light');
+    console.log('ℹ️ THEME: User not authenticated or API not available, using default: light');
   }
+  
+  // Apply the theme (always light if not found in database)
+  await setTheme(savedTheme);
+  console.log('✅ THEME: Theme initialized to:', savedTheme);
 }
 
-function setTheme(theme) {
+async function setTheme(theme) {
   const body = document.body;
   const themeIcon = document.getElementById('theme-icon');
   const themeText = document.getElementById('theme-text');
   
   if (theme === 'dark') {
     body.setAttribute('data-theme', 'dark');
+    document.documentElement.setAttribute('data-theme', 'dark');
     if (themeIcon) themeIcon.textContent = '☀️';
     if (themeText) themeText.textContent = 'Light mode';
   } else {
     body.setAttribute('data-theme', 'light');
+    document.documentElement.setAttribute('data-theme', 'light');
     if (themeIcon) themeIcon.textContent = '🌙';
     if (themeText) themeText.textContent = 'Dark mode';
   }
   
-  // Save theme preference
-  if (typeof window.setState === 'function') {
-    window.setState('theme', theme);
+  // CRITICAL: Save theme preference to database only (no localStorage)
+  // Theme is persisted in AppUser.preferences JSON field
+  if (window.currentUser?.id && window.api) {
+    try {
+      console.log('🔧 THEME: Saving theme preference to AppUser:', theme);
+      
+      // CRITICAL: Only UUID is required - no email needed
+      const userId = window.currentUser?.id;
+      if (!userId) {
+        console.error('❌ THEME: No userId (UUID) available for API request');
+        console.error('   window.currentUser:', window.currentUser);
+        return;
+      }
+      
+      // Validate UUID format
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(userId)) {
+        console.error('❌ THEME: Invalid userId format:', userId);
+        return;
+      }
+      
+      console.log('✅ THEME: Using userId (UUID) for API:', userId);
+      
+      await window.api.request('/v1/users/update-preferences', {
+        method: 'POST',
+        body: JSON.stringify({
+          userId: userId,
+          preferences: {
+            theme: theme
+          }
+        })
+      });
+      console.log('✅ THEME: Theme preference saved to AppUser');
+    } catch (error) {
+      console.error('❌ THEME: Error saving theme preference:', error);
+      // Non-critical - continue even if API call fails
+    }
   }
 }
 
-function toggleTheme() {
+async function toggleTheme() {
   const currentTheme = document.body.getAttribute('data-theme') || 'light';
   const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-  setTheme(newTheme);
+  // CRITICAL FIX: setTheme already handles API call, no need to duplicate
+  await setTheme(newTheme);
 }
 
 // Make available globally

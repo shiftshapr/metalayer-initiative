@@ -221,6 +221,42 @@ class UserService {
       throw new Error('Failed to update display visibility after exit');
     }
   }
+
+  // Update user preferences (UUID only - no email required)
+  async updatePreferences(userId, preferences) {
+    try {
+      console.log(`🔍 USER SERVICE: Updating preferences for user ${userId}`);
+      
+      const user = await this.prisma.AppUser.update({
+        where: { id: userId },
+        data: { 
+          preferences: preferences,
+          updatedAt: new Date()
+        }
+      });
+      
+      console.log(`✅ USER SERVICE: Preferences updated successfully for user ${userId}`);
+      return user;
+    } catch (error) {
+      console.error('Error updating preferences:', error);
+      throw new Error('Failed to update preferences');
+    }
+  }
+
+  // Get user preferences (UUID only - no email required)
+  async getPreferences(userId) {
+    try {
+      const user = await this.prisma.AppUser.findUnique({
+        where: { id: userId },
+        select: { preferences: true }
+      });
+      
+      return user?.preferences || null;
+    } catch (error) {
+      console.error('Error getting preferences:', error);
+      throw new Error('Failed to get preferences');
+    }
+  }
 }
 
 module.exports = UserService;

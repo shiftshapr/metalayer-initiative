@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shared Message - Canopi</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #333;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+            color: white;
+            padding: 30px 40px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2rem;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        .header p {
+            font-size: 1rem;
+            opacity: 0.9;
+        }
+
+        .content {
+            padding: 40px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 60px 20px;
+            color: #666;
+        }
+
+        .error {
+            background: #fee;
+            border: 1px solid #fcc;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            color: #c33;
+        }
+
+        .message-thread {
+            margin-bottom: 30px;
+        }
+
+        .message {
+            background: #f8f9fa;
+            border-left: 4px solid #4f46e5;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            position: relative;
+        }
+
+        .message.parent {
+            background: #f0f4ff;
+            border-left-color: #7c3aed;
+        }
+
+        .message.main {
+            background: #fff;
+            border-left-width: 6px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .message.reply {
+            margin-left: 40px;
+            border-left-color: #94a3b8;
+        }
+
+        .message-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            margin-right: 12px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            font-size: 16px;
+        }
+
+        .avatar img {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            object-fit: cover;
+        }
+
+        .author-info {
+            flex: 1;
+        }
+
+        .author-name {
+            font-weight: 600;
+            color: #1f2937;
+            margin-bottom: 2px;
+        }
+
+        .message-time {
+            font-size: 0.875rem;
+            color: #6b7280;
+        }
+
+        .message-body {
+            color: #1f2937;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .message-footer {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid #e5e7eb;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            font-size: 0.875rem;
+            color: #6b7280;
+        }
+
+        .reactions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .reaction {
+            background: #f3f4f6;
+            padding: 4px 8px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .extension-prompt {
+            background: #eff6ff;
+            border: 2px solid #3b82f6;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 30px;
+            text-align: center;
+        }
+
+        .extension-prompt h3 {
+            color: #1e40af;
+            margin-bottom: 10px;
+        }
+
+        .extension-prompt p {
+            color: #1e3a8a;
+            margin-bottom: 15px;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 12px 24px;
+            background: #3b82f6;
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: background 0.2s;
+        }
+
+        .btn:hover {
+            background: #2563eb;
+        }
+
+        .btn-secondary {
+            background: #6b7280;
+        }
+
+        .btn-secondary:hover {
+            background: #4b5563;
+        }
+
+        @media (max-width: 640px) {
+            .container {
+                margin: 10px;
+                border-radius: 12px;
+            }
+
+            .content {
+                padding: 20px;
+            }
+
+            .message.reply {
+                margin-left: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔗 Shared Message</h1>
+            <p>Viewing a shared message from Canopi</p>
+        </div>
+        <div class="content">
+            <div id="loading" class="loading">
+                Loading message...
+            </div>
+            <div id="error" class="error" style="display: none;"></div>
+            <div id="message-container" style="display: none;"></div>
+            <div id="extension-prompt" class="extension-prompt" style="display: none;">
+                <h3>📱 Get the Full Experience</h3>
+                <p>Install the Canopi extension to view this message in context and interact with the community!</p>
+                <a href="#" class="btn" id="install-link">Install Canopi Extension</a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // API configuration
+        // Use same origin for share resolver, fallback to api.themetalayer.org
+        const API_BASE = window.location.origin.includes('localhost') 
+            ? 'http://localhost:3002' 
+            : (window.location.origin.includes('share.canopi.live') 
+                ? window.location.origin 
+                : 'https://api.themetalayer.org');
+
+        // Get parameters from URL (resolver format: ?message=ID&page=ENCODED_URL&conversation=ID)
+        const urlParams = new URLSearchParams(window.location.search);
+        const messageId = urlParams.get('message') || urlParams.get('id'); // Support both formats
+        const encodedPageUrl = urlParams.get('page');
+        const conversationId = urlParams.get('conversation');
+        
+        // Decode page URL if provided
+        let pageUrl = null;
+        if (encodedPageUrl) {
+            try {
+                pageUrl = decodeURIComponent(encodedPageUrl);
+            } catch (e) {
+                console.error('Error decoding page URL:', e);
+            }
+        }
+
+        // Check if extension is available
+        // The content script will inject markers and listeners on share pages
+        function checkExtension() {
+            return new Promise((resolve) => {
+                // Method 1: Check for injected markers (fastest)
+                if (document.documentElement.hasAttribute('data-canopi-extension') || window.CanopiExtension) {
+                    resolve(true);
+                    return;
+                }
+
+                // Method 2: Try to ping via postMessage (works if content script is loaded)
+                const checkTimeout = setTimeout(() => {
+                    resolve(false);
+                }, 1000); // Increased timeout to allow content script to initialize
+
+                const messageHandler = (event) => {
+                    if (event.data && event.data.type === 'CANOPI_EXTENSION_RESPONSE') {
+                        clearTimeout(checkTimeout);
+                        window.removeEventListener('message', messageHandler);
+                        resolve(event.data.installed === true);
+                    }
+                };
+
+                window.addEventListener('message', messageHandler);
+                window.postMessage({ type: 'CHECK_CANOPI_EXTENSION' }, window.location.origin);
+
+                // Method 3: Fallback - check if chrome.runtime exists (might work in some contexts)
+                if (typeof chrome !== 'undefined' && chrome.runtime) {
+                    try {
+                        chrome.runtime.sendMessage({ type: 'PING' }, (response) => {
+                            if (!chrome.runtime.lastError && response) {
+                                clearTimeout(checkTimeout);
+                                window.removeEventListener('message', messageHandler);
+                                resolve(true);
+                            }
+                        });
+                    } catch (e) {
+                        // Ignore errors
+                    }
+                }
+            });
+        }
+
+        // Format message time
+        function formatTime(dateString) {
+            const date = new Date(dateString);
+            const now = new Date();
+            const diffMs = now - date;
+            const diffMins = Math.floor(diffMs / 60000);
+            const diffHours = Math.floor(diffMs / 3600000);
+            const diffDays = Math.floor(diffMs / 86400000);
+
+            if (diffMins < 1) return 'Just now';
+            if (diffMins < 60) return `${diffMins}m ago`;
+            if (diffHours < 24) return `${diffHours}h ago`;
+            if (diffDays < 7) return `${diffDays}d ago`;
+            
+            return date.toLocaleDateString();
+        }
+
+        // Render message
+        function renderMessage(message, isMain = false, isReply = false, isParent = false) {
+            const authorName = message.author?.name || message.author?.handle || 'Unknown';
+            const authorInitials = authorName.charAt(0).toUpperCase();
+            const avatarUrl = message.author?.avatarUrl;
+            const messageTime = formatTime(message.createdAt || message.created_at);
+            const messageBody = message.body || message.content || '';
+            const reactions = message.reactions || [];
+            const replyCount = message._count?.children || 0;
+
+            const messageClass = isMain ? 'main' : (isReply ? 'reply' : (isParent ? 'parent' : ''));
+
+            return `
+                <div class="message ${messageClass}">
+                    <div class="message-header">
+                        <div class="avatar">
+                            ${avatarUrl ? `<img src="${avatarUrl}" alt="${authorName}">` : authorInitials}
+                        </div>
+                        <div class="author-info">
+                            <div class="author-name">${authorName}</div>
+                            <div class="message-time">${messageTime}</div>
+                        </div>
+                    </div>
+                    <div class="message-body">${escapeHtml(messageBody)}</div>
+                    <div class="message-footer">
+                        ${reactions.length > 0 ? `
+                            <div class="reactions">
+                                ${reactions.map(r => `
+                                    <span class="reaction">
+                                        <span>${r.emoji || '👍'}</span>
+                                        <span>${r._count || 1}</span>
+                                    </span>
+                                `).join('')}
+                            </div>
+                        ` : ''}
+                        ${replyCount > 0 ? `<span>💬 ${replyCount} ${replyCount === 1 ? 'reply' : 'replies'}</span>` : ''}
+                    </div>
+                </div>
+            `;
+        }
+
+        // Escape HTML
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Load and display message
+        async function loadMessage() {
+            if (!messageId) {
+                document.getElementById('error').style.display = 'block';
+                document.getElementById('error').textContent = 'No message ID provided';
+                document.getElementById('loading').style.display = 'none';
+                return;
+            }
+
+            try {
+                // Check if extension is available
+                const hasExtension = await checkExtension();
+                
+                if (hasExtension) {
+                    // Extension is available - redirect to page URL with sidebar
+                    // Use page URL from query params if available, otherwise fetch from API
+                    let targetPageUrl = pageUrl;
+                    
+                    if (!targetPageUrl) {
+                        // Fetch message data to get page URL
+                        try {
+                            const msgResponse = await fetch(`${API_BASE}/v1/posts/${messageId}`);
+                            if (msgResponse.ok) {
+                                const msgData = await msgResponse.json();
+                                targetPageUrl = msgData.conversation?.page?.url || 
+                                               msgData.pageUrl || 
+                                               'https://www.google.com';
+                            }
+                        } catch (e) {
+                            console.error('Error fetching message for redirect:', e);
+                            targetPageUrl = 'https://www.google.com'; // Fallback
+                        }
+                    }
+                    
+                    if (targetPageUrl) {
+                        // Construct target URL with message hash
+                        const targetUrl = `${targetPageUrl}#message=${messageId}&conversation=${conversationId || ''}`;
+                        
+                        console.log('🔗 RESOLVER: Extension detected, redirecting to:', targetUrl);
+                        
+                        // Send message to extension to open tab with sidebar
+                        // Try via chrome.runtime first (if available)
+                        if (window.CanopiExtension && window.CanopiExtension.sendMessage) {
+                            window.CanopiExtension.sendMessage({
+                                type: 'OPEN_SHARED_MESSAGE',
+                                url: targetUrl,
+                                messageId: messageId
+                            }, (response) => {
+                                if (response && response.success) {
+                                    // Success - redirect to target page
+                                    window.location.href = targetUrl;
+                                } else {
+                                    // Fallback: just open the URL
+                                    window.location.href = targetUrl;
+                                }
+                            });
+                        } else {
+                            // Try via postMessage (content script will forward)
+                            const messageHandler = (event) => {
+                                if (event.data && event.data.type === 'OPEN_SHARED_MESSAGE_RESPONSE') {
+                                    window.removeEventListener('message', messageHandler);
+                                    if (event.data.success) {
+                                        window.location.href = targetUrl;
+                                    } else {
+                                        window.location.href = targetUrl;
+                                    }
+                                }
+                            };
+                            window.addEventListener('message', messageHandler);
+                            window.postMessage({
+                                type: 'OPEN_SHARED_MESSAGE',
+                                url: targetUrl,
+                                messageId: messageId
+                            }, window.location.origin);
+                            
+                            // Fallback timeout - redirect anyway
+                            setTimeout(() => {
+                                window.removeEventListener('message', messageHandler);
+                                window.location.href = targetUrl;
+                            }, 2000);
+                        }
+                        return; // Don't load message display, just redirect
+                    }
+                }
+                
+                // Extension not detected or no page URL - show message on webpage
+                console.log('🔗 RESOLVER: Extension not detected, showing message on webpage');
+
+                // Fetch message data
+                const response = await fetch(`${API_BASE}/v1/posts/${messageId}/share`);
+                
+                if (!response.ok) {
+                    if (response.status === 404) {
+                        const errorData = await response.json().catch(() => ({ error: 'Post not found' }));
+                        throw new Error(`Message not found: ${errorData.error || 'The shared message could not be found. It may have been deleted.'}`);
+                    }
+                    if (response.status === 400) {
+                        const errorData = await response.json().catch(() => ({ error: 'Invalid request' }));
+                        throw new Error(`Invalid message ID: ${errorData.error || 'The message ID format is invalid.'}`);
+                    }
+                    const errorText = await response.text().catch(() => response.statusText);
+                    throw new Error(`Failed to load message: ${errorText}`);
+                }
+
+                const data = await response.json();
+
+                // Hide loading
+                document.getElementById('loading').style.display = 'none';
+
+                // Render message
+                const container = document.getElementById('message-container');
+                container.style.display = 'block';
+
+                let html = '';
+
+                // Render parent chain (if this is a reply)
+                if (data.parentChain && data.parentChain.length > 0) {
+                    html += '<div class="message-thread"><h3 style="margin-bottom: 20px; color: #6b7280; font-size: 0.875rem;">In reply to:</h3>';
+                    data.parentChain.forEach(parent => {
+                        html += renderMessage(parent, false, false, true);
+                    });
+                    html += '</div>';
+                }
+
+                // Render main message
+                html += '<div class="message-thread"><h3 style="margin-bottom: 20px; color: #1f2937;">Message:</h3>';
+                html += renderMessage(data, true);
+                html += '</div>';
+
+                // Render progeny (replies)
+                if (data.progeny && data.progeny.length > 0) {
+                    html += '<div class="message-thread"><h3 style="margin-bottom: 20px; color: #1f2937;">Replies:</h3>';
+                    data.progeny.forEach(reply => {
+                        html += renderMessage(reply, false, true);
+                    });
+                    html += '</div>';
+                }
+
+                container.innerHTML = html;
+
+                // Show extension prompt
+                document.getElementById('extension-prompt').style.display = 'block';
+
+            } catch (error) {
+                console.error('Error loading message:', error);
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('error').style.display = 'block';
+                document.getElementById('error').textContent = `Error: ${error.message}`;
+            }
+        }
+
+        // Load message on page load
+        // Wait a bit for content script to inject markers
+        window.addEventListener('DOMContentLoaded', () => {
+            // Give content script time to inject markers
+            setTimeout(loadMessage, 100);
+        });
+        
+        // Also try immediately if DOM is already loaded
+        if (document.readyState === 'complete' || document.readyState === 'interactive') {
+            setTimeout(loadMessage, 100);
+        }
+    </script>
+</body>
+</html>
+

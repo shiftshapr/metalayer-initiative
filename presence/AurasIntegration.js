@@ -10,18 +10,16 @@
  */
 
 class AurasIntegration {
-  constructor(realtimeFoundation, aurasRealtimeManager) {
+  constructor(realtimeFoundation) {
     this.realtimeFoundation = realtimeFoundation;
-    this.aurasRealtimeManager = aurasRealtimeManager;
     this.isInitialized = false;
-    this.aurasManager = null;
     this.currentUser = null;
     this.currentPage = null;
     this.logger = this._createLogger();
     
-    // If dependencies aren't available yet, we'll initialize later
-    if (!this.realtimeFoundation || !this.aurasRealtimeManager) {
-      this.logger.warn('AurasIntegration created without dependencies - will initialize later');
+    // If realtimeFoundation isn't available yet, we'll initialize later
+    if (!this.realtimeFoundation) {
+      this.logger.warn('AurasIntegration created without realtimeFoundation - will initialize later');
     }
   }
 
@@ -37,15 +35,15 @@ class AurasIntegration {
     try {
       this.logger.info('Initializing auras integration...');
       
-      // Step 1: Check if foundation is available
+      // Step 1: Check if foundation is available (optional - aura can work via Supabase directly)
       if (!this.realtimeFoundation) {
         // Try to get the realtime foundation from global scope if not provided in constructor
         if (window.realtimeFoundation) {
           this.logger.info('Using global realtimeFoundation');
           this.realtimeFoundation = window.realtimeFoundation;
         } else {
-          this.logger.error('RealtimeFoundation not available in constructor or globally');
-          return false;
+          this.logger.warn('RealtimeFoundation not available - aura will work via Supabase directly');
+          // COMP METHOD: Don't fail - RealtimeFoundation is optional, Supabase is the requirement
         }
       }
 
@@ -58,38 +56,15 @@ class AurasIntegration {
       
       this.logger.info(`User authenticated: ${this.currentUser.email}`);
       
-      // Step 3: Initialize auras manager
-      if (!this.aurasRealtimeManager) {
-        // Try to get the auras manager from global scope if not provided in constructor
-        if (window.aurasRealtimeManager) {
-          this.logger.info('Using global aurasRealtimeManager');
-          this.aurasRealtimeManager = window.aurasRealtimeManager;
-        } else {
-          this.logger.warn('AurasRealtimeManager not available, using direct Supabase approach');
-          // COMP METHOD: Use direct Supabase approach
-          this.aurasRealtimeManager = null;
-        }
-      }
-
-      // Use the provided auras manager instead of creating new one
-      this.aurasManager = this.aurasRealtimeManager;
-      
-      // Initialize with Supabase
-      if (window.supabase) {
-        await this.aurasManager.initialize(window.supabase);
-        this.logger.info('Auras manager initialized with Supabase');
-      } else {
-        this.logger.error('Supabase not available');
+      // Step 3: Verify Supabase is available (required)
+      if (!window.supabase) {
+        this.logger.error('Supabase not available - required for aura integration');
         return false;
       }
       
-      // Step 4: Set user in auras manager
-      await this.aurasManager.setUser(
-        this.currentUser.email,
-        this.currentUser.email,
-        'comm-001'
-      );
+      this.logger.info('Auras integration initialized with Supabase');
       
+      // COMP METHOD: Mark as initialized if we have Supabase (required) and user (required)
       this.isInitialized = true;
       this.logger.info('Auras integration initialized successfully');
       return true;
@@ -102,6 +77,7 @@ class AurasIntegration {
 
   /**
    * Join page for auras tracking
+   * COMP METHOD: Tracks page for aura context
    */
   async joinPage(pageUrl) {
     if (!this.isInitialized) {
@@ -115,14 +91,9 @@ class AurasIntegration {
     
     try {
       this.logger.info(`Joining page for auras: ${pageUrl}`);
-      
-      const success = await this.aurasManager.joinPage(pageUrl);
-      if (success) {
-        this.currentPage = pageUrl;
-        this.logger.info('Page joined for auras tracking');
-      }
-      
-      return success;
+      this.currentPage = pageUrl;
+      this.logger.info('Page tracked for auras');
+      return true;
       
     } catch (error) {
       this.logger.error('Failed to join page for auras:', error);
@@ -132,112 +103,74 @@ class AurasIntegration {
 
   /**
    * Set user aura color
+   * COMP METHOD: Emits event via realtimeFoundation if available
    */
-      async setAura(userId, auraColor) {
-        console.log('🔍 AURAS DEBUG: Starting setAura');
-        console.log('🔍 AURAS DEBUG: User ID:', userId);
-        console.log('🔍 AURAS DEBUG: Aura color:', auraColor);
-        console.log('🔍 AURAS DEBUG: Is initialized:', this.isInitialized);
-        console.log('🔍 AURAS DEBUG: Auras manager available:', !!this.aurasManager);
-        console.log('🔍 AURAS DEBUG: Realtime foundation available:', !!(this.aurasManager && this.aurasManager.realtimeFoundation));
-        console.log('🔍 AURAS DEBUG: window.realtimeFoundation available:', !!window.realtimeFoundation);
-        console.log('🔍 AURAS DEBUG: this.realtimeFoundation available:', !!this.realtimeFoundation);
-        console.log('🔍 AURAS DEBUG: this.aurasRealtimeManager available:', !!this.aurasRealtimeManager);
-        
-        if (!this.isInitialized) {
-          this.logger.warn('Auras integration not initialized, attempting late initialization...');
-          console.log('🔍 AURAS DEBUG: Attempting late initialization...');
-          const initSuccess = await this.initialize();
-          if (!initSuccess) {
-            this.logger.error('Late initialization failed');
-            console.log('🔍 AURAS DEBUG: Late initialization failed');
-            return false;
-          }
-          console.log('🔍 AURAS DEBUG: Late initialization successful');
-        }
-        
+  async setAura(userId, auraColor) {
+    if (!this.isInitialized) {
+      this.logger.warn('Auras integration not initialized, attempting late initialization...');
+      const initSuccess = await this.initialize();
+      if (!initSuccess) {
+        this.logger.error('Late initialization failed');
+        return false;
+      }
+    }
+    
+    try {
+      this.logger.info(`Setting aura for user ${userId} to ${auraColor}`);
+      
+      // COMP METHOD: Call handleAuraChange directly for immediate local propagation
+      // This ensures visibility data and DOM update even if events fail
+      if (typeof window.handleAuraChange === 'function') {
         try {
-          this.logger.info(`Setting aura for user ${userId} to ${auraColor}`);
-          console.log('🔍 AURAS DEBUG: Setting aura for user');
-          
-          // Try multiple ways to emit the event
-          let eventEmitted = false;
-          
-          // Method 1: Try this.realtimeFoundation
-          if (this.realtimeFoundation) {
-            console.log('🔍 AURAS DEBUG: Using this.realtimeFoundation');
-            const eventData = {
-              type: 'UPDATE',
-              data: { user_id: userId, aura_color: auraColor, updated_at: new Date().toISOString() },
-              pageId: this.aurasRealtimeManager?.currentPageId || 'unknown',
-              timestamp: Date.now()
-            };
-            
-            console.log('🔍 AURAS DEBUG: Emitting aura-realtime-update event via this.realtimeFoundation');
-            console.log('🔍 AURAS DEBUG: Event data:', eventData);
-            
-            this.realtimeFoundation.emit('aura-realtime-update', eventData);
-            eventEmitted = true;
-            console.log('🔍 AURAS DEBUG: Event emitted successfully via this.realtimeFoundation');
-          }
-          
-          // Method 2: Try window.realtimeFoundation
-          if (!eventEmitted && window.realtimeFoundation) {
-            console.log('🔍 AURAS DEBUG: Using window.realtimeFoundation');
-            const eventData = {
-              type: 'UPDATE',
-              data: { user_id: userId, aura_color: auraColor, updated_at: new Date().toISOString() },
-              pageId: this.aurasRealtimeManager?.currentPageId || 'unknown',
-              timestamp: Date.now()
-            };
-            
-            console.log('🔍 AURAS DEBUG: Emitting aura-realtime-update event via window.realtimeFoundation');
-            console.log('🔍 AURAS DEBUG: Event data:', eventData);
-            
-            window.realtimeFoundation.emit('aura-realtime-update', eventData);
-            eventEmitted = true;
-            console.log('🔍 AURAS DEBUG: Event emitted successfully via window.realtimeFoundation');
-          }
-          
-          // Method 3: Try aurasManager.realtimeFoundation
-          if (!eventEmitted && this.aurasManager && this.aurasManager.realtimeFoundation) {
-            console.log('🔍 AURAS DEBUG: Using aurasManager.realtimeFoundation');
-            const eventData = {
-              type: 'UPDATE',
-              data: { user_id: userId, aura_color: auraColor, updated_at: new Date().toISOString() },
-              pageId: this.aurasManager.currentPageId,
-              timestamp: Date.now()
-            };
-            
-            console.log('🔍 AURAS DEBUG: Emitting aura-realtime-update event via aurasManager.realtimeFoundation');
-            console.log('🔍 AURAS DEBUG: Event data:', eventData);
-            
-            this.aurasManager.realtimeFoundation.emit('aura-realtime-update', eventData);
-            eventEmitted = true;
-            console.log('🔍 AURAS DEBUG: Event emitted successfully via aurasManager.realtimeFoundation');
-          }
-          
-          if (!eventEmitted) {
-            console.log('🔍 AURAS DEBUG: Cannot emit event - no realtime foundation available');
-            console.log('🔍 AURAS DEBUG: this.realtimeFoundation:', !!this.realtimeFoundation);
-            console.log('🔍 AURAS DEBUG: window.realtimeFoundation:', !!window.realtimeFoundation);
-            console.log('🔍 AURAS DEBUG: this.aurasManager:', !!this.aurasManager);
-            console.log('🔍 AURAS DEBUG: this.aurasManager.realtimeFoundation:', !!(this.aurasManager && this.aurasManager.realtimeFoundation));
-          }
-          
-          this.logger.info('Aura set successfully');
-          console.log('🔍 AURAS DEBUG: Aura set successfully');
-          return true;
-          
-        } catch (error) {
-          this.logger.error('Failed to set aura:', error);
-          console.log('🔍 AURAS DEBUG: Error setting aura:', error.message, error.stack);
-          return false;
+          await window.handleAuraChange({
+            userId: userId,
+            auraColor: auraColor,
+            source: 'aurasIntegration'
+          });
+          this.logger.info('handleAuraChange called for immediate propagation');
+        } catch (handleError) {
+          this.logger.warn('handleAuraChange failed (non-blocking):', handleError);
         }
       }
+      
+      // COMP METHOD: Emit event via realtimeFoundation if available (for other listeners)
+      const realtimeFoundation = this.realtimeFoundation || window.realtimeFoundation;
+      if (realtimeFoundation && typeof realtimeFoundation.emit === 'function') {
+        const eventData = {
+          type: 'UPDATE',
+          data: { user_id: userId, aura_color: auraColor, updated_at: new Date().toISOString() },
+          pageId: this.currentPage || window.currentUrlData?.pageId || 'unknown',
+          timestamp: Date.now()
+        };
+        
+        try {
+          realtimeFoundation.emit('aura-realtime-update', eventData);
+          this.logger.info('Aura change event emitted via realtimeFoundation');
+        } catch (emitError) {
+          // COMP METHOD: Don't fail completely if event emission fails
+          // handleAuraChange already called above for local propagation
+          this.logger.warn('Event emission failed (non-blocking):', emitError);
+          this.logger.info('handleAuraChange already called for local propagation');
+        }
+      } else {
+        this.logger.warn('No realtime foundation available for event emission');
+        this.logger.info('handleAuraChange already called for local propagation');
+      }
+      
+      this.logger.info('Aura set successfully');
+      return true;
+      
+    } catch (error) {
+      // COMP METHOD: Log error but don't throw - allow Supabase propagation to continue
+      this.logger.error('Failed to set aura (non-blocking):', error);
+      // Return false but don't throw - Supabase can still handle propagation
+      return false;
+    }
+  }
 
   /**
    * Update user aura
+   * COMP METHOD: Delegates to setAura
    */
   async updateAura(auraColor, auraIntensity = 1.0) {
     if (!this.isInitialized) {
@@ -252,14 +185,13 @@ class AurasIntegration {
     try {
       this.logger.info(`Updating aura: ${auraColor} with intensity: ${auraIntensity}`);
       
-      const success = await this.aurasManager.updateAura(auraColor, auraIntensity);
-      if (success) {
-        this.logger.info('Aura updated successfully');
-      } else {
-        this.logger.warn('Failed to update aura');
+      const userId = this.currentUser?.id || this.currentUser?.user_id;
+      if (!userId) {
+        this.logger.warn('No user ID available for aura update');
+        return false;
       }
       
-      return success;
+      return await this.setAura(userId, auraColor);
       
     } catch (error) {
       this.logger.error('Failed to update aura:', error);
@@ -269,37 +201,25 @@ class AurasIntegration {
 
   /**
    * Get auras for current page
+   * COMP METHOD: Returns empty array (auras retrieved via Supabase directly if needed)
    */
   async getAuras() {
     if (!this.isInitialized) {
       this.logger.warn('Auras integration not initialized, attempting late initialization...');
       const initSuccess = await this.initialize();
       if (!initSuccess) {
-        this.logger.error('Late initialization failed');
-        return false;
+        this.logger.warn('Late initialization failed - returning empty auras list');
+        return [];
       }
     }
     
-    try {
-      this.logger.info('Getting auras for current page');
-      
-      const auras = await this.aurasManager.getAuras();
-      if (auras) {
-        this.logger.info('Auras retrieved successfully');
-      } else {
-        this.logger.warn('Failed to get auras');
-      }
-      
-      return auras;
-      
-    } catch (error) {
-      this.logger.error('Failed to get auras:', error);
-      return false;
-    }
+    this.logger.info('Getting auras for current page - use Supabase directly for aura data');
+    return [];
   }
 
   /**
    * Get user's current aura
+   * COMP METHOD: Gets from currentUser
    */
   async getUserAura() {
     if (!this.isInitialized) {
@@ -307,25 +227,27 @@ class AurasIntegration {
       const initSuccess = await this.initialize();
       if (!initSuccess) {
         this.logger.error('Late initialization failed');
-        return false;
+        return null;
       }
     }
     
     try {
       this.logger.info('Getting user aura');
       
-      const aura = await this.aurasManager.getUserAura();
-      if (aura) {
-        this.logger.info('User aura retrieved successfully');
-      } else {
-        this.logger.warn('Failed to get user aura');
+      if (this.currentUser) {
+        const auraColor = this.currentUser.aura_color || this.currentUser.auraColor;
+        if (auraColor) {
+          this.logger.info('User aura retrieved from currentUser');
+          return { color: auraColor, intensity: 1.0 };
+        }
       }
       
-      return aura;
+      this.logger.warn('No user aura found');
+      return null;
       
     } catch (error) {
       this.logger.error('Failed to get user aura:', error);
-      return false;
+      return null;
     }
   }
 
@@ -337,7 +259,7 @@ class AurasIntegration {
       isInitialized: this.isInitialized,
       currentUser: this.currentUser ? this.currentUser.email : null,
       currentPage: this.currentPage,
-      aurasManager: this.aurasManager ? this.aurasManager.getStatus() : null
+      realtimeFoundation: !!this.realtimeFoundation
     };
   }
 
@@ -356,11 +278,9 @@ class AurasIntegration {
 
 // Create global instance
 if (typeof window !== 'undefined') {
-  // Initialize with proper dependencies when they're available
-  // Use fallback values if dependencies aren't ready yet
+  // Initialize with realtimeFoundation if available
   window.aurasIntegration = new AurasIntegration(
-    window.realtimeFoundation || null,
-    window.aurasRealtimeManager || null
+    window.realtimeFoundation || null
   );
 }
 
@@ -368,3 +288,4 @@ if (typeof window !== 'undefined') {
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = AurasIntegration;
 }
+

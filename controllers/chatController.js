@@ -5,12 +5,19 @@ const prisma = new PrismaClient();
 exports.postMessage = async (req, res) => {
   try {
     const { user_id, communityId, content, uri, parentId, threadId, optionalContent } = req.body;
-    if (!user_id || !communityId || !content) {
-      return res.status(400).json({ error: 'user_id, communityId & content are required' });
+    if (!user_id || !content) {
+      return res.status(400).json({ error: 'user_id & content are required' });
     }
+    
+    // CRITICAL FIX: Default to comm-001 (Public Square) if communityId not provided
+    // This matches the database schema default and ensures messages are always assigned to a community
+    const resolvedCommunityId = communityId || 'comm-001';
 
-    console.log(`✅ CHAT: Creating message for user ${user_id} in community ${communityId} on URI ${uri}`);
+    console.log(`✅ CHAT: Creating message for user ${user_id} in community ${resolvedCommunityId} on URI ${uri}`);
     console.log(`🔍 CHAT_CREATE: Message content: "${content}"`);
+    if (!communityId) {
+      console.log(`🔍 CHAT_CREATE: No communityId provided, defaulting to comm-001 (Public Square)`);
+    }
 
     // Look up user by email to get database user ID
     const user = await prisma.appUser.findUnique({
@@ -27,7 +34,7 @@ exports.postMessage = async (req, res) => {
 
     // Generate unique IDs
     const postId = `post-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    const conversationId = `conv-${communityId}-${uri || 'general'}`;
+    const conversationId = `conv-${resolvedCommunityId}-${uri || 'general'}`;
     
     // Normalize the URI to get pageId
     const UrlNormalizationService = require('../services/urlNormalizationService');
@@ -58,7 +65,7 @@ exports.postMessage = async (req, res) => {
         pageId: pageId,
         visibility: 'PUBLIC',
         createdById: userId,
-        communityId: communityId
+        communityId: resolvedCommunityId
       }
     });
     console.log(`🔍 CHAT_CREATE: Conversation upserted with ID: ${conversationId}`);

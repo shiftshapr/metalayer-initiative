@@ -1,0 +1,1468 @@
+[
+  {
+    "title": "COMP Method Adherence Requirement",
+    "summary": "Modular architecture must strictly adhere to COMP method. All authentication, presence tracking, and UI display must use exact same functions and calls as COMP, with deviations only for modularization purposes.",
+    "tags": ["policy", "red-lines", "project", "canopi", "architecture"]
+  },
+  {
+    "title": "Sidepanel Orchestration-Only Architecture",
+    "summary": "Sidepanel must be minimal and orchestration-only. It should not contain business logic, only coordinate module initialization and communication.",
+    "tags": ["policy", "architecture", "project", "canopi"]
+  },
+  {
+    "title": "File Removal Protocol",
+    "summary": "Before deleting files, must verify they are not loaded by the codebase. Check all script tags, imports, and references to prevent breaking the extension.",
+    "tags": ["workflow", "policy", "fix"]
+  },
+  {
+    "title": "Logger Removal Mandate",
+    "summary": "Logger utility must be completely removed and replaced with console.log throughout the codebase. No Logger imports or calls should remain.",
+    "tags": ["policy", "fix", "learning"]
+  },
+  {
+    "title": "StateManager Replaces chrome.storage.local",
+    "summary": "All chrome.storage.local usage must be replaced with StateManager. Use getState() and setState() functions. StateManager is the single source of truth for application state.",
+    "tags": ["policy", "architecture", "system", "setup"]
+  },
+  {
+    "title": "Authentication Architecture Using authManager",
+    "summary": "Authentication must use authManager object (from COMP). Use window.currentUser and authManager.getCurrentUser() instead of chrome.storage.local. AuthManager, AuthModule, and realGoogleAuth work together.",
+    "tags": ["architecture", "setup", "workflow", "project", "canopi"]
+  },
+  {
+    "title": "Chrome Profile Authentication Method",
+    "summary": "Use chrome.identity.getAuthToken() to obtain OAuth token, then fetch user info from Google OAuth2 UserInfo API (https://www.googleapis.com/oauth2/v2/userinfo). Do not use chrome.identity.getProfileUserInfo() for profile pictures.",
+    "tags": ["learning", "fix", "workflow", "project", "canopi"]
+  },
+  {
+    "title": "Avatar Retrieval Source - StateManager.supabaseSession.user.picture",
+    "summary": "Profile avatar must be retrieved from StateManager.supabaseSession.user.picture (or StateManager.supabaseUser.picture). This is the correct location where Google profile picture URL is stored after OAuth authentication.",
+    "tags": ["learning", "fix", "workflow", "project", "canopi"]
+  },
+  {
+    "title": "No Gravatar Images Policy",
+    "summary": "User explicitly does not want Gravatar images. Must use actual Google profile pictures associated with Chrome profile. Gravatar fallback is not acceptable for authenticated users.",
+    "tags": ["policy", "preferences", "red-lines", "project", "canopi"]
+  },
+  {
+    "title": "No Hardcoding Policy for SD1 SD2 SD4",
+    "summary": "SD1, SD2, and SD4 agents must never hardcode values unless explicitly given permission by user. All values must be dynamically retrieved from appropriate sources.",
+    "tags": ["policy", "red-lines", "agent"]
+  },
+  {
+    "title": "Agent Specializations - TA1 SD2 SD3 SD4",
+    "summary": "TA1 specializes in testing modular architecture COMP compliance. SD2 fixes deviations from COMP by mimicking COMP method exactly. SD3 handles cleanup (unused files, obsolete docs). SD4 advocates for architecture. Each agent has distinct role.",
+    "tags": ["agent", "workflow", "orchestration"]
+  },
+  {
+    "title": "Global Function Exposure Requirement",
+    "summary": "All key functions in modules must be globally exposed via window object. Functions like window.getState, window.setState, window.currentUser, window.authManager must be available for cross-module communication.",
+    "tags": ["policy", "architecture", "setup"]
+  },
+  {
+    "title": "Syntax Error Prevention Protocol",
+    "summary": "Must proactively catch syntax errors before they break functionality. Implement syntax validation and testing. Runtime testing (TA1) should catch dynamic errors during execution.",
+    "tags": ["policy", "workflow", "learning", "fix"]
+  },
+  {
+    "title": "Module Loading Order Critical",
+    "summary": "Module loading order is critical. AuthManager must initialize before AuthModule. StateManager must be available before modules try to use getState/setState. Dependencies must load in correct sequence.",
+    "tags": ["workflow", "setup", "learning"]
+  },
+  {
+    "title": "User Identity Isolation Requirement",
+    "summary": "Prevent user data confusion. Ensure authenticated user (e.g., daveroom@gmail.com) does not see another user's data (e.g., themetalayer@gmail.com). Prioritize window.currentUser in API calls and data retrieval.",
+    "tags": ["policy", "red-lines", "learning", "fix"]
+  },
+  {
+    "title": "UI State Synchronization",
+    "summary": "UI must reflect backend auth status. Sign In Required modal should only appear when user is actually not authenticated. UI state must sync with StateManager and authentication state.",
+    "tags": ["workflow", "learning", "fix"]
+  },
+  {
+    "title": "Presence Tracking Single Source of Truth",
+    "summary": "Presence tracking must use Supabase as single source of truth. Removed heartbeat-related code and UnifiedPresenceManager as deviations from COMP. Use pure Supabase Realtime approach only.",
+    "tags": ["policy", "architecture", "fix", "project", "canopi"]
+  },
+  {
+    "title": "Database Architecture - Supabase Only",
+    "summary": "Dual database writes (Prisma + Supabase) identified as anti-pattern. Removed. Use Supabase for presence and real-time. Backend services/presenceService.js should only upsert to Supabase.",
+    "tags": ["policy", "architecture", "fix", "project", "canopi"]
+  },
+  {
+    "title": "Error Resolution Pattern Recognition",
+    "summary": "User requested pattern recognition for recurring errors. When similar errors appear, identify pattern and fix all instances systematically rather than one-by-one.",
+    "tags": ["workflow", "learning", "blindspot"]
+  },
+  {
+    "title": "SD2 Prevention Plan for Repeated Mistakes",
+    "summary": "SD2 must always verify COMP method before implementing. Respond immediately to user feedback. Prove approaches before implementing. Avoid repeated failures on same issues (e.g., avatar retrieval).",
+    "tags": ["agent", "learning", "blindspot", "fix"]
+  },
+  {
+    "title": "Console Logging Diagnostic Strategy",
+    "summary": "When debugging issues, add extensive logging. User explicitly requests 'more logging' and diagnostic code blocks when problems persist. Logs help identify timing issues and data flow problems.",
+    "tags": ["workflow", "learning", "log"]
+  },
+  {
+    "title": "setStateMultiple and getStateMultiple Removal",
+    "summary": "setStateMultiple and getStateMultiple functions removed. Replace all calls with individual setState() and getState() calls. These functions do not exist in StateManager.",
+    "tags": ["fix", "learning", "workflow"]
+  },
+  {
+    "title": "Background.js and Content.js Must Stay",
+    "summary": "background.js and content.js must always remain in Chrome extension. They are core Chrome extension files and cannot be removed or replaced.",
+    "tags": ["policy", "red-lines", "architecture"]
+  },
+  {
+    "title": "Community Membership Auto-Registration",
+    "summary": "New users should be automatically registered to public communities (comm-001, comm-002). Backend communitiesController must include new users in userMemberships and set default owner/admin.",
+    "tags": ["workflow", "fix", "project", "canopi"]
+  },
+  {
+    "title": "Auras Integration Initialization",
+    "summary": "AurasIntegration must be initialized within RealtimeManager.initialize(). Error 'Auras integration not initialized' indicates missing AurasIntegration.initialize() call.",
+    "tags": ["fix", "workflow", "setup"]
+  },
+  {
+    "title": "Chrome Extension API Availability Check",
+    "summary": "Before using Chrome APIs, check if typeof chrome !== 'undefined' and chrome.identity, chrome.identity.getAuthToken are available. Handle cases where Chrome extension context is not available.",
+    "tags": ["learning", "fix", "workflow"]
+  },
+  {
+    "title": "Database Schema Field Names",
+    "summary": "Use correct field names: user_email (not author_id) in messages table. user_presence table uses is_active boolean, not kind column. Verify schema before writing queries.",
+    "tags": ["learning", "fix", "project", "canopi"]
+  },
+  {
+    "title": "Content Security Policy Restriction",
+    "summary": "Cannot use eval() due to CSP. Diagnostic scripts must avoid unsafe-eval. Use alternative approaches for dynamic code evaluation.",
+    "tags": ["learning", "fix", "security"]
+  },
+  {
+    "title": "Profile Avatar Display Issue Pattern",
+    "summary": "Repeated issue: Avatar displays Gravatar identicon instead of actual Google profile picture. Root cause: Retrieving from wrong source or timing issue (StateManager not yet populated). Solution: Use StateManager.supabaseSession.user.picture after authentication completes.",
+    "tags": ["blindspot", "learning", "fix", "project", "canopi"]
+  },
+  {
+    "title": "Real-Time Subscription Management",
+    "summary": "Supabase real-time subscriptions must be properly initialized and managed. Check subscriptions using window.supabaseRealtimeClient or window.supabase. Ensure proper cleanup on page navigation.",
+    "tags": ["workflow", "learning", "fix"]
+  },
+  {
+    "title": "API Module Endpoint Redirection",
+    "summary": "APIModule.js handles all API redirection logic. MetaLayerAPI class manages endpoint routing. Maintains modular architecture while providing same functionality as COMP.",
+    "tags": ["architecture", "project", "canopi"]
+  },
+  {
+    "title": "Initialization Flag to Prevent Multiple Initializations",
+    "summary": "Use StateManager flag (extension.isInitialized) to prevent multiple initializations. Check flag before initializing complete modern architecture.",
+    "tags": ["learning", "fix", "workflow"]
+  },
+  {
+    "title": "Window Declarations for Critical Objects",
+    "summary": "All critical window objects must be declared: window.getState, window.setState, window.currentUser, window.authManager, window.uiManager, window.supabase, window.supabaseRealtimeClient, etc.",
+    "tags": ["policy", "setup", "architecture"]
+  },
+  {
+    "title": "Authentication Timing and StateManager Population",
+    "summary": "Authentication must complete before StateManager is populated with supabaseUser/supabaseSession. Check timing when retrieving user data - StateManager may not be ready immediately after authentication starts.",
+    "tags": ["learning", "blindspot", "workflow"]
+  },
+  {
+    "title": "Module Consolidation Strategy",
+    "summary": "When modules overlap (e.g., auth-manager.js and AuthManager.js), consolidate rather than maintaining duplicates. Verify which module is actually used before removal.",
+    "tags": ["workflow", "learning", "architecture"]
+  },
+  {
+    "title": "Chrome Identity API Parameter Format",
+    "summary": "chrome.identity.getProfileUserInfo now requires object parameter { accountStatus: 'ANY' } instead of direct callback, as per COMP. However, prefer getAuthToken + OAuth API for profile pictures.",
+    "tags": ["learning", "fix", "workflow"]
+  },
+  {
+    "title": "Community Owner and Admin Filtering",
+    "summary": "Frontend CommunitiesModule should filter out owner and admins fields from API responses if they cause user confusion. Display only membership-relevant data.",
+    "tags": ["fix", "learning", "project", "canopi"]
+  },
+  {
+    "title": "Message Persistence and Real-Time Updates",
+    "summary": "Messages must persist to database and appear in real-time. Ensure both Supabase inserts and real-time subscriptions are working. Messages should display immediately after creation.",
+    "tags": ["workflow", "learning", "fix", "project", "canopi"]
+  },
+  {
+    "title": "Domain Routing for Backend Services",
+    "summary": "Backend domain routing should handle traffic to correct service. Frontend configured for specific ports/domains, but domain routing expected to handle it transparently.",
+    "tags": ["architecture", "learning", "project", "canopi"]
+  },
+  {
+    "title": "Extension Build Version Management",
+    "summary": "Use consistent version identifiers. Replace EXTENSION_BUILD references with 'v1.0' or similar. StateManager tracks extension.build as '2025-01-24-010'.",
+    "tags": ["learning", "fix", "workflow"]
+  },
+  {
+    "title": "Error Message Context for Debugging",
+    "summary": "Error messages should include context: function name, module, relevant state. Helpful format: '❌ MODULE: Error description' with relevant variable values logged.",
+    "tags": ["workflow", "learning", "log"]
+  },
+  {
+    "title": "Chrome Profile Picture vs OAuth Profile Picture",
+    "summary": "chrome.identity.getProfileUserInfo() does not provide actual Google profile picture. Must use chrome.identity.getAuthToken() + Google OAuth2 UserInfo API to get real profile picture URL.",
+    "tags": ["learning", "fix", "blindspot", "project", "canopi"]
+  },
+  {
+    "title": "StateManager Persistence Loading",
+    "summary": "StateManager.loadPersistedState() retrieves state from chrome.storage.local. If StateManager methods unavailable, use internal this.getState/this.setState, not window.getState.",
+    "tags": ["learning", "fix", "workflow"]
+  },
+  {
+    "title": "Supabase Session vs User Object",
+    "summary": "supabaseSession contains { user: {...} } structure. supabaseUser contains direct user object. Both stored in StateManager. Use appropriate one based on context (session.user.picture vs user.picture).",
+    "tags": ["learning", "workflow", "project", "canopi"]
+  },
+  {
+    "title": "Avatar URL Assignment Timing Issue",
+    "summary": "window.currentUser.avatarUrl must be assigned after StateManager is populated, not before. Check if storedUser exists and has picture property before assigning. Log extensively to diagnose timing issues.",
+    "tags": ["blindspot", "learning", "fix", "project", "canopi"]
+  },
+  {
+    "title": "Google OAuth Token Scope",
+    "summary": "chrome.identity.getAuthToken() provides OAuth token for Google APIs. Token can access https://www.googleapis.com/oauth2/v2/userinfo endpoint to retrieve user profile including picture URL.",
+    "tags": ["learning", "workflow", "project", "canopi"]
+  },
+  {
+    "title": "Fallback Avatar Color Configuration",
+    "summary": "AVATAR_FALLBACK_COLOR constant used for user avatar background color. Can be customized. Stored in StateManager as userAvatarBgColor.",
+    "tags": ["setup", "workflow", "project", "canopi"]
+  },
+  {
+    "title": "Extension Reload and State Persistence",
+    "summary": "Extension reload should preserve state via StateManager persistence. StateManager tracks extension.reloadTimestamp and extension.isInitialized flags.",
+    "tags": ["workflow", "setup", "system"]
+  },
+  {
+    "title": "Diagnostic Code Block Requests",
+    "summary": "When debugging fails, user requests executable console code blocks to manually diagnose issues. Provide JavaScript code that can be pasted into browser console to inspect state.",
+    "tags": ["workflow", "preferences", "log"]
+  },
+  {
+    "title": "Module Availability Check Pattern",
+    "summary": "Before using modules, check if typeof ModuleName !== 'undefined'. If not available, wait or create fallback. Use polling with setTimeout to wait for module availability.",
+    "tags": ["learning", "workflow", "fix"]
+  },
+  {
+    "title": "Hardcoded Value Detection Pattern",
+    "summary": "User explicitly identifies hardcoded values as problems (e.g., hardcoded Google avatar URL for themetalayer). All hardcoded values should be removed unless explicitly approved.",
+    "tags": ["blindspot", "learning", "policy", "red-lines"]
+  },
+  {
+    "title": "COMP Method Verification Before Implementation",
+    "summary": "SD2 must verify exact COMP method before implementing fixes. Grep COMP file, compare function calls, ensure exact method replication. Do not assume - prove with code comparison.",
+    "tags": ["agent", "policy", "workflow", "learning"]
+  },
+  {
+    "title": "User Frustration Signals and Immediate Response",
+    "summary": "When user expresses frustration (e.g., 'WTF', 'This is fucking ridiculous'), immediately analyze logs and provide clear diagnostic path. Do not repeat same failed approach.",
+    "tags": ["agent", "preferences", "workflow"]
+  },
+  {
+    "title": "Avatar Display Issue Root Cause Analysis",
+    "summary": "Avatar issue root cause: StateManager retrieval timing (getState called before StateManager populated) OR wrong source (Gravatar instead of StateManager.supabaseSession.user.picture). Verify StateManager contains correct data before using fallback.",
+    "tags": ["blindspot", "learning", "fix", "project", "canopi"]
+  },
+  {
+    "title": "Chrome Extension Manifest Permissions",
+    "summary": "Chrome extension requires identity permission in manifest.json for chrome.identity.getAuthToken() and chrome.identity.getProfileUserInfo() to work. Verify permissions are present.",
+    "tags": ["setup", "learning", "workflow"]
+  },
+  {
+    "title": "Async/Await Error Handling",
+    "summary": "Syntax errors from await in non-async functions. Use promise-based approach or ensure function is async. Catch syntax errors proactively with validation.",
+    "tags": ["learning", "fix", "workflow"]
+  },
+  {
+    "title": "Supabase Realtime Client Methods",
+    "summary": "SupabaseRealtimeClient must implement setCurrentUser, joinPage, deleteMessage, editMessage methods. Create proper SupabaseRealtimeClient wrapper if methods missing.",
+    "tags": ["learning", "fix", "workflow", "project", "canopi"]
+  },
+  {
+    "title": "Error Stack Trace Analysis",
+    "summary": "Use error stack traces to identify failing modules. Trace leads to source file (e.g., UIManager.js:375 for createAuthPromptModal). Fix at source, not symptoms.",
+    "tags": ["workflow", "learning", "log"]
+  },
+  {
+    "title": "Notification History Manager Null Check",
+    "summary": "Check if window.notificationHistory exists before calling methods. Add null checks: if (window.notificationHistory) { window.notificationHistory.addNotification(...) }.",
+    "tags": ["learning", "fix", "workflow"]
+  },
+  {
+    "title": "Event Listener Setup Timing",
+    "summary": "Event listeners must be set up after DOM is ready. Check if document.body is available before creating modals or attaching listeners. Defer if necessary.",
+    "tags": ["learning", "workflow", "fix"]
+  },
+  {
+    "title": "Module Script Loading Order in HTML",
+    "summary": "Script tag order in sidepanel.html determines module availability. Load dependencies before modules that use them. Verify all required modules are included in HTML.",
+    "tags": ["workflow", "setup", "learning"]
+  },
+  {
+    "title": "StateManager Internal Method Usage",
+    "summary": "Inside StateManager class, use this.getState() and this.setState(), not window.getState(). External calls use window.getState(). Avoid circular dependencies.",
+    "tags": ["learning", "fix", "architecture"]
+  },
+  {
+    "title": "Profile Picture URL Format Validation",
+    "summary": "Google profile picture URLs follow pattern https://lh3.googleusercontent.com/... or similar. Gravatar URLs follow pattern https://www.gravatar.com/avatar/.... Validate URL format when debugging avatar issues.",
+    "tags": ["learning", "workflow", "log"]
+  },
+  {
+    "title": "Authentication State Caching Issues",
+    "summary": "Auth state caching can cause inconsistent authentication. Remove auth state caching in AuthModule. Simplify getCurrentUserEmail() to always check current state, not cached values.",
+    "tags": ["learning", "fix", "workflow"]
+  },
+  {
+    "title": "Community Loading After Authentication",
+    "summary": "Communities must load after authentication completes. Move communities loading after auth in sidepanel.js initialization sequence. Prevents showing wrong user's communities.",
+    "tags": ["learning", "fix", "workflow", "project", "canopi"]
+  },
+  {
+    "title": "API Module Current User Prioritization",
+    "summary": "APIModule.js must prioritize window.currentUser when making API calls. Include correct user email in requests to prevent returning wrong user's data.",
+    "tags": ["learning", "fix", "workflow", "project", "canopi"]
+  },
+  {
+    "title": "Presence Tracking Initialization Sequence",
+    "summary": "startPresenceTracking must be called after authentication completes in sidepanel.js. Ensure window.currentUser is set before starting presence tracking.",
+    "tags": ["learning", "fix", "workflow", "project", "canopi"]
+  },
+  {
+    "title": "Database Trigger Removal",
+    "summary": "SQL triggers for presence (e.g., create-presence-triggers.sql) removed as deviation from COMP. Use Supabase Realtime subscriptions instead of database triggers.",
+    "tags": ["policy", "fix", "architecture", "project", "canopi"]
+  },
+  {
+    "title": "UnifiedPresenceManager Removal",
+    "summary": "UnifiedPresenceManager.js removed as deviation from COMP. Use Supabase Realtime directly for presence tracking. Single source of truth in Supabase.",
+    "tags": ["policy", "fix", "architecture", "project", "canopi"]
+  },
+  {
+    "title": "Heartbeat Enum and Code Removal",
+    "summary": "All heartbeat-related code removed: HEARTBEAT enum entries, heartbeat intervals, heartbeat tracking. Deviation from COMP. Use Supabase Realtime for presence, no periodic heartbeats.",
+    "tags": ["policy", "fix", "architecture", "project", "canopi"]
+  },
+  {
+    "title": "Backend Hardcoded Data Issue",
+    "summary": "Backend was using hardcoded community data instead of database. Fixed by updating communitiesController to use actual database queries and include userMemberships properly.",
+    "tags": ["learning", "fix", "project", "canopi"]
+  },
+  {
+    "title": "Database Schema Verification Method",
+    "summary": "Use SQL queries to verify schema: SELECT column_name FROM information_schema.columns WHERE table_name = 'user_presence'. \\d command is psql-specific, not available in all contexts.",
+    "tags": ["learning", "workflow", "log"]
+  },
+  {
+    "title": "Content Security Policy and Unsafe Eval",
+    "summary": "CSP prevents eval() and similar unsafe operations. Diagnostic scripts must avoid eval(). Use alternative approaches for dynamic code execution.",
+    "tags": ["learning", "security", "workflow"]
+  },
+  {
+    "title": "Extension Build Timestamp Tracking",
+    "summary": "Extension tracks reload timestamp in StateManager as extension.reloadTimestamp. Useful for debugging initialization issues and state persistence.",
+    "tags": ["setup", "log", "system"]
+  },
+  {
+    "title": "Module Initialization Promise Handling",
+    "summary": "Module initialization must return Promise or handle promise chain correctly. Check if module.initialize() returns Promise before calling .then(). Add fallback if undefined.",
+    "tags": ["learning", "fix", "workflow"]
+  },
+  {
+    "title": "Google OAuth UserInfo API Response Structure",
+    "summary": "Google OAuth2 UserInfo API returns: { email, given_name, name, picture, id }. Use picture field for avatar URL. Store in StateManager as supabaseUser.picture.",
+    "tags": ["learning", "workflow", "project", "canopi"]
+  },
+  {
+    "title": "Chrome Identity Last Error Checking",
+    "summary": "Always check chrome.runtime.lastError after chrome.identity API calls. If present, handle error appropriately. Do not proceed if lastError exists.",
+    "tags": ["learning", "fix", "workflow"]
+  },
+  {
+    "title": "StateManager Subscriber Pattern",
+    "summary": "StateManager supports subscribers for reactive updates. Use subscribe() method to listen for state changes. Useful for UI updates when state changes.",
+    "tags": ["architecture", "workflow", "project", "canopi"]
+  },
+  {
+    "title": "Profile Avatar URL Logging",
+    "summary": "Log avatar URL at key points: StateManager storage, window.currentUser assignment, UI rendering. Helps diagnose where correct URL is lost or overwritten.",
+    "tags": ["workflow", "log", "learning"]
+  },
+  {
+    "title": "Extension Initialization Flag Management",
+    "summary": "Use StateManager.setState('extension.isInitialized', true) to mark initialization complete. Check flag before re-initializing to prevent duplicate initialization.",
+    "tags": ["workflow", "setup", "system"]
+  },
+  {
+    "title": "Chrome Identity Interactive Auth",
+    "summary": "chrome.identity.getAuthToken({ interactive: true }) prompts user for authentication if not already authenticated. Use interactive: true for initial auth, false for subsequent checks.",
+    "tags": ["learning", "workflow", "project", "canopi"]
+  },
+  {
+    "title": "User Metadata Structure in StateManager",
+    "summary": "Supabase user stored with structure: { email, name, picture, user_metadata: { full_name, avatar_url }, provider, id }. Access picture from user.picture or user.user_metadata.avatar_url.",
+    "tags": ["learning", "workflow", "project", "canopi"]
+  },
+  {
+    "title": "Gravatar Hash Generation",
+    "summary": "Gravatar URLs use MD5 hash of lowercase email: getGravatarHash(email). Do not use for authenticated users - use actual Google profile picture instead.",
+    "tags": ["learning", "workflow", "project", "canopi"]
+  },
+  {
+    "title": "Extension Reload State Preservation",
+    "summary": "On extension reload, StateManager.loadPersistedState() restores state from chrome.storage.local. Ensures continuity across reloads.",
+    "tags": ["workflow", "setup", "system"]
+  },
+  {
+    "title": "Module Export and Global Exposure",
+    "summary": "Modules must export classes/functions AND expose them globally via window object. Example: window.authManager = authManager; window.getState = getState; etc.",
+    "tags": ["policy", "architecture", "setup"]
+  },
+  {
+    "title": "Real-Time Subscription Error Handling",
+    "summary": "Supabase real-time subscriptions can fail. Handle errors gracefully, log subscription status, and provide fallback behavior if subscriptions unavailable.",
+    "tags": ["learning", "workflow", "fix", "project", "canopi"]
+  },
+  {
+    "title": "Chrome Extension Context Availability",
+    "summary": "Chrome extension APIs only available in extension context (background, content, popup, sidepanel). Check typeof chrome !== 'undefined' before using Chrome APIs.",
+    "tags": ["learning", "workflow", "fix"]
+  },
+  {
+    "title": "StateManager History for Debugging",
+    "summary": "StateManager maintains history of state changes (maxHistorySize: 100). Useful for debugging state transitions and identifying when state was corrupted.",
+    "tags": ["log", "workflow", "system"]
+  },
+  {
+    "title": "Avatar Fallback Chain",
+    "summary": "Avatar retrieval priority: 1) StateManager.supabaseSession.user.picture, 2) StateManager.supabaseUser.picture, 3) realGoogleAuth.getCurrentUser().picture. Do not use Gravatar fallback for authenticated users.",
+    "tags": ["workflow", "learning", "project", "canopi"]
+  },
+  {
+    "title": "Extension Build Version String",
+    "summary": "Use consistent version format. StateManager tracks as '2025-01-24-010'. Replace EXTENSION_BUILD with 'v1.0' or similar string constant.",
+    "tags": ["setup", "workflow", "system"]
+  },
+  {
+    "title": "User Email Normalization",
+    "summary": "Normalize user emails to lowercase for consistent comparison and Gravatar hash generation. Use email.toLowerCase() before storing or comparing.",
+    "tags": ["learning", "workflow", "fix"]
+  },
+  {
+    "title": "Module Dependency Graph",
+    "summary": "Understand module dependencies: StateManager -> AuthManager -> AuthModule -> realGoogleAuth -> Supabase. Load in dependency order to prevent undefined reference errors.",
+    "tags": ["workflow", "setup", "architecture"]
+  },
+  {
+    "title": "Chrome Storage Local Migration Complete",
+    "summary": "Migration from chrome.storage.local to StateManager is complete. All code should use StateManager (getState/setState). No chrome.storage.local calls should remain.",
+    "tags": ["learning", "fix", "system"]
+  },
+  {
+    "title": "Profile Picture URL Size Parameter",
+    "summary": "Google profile picture URLs can include size parameter (e.g., =s96-c for 96px). Avatar URLs may have size parameters that affect image quality. Use appropriate size for UI display.",
+    "tags": ["learning", "workflow", "project", "canopi"]
+  },
+  {
+    "title": "Extension Context vs Web Context",
+    "summary": "Extension runs in multiple contexts: background (service worker), content (injected), sidepanel (extension page). Each context has different API availability. Code accordingly.",
+    "tags": ["learning", "architecture", "workflow"]
+  },
+  {
+    "title": "StateManager State Structure",
+    "summary": "StateManager uses nested structure: chat, avatars, ui, sync, api, extension. Access via dot notation: getState('ui.activeCommunities') or direct: getState('activeCommunities') if flat key exists.",
+    "tags": ["learning", "architecture", "workflow"]
+  },
+  {
+    "title": "Authentication Token Expiration",
+    "summary": "OAuth tokens can expire. Handle token refresh if needed. Chrome identity API handles token management, but be aware of expiration for API calls.",
+    "tags": ["learning", "workflow", "project", "canopi"]
+  },
+  {
+    "title": "Profile Picture Caching Issues",
+    "summary": "Browser may cache avatar images. If correct URL is set but wrong image displays, clear browser cache or add cache-busting parameter to URL.",
+    "tags": ["learning", "workflow", "fix"]
+  },
+  {
+    "title": "StateManager Persistence Strategy",
+    "summary": "StateManager persists critical state to chrome.storage.local on setState calls with persist flag. Load persisted state on initialization. Balance between persistence and performance.",
+    "tags": ["architecture", "workflow", "system"]
+  },
+  {
+    "title": "Module Class vs Instance Pattern",
+    "summary": "Some modules export classes (AuthManager, StateManager) requiring instantiation. Others export functions directly. Understand pattern and use appropriately: new ModuleName() vs ModuleName().",
+    "tags": ["learning", "architecture", "workflow"]
+  },
+  {
+    "title": "Extension Manifest Permissions for OAuth",
+    "summary": "Chrome extension requires 'identity' permission in manifest.json for OAuth. Also needs host permissions for Google APIs if making direct fetch calls. Verify manifest permissions.",
+    "tags": ["setup", "learning", "workflow"]
+  },
+  {
+    "title": "User Provider Field",
+    "summary": "User object includes provider field: 'chrome_profile' for getProfileUserInfo, 'google' for OAuth. Use provider to determine authentication method and available data.",
+    "tags": ["learning", "workflow", "project", "canopi"]
+  },
+  {
+    "title": "StateManager Subscriber Cleanup",
+    "summary": "StateManager subscribers should be cleaned up when components unmount. Use unsubscribe() method to prevent memory leaks. Important for long-running extension.",
+    "tags": ["learning", "workflow", "architecture"]
+  },
+  {
+    "title": "Extension Version Compatibility",
+    "summary": "Extension must work across Chrome versions. Test Chrome API availability and provide fallbacks for older versions. Check chrome.runtime for API availability.",
+    "tags": ["learning", "setup", "workflow"]
+  },
+  {
+    "title": "Profile Picture URL Validity Check",
+    "summary": "Before using profile picture URL, validate it's a valid URL and not null/undefined. Check URL format matches expected pattern (Google or Gravatar). Log invalid URLs for debugging.",
+    "tags": ["learning", "workflow", "fix"]
+  },
+  {
+    "title": "Chrome Identity Account Status",
+    "summary": "chrome.identity.getProfileUserInfo({ accountStatus: 'ANY' }) retrieves profile info regardless of account status. Prefer OAuth method for profile pictures, but understand accountStatus parameter.",
+    "tags": ["learning", "workflow", "project", "canopi"]
+  },
+  {
+    "title": "StateManager Internal State vs Persisted State",
+    "summary": "StateManager maintains in-memory state and persisted state (chrome.storage.local). In-memory state is faster, persisted state survives reloads. Balance between speed and persistence.",
+    "tags": ["architecture", "workflow", "system"]
+  },
+  {
+    "title": "Extension Build Process",
+    "summary": "Extension build process should maintain modular structure. Do not bundle modules into single file - maintain separate module files for modularity and debugging.",
+    "tags": ["policy", "architecture", "workflow"]
+  },
+  {
+    "title": "User ID Format Consistency",
+    "summary": "User IDs can be email addresses or numeric IDs from Google (e.g., '101904640857527620819'). Store consistently and use appropriate format for API calls and database queries.",
+    "tags": ["learning", "workflow", "project", "canopi"]
+  },
+  {
+    "title": "Profile Picture URL Parameter Encoding",
+    "summary": "Profile picture URLs may contain special characters. Ensure proper URL encoding when constructing or passing URLs. Use encodeURIComponent if needed for query parameters.",
+    "tags": ["learning", "workflow", "fix"]
+  },
+  {
+    "title": "Extension Development vs Production",
+    "summary": "Extension has development and production modes. Use CONFIG module to detect environment. Different API URLs and behaviors for dev vs prod.",
+    "tags": ["setup", "workflow", "system"]
+  },
+  {
+    "title": "StateManager State Key Naming Convention",
+    "summary": "StateManager uses consistent key naming: camelCase for flat keys, dot.notation for nested paths. Examples: 'activeCommunities' or 'ui.activeCommunities'. Follow convention consistently.",
+    "tags": ["policy", "workflow", "architecture"]
+  },
+  {
+    "title": "Chrome Extension Action API",
+    "summary": "chrome.action API used for extension icon and popup. chrome.action.onClicked may not be available in all contexts. Check availability before using.",
+    "tags": ["learning", "workflow", "fix"]
+  },
+  {
+    "title": "Extension Sidepanel API",
+    "summary": "Chrome Side Panel API used for sidepanel. Ensure manifest includes side_panel permission. Sidepanel runs in extension context with access to Chrome APIs.",
+    "tags": ["setup", "learning", "workflow"]
+  },
+  {
+    "title": "StateManager State Initialization Values",
+    "summary": "StateManager.initialize() accepts initial state values. Provide sensible defaults for all state keys. Ensures consistent state even if persistence fails.",
+    "tags": ["workflow", "setup", "system"]
+  },
+  {
+    "title": "Extension Reload Detection",
+    "summary": "Detect extension reload by checking extension.reloadTimestamp. If timestamp changed, extension was reloaded. Use to reset transient state or re-initialize modules.",
+    "tags": ["workflow", "system", "log"]
+  },
+  {
+    "title": "Profile Picture Display in UI Components",
+    "summary": "UI components (AvatarUtils, ProfileManager) must use window.currentUser.avatarUrl or retrieve from StateManager. Do not hardcode avatar URLs in UI components.",
+    "tags": ["policy", "workflow", "learning", "project", "canopi"]
+  },
+  {
+    "title": "Chrome Identity API Promise Wrapper",
+    "summary": "Chrome identity API uses callbacks. Wrap in Promise for async/await usage. Pattern: new Promise((resolve, reject) => { chrome.identity.method(params, (result) => { ... }); }).",
+    "tags": ["learning", "workflow", "fix"]
+  },
+  {
+    "title": "StateManager State Update Notifications",
+    "summary": "StateManager can notify subscribers of state changes. Use for reactive UI updates. Subscribe to specific keys or all changes. Unsubscribe when component unmounts.",
+    "tags": ["architecture", "workflow", "project", "canopi"]
+  },
+  {
+    "title": "Extension Background Service Worker",
+    "summary": "Background script runs as service worker in Manifest V3. Has limited lifecycle. Use chrome.storage for persistence. Initialize properly on startup.",
+    "tags": ["learning", "setup", "workflow"]
+  },
+  {
+    "title": "Profile Picture URL Fetch Error Handling",
+    "summary": "If Google OAuth API fetch fails, handle error gracefully. Log error details. May fall back to cached picture or show default, but avoid Gravatar for authenticated users.",
+    "tags": ["learning", "workflow", "fix", "project", "canopi"]
+  },
+  {
+    "title": "StateManager State Path Resolution",
+    "summary": "StateManager resolves nested paths: 'ui.activeCommunities' accesses state.ui.activeCommunities. Supports both flat and nested access patterns.",
+    "tags": ["learning", "architecture", "workflow"]
+  },
+  {
+    "title": "Extension Content Script Injection",
+    "summary": "Content scripts inject into web pages. Limited access to extension APIs. Use message passing for communication with background or sidepanel.",
+    "tags": ["learning", "architecture", "workflow"]
+  },
+  {
+    "title": "Chrome Extension Message Passing",
+    "summary": "Use chrome.runtime.sendMessage and chrome.runtime.onMessage for communication between extension contexts. Proper message format and error handling important.",
+    "tags": ["learning", "workflow", "architecture"]
+  },
+  {
+    "title": "StateManager State Validation",
+    "summary": "StateManager should validate state values before storing. Sanitize user input, validate types, ensure required fields present. Prevents state corruption.",
+    "tags": ["policy", "workflow", "architecture"]
+  },
+  {
+    "title": "Profile Picture URL Size Optimization",
+    "summary": "Google profile picture URLs support size parameters. Use appropriate size for UI (e.g., =s96-c for small avatars, =s200 for larger). Balance quality and performance.",
+    "tags": ["learning", "workflow", "project", "canopi"]
+  },
+  {
+    "title": "Extension Storage Quota Management",
+    "summary": "Chrome storage has quota limits. StateManager should prioritize critical state for persistence. Avoid storing large objects or excessive history.",
+    "tags": ["learning", "workflow", "system"]
+  },
+  {
+    "title": "StateManager State Reset Capability",
+    "summary": "StateManager.resetState() allows resetting state to defaults. Useful for logout, error recovery, or testing. Supports resetting specific paths or entire state.",
+    "tags": ["workflow", "system", "architecture"]
+  },
+  {
+    "title": "Chrome Extension Update Detection",
+    "summary": "Detect extension updates using chrome.runtime.onInstalled with reason 'update'. Re-initialize or migrate state if needed on update.",
+    "tags": ["workflow", "system", "setup"]
+  },
+  {
+    "title": "Profile Picture URL HTTPS Requirement",
+    "summary": "Profile picture URLs must use HTTPS. Chrome extension CSP may block HTTP images. Ensure all avatar URLs use HTTPS protocol.",
+    "tags": ["learning", "security", "workflow"]
+  },
+  {
+    "title": "StateManager State Migration",
+    "summary": "When state structure changes, migrate old state format to new format. StateManager should handle version differences and migrate automatically on load.",
+    "tags": ["workflow", "system", "architecture"]
+  },
+  {
+    "title": "Extension Manifest V3 Migration",
+    "summary": "Extension uses Manifest V3. Background scripts are service workers. No persistent background pages. Use chrome.storage for persistence, chrome.alarms for periodic tasks.",
+    "tags": ["learning", "setup", "system"]
+  },
+  {
+    "title": "Profile Picture URL Cross-Origin Issues",
+    "summary": "Profile picture URLs from Google may have CORS restrictions. Chrome extension context may bypass some restrictions, but be aware of cross-origin image loading.",
+    "tags": ["learning", "security", "workflow"]
+  },
+  {
+    "title": "StateManager State Snapshot",
+    "summary": "StateManager can create snapshots of current state for debugging or recovery. Export state as JSON for analysis or backup.",
+    "tags": ["workflow", "log", "system"]
+  },
+  {
+    "title": "Extension Permission Model",
+    "summary": "Extension permissions declared in manifest.json. User grants permissions on install. Check permission availability before using restricted APIs.",
+    "tags": ["learning", "setup", "security"]
+  },
+  {
+    "title": "Profile Picture URL Expiration",
+    "summary": "Google profile picture URLs may expire or change. Store URL but be prepared to refresh if image fails to load. Consider caching with expiration.",
+    "tags": ["learning", "workflow", "project", "canopi"]
+  },
+  {
+    "title": "StateManager State Compression",
+    "summary": "For large state objects, consider compression before persisting to chrome.storage. Balance between storage usage and performance overhead.",
+    "tags": ["learning", "workflow", "system"]
+  },
+  {
+    "title": "Extension Install Flow",
+    "summary": "On extension install, chrome.runtime.onInstalled fires with reason 'install'. Initialize state, request permissions, set up initial configuration.",
+    "tags": ["workflow", "setup", "system"]
+  },
+  {
+    "title": "Profile Picture URL CDN Optimization",
+    "summary": "Google uses CDN for profile pictures. URLs may redirect or use different CDN endpoints. Handle redirects and ensure correct final URL is stored.",
+    "tags": ["learning", "workflow", "project", "canopi"]
+  },
+  {
+    "title": "StateManager State Deduplication",
+    "summary": "StateManager should avoid storing duplicate data. Use references or IDs instead of full objects when possible. Reduces storage usage and improves performance.",
+    "tags": ["learning", "workflow", "architecture"]
+  },
+  {
+    "title": "Extension Uninstall Cleanup",
+    "summary": "On extension uninstall, chrome.storage.local may persist. Consider cleanup strategy if needed. Extension cannot run cleanup code after uninstall.",
+    "tags": ["workflow", "system", "setup"]
+  },
+  {
+    "title": "Profile Picture URL Parameter Persistence",
+    "summary": "When storing profile picture URLs, preserve size parameters and other URL parameters. Do not strip parameters that affect image quality or format.",
+    "tags": ["learning", "workflow", "project", "canopi"]
+  },
+  {
+    "title": "StateManager State Atomic Updates",
+    "summary": "StateManager should support atomic updates for multiple state keys. Use setStateMultiple (if re-implemented) or batch updates to prevent intermediate inconsistent state.",
+    "tags": ["learning", "workflow", "architecture"]
+  },
+  {
+    "title": "Extension Context Isolation",
+    "summary": "Extension contexts are isolated. Content scripts run in isolated world, cannot directly access page JavaScript. Use DOM messaging or injection for communication.",
+    "tags": ["learning", "architecture", "security"]
+  },
+  {
+    "title": "Profile Picture URL Loading Error Handling",
+    "summary": "If profile picture image fails to load in UI, handle gracefully. Show placeholder or default avatar. Log error for debugging. Do not break UI rendering.",
+    "tags": ["learning", "workflow", "fix", "project", "canopi"]
+  },
+  {
+    "title": "StateManager State Change Hooks",
+    "summary": "StateManager can trigger hooks before/after state changes. Useful for validation, logging, or side effects. Implement hooks pattern if needed.",
+    "tags": ["learning", "workflow", "architecture"]
+  },
+  {
+    "title": "Extension Popup vs Sidepanel",
+    "summary": "Extension can use popup (chrome.action) or sidepanel. Sidepanel is more persistent. Choose based on use case. Current extension uses sidepanel.",
+    "tags": ["learning", "setup", "architecture"]
+  },
+  {
+    "title": "Profile Picture URL Browser Cache",
+    "summary": "Browser caches profile picture images. If URL is correct but image is stale, add cache-busting parameter or use different URL size parameter to force refresh.",
+    "tags": ["learning", "workflow", "fix"]
+  },
+  {
+    "title": "StateManager State Type Safety",
+    "summary": "StateManager should validate state value types. Ensure strings are strings, objects are objects, etc. Prevents type-related bugs and state corruption.",
+    "tags": ["policy", "workflow", "architecture"]
+  },
+  {
+    "title": "Extension API Availability Matrix",
+    "summary": "Different Chrome APIs available in different contexts. Background has full API access, content scripts have limited access, sidepanel has extension context access. Know limitations.",
+    "tags": ["learning", "architecture", "workflow"]
+  },
+  {
+    "title": "Profile Picture URL Format Standardization",
+    "summary": "Standardize profile picture URL format across codebase. Use consistent field names (picture, avatar_url, avatarUrl). Map between formats if needed, but be consistent.",
+    "tags": ["policy", "workflow", "learning", "project", "canopi"]
+  },
+  {
+    "title": "StateManager State Access Performance",
+    "summary": "StateManager getState() should be fast for frequent access. Consider caching frequently accessed values. Balance between performance and consistency.",
+    "tags": ["learning", "workflow", "architecture"]
+  },
+  {
+    "title": "Extension DevTools Integration",
+    "summary": "Extension can integrate with Chrome DevTools. Use chrome.devtools API if needed. Useful for debugging extension behavior in development.",
+    "tags": ["learning", "setup", "workflow"]
+  },
+  {
+    "title": "Profile Picture URL Update Frequency",
+    "summary": "Profile pictures may change on Google side. Consider periodic refresh of profile picture URLs. Not too frequent to avoid rate limits, but keep URLs current.",
+    "tags": ["learning", "workflow", "project", "canopi"]
+  },
+  {
+    "title": "StateManager State Export/Import",
+    "summary": "StateManager should support exporting state to JSON and importing from JSON. Useful for backup, migration, or debugging. Validate imported state structure.",
+    "tags": ["workflow", "system", "architecture"]
+  },
+  {
+    "title": "Extension Error Reporting",
+    "summary": "Extension errors should be logged and potentially reported. Use console.log for development, consider error reporting service for production. Help identify and fix issues.",
+    "tags": ["policy", "workflow", "log"]
+  },
+  {
+    "title": "Profile Picture URL Accessibility",
+    "summary": "Profile pictures should have alt text for accessibility. Use user name or email as alt text. Ensure screen readers can identify users by avatar.",
+    "tags": ["learning", "workflow", "project", "canopi"]
+  },
+  {
+    "title": "StateManager State Versioning",
+    "summary": "StateManager should version state structure. Track version number, migrate between versions automatically. Prevents breaking changes from corrupting state.",
+    "tags": ["workflow", "system", "architecture"]
+  },
+  {
+    "title": "Extension Native Messaging",
+    "summary": "Extension can communicate with native applications via chrome.runtime.connectNative. Requires native messaging host. Not used in current extension, but available if needed.",
+    "tags": ["learning", "architecture", "workflow"]
+  },
+  {
+    "title": "Profile Picture URL Privacy Considerations",
+    "summary": "Profile picture URLs may reveal user information. Ensure URLs are handled securely, not logged inappropriately, and respect user privacy. Consider URL sanitization for logs.",
+    "tags": ["learning", "security", "workflow"]
+  },
+  {
+    "title": "StateManager State Conflict Resolution",
+    "summary": "If state conflicts occur (e.g., multiple writes), StateManager should resolve conflicts. Use last-write-wins or merge strategy based on use case.",
+    "tags": ["learning", "workflow", "architecture"]
+  },
+  {
+    "title": "Extension Offline Support",
+    "summary": "Extension should handle offline scenarios gracefully. Cache critical state, queue operations, sync when online. Use chrome.storage for offline persistence.",
+    "tags": ["learning", "workflow", "system"]
+  },
+  {
+    "title": "Profile Picture URL Rate Limiting",
+    "summary": "Google APIs may rate limit requests. Do not fetch profile pictures too frequently. Cache URLs and reuse. Respect rate limits to avoid blocking.",
+    "tags": ["learning", "workflow", "project", "canopi"]
+  },
+  {
+    "title": "StateManager State Observability",
+    "summary": "StateManager should support observability for debugging. Log state changes, track access patterns, provide debugging interface. Helps identify state-related issues.",
+    "tags": ["workflow", "log", "system"]
+  },
+  {
+    "title": "Extension Update Notification",
+    "summary": "Extension can notify users of updates using chrome.notifications or UI messages. Helpful for informing users of new features or breaking changes.",
+    "tags": ["learning", "workflow", "system"]
+  },
+  {
+    "title": "Profile Picture URL Fallback Strategy",
+    "summary": "If Google profile picture unavailable, fallback strategy: 1) Cached URL, 2) Default avatar with user initial, 3) Never Gravatar for authenticated users. User preference is actual Google picture only.",
+    "tags": ["policy", "workflow", "preferences", "project", "canopi"]
+  },
+  {
+    "title": "StateManager State Persistence Frequency",
+    "summary": "Balance persistence frequency. Too frequent causes performance issues, too infrequent risks data loss. Persist critical state immediately, batch less critical updates.",
+    "tags": ["learning", "workflow", "system"]
+  },
+  {
+    "title": "Extension Content Security Policy Configuration",
+    "summary": "Extension CSP defined in manifest.json. Restricts eval, inline scripts, external resources. Configure CSP appropriately for extension functionality while maintaining security.",
+    "tags": ["setup", "security", "workflow"]
+  },
+  {
+    "title": "Profile Picture URL Validation Regex",
+    "summary": "Validate profile picture URLs match expected patterns. Google URLs: /^https:\\/\\/lh3\\.googleusercontent\\.com\\//. Gravatar URLs: /^https:\\/\\/www\\.gravatar\\.com\\/avatar\\//. Reject invalid formats.",
+    "tags": ["learning", "workflow", "fix"]
+  },
+  {
+    "title": "StateManager State Garbage Collection",
+    "summary": "StateManager should clean up unused state over time. Remove old history entries, clear transient data, prevent memory leaks. Important for long-running extension.",
+    "tags": ["learning", "workflow", "architecture"]
+  },
+  {
+    "title": "Extension Web Accessible Resources",
+    "summary": "Extension resources can be made web-accessible via web_accessible_resources in manifest. Allows web pages to load extension assets. Configure carefully for security.",
+    "tags": ["learning", "security", "setup"]
+  },
+  {
+    "title": "Profile Picture URL Loading Timeout",
+    "summary": "Profile picture image loading should have timeout. If image takes too long to load, show placeholder. Prevents UI blocking on slow network or broken URLs.",
+    "tags": ["learning", "workflow", "fix"]
+  },
+  {
+    "title": "StateManager State Rollback Capability",
+    "summary": "StateManager should support rolling back to previous state if error occurs. Maintain state history, allow undo operations. Useful for error recovery and testing.",
+    "tags": ["learning", "workflow", "architecture"]
+  },
+  {
+    "title": "Extension Tab Management",
+    "summary": "Extension can manage tabs using chrome.tabs API. Open, close, update tabs. Track tab state. Useful for tab-related features in extension.",
+    "tags": ["learning", "workflow", "architecture"]
+  },
+  {
+    "title": "Profile Picture URL Image Format",
+    "summary": "Google profile pictures may be JPEG or PNG. Handle both formats. Ensure UI components can display both. Consider format conversion if needed for consistency.",
+    "tags": ["learning", "workflow", "project", "canopi"]
+  },
+  {
+    "title": "StateManager State Serialization",
+    "summary": "StateManager must serialize state for persistence. Handle complex objects, circular references, functions. Use JSON.stringify carefully, handle edge cases.",
+    "tags": ["learning", "workflow", "architecture"]
+  },
+  {
+    "title": "Extension Bookmark Management",
+    "summary": "Extension can manage bookmarks using chrome.bookmarks API. Create, read, update, delete bookmarks. Requires bookmarks permission in manifest.",
+    "tags": ["learning", "workflow", "architecture"]
+  },
+  {
+    "title": "Profile Picture URL Image Dimensions",
+    "summary": "Profile pictures have various dimensions. Standardize display size in UI (e.g., 40x40px, 96x96px). Use CSS or image processing to ensure consistent sizing.",
+    "tags": ["learning", "workflow", "project", "canopi"]
+  },
+  {
+    "title": "StateManager State Concurrency",
+    "summary": "StateManager should handle concurrent access safely. Multiple modules may read/write state simultaneously. Use locks or atomic operations to prevent race conditions.",
+    "tags": ["learning", "workflow", "architecture"]
+  },
+  {
+    "title": "Extension Download Management",
+    "summary": "Extension can manage downloads using chrome.downloads API. Track download progress, cancel downloads, open downloaded files. Requires downloads permission.",
+    "tags": ["learning", "workflow", "architecture"]
+  },
+  {
+    "title": "Profile Picture URL Image Compression",
+    "summary": "Profile pictures may be large. Consider client-side compression before displaying or storing. Balance between image quality and performance. Use appropriate image formats.",
+    "tags": ["learning", "workflow", "project", "canopi"]
+  },
+  {
+    "title": "StateManager State Encryption",
+    "summary": "Sensitive state data should be encrypted before persisting to chrome.storage. Use encryption for passwords, tokens, personal data. Balance security and performance.",
+    "tags": ["learning", "security", "architecture"]
+  },
+  {
+    "title": "Extension History Management",
+    "summary": "Extension can access browser history using chrome.history API. Search, add, delete history entries. Requires history permission. Useful for history-related features.",
+    "tags": ["learning", "workflow", "architecture"]
+  },
+  {
+    "title": "Profile Picture URL Image Lazy Loading",
+    "summary": "Profile pictures should load lazily in UI. Only load images when visible in viewport. Improves initial page load performance. Use loading='lazy' attribute or intersection observer.",
+    "tags": ["learning", "workflow", "project", "canopi"]
+  },
+  {
+    "title": "StateManager State Indexing",
+    "summary": "StateManager should support indexing for fast lookups. Create indexes for frequently queried state keys. Improves performance for large state objects.",
+    "tags": ["learning", "workflow", "architecture"]
+  },
+  {
+    "title": "Extension Context Menu Management",
+    "summary": "Extension can create context menus using chrome.contextMenus API. Add items to right-click menu. Requires contextMenus permission. Useful for quick actions.",
+    "tags": ["learning", "workflow", "architecture"]
+  },
+  {
+    "title": "Profile Picture URL Image Preloading",
+    "summary": "Preload profile pictures for better UX. Load avatars before they're needed. Balance preloading with performance. Don't preload too many images at once.",
+    "tags": ["learning", "workflow", "project", "canopi"]
+  },
+  {
+    "title": "StateManager State Partitioning",
+    "summary": "StateManager should partition state by domain or feature. Separate chat state from UI state from API state. Improves organization and performance.",
+    "tags": ["learning", "workflow", "architecture"]
+  },
+  {
+    "title": "Extension Omnibox Integration",
+    "summary": "Extension can add keywords to Chrome omnibox using chrome.omnibox API. Allow users to trigger extension from address bar. Requires omnibox permission.",
+    "tags": ["learning", "workflow", "architecture"]
+  },
+  {
+    "title": "Profile Picture URL Image Responsive Sizing",
+    "summary": "Profile pictures should be responsive. Scale appropriately for different screen sizes and pixel densities. Use srcset or CSS media queries for responsive images.",
+    "tags": ["learning", "workflow", "project", "canopi"]
+  },
+  {
+    "title": "StateManager State Replication",
+    "summary": "StateManager could replicate state across extension contexts if needed. Sync state between background, content, sidepanel. Use message passing for replication.",
+    "tags": ["learning", "workflow", "architecture"]
+  },
+  {
+    "title": "Extension Page Action vs Browser Action",
+    "summary": "Manifest V3 uses chrome.action (formerly browserAction). Page actions deprecated. Use chrome.action for extension icon and popup functionality.",
+    "tags": ["learning", "setup", "architecture"]
+  },
+  {
+    "title": "Profile Picture URL Image Placeholder",
+    "summary": "Show placeholder while profile picture loads. Use user initial, default avatar, or loading spinner. Improves perceived performance and prevents layout shifts.",
+    "tags": ["learning", "workflow", "project", "canopi"]
+  },
+  {
+    "title": "StateManager State Sharding",
+    "summary": "For very large state, consider sharding across multiple chrome.storage keys. Split state into logical chunks. Improves performance and avoids quota limits.",
+    "tags": ["learning", "workflow", "architecture"]
+  },
+  {
+    "title": "Extension Storage Area Selection",
+    "summary": "Chrome storage has local, sync, and managed areas. Use local for temporary data, sync for user preferences (limited quota), managed for enterprise policies. Choose appropriately.",
+    "tags": ["learning", "workflow", "system"]
+  },
+  {
+    "title": "Profile Picture URL Image Error Boundary",
+    "summary": "Profile picture image loading errors should not break UI. Use error boundary pattern. Catch image load errors, show fallback, log for debugging. Graceful degradation.",
+    "tags": ["learning", "workflow", "fix", "project", "canopi"]
+  },
+  {
+    "title": "StateManager State Transaction Support",
+    "summary": "StateManager could support transactions for atomic multi-key updates. Begin transaction, make multiple changes, commit or rollback. Ensures consistency.",
+    "tags": ["learning", "workflow", "architecture"]
+  },
+  {
+    "title": "Extension Sync Storage Quota",
+    "summary": "chrome.storage.sync has quota limits (100KB per item, 8KB per key). Use sync storage sparingly for critical user preferences. Use local storage for larger data.",
+    "tags": ["learning", "workflow", "system"]
+  },
+  {
+    "title": "Profile Picture URL Image Progressive Loading",
+    "summary": "Use progressive image loading for profile pictures. Show low-quality placeholder first, then load full quality. Improves perceived performance.",
+    "tags": ["learning", "workflow", "project", "canopi"]
+  },
+  {
+    "title": "StateManager State Change Batching",
+    "summary": "StateManager should batch state changes when possible. Group related updates, persist once, notify subscribers once. Reduces overhead and improves performance.",
+    "tags": ["learning", "workflow", "architecture"]
+  },
+  {
+    "title": "Extension Background Page Persistence",
+    "summary": "Manifest V3 service workers are event-driven and not persistent. Use chrome.alarms for periodic tasks, chrome.storage for state. Do not rely on background page staying alive.",
+    "tags": ["learning", "setup", "system"]
+  },
+  {
+    "title": "Profile Picture URL Image CDN Cache Headers",
+    "summary": "Google CDN sets cache headers for profile pictures. Respect cache headers, but don't cache forever. Refresh URLs periodically to get updated pictures.",
+    "tags": ["learning", "workflow", "project", "canopi"]
+  },
+  {
+    "title": "StateManager State Change Debouncing",
+    "summary": "StateManager should debounce rapid state changes. Wait for pause in updates before persisting or notifying. Prevents excessive I/O and subscriber notifications.",
+    "tags": ["learning", "workflow", "architecture"]
+  },
+  {
+    "title": "Extension Options Page",
+    "summary": "Extension can have options page for settings. Configure via chrome.runtime.openOptionsPage() or options_ui in manifest. Provides UI for user preferences.",
+    "tags": ["learning", "setup", "workflow"]
+  },
+  {
+    "title": "Profile Picture URL Image Format Detection",
+    "summary": "Detect profile picture image format before displaying. Check Content-Type header or image signature. Handle different formats appropriately.",
+    "tags": ["learning", "workflow", "project", "canopi"]
+  },
+  {
+    "title": "StateManager State Change Throttling",
+    "summary": "StateManager should throttle state change notifications. Limit notification frequency to prevent subscriber overload. Use requestAnimationFrame or similar for UI updates.",
+    "tags": ["learning", "workflow", "architecture"]
+  },
+  {
+    "title": "Extension Badge Management",
+    "summary": "Extension can set badge text and color using chrome.action.setBadgeText and setBadgeBackgroundColor. Show notifications, counts, or status indicators.",
+    "tags": ["learning", "workflow", "architecture"]
+  },
+  {
+    "title": "Profile Picture URL Image Aspect Ratio",
+    "summary": "Profile pictures may have different aspect ratios. Ensure UI displays consistently regardless of original aspect ratio. Use CSS object-fit or image cropping.",
+    "tags": ["learning", "workflow", "project", "canopi"]
+  },
+  {
+    "title": "StateManager State Change Queuing",
+    "summary": "StateManager could queue state changes during high load. Process queue asynchronously, batch updates. Prevents blocking and improves responsiveness.",
+    "tags": ["learning", "workflow", "architecture"]
+  },
+  {
+    "title": "Extension Installation Source Detection",
+    "summary": "Detect extension installation source using chrome.management API. Distinguish between Chrome Web Store, unpacked, or enterprise installs. Useful for analytics or feature gating.",
+    "tags": ["learning", "workflow", "system"]
+  },
+  {
+    "title": "Profile Picture URL Image Metadata",
+    "summary": "Profile pictures may have EXIF metadata. Strip metadata before displaying for privacy and performance. Consider metadata removal for security.",
+    "tags": ["learning", "security", "workflow"]
+  },
+  {
+    "title": "StateManager State Change Prioritization",
+    "summary": "StateManager should prioritize critical state changes. Process important updates first, defer less critical. Ensures responsiveness for user-facing updates.",
+    "tags": ["learning", "workflow", "architecture"]
+  },
+  {
+    "title": "Extension Update Channel Management",
+    "summary": "Extension can have different update channels (stable, beta, dev). Manage versions per channel. Use chrome.management API to detect version and channel.",
+    "tags": ["learning", "workflow", "system"]
+  },
+  {
+    "title": "Profile Picture URL Image Watermarking",
+    "summary": "Consider watermarking profile pictures for security or branding. Add watermark overlay if needed. Balance watermark visibility with image quality.",
+    "tags": ["learning", "workflow", "project", "canopi"]
+  },
+  {
+    "title": "StateManager State Change Conflict Detection",
+    "summary": "StateManager should detect state change conflicts. If same key updated simultaneously, detect and resolve. Use version numbers or timestamps for conflict resolution.",
+    "tags": ["learning", "workflow", "architecture"]
+  },
+  {
+    "title": "Extension Update Notification Preference",
+    "summary": "Respect user preference for update notifications. Some users want to know about updates, others don't. Make notification optional, default to off.",
+    "tags": ["learning", "preferences", "workflow"]
+  },
+  {
+    "title": "Profile Picture URL Image Optimization Service",
+    "summary": "Consider using image optimization service for profile pictures. Resize, compress, convert formats server-side. Improves performance and reduces bandwidth.",
+    "tags": ["learning", "workflow", "project", "canopi"]
+  },
+  {
+    "title": "StateManager State Change Audit Trail",
+    "summary": "StateManager should maintain audit trail of state changes. Log who changed what when. Useful for debugging and security. Consider privacy implications.",
+    "tags": ["learning", "workflow", "log"]
+  },
+  {
+    "title": "Extension Update Rollback Capability",
+    "summary": "Extension updates can break functionality. Consider rollback mechanism. Allow users to revert to previous version if update causes issues.",
+    "tags": ["learning", "workflow", "system"]
+  },
+  {
+    "title": "Profile Picture URL Image Fallback Chain Implementation",
+    "summary": "Implement fallback chain for profile pictures: 1) StateManager.supabaseSession.user.picture, 2) StateManager.supabaseUser.picture, 3) realGoogleAuth.getCurrentUser().picture. Never use Gravatar for authenticated users per user preference.",
+    "tags": ["workflow", "learning", "fix", "policy", "project", "canopi"]
+  },
+  {
+    "title": "StateManager State Change Notification Filtering",
+    "summary": "StateManager should allow subscribers to filter notifications. Only receive updates for specific keys or patterns. Reduces unnecessary notifications and improves performance.",
+    "tags": ["learning", "workflow", "architecture"]
+  },
+  {
+    "title": "Extension Update Automatic vs Manual",
+    "summary": "Chrome extensions update automatically from Chrome Web Store. Unpacked extensions require manual update. Inform users about update behavior and provide manual check option.",
+    "tags": ["learning", "workflow", "system"]
+  },
+  {
+    "title": "Profile Picture URL Image Loading Spinner",
+    "summary": "Show loading spinner while profile picture loads. Indicates progress to user. Replace spinner with image when loaded. Improves perceived performance.",
+    "tags": ["learning", "workflow", "project", "canopi"]
+  },
+  {
+    "title": "StateManager State Change Notification Batching",
+    "summary": "StateManager should batch notifications to subscribers. Group multiple state changes into single notification. Reduces subscriber callback overhead.",
+    "tags": ["learning", "workflow", "architecture"]
+  },
+  {
+    "title": "Extension Update Version Comparison",
+    "summary": "Compare extension versions to determine if update is major, minor, or patch. Show appropriate notification based on version change type. Use semver if applicable.",
+    "tags": ["learning", "workflow", "system"]
+  },
+  {
+    "title": "Profile Picture URL Image Retry Logic",
+    "summary": "Retry profile picture loading if initial load fails. Network issues may cause temporary failures. Implement exponential backoff for retries. Max retries to prevent infinite loops.",
+    "tags": ["learning", "workflow", "fix", "project", "canopi"]
+  },
+  {
+    "title": "StateManager State Change Notification Priority",
+    "summary": "StateManager should prioritize notifications based on importance. Critical state changes notify immediately, less critical can be batched or deferred.",
+    "tags": ["learning", "workflow", "architecture"]
+  },
+  {
+    "title": "Extension Update Changelog Display",
+    "summary": "Display changelog when extension updates. Show what changed, new features, bug fixes. Helps users understand update and decide if action needed.",
+    "tags": ["learning", "workflow", "system"]
+  },
+  {
+    "title": "Profile Picture URL Image CORS Handling",
+    "summary": "Handle CORS issues when loading profile pictures. Chrome extension context may bypass some CORS restrictions, but be aware of cross-origin image loading limitations.",
+    "tags": ["learning", "security", "workflow"]
+  },
+  {
+    "title": "StateManager State Change Notification Deduplication",
+    "summary": "StateManager should deduplicate notifications. If same state change notified multiple times, only notify once. Prevents redundant subscriber callbacks.",
+    "tags": ["learning", "workflow", "architecture"]
+  },
+  {
+    "title": "Extension Update Migration Scripts",
+    "summary": "Run migration scripts on extension update if state structure changed. Transform old state format to new format. Ensure backward compatibility.",
+    "tags": ["learning", "workflow", "system"]
+  },
+  {
+    "title": "Profile Picture URL Image Security Headers",
+    "summary": "Check security headers when loading profile pictures. Ensure images served over HTTPS, proper Content-Type, no dangerous headers. Security best practices.",
+    "tags": ["learning", "security", "workflow"]
+  },
+  {
+    "title": "StateManager State Change Notification Delivery Guarantee",
+    "summary": "StateManager should guarantee notification delivery. Retry failed notifications, queue if subscriber unavailable. Ensure all subscribers receive updates eventually.",
+    "tags": ["learning", "workflow", "architecture"]
+  },
+  {
+    "title": "Extension Update Testing Strategy",
+    "summary": "Test extension updates before releasing. Verify state migration, feature compatibility, performance. Use staging environment if possible. Minimize breaking changes.",
+    "tags": ["policy", "workflow", "learning"]
+  },
+  {
+    "title": "Profile Picture URL Image Content Security",
+    "summary": "Validate profile picture image content for security. Check file signature, scan for malicious content. Prevent XSS or other attacks via image loading.",
+    "tags": ["learning", "security", "workflow"]
+  },
+  {
+    "title": "StateManager State Change Notification Ordering",
+    "summary": "StateManager should maintain notification order. Notify subscribers in consistent order. Important for state-dependent logic. Use queue or priority system.",
+    "tags": ["learning", "workflow", "architecture"]
+  },
+  {
+    "title": "Extension Update Rollout Strategy",
+    "summary": "Roll out extension updates gradually if possible. Start with small percentage, monitor errors, increase gradually. Helps catch issues before full deployment.",
+    "tags": ["learning", "workflow", "system"]
+  },
+  {
+    "title": "Profile Picture URL Image Format Validation",
+    "summary": "Validate profile picture image format before displaying. Check file extension, MIME type, or magic bytes. Reject unsupported formats. Security best practice.",
+    "tags": ["learning", "security", "workflow"]
+  },
+  {
+    "title": "StateManager State Change Notification Retry",
+    "summary": "StateManager should retry failed notifications. If subscriber throws error, retry with exponential backoff. Prevent notification loss due to transient errors.",
+    "tags": ["learning", "workflow", "architecture"]
+  },
+  {
+    "title": "Extension Update User Communication",
+    "summary": "Communicate extension updates to users effectively. Use appropriate channels (notifications, UI messages, changelog). Balance information with annoyance. Respect user preferences.",
+    "tags": ["learning", "preferences", "workflow"]
+  },
+  {
+    "title": "Profile Picture URL Image Size Validation",
+    "summary": "Validate profile picture image size before displaying. Reject extremely large images that could cause memory issues. Set reasonable size limits. Security and performance.",
+    "tags": ["learning", "security", "workflow"]
+  },
+  {
+    "title": "StateManager State Change Notification Error Handling",
+    "summary": "StateManager should handle subscriber errors gracefully. If subscriber throws error, log it but don't break state update. Isolate subscriber errors from state management.",
+    "tags": ["learning", "workflow", "architecture"]
+  },
+  {
+    "title": "Extension Update Compatibility Checking",
+    "summary": "Check extension update compatibility with Chrome version. Some APIs require minimum Chrome version. Verify compatibility before updating. Handle gracefully if incompatible.",
+    "tags": ["learning", "workflow", "system"]
+  },
+  {
+    "title": "Profile Picture URL Image Integrity Checking",
+    "summary": "Check profile picture image integrity. Verify image is not corrupted, complete, valid format. Handle corrupted images gracefully. Show error or fallback.",
+    "tags": ["learning", "workflow", "fix"]
+  },
+  {
+    "title": "StateManager State Change Notification Timeout",
+    "summary": "StateManager should timeout slow subscriber notifications. If subscriber takes too long, timeout and continue. Prevent blocking state updates. Log timeout for debugging.",
+    "tags": ["learning", "workflow", "architecture"]
+  },
+  {
+    "title": "Extension Update Feature Flags",
+    "summary": "Use feature flags for extension updates. Gradually enable new features, test in production, rollback if issues. Provides safety net for updates.",
+    "tags": ["learning", "workflow", "system"]
+  },
+  {
+    "title": "Profile Picture URL Image Loading Performance Monitoring",
+    "summary": "Monitor profile picture loading performance. Track load times, success rates, error rates. Identify bottlenecks. Optimize based on metrics.",
+    "tags": ["learning", "workflow", "log"]
+  },
+  {
+    "title": "StateManager State Change Notification Batching Window",
+    "summary": "StateManager should have configurable batching window. Group state changes within time window into single notification. Balance latency and efficiency.",
+    "tags": ["learning", "workflow", "architecture"]
+  },
+  {
+    "title": "Extension Update Dependency Management",
+    "summary": "Manage extension update dependencies. Ensure all required APIs, permissions, resources available after update. Verify compatibility before deploying.",
+    "tags": ["learning", "workflow", "system"]
+  },
+  {
+    "title": "Profile Picture URL Image Loading Cache Strategy",
+    "summary": "Cache profile picture images appropriately. Use browser cache, service worker cache, or in-memory cache. Balance freshness with performance. Invalidate stale cache.",
+    "tags": ["learning", "workflow", "project", "canopi"]
+  },
+  {
+    "title": "StateManager State Change Notification Async Processing",
+    "summary": "StateManager should process notifications asynchronously. Use setTimeout, requestAnimationFrame, or Promise for async notification delivery. Prevents blocking state updates.",
+    "tags": ["learning", "workflow", "architecture"]
+  },
+  {
+    "title": "Extension Update State Migration Testing",
+    "summary": "Test state migration on extension updates thoroughly. Create test cases for various state formats. Verify migration handles edge cases. Ensure no data loss.",
+    "tags": ["policy", "workflow", "learning"]
+  },
+  {
+    "title": "Profile Picture URL Image Loading Error Recovery",
+    "summary": "Recover from profile picture loading errors gracefully. Retry with exponential backoff, show fallback, log error. Don't break UI or user experience.",
+    "tags": ["learning", "workflow", "fix", "project", "canopi"]
+  },
+  {
+    "title": "StateManager State Change Notification Subscription Management",
+    "summary": "StateManager should manage subscriptions efficiently. Track active subscribers, clean up unused subscriptions. Prevent memory leaks. Provide unsubscribe method.",
+    "tags": ["learning", "workflow", "architecture"]
+  },
+  {
+    "title": "Extension Update Breaking Change Communication",
+    "summary": "Communicate breaking changes in extension updates clearly. Warn users about breaking changes, provide migration guides. Minimize breaking changes when possible.",
+    "tags": ["learning", "preferences", "workflow"]
+  },
+  {
+    "title": "Profile Picture URL Image Loading Success Tracking",
+    "summary": "Track profile picture loading success rates. Monitor which URLs work, which fail. Identify patterns. Optimize based on success metrics.",
+    "tags": ["learning", "workflow", "log"]
+  },
+  {
+    "title": "StateManager State Change Notification Unsubscription",
+    "summary": "StateManager should handle unsubscription cleanly. Remove subscriber from notification list, clean up references. Prevent memory leaks. Support unsubscribe during notification.",
+    "tags": ["learning", "workflow", "architecture"]
+  },
+  {
+    "title": "Extension Update User Feedback Collection",
+    "summary": "Collect user feedback on extension updates. Monitor error reports, user complaints, usage metrics. Use feedback to improve future updates.",
+    "tags": ["learning", "workflow", "log"]
+  },
+  {
+    "title": "Profile Picture URL Image Loading Failure Analysis",
+    "summary": "Analyze profile picture loading failures. Categorize failures (network, CORS, format, size). Identify root causes. Fix systematic issues. Track improvement over time.",
+    "tags": ["learning", "workflow", "log", "fix"]
+  },
+  {
+    "title": "StateManager State Change Notification Performance Optimization",
+    "summary": "Optimize StateManager notification performance. Profile notification overhead, optimize hot paths, reduce allocations. Ensure notifications don't become bottleneck.",
+    "tags": ["learning", "workflow", "architecture"]
+  },
+  {
+    "title": "Extension Update Quality Assurance",
+    "summary": "Quality assurance for extension updates. Test thoroughly before release. Automated tests, manual testing, user acceptance testing. Minimize bugs in updates.",
+    "tags": ["policy", "workflow", "learning"]
+  },
+  {
+    "title": "Profile Picture URL Image Loading User Experience",
+    "summary": "Optimize profile picture loading for user experience. Fast loading, smooth transitions, appropriate fallbacks. Minimize layout shifts. Provide visual feedback.",
+    "tags": ["learning", "workflow", "project", "canopi"]
+  },
+  {
+    "title": "StateManager State Change Notification Scalability",
+    "summary": "StateManager should scale to many subscribers. Efficient notification delivery, batching, filtering. Handle hundreds of subscribers without performance degradation.",
+    "tags": ["learning", "workflow", "architecture"]
+  },
+  {
+    "title": "Extension Update Rollback Mechanism",
+    "summary": "Provide rollback mechanism for extension updates. Allow users to revert to previous version if update causes issues. Store previous version for rollback.",
+    "tags": ["learning", "workflow", "system"]
+  },
+  {
+    "title": "Profile Picture URL Image Loading Accessibility",
+    "summary": "Ensure profile picture loading is accessible. Alt text, ARIA labels, keyboard navigation. Screen reader support. Don't break accessibility with lazy loading or placeholders.",
+    "tags": ["learning", "workflow", "project", "canopi"]
+  },
+  {
+    "title": "StateManager State Change Notification Reliability",
+    "summary": "StateManager should reliably deliver notifications. Guarantee delivery, handle failures, retry mechanisms. Ensure subscribers don't miss important state changes.",
+    "tags": ["learning", "workflow", "architecture"]
+  },
+  {
+    "title": "Extension Update Security Considerations",
+    "summary": "Consider security implications of extension updates. Verify update authenticity, check for malicious code, validate permissions. Security audit before release.",
+    "tags": ["policy", "security", "workflow"]
+  },
+  {
+    "title": "Profile Picture URL Image Loading Privacy",
+    "summary": "Respect privacy when loading profile pictures. Don't leak user information, respect privacy settings, handle URLs securely. Consider privacy implications of image loading.",
+    "tags": ["learning", "security", "workflow"]
+  },
+  {
+    "title": "StateManager State Change Notification Observability",
+    "summary": "Make StateManager notifications observable. Log notifications, track metrics, provide debugging interface. Help identify notification-related issues.",
+    "tags": ["learning", "workflow", "log"]
+  },
+  {
+    "title": "Extension Update Performance Impact",
+    "summary": "Monitor performance impact of extension updates. Check memory usage, CPU usage, network traffic. Ensure updates don't degrade performance. Optimize if needed.",
+    "tags": ["learning", "workflow", "system"]
+  },
+  {
+    "title": "Profile Picture URL Image Loading Compliance",
+    "summary": "Ensure profile picture loading complies with regulations. GDPR, CCPA, privacy laws. Handle user data appropriately. Respect user rights.",
+    "tags": ["learning", "security", "workflow"]
+  },
+  {
+    "title": "StateManager State Change Notification Monitoring",
+    "summary": "Monitor StateManager notification system. Track notification rates, subscriber counts, performance metrics. Identify issues early. Optimize based on monitoring.",
+    "tags": ["learning", "workflow", "log"]
+  },
+  {
+    "title": "Extension Update Documentation",
+    "summary": "Document extension updates thoroughly. Changelog, migration guides, breaking changes. Help users understand and adapt to updates.",
+    "tags": ["learning", "workflow", "template"]
+  },
+  {
+    "title": "Profile Picture URL Image Loading Standards",
+    "summary": "Follow web standards for profile picture loading. Use appropriate HTML attributes, CSS properties, JavaScript APIs. Ensure cross-browser compatibility.",
+    "tags": ["learning", "workflow", "project", "canopi"]
+  },
+  {
+    "title": "StateManager State Change Notification Best Practices",
+    "summary": "Follow best practices for StateManager notifications. Efficient delivery, error handling, performance optimization. Document patterns and anti-patterns.",
+    "tags": ["learning", "workflow", "template"]
+  },
+  {
+    "title": "Extension Update Communication Channels",
+    "summary": "Use appropriate communication channels for extension updates. In-app notifications, email, blog posts, social media. Balance reach with annoyance.",
+    "tags": ["learning", "preferences", "workflow"]
+  },
+  {
+    "title": "Profile Picture URL Image Loading Innovation",
+    "summary": "Innovate on profile picture loading. New techniques, optimizations, user experience improvements. Stay current with web technologies.",
+    "tags": ["learning", "workflow", "project", "canopi"]
+  },
+  {
+    "title": "StateManager State Change Notification Future Enhancements",
+    "summary": "Plan future enhancements for StateManager notifications. New features, performance improvements, developer experience. Roadmap for notification system.",
+    "tags": ["learning", "workflow", "architecture"]
+  },
+  {
+    "title": "Extension Update User Education",
+    "summary": "Educate users about extension updates. Explain benefits, new features, changes. Help users understand and utilize updates effectively.",
+    "tags": ["learning", "preferences", "workflow"]
+  },
+  {
+    "title": "Profile Picture URL Image Loading Continuous Improvement",
+    "summary": "Continuously improve profile picture loading. Monitor metrics, gather feedback, iterate. Always look for optimization opportunities.",
+    "tags": ["learning", "workflow", "project", "canopi"]
+  },
+  {
+    "title": "StateManager State Change Notification Evolution",
+    "summary": "Evolve StateManager notification system over time. Adapt to changing requirements, improve based on usage patterns. Keep notification system modern and efficient.",
+    "tags": ["learning", "workflow", "architecture"]
+  },
+  {
+    "title": "Extension Update Success Metrics",
+    "summary": "Define success metrics for extension updates. User adoption, error rates, performance metrics. Track and improve based on metrics.",
+    "tags": ["learning", "workflow", "log"]
+  },
+  {
+    "title": "Profile Picture URL Image Loading Success Criteria",
+    "summary": "Define success criteria for profile picture loading. Load time, success rate, user satisfaction. Measure and optimize based on criteria.",
+    "tags": ["learning", "workflow", "log"]
+  },
+  {
+    "title": "StateManager State Change Notification Success Metrics",
+    "summary": "Define success metrics for StateManager notifications. Delivery rate, performance, reliability. Track and improve based on metrics.",
+    "tags": ["learning", "workflow", "log"]
+  },
+  {
+    "title": "Extension Update Long-Term Strategy",
+    "summary": "Develop long-term strategy for extension updates. Update frequency, feature roadmap, maintenance plan. Ensure sustainable update process.",
+    "tags": ["learning", "workflow", "system"]
+  },
+  {
+    "title": "Profile Picture URL Image Loading Long-Term Strategy",
+    "summary": "Develop long-term strategy for profile picture loading. Optimization roadmap, feature plans, maintenance. Ensure sustainable image loading system.",
+    "tags": ["learning", "workflow", "project", "canopi"]
+  },
+  {
+    "title": "StateManager State Change Notification Long-Term Strategy",
+    "summary": "Develop long-term strategy for StateManager notifications. Evolution plan, scalability, maintenance. Ensure sustainable notification system.",
+    "tags": ["learning", "workflow", "architecture"]
+  },
+  {
+    "title": "Extension Update Risk Management",
+    "summary": "Manage risks associated with extension updates. Testing, rollback plans, monitoring. Minimize risk of breaking changes or bugs.",
+    "tags": ["policy", "workflow", "learning"]
+  },
+  {
+    "title": "Profile Picture URL Image Loading Risk Management",
+    "summary": "Manage risks associated with profile picture loading. Error handling, fallbacks, security. Minimize risk of broken images or security issues.",
+    "tags": ["learning", "security", "workflow"]
+  },
+  {
+    "title": "StateManager State Change Notification Risk Management",
+    "summary": "Manage risks associated with StateManager notifications. Error handling, performance, reliability. Minimize risk of missed notifications or performance issues.",
+    "tags": ["learning", "workflow", "architecture"]
+  },
+  {
+    "title": "Extension Update Continuous Improvement",
+    "summary": "Continuously improve extension update process. Learn from mistakes, optimize workflows, streamline processes. Always look for improvement opportunities.",
+    "tags": ["learning", "workflow", "system"]
+  },
+  {
+    "title": "Profile Picture URL Image Loading Continuous Improvement",
+    "summary": "Continuously improve profile picture loading. Monitor metrics, gather feedback, iterate. Always look for optimization opportunities.",
+    "tags": ["learning", "workflow", "project", "canopi"]
+  },
+  {
+    "title": "StateManager State Change Notification Continuous Improvement",
+    "summary": "Continuously improve StateManager notification system. Monitor performance, gather feedback, iterate. Always look for optimization opportunities.",
+    "tags": ["learning", "workflow", "architecture"]
+  }
+]
+

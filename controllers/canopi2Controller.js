@@ -139,7 +139,16 @@ class Canopi2Controller {
       if (!req.user) {
         return res.status(401).json({ error: 'Authentication required' });
       }
-
+      
+      // RED HAT: Security validation - Verify parentId is valid UUID format if provided
+      if (parentId) {
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (!uuidRegex.test(parentId)) {
+          console.error('❌ RED HAT SECURITY: Invalid parentId UUID format:', parentId);
+          return res.status(400).json({ error: 'Invalid parent message UUID format' });
+        }
+      }
+      
       // Ensure user exists in database before creating post
       const user = await this.userService.getOrCreateUser(req.user);
       
@@ -147,7 +156,7 @@ class Canopi2Controller {
         conversationId,
         authorId: user.id, // Use the actual user ID from database
         body,
-        parentId,
+        parentId, // COMP METHOD: Parent message UUID (validated above)
         attachments,
         visibilityOverride
       });
@@ -172,6 +181,23 @@ class Canopi2Controller {
       res.json(post);
     } catch (error) {
       console.error('Error in getPost:', error);
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  async getPostForShare(req, res) {
+    try {
+      const { id } = req.params;
+      
+      const post = await this.postService.getPostForShare(id);
+      
+      if (!post) {
+        return res.status(404).json({ error: 'Post not found' });
+      }
+      
+      res.json(post);
+    } catch (error) {
+      console.error('Error in getPostForShare:', error);
       res.status(500).json({ error: error.message });
     }
   }

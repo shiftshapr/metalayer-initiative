@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 const { PrismaClient } = require('./generated/prisma');
 const crypto = require('crypto');
 const { createServer } = require('http');
@@ -13,6 +14,9 @@ const SERVER_START_TIME = new Date().toISOString();
 
 // Initialize Prisma client
 const prisma = new PrismaClient();
+
+// Make Prisma client globally available for routes
+global.prismaClient = prisma;
 
 // Initialize controller
 const canopi2Controller = new Canopi2Controller(prisma);
@@ -35,6 +39,19 @@ app.use(cors({
 }));
 
 app.use(express.json());
+
+// Serve static files from public directory
+app.use(express.static('public'));
+
+// Serve meta-community form page
+app.get('/meta-community-form', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'meta-community-form.html'));
+});
+
+// Serve share message page
+app.get('/share-message', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'share-message.html'));
+});
 
 // Health check endpoint - Enhanced with version and uptime tracking
 app.get('/health', (req, res) => {
@@ -126,6 +143,7 @@ app.get('/v1/conversations/:id', (req, res) => canopi2Controller.getConversation
 
 app.post('/v1/posts', (req, res) => canopi2Controller.createPost(req, res));
 app.get('/v1/posts/:id', (req, res) => canopi2Controller.getPost(req, res));
+app.get('/v1/posts/:id/share', (req, res) => canopi2Controller.getPostForShare(req, res));
 app.put('/v1/posts/:id', (req, res) => canopi2Controller.updatePost(req, res));
 app.delete('/v1/posts/:id', (req, res) => canopi2Controller.deletePost(req, res));
 
@@ -210,6 +228,10 @@ app.use('/v1/users', userRoutes);
 app.use('/v1/presence', presenceRoutes);
 app.use('/v1/visibility', visibilityRoutes);
 app.use('/chat', chatRoutes);
+
+// Meta-communities routes
+const metaCommunitiesRoutes = require('./routes/metaCommunities');
+app.use('/v1/meta-communities', metaCommunitiesRoutes);
 
 // Compatibility endpoints for existing extension
 app.get('/communities', (req, res) => {

@@ -50,10 +50,63 @@ class MetaLayerAPI {
       
       // First try to get from window.currentUser (set by authentication)
       if (window.currentUser && (window.currentUser.id || window.currentUser.user_id)) {
-        user = window.currentUser;
+        user = { ...window.currentUser }; // Create a copy to avoid modifying original
+
         console.log('🔍 USER_IDENTITY: ✅ Using window.currentUser for authentication:', user.id || user.user_id);
         console.log('🔍 USER_IDENTITY: ✅ User name:', user.name);
         console.log('🔍 USER_IDENTITY: ✅ User avatar:', user.avatarUrl);
+        console.log('🔍 USER_IDENTITY: ✅ User auraColor:', user.auraColor || user.aura_color);
+
+        // CRITICAL FIX: Handle case where auraColor is a Promise (from reactive systems)
+        if (user.auraColor && typeof user.auraColor === 'object' && typeof user.auraColor.then === 'function') {
+          console.log('🔍 USER_IDENTITY: ⚠️ auraColor is a Promise, resolving...');
+          console.log('🔍 USER_IDENTITY: Promise object:', user.auraColor);
+          try {
+            const resolvedAuraColor = await user.auraColor;
+            console.log('🔍 USER_IDENTITY: ✅ Resolved auraColor Promise to:', resolvedAuraColor);
+            user.auraColor = resolvedAuraColor;
+          } catch (error) {
+            console.warn('🔍 USER_IDENTITY: ❌ Failed to resolve auraColor Promise:', error);
+            console.warn('🔍 USER_IDENTITY: Error details:', error.message);
+            user.auraColor = null;
+          }
+        }
+
+        // CRITICAL FIX: If auraColor is missing or resolved to fallback, fetch it now to prevent delays
+        if (!user.auraColor && !user.aura_color && user.id && window.api) {
+          console.log('🔍 USER_IDENTITY: 🎨 AuraColor missing, fetching immediately...');
+          try {
+            const userResponse = await window.api.request(`/v1/users/${user.id}`, {
+              method: 'GET'
+            });
+
+            if (userResponse) {
+              const auraColor = userResponse.aura_color || userResponse.auraColor;
+              const avatarUrl = userResponse.avatar_url || userResponse.avatarUrl;
+
+              // Update the user object with fetched data
+              user.auraColor = auraColor;
+              user.aura_color = auraColor;
+              if (avatarUrl && !user.avatarUrl) {
+                user.avatarUrl = avatarUrl;
+              }
+
+              // Also update window.currentUser to prevent future fetches
+              if (window.currentUser) {
+                window.currentUser.auraColor = auraColor;
+                window.currentUser.aura_color = auraColor;
+                if (avatarUrl && !window.currentUser.avatarUrl) {
+                  window.currentUser.avatarUrl = avatarUrl;
+                }
+              }
+
+              console.log('🔍 USER_IDENTITY: ✅ AuraColor fetched immediately:', auraColor);
+              console.log('🔍 USER_IDENTITY: ✅ AvatarUrl updated:', avatarUrl);
+            }
+          } catch (error) {
+            console.warn('🔍 USER_IDENTITY: ⚠️ Failed to fetch auraColor immediately:', error.message);
+          }
+        }
       } else if (window.authManager && typeof window.authManager.getCurrentUser === 'function') {
         user = await window.authManager.getCurrentUser();
         console.log('🔍 USER_IDENTITY: ✅ Using authManager for authentication:', user?.id || user?.user_id);
@@ -67,7 +120,15 @@ class MetaLayerAPI {
         console.log('🔍 USER_IDENTITY: ❌ No user authentication available');
       }
       
-      console.log('🔍 USER_IDENTITY: Final user object for API:', user);
+      console.log('🔍 USER_IDENTITY: Final user object for API:', {
+        id: user?.id || user?.user_id,
+        name: user?.name,
+        email: user?.email,
+        avatarUrl: user?.avatarUrl,
+        auraColor: user?.auraColor || user?.aura_color,
+        hasAuraColor: !!(user?.auraColor || user?.aura_color),
+        auraColorType: typeof (user?.auraColor || user?.aura_color)
+      });
       console.log('🔍 USER_IDENTITY: === END API USER IDENTITY TRACE ===');
     } catch (error) {
       console.log('🔍 USER_IDENTITY: ❌ Error getting user authentication:', error);
@@ -98,6 +159,15 @@ class MetaLayerAPI {
       // Allow callers to opt-in to treating 404 as a non-throwing null result
       if (response.status === 404 && options.allow404) {
         console.warn('API 404 (allowed):', finalUrl);
+        return null;
+      }
+      if (response.status === 401 && options.allow401) {
+        console.warn('API 401 (allowed):', finalUrl);
+        return null;
+      }
+      // CRITICAL FIX: Handle 500 errors gracefully if allow500 option is set
+      if (response.status === 500 && options.allow500) {
+        console.warn('⚠️ API: 500 error (allowed):', finalUrl);
         return null;
       }
       if (!response.ok) {
@@ -161,6 +231,29 @@ class MetaLayerAPI {
       
       return data;
     } catch (error) {
+      // Handle connection refused errors gracefully (backend not running)
+      const isConnectionError = error.message && (
+        error.message.includes('Failed to fetch') || 
+        error.message.includes('ERR_CONNECTION_REFUSED') ||
+        error.message.includes('NetworkError') ||
+        error.name === 'TypeError' && error.message.includes('fetch')
+      );
+      
+      if (isConnectionError) {
+        // Only log as warning for connection errors, not as critical errors
+        // Suppress duplicate warnings (only log once per unique URL pattern)
+        const urlPattern = finalUrl.replace(/\/[a-f0-9-]+/g, '/[id]').replace(/[?&].*$/, '');
+        if (!window._apiConnectionErrors || !window._apiConnectionErrors[urlPattern]) {
+          if (!window._apiConnectionErrors) window._apiConnectionErrors = {};
+          window._apiConnectionErrors[urlPattern] = true;
+          console.warn('⚠️ API: Backend offline - connection refused:', urlPattern);
+          console.warn('💡 Extension will work in offline mode. Some features may be limited.');
+        }
+        // Always return null for connection errors to allow graceful degradation
+        // This prevents cascade of errors throughout the extension
+        return null;
+      }
+      // Log other errors normally
       console.error('API request failed:', error);
       throw error;
     }
@@ -172,7 +265,20 @@ class MetaLayerAPI {
     const userId = user?.id || user?.user_id;
     
     const url = userId ? `/communities?userId=${encodeURIComponent(userId)}` : '/communities';
-    return this.request(url);
+    
+    // CRITICAL FIX: Handle 500 errors gracefully by returning null instead of throwing
+    try {
+      const response = await this.request(url, { allow500: true }); // Allow 500 to return null
+      return response;
+    } catch (error) {
+      // CRITICAL FIX: For 500 errors, return null instead of throwing to allow graceful degradation
+      if (error.status === 500) {
+        console.warn('⚠️ API: getCommunities returned 500 error, returning null for graceful degradation');
+        return null;
+      }
+      // Re-throw other errors
+      throw error;
+    }
   }
 
   async getAvatars(communityId) {
@@ -206,7 +312,11 @@ class MetaLayerAPI {
       console.log('🔍 API: Error getting user authentication:', error);
     }
     
-    const response = await this.request(`/v1/presence/url?${params.toString()}`, { user });
+    // CRITICAL FIX: Pass user object to request method to ensure auth headers are sent
+    const response = await this.request(`/v1/presence/url?${params.toString()}`, { 
+      user,
+      method: 'GET'
+    });
     console.log('🔍 API: getPresenceByUrl response:', JSON.stringify(response, null, 2));
     return response;
   }

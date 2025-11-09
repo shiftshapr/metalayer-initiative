@@ -3,7 +3,7 @@
 # Backend API Test Script
 # Tests all the userEmail -> userId changes
 
-BASE_URL="http://localhost:3003"
+BASE_URL="http://localhost:3002"
 TEST_USER_ID="test-user-$(date +%s)"
 TEST_MESSAGE_ID="test-message-$(date +%s)"
 

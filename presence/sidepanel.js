@@ -394,140 +394,170 @@ async function setupModernCrossProfileCommunication() {
 
 
 
-// ===== MISSING FUNCTION: updateVisibleTab =====
-async function updateVisibleTab(avatars) {
-  console.log('🔍 VISIBILITY: updateVisibleTab called with avatars:', JSON.stringify(avatars, null, 2));
+// ===== HELPER FUNCTIONS: Time Display Formatting =====
+function formatTimeDisplay(enterTime) {
+  if (!enterTime) return 'offline';
+  const enter = new Date(enterTime);
+  const now = new Date();
+  const diffMs = now - enter;
+  const diffMins = Math.floor(diffMs / 60000);
   
-  // ROOT CAUSE FIX: Add current user to visibility list if not already present
-  // CRITICAL: Include isActive and lastSeen fields so status displays correctly
-  if (window.currentUser && (window.currentUser.id || window.currentUser.user_id)) {
-    const currentUserId = window.currentUser.id || window.currentUser.user_id;
-    const currentUserEmail = window.currentUser.email;
-    // Check by UUID, not email (different profiles may have same email)
-    const isCurrentUserInList = avatars.some(avatar => {
-      const avatarId = avatar.id || avatar.userId || avatar.user_id;
-      return avatarId && currentUserId && String(avatarId) === String(currentUserId);
-    });
-    
-    if (!isCurrentUserInList) {
-      console.log('🔍 VISIBILITY: Adding current user to visibility list');
-      const currentUserAvatar = {
-        id: currentUserId,
-        userId: currentUserId,
-        user_id: currentUserId,
-        email: currentUserEmail,
-        name: window.currentUser.name || (currentUserEmail ? currentUserEmail.split('@')[0] : 'User'),
-        avatarUrl: window.currentUser.avatarUrl, // Use the real Google avatar URL
-        auraColor: window.currentUser.auraColor || window.AVATAR_FALLBACK_COLOR,
-        isActive: true, // ROOT CAUSE FIX: Set isActive so status displays correctly
-        status: 'online',
-        enterTime: new Date().toISOString(),
-        lastSeen: new Date().toISOString() // ROOT CAUSE FIX: Include lastSeen for consistency
-      };
-      avatars.unshift(currentUserAvatar); // Add to beginning of list
-    }
-  }
+  if (diffMins < 1) return 'Now';
+  if (diffMins < 60) return `Online for ${diffMins} min${diffMins !== 1 ? 's' : ''}`;
   
-  // Store visibility data globally for real-time aura color access
-  window.currentVisibilityData = { active: avatars };
-  window.currentVisibilityDataUnfiltered = { active: avatars };
-  console.log('🔄 VISIBILITY: Stored visibility data globally for real-time aura access');
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) return `Online for ${diffHours} hour${diffHours !== 1 ? 's' : ''}`;
   
-  const visibleTab = document.getElementById('canopi-visible');
-  if (!visibleTab) {
-    console.log('❌ VISIBILITY: visibleTab element not found');
-    return;
-  }
-  
-  console.log('🔍 VISIBILITY: Updating visible tab with', avatars.length, 'avatars');
-  
-  // Get current user email for filtering
-  const currentUserEmail = window.currentUser ? window.currentUser.email : null;
-  console.log('🔍 VISIBILITY: Current user email:', currentUserEmail);
-  
-  // ROOT CAUSE FIX: Filter out ONLY the current user - show all other users
-  // CRITICAL: Use UUID matching, not email matching - different profiles may have same email
-  const currentUserId = window.currentUser?.id || window.currentUser?.user_id;
-  const usersWithAvatars = avatars.filter(avatar => {
-    // Match by UUID (primary) or email (fallback if UUID not available)
-    const avatarId = avatar.id || avatar.userId || avatar.user_id;
-    const isCurrentUser = (currentUserId && avatarId && String(avatarId) === String(currentUserId)) ||
-                        (!currentUserId && avatar.email === currentUserEmail);
-    
-    if (isCurrentUser) {
-      console.log('🔍 VISIBILITY: 🚫 FILTERING OUT current user from their own visibility list');
-      console.log('🔍 VISIBILITY: Current user ID:', currentUserId, 'Avatar ID:', avatarId);
-      return false;
-    }
-    
-    return true;
-  });
-  
-  console.log('🔍 VISIBILITY: Showing', usersWithAvatars.length, 'users with real avatars (filtered from', avatars.length, 'total)');
-  
-  // Create the visible users UI
-  visibleTab.innerHTML = `
-    <div class="visible-users">
-      <div class="visible-header" style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px; padding: 8px; background: var(--background-secondary); border-radius: 6px;">
-        <div class="visible-count" style="font-weight: bold; color: var(--text-primary);">
-          ${usersWithAvatars.length} visible
-        </div>
-        <input type="text" id="visible-search" placeholder="Search users..." style="flex: 1; padding: 4px 8px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--background-primary); color: var(--text-primary); font-size: 12px;">
-        <button id="go-invisible-btn" style="padding: 4px 8px; background: var(--accent-color); color: white; border: none; border-radius: 4px; font-size: 12px; cursor: pointer;">Go Invisible</button>
-      </div>
-      <ul class="item-list">
-        ${usersWithAvatars.map(avatar => `
-          <li class="item" style="display: flex; align-items: center; gap: 8px; padding: 8px; border-bottom: 1px solid var(--border-color);">
-            <div class="avatar-container" style="position: relative;">
-              <img src="${avatar.avatarUrl}" 
-                   alt="${avatar.name || avatar.email}" 
-                   style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover; border: 2px solid ${avatar.auraColor || window.AVATAR_FALLBACK_COLOR};">
-            </div>
-            <div class="user-info" style="flex: 1;">
-              <div class="user-name" style="font-weight: bold; color: var(--text-primary); font-size: 12px;">${avatar.name || avatar.email}</div>
-              <div class="user-status" style="color: var(--text-secondary); font-size: 10px;">
-                ${(avatar.isActive || avatar.status === 'online') && avatar.enterTime ? formatTimeDisplay(avatar.enterTime) : 
-                  ((avatar.status === 'recently_seen' || (!avatar.isActive && avatar.lastSeen)) && avatar.lastSeen ? formatLastSeenDisplay(avatar.lastSeen) : 
-                  'offline')}
-              </div>
-            </div>
-          </li>
-        `).join('')}
-      </ul>
-    </div>
-  `;
-  
-  console.log('✅ VISIBILITY: Visible tab updated successfully');
-  
-  // COMP METHOD: Refresh all message avatars now that visibility data is available
-  if (typeof window.refreshAllMessageAvatars === 'function') {
-    console.log('🔧 VISIBILITY: Refreshing all message avatars with updated visibility data');
-    window.refreshAllMessageAvatars();
-  }
-  
-  // ROOT CAUSE FIX: Start periodic status refresh to update "Now" to "Online for X mins"
-  // Clear any existing interval to prevent duplicates
-  if (window.visibilityStatusRefreshInterval) {
-    clearInterval(window.visibilityStatusRefreshInterval);
-  }
-  
-  // Refresh status display every 30 seconds to update "Now" -> "Online for X mins"
-  window.visibilityStatusRefreshInterval = setInterval(() => {
-    const visibleTab = document.getElementById('canopi-visible');
-    if (visibleTab && window.currentVisibilityData?.active && window.currentVisibilityData.active.length > 0) {
-      console.log('🔄 VISIBILITY: Periodic status refresh - updating time displays');
-      // Re-render the visible tab to update status times
-      window.updateVisibleTab(window.currentVisibilityData.active);
-    }
-  }, 30000); // Every 30 seconds
+  return enter.toLocaleTimeString();
 }
+
+function formatLastSeenDisplay(lastSeen) {
+  if (!lastSeen) return 'offline';
+  const seen = new Date(lastSeen);
+  const now = new Date();
+  const diffMs = now - seen;
+  const diffMins = Math.floor(diffMs / 60000);
+  
+  if (diffMins < 1) return 'Just now';
+  if (diffMins < 60) return `${diffMins} min${diffMins !== 1 ? 's' : ''} ago`;
+  
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) return `${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`;
+  
+  return seen.toLocaleTimeString();
+}
+
+// ===== REMOVED: updateVisibleTab moved to VisibilityManager.js per SD4 architecture =====
+// This function has been consolidated into features/VisibilityManager.js
+// All visibility tab logic is now in the VisibilityManager module
+async function updateVisibleTab_DEPRECATED(avatars) {
+  console.warn('⚠️ DEPRECATED: updateVisibleTab in sidepanel.js is deprecated. Use VisibilityManager.js version.');
+  // Delegate to VisibilityManager version if available
+  if (window.updateVisibleTab && window.updateVisibleTab !== updateVisibleTab_DEPRECATED) {
+    return await window.updateVisibleTab(avatars);
+  }
+  console.error('❌ VISIBILITY: updateVisibleTab not available from VisibilityManager');
+}
+
+  // ROOT CAUSE FIX: Don't define updateVisibleTab here if VisibilityManager already has it
+  // VisibilityManager.js loads before sidepanel.js, so it should already be available
+  // Only define this as a fallback if VisibilityManager failed to load
+  if (!window.updateVisibleTab) {
+    console.warn('⚠️ VISIBILITY: VisibilityManager.updateVisibleTab not found - defining fallback');
+    
+    async function updateVisibleTab(avatars) {
+      // Wait a moment for VisibilityManager to load
+      let attempts = 0;
+      while (attempts < 10 && (!window.updateVisibleTab || window.updateVisibleTab === updateVisibleTab)) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+        attempts++;
+      }
+
+      // If VisibilityManager version exists now, use it
+      if (window.updateVisibleTab && window.updateVisibleTab !== updateVisibleTab) {
+        return await window.updateVisibleTab(avatars);
+      }
+      
+      // Fallback: Minimal implementation (should not happen)
+      console.error('❌ VISIBILITY: Fallback updateVisibleTab called - VisibilityManager failed to load');
+      const visibleTab = document.getElementById('visibility-tab');
+      if (!visibleTab) {
+        console.error('❌ VISIBILITY: visibility-tab not found');
+        return;
+      }
+      // Don't show "Loading" - just leave it empty
+      if (visibleTab.innerHTML.trim() === '' || visibleTab.innerHTML.includes('Loading visibility data')) {
+        visibleTab.innerHTML = '';
+      }
+    }
+    
+    window.updateVisibleTab = updateVisibleTab;
+  }
 
 // ===== COMP METHOD: Message handling moved to CanopiModule.js =====
 // The addMessageToChat function has been moved to CanopiModule.js
 // to follow proper modular architecture principles
 
-// Make updateVisibleTab globally accessible
-window.updateVisibleTab = updateVisibleTab;
+// ===== REMOVED: updateVisibleTab moved to VisibilityManager.js per SD4 architecture =====
+// updateVisibleTab is now exported from features/VisibilityManager.js
+// Only set if VisibilityManager hasn't already set it
+if (!window.updateVisibleTab) {
+  window.updateVisibleTab = updateVisibleTab; // Fallback delegate
+}
+
+// ===== COMP METHOD: Real-time Aura Color Change Handler =====
+// Handles aura color changes from real-time updates (presence or broadcast)
+window.handleAuraChange = async function(auraChangeData) {
+  console.log('🎨 COMP METHOD: handleAuraChange called:', auraChangeData);
+  
+  try {
+    const { userId, auraColor, source } = auraChangeData;
+    
+    if (!userId || !auraColor) {
+      console.warn('⚠️ COMP METHOD: Invalid aura change data:', auraChangeData);
+      return;
+    }
+    
+    console.log(`🎨 COMP METHOD: Processing aura color change for user ${userId}: ${auraColor} (source: ${source})`);
+    
+    // COMP METHOD: Update visibility data immediately (priority 1)
+    // COMP METHOD: Use aura_color (snake_case) to match COMP standard
+    if (window.currentVisibilityDataUnfiltered?.active) {
+      const userInVisibility = window.currentVisibilityDataUnfiltered.active.find(u => 
+        String(u.id || u.userId || u.user_id) === String(userId)
+      );
+      if (userInVisibility) {
+        userInVisibility.aura_color = auraColor;
+        console.log('✅ COMP METHOD: Updated aura color in unfiltered visibility data');
+      }
+    }
+    
+    if (window.currentVisibilityData?.active) {
+      const userInVisibility = window.currentVisibilityData.active.find(u => 
+        String(u.id || u.userId || u.user_id) === String(userId)
+      );
+      if (userInVisibility) {
+        userInVisibility.aura_color = auraColor;
+      }
+    }
+    
+    // COMP METHOD: Update window.currentUser if it's the current user
+    if (window.currentUser && (window.currentUser.id || window.currentUser.user_id) === String(userId)) {
+      window.currentUser.aura_color = auraColor;
+      console.log('✅ COMP METHOD: Updated window.currentUser.aura_color');
+    }
+    
+    // COMP METHOD: Refresh all message avatars to propagate aura color
+    if (typeof window.refreshAllMessageAvatars === 'function') {
+      console.log('🔄 COMP METHOD: Refreshing all message avatars with new aura color');
+      await window.refreshAllMessageAvatars();
+    }
+    
+    // COMP METHOD: Refresh visibility avatars using updated data (don't re-fetch from DB)
+    // COMP METHOD: Call updateVisibleTab directly with updated visibility data to avoid DB delay
+    if (window.currentVisibilityDataUnfiltered?.active && typeof window.updateVisibleTab === 'function') {
+      console.log('🔄 COMP METHOD: Updating visible tab with refreshed aura color data');
+      // COMP METHOD: Use the updated visibility data directly (already has new aura color)
+      await window.updateVisibleTab(window.currentVisibilityDataUnfiltered.active);
+    } else if (typeof refreshVisibilityAvatars === 'function') {
+      console.log('🔄 COMP METHOD: Refreshing visibility avatars with new aura color (fallback)');
+      await refreshVisibilityAvatars();
+    }
+    
+    // COMP METHOD: Refresh profile avatar if it's the current user
+    // COMP METHOD: Skip visibility refresh since we already called updateVisibleTab above
+    if (window.currentUser && (window.currentUser.id || window.currentUser.user_id) === String(userId)) {
+      if (typeof window.updateUserAuraInUI === 'function') {
+        console.log('🔄 COMP METHOD: Refreshing profile avatar for current user');
+        await window.updateUserAuraInUI(userId, auraColor);
+      }
+    }
+    
+    console.log('✅ COMP METHOD: Aura color propagation complete for user:', userId);
+  } catch (error) {
+    console.error('❌ COMP METHOD: Error in handleAuraChange:', error);
+  }
+};
 
 // ===== ORCHESTRATION FUNCTION: refreshVisibilityAvatars =====
 async function refreshVisibilityAvatars() {
@@ -558,6 +588,33 @@ async function refreshVisibilityAvatars() {
       if (!client || typeof client.getPageUsers !== 'function') {
         console.error('❌ REFRESH_VISIBILITY: Client or getPageUsers not available');
         return [];
+      }
+      
+      // COMP METHOD: Before fetching, store current aura colors from visibility data
+      // This ensures we preserve aura color updates that haven't been saved to DB yet
+      // COMP METHOD: Exact same filter as CommunitiesModule for functional parity
+      const auraColorCache = {};
+      if (window.currentVisibilityDataUnfiltered?.active) {
+        window.currentVisibilityDataUnfiltered.active.forEach(user => {
+          const userId = String(user.id || user.userId || user.user_id);
+          const auraColor = user.aura_color; // COMP METHOD: Use aura_color (snake_case)
+          // COMP METHOD: Accept any valid aura color (including those that might be temporarily set)
+          if (userId && auraColor && auraColor.trim() !== '') {
+            auraColorCache[userId] = auraColor;
+            console.log(`🔍 COMP DEBUG: Cached aura color for ${userId}: ${auraColor}`);
+          }
+        });
+      }
+      
+      // COMP METHOD: Also check window.currentUser for current user's aura color
+      // This ensures real-time updates to current user are preserved
+      if (window.currentUser) {
+        const currentUserId = String(window.currentUser.id || window.currentUser.user_id);
+        const currentUserAuraColor = window.currentUser.aura_color;
+        if (currentUserId && currentUserAuraColor && currentUserAuraColor.trim() !== '') {
+          auraColorCache[currentUserId] = currentUserAuraColor;
+          console.log(`🔍 COMP DEBUG: Cached aura color from currentUser for ${currentUserId}: ${currentUserAuraColor}`);
+        }
       }
       
       console.log('🌐 REFRESH_VISIBILITY: Using COMP method - client.getPageUsers()');
@@ -597,7 +654,7 @@ async function refreshVisibilityAvatars() {
               name: userName,
               handle: userHandle,
               avatarUrl: 'https://lh3.googleusercontent.com/a/default-user=s96-c',
-              auraColor: '#ffffff',
+              aura_color: '#ffffff', // COMP METHOD: Use aura_color (snake_case)
               isActive: user.is_active || false,
               enterTime: user.enter_time || null,
               lastSeen: user.last_seen || new Date().toISOString(),
@@ -630,14 +687,30 @@ async function refreshVisibilityAvatars() {
                               (user.lastSeen || user.last_seen ? 'recently_seen' : 'offline')));
           
           // COMP METHOD: Map from COMP format to visibility format
-          // COMP returns: { user_email, user_id, is_active, last_seen, enter_time, status, isActive, enterTime, lastSeen, name, avatar_url }
+          // COMP returns: { user_email, user_id, is_active, last_seen, enter_time, status, isActive, enterTime, lastSeen, name, avatar_url, aura_color }
+          // COMP METHOD: Prioritize cached aura color (from real-time updates) over DB value
+          // COMP METHOD: Use string normalization for reliable cache lookup
+          const normalizedUserId = String(userId);
+          const cachedAuraColor = auraColorCache[normalizedUserId];
+          const dbAuraColor = user.aura_color; // COMP METHOD: COMP uses aura_color (snake_case) from DB
+          const finalAuraColor = cachedAuraColor || dbAuraColor || window.AVATAR_FALLBACK_COLOR;
+          
+          // COMP METHOD: Always prefer cached color if it exists (real-time updates take precedence)
+          if (cachedAuraColor) {
+            if (cachedAuraColor !== dbAuraColor) {
+              console.log(`🔍 COMP DEBUG: Using cached aura color for ${normalizedUserId}: ${cachedAuraColor} (DB had: ${dbAuraColor || 'none'})`);
+            } else {
+              console.log(`🔍 COMP DEBUG: Cached and DB aura colors match for ${normalizedUserId}: ${cachedAuraColor}`);
+            }
+          }
+          
           return {
             userId: user.id || user.user_id || 'unknown',
             handle: userHandle,
             name: userName,
             id: userId,
             avatarUrl: avatarUrl,
-            auraColor: user.aura_color || user.auraColor || window.AVATAR_FALLBACK_COLOR,
+            aura_color: finalAuraColor, // COMP METHOD: Use aura_color (snake_case) to match COMP
             // ROOT CAUSE FIX: Use isActive from COMP response (preserved from backend)
             isActive: user.isActive !== undefined ? user.isActive : (user.is_active !== undefined ? user.is_active : false),
             // ROOT CAUSE FIX: Include enterTime for "Online for X" display
@@ -801,20 +874,22 @@ async function updateUI(user) {
       let userAuraColor = null;
       
       // COMP METHOD: Get database aura color first, not stored white color
+      // COMP METHOD: Use aura_color (snake_case) to match COMP standard
       // Try to get from visibility data (database colors)
       if (window.currentVisibilityDataUnfiltered && window.currentVisibilityDataUnfiltered.active) {
         const userInVisibility = window.currentVisibilityDataUnfiltered.active.find(
-          u => u.email === user.email || u.userId === user.email
+          u => u.email === user.email || u.userId === user.email || u.id === user.id
         );
-        if (userInVisibility && userInVisibility.auraColor && userInVisibility.auraColor !== window.AVATAR_FALLBACK_COLOR) {
-          userAuraColor = userInVisibility.auraColor;
+        if (userInVisibility && userInVisibility.aura_color && userInVisibility.aura_color !== window.AVATAR_FALLBACK_COLOR) {
+          userAuraColor = userInVisibility.aura_color;
           console.log(`PROFILE_AVATAR: Using database aura color: ${userAuraColor}`);
         }
       }
       
       // Fallback to stored aura color only if no database color found
-      if (!userAuraColor && user.auraColor && user.auraColor !== null && user.auraColor !== 'null' && user.auraColor !== window.AVATAR_FALLBACK_COLOR) {
-        userAuraColor = user.auraColor;
+      // COMP METHOD: Use aura_color (snake_case) to match COMP standard
+      if (!userAuraColor && window.currentUser && window.currentUser.aura_color && window.currentUser.aura_color !== null && window.currentUser.aura_color !== 'null' && window.currentUser.aura_color !== window.AVATAR_FALLBACK_COLOR) {
+        userAuraColor = window.currentUser.aura_color;
         console.log(`PROFILE_AVATAR: Using stored aura color: ${userAuraColor}`);
       } else if (!userAuraColor) {
       // Try to get from real-time presence data (same as message avatars)
@@ -872,14 +947,69 @@ async function updateUI(user) {
         name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
         email: user.email,
         avatarUrl: realAvatarUrl,  // USE THE REAL AVATAR URL FROM DATABASE
-        auraColor: userAuraColor // Use aura color from presence API
+        aura_color: userAuraColor || window.AVATAR_FALLBACK_COLOR // COMP METHOD: Use aura_color (snake_case) to match COMP
       };
+      
+      // ROOT CAUSE FIX: Ensure auraColor (camelCase) is set, prioritizing visibility data
+      // Priority: 1) visibility data, 2) user object (camelCase), 3) user object (snake_case), 4) fallback
+      if (!userData.auraColor) {
+        // Try visibility data first (most reliable)
+        if (userAuraColor) {
+          userData.auraColor = userAuraColor;
+        }
+        // Then try userData.aura_color (snake_case)
+        else if (userData.aura_color && userData.aura_color !== window.AVATAR_FALLBACK_COLOR) {
+          userData.auraColor = userData.aura_color;
+        }
+        // Then try window.currentUser
+        else if (window.currentUser?.auraColor) {
+          userData.auraColor = window.currentUser.auraColor;
+        }
+        else if (window.currentUser?.aura_color) {
+          userData.auraColor = window.currentUser.aura_color;
+        }
+        // Fallback to generated color
+        else {
+          userData.auraColor = userAuraColor || window.AVATAR_FALLBACK_COLOR;
+        }
+      }
+      
+      // ROOT CAUSE FIX: Wait for visibility data if not available yet (prevent white flash)
+      if (userData.auraColor === window.AVATAR_FALLBACK_COLOR && (!window.currentVisibilityDataUnfiltered || !window.currentVisibilityDataUnfiltered.active)) {
+        console.log('⚠️ PROFILE_AVATAR: Visibility data not loaded yet, waiting...');
+        // Wait a moment for visibility data to load, then refresh
+        setTimeout(async () => {
+          if (window.currentVisibilityDataUnfiltered && window.currentVisibilityDataUnfiltered.active) {
+            const currentUserInVisibility = window.currentVisibilityDataUnfiltered.active.find(
+              u => u.email === user.email || u.userId === user.id || u.id === user.id
+            );
+            if (currentUserInVisibility && (currentUserInVisibility.auraColor || currentUserInVisibility.aura_color)) {
+              const correctAuraColor = currentUserInVisibility.auraColor || currentUserInVisibility.aura_color;
+              console.log(`✅ PROFILE_AVATAR: Updating aura color after visibility load: ${correctAuraColor}`);
+              // Update the avatar with correct aura color
+              userData.auraColor = correctAuraColor;
+              userData.aura_color = correctAuraColor;
+              // Recreate avatar with correct color
+              if (typeof window.AvatarUtils !== 'undefined' && window.AvatarUtils.createUnifiedAvatar && userAvatarContainer) {
+                const avatarHTML = await window.AvatarUtils.createUnifiedAvatar(userData, {
+                  size: 32,
+                  showStatus: false,
+                  showAura: true,
+                  context: 'profile'
+                });
+                userAvatarContainer.innerHTML = avatarHTML;
+              }
+            }
+          }
+        }, 500); // Wait 500ms for visibility data to load
+      }
       
       console.log(`PROFILE_AVATAR: Creating UNIFIED avatar for profile:`, {
         name: userData.name,
         email: userData.email,
         avatarUrl: userData.avatarUrl,
-        auraColor: userData.auraColor,
+        auraColor: userData.auraColor, // CRITICAL FIX: Use camelCase
+        aura_color: userData.aura_color,
         source: realAvatarUrl === (user.user_metadata?.avatar_url || user.picture) ? 'auth' : 'visibility-data'
       });
       
@@ -981,13 +1111,14 @@ async function updateUI(user) {
 
 // ===== COMP HELPER FUNCTIONS =====
 function getLatestAuraColorFromPresence(email) {
+  // COMP METHOD: Use aura_color (snake_case) to match COMP standard
   // Try to get aura color from unfiltered visibility data
   if (window.currentVisibilityDataUnfiltered && window.currentVisibilityDataUnfiltered.active) {
     const user = window.currentVisibilityDataUnfiltered.active.find(
       u => u.email === email || u.userId === email || u.id === email
     );
-    if (user && user.auraColor) {
-      return user.auraColor;
+    if (user && user.aura_color) {
+      return user.aura_color;
     }
   }
   return null;
@@ -1013,15 +1144,38 @@ window.diagnoseSystem = function() {
   }, 100);
   
   console.log('🔍 DIAGNOSTIC: Messages container:', !!document.querySelector('.chat-messages'));
-  console.log('🔍 DIAGNOSTIC: Visibility container:', !!document.querySelector('#canopi-visible'));
+  console.log('🔍 DIAGNOSTIC: Visibility container:', !!document.querySelector('#visibility-tab'));
   console.log('🔍 DIAGNOSTIC: Current URL data:', window.currentUrlData);
   console.log('🔍 DIAGNOSTIC: === END DIAGNOSTIC ===');
 };
 
 // ===== TAB EVENT HANDLERS (CRITICAL FOR FUNCTIONALITY) =====
-// Listen for tab updates to refresh visibility and messages
-if (typeof chrome !== 'undefined' && chrome.tabs) {
+// CRITICAL FIX: Move tab listeners to setupTabListeners() function
+// This ensures they only run AFTER CanopiModule.js is loaded
+// DO NOT set up listeners here - they will be set up in initializeSidepanel()
+
+function setupTabListeners() {
+  if (typeof chrome === 'undefined' || !chrome.tabs) {
+    console.warn('⚠️ TABS: Chrome tabs API not available');
+    return;
+  }
+  
   console.log('🔗 TABS: Setting up tab event handlers...');
+  
+  // CRITICAL FIX: Check if loadChatHistory is available before setting up listeners
+  if (typeof window.loadChatHistory !== 'function') {
+    console.warn('⚠️ TABS: loadChatHistory not available yet, deferring tab listener setup...');
+    // Retry after a delay
+    setTimeout(() => {
+      if (typeof window.loadChatHistory === 'function') {
+        console.log('✅ TABS: loadChatHistory now available, setting up tab listeners');
+        setupTabListeners();
+      } else {
+        console.error('❌ TABS: loadChatHistory still not available after delay');
+      }
+    }, 500);
+    return;
+  }
   
   // Listen for tab updates (URL changes, page loads)
   chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
@@ -1124,8 +1278,6 @@ if (typeof chrome !== 'undefined' && chrome.tabs) {
   });
   
   console.log('✅ TABS: Tab event handlers set up successfully');
-} else {
-  console.log('❌ TABS: Chrome tabs API not available');
 }
 
 // ===== USER SETTINGS FOR THRESHOLD CONFIGURATION =====
@@ -1262,8 +1414,8 @@ function clearContext() {
   }
   
   if (chatInput) {
-    // Clear all context data
-    delete chatInput.dataset.replyTo;
+    // COMP METHOD: Clear all context data - use replyingTo only
+    delete chatInput.dataset.replyingTo;
     delete chatInput.dataset.replyToConversation;
     delete chatInput.dataset.editingMessageId;
     delete chatInput.dataset.contextMode;
@@ -1432,6 +1584,86 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
   
+  // Handle shared message highlighting
+  if (message.type === 'HIGHLIGHT_SHARED_MESSAGE') {
+    console.log('🔗 SIDEPANEL: Received highlight request for message:', message.messageId);
+    
+    // Wait for sidebar to be ready, then highlight the message
+    const highlightMessage = async () => {
+      try {
+        // Check if we're on the correct page (check URL hash)
+        const currentUrl = window.location.href;
+        if (!currentUrl.includes(`#message=${message.messageId}`)) {
+          console.log('🔗 SIDEPANEL: Current page does not match message URL, waiting...');
+          // The page should have the hash, but if not, we'll still try to find the message
+        }
+        
+        // Wait for messages to load
+        let attempts = 0;
+        const maxAttempts = 20;
+        
+        const findAndHighlight = () => {
+          attempts++;
+          const messageElement = document.querySelector(`[data-message-id="${message.messageId}"]`);
+          
+          if (messageElement) {
+            console.log('🔗 SIDEPANEL: Message found, highlighting');
+            
+            // Scroll to message
+            messageElement.scrollIntoView({ 
+              behavior: 'smooth', 
+              block: 'center',
+              inline: 'nearest'
+            });
+            
+            // Add highlight class (defined in sidepanel.css) - this applies shake animation and styling
+            // Note: This class is called 'shared-message-highlight', NOT 'message-reply'
+            // 'message-reply' is a different class used for styling reply messages in threads
+            messageElement.classList.add('shared-message-highlight');
+            
+            // Remove highlight and animation after 2.5 seconds (shake completes in ~2s)
+            setTimeout(() => {
+              messageElement.classList.remove('shared-message-highlight');
+              messageElement.style.backgroundColor = '';
+              messageElement.style.borderLeft = '';
+              messageElement.style.boxShadow = '';
+              messageElement.style.borderRadius = '';
+            }, 2500);
+            
+            // Try to enter focus mode if available
+            if (typeof handleMessageFocus === 'function' && window.currentChatData) {
+              const messageData = window.currentChatData.find(m => m.id === message.messageId);
+              if (messageData) {
+                setTimeout(() => {
+                  handleMessageFocus(messageData).catch(err => {
+                    console.warn('🔗 SIDEPANEL: Could not enter focus mode:', err);
+                  });
+                }, 500);
+              }
+            }
+            
+            sendResponse({ success: true });
+          } else if (attempts < maxAttempts) {
+            setTimeout(findAndHighlight, 500);
+          } else {
+            console.warn('🔗 SIDEPANEL: Message not found after max attempts:', message.messageId);
+            sendResponse({ success: false, error: 'Message not found' });
+          }
+        };
+        
+        // Start trying after initial delay
+        setTimeout(findAndHighlight, 1000);
+        
+      } catch (error) {
+        console.error('🔗 SIDEPANEL: Error highlighting message:', error);
+        sendResponse({ success: false, error: error.message });
+      }
+    };
+    
+    highlightMessage();
+    return true; // Keep channel open for async response
+  }
+  
   if (message.type === 'TAB_CLOSED') {
     console.log('Tab closed:', message.tabId);
     handleTabClosed(message.tabId);
@@ -1471,26 +1703,93 @@ async function handleTabChange(tabId) {
         console.log('✅ TAB_CHANGE: Real-time subscription ensured');
       }
       
+      // CRITICAL FIX: Clear focus mode if active when tab changes
+      const chatMessages = document.querySelector('.chat-messages');
+      if (chatMessages && chatMessages.dataset.focusMode === 'true') {
+        console.log('🔄 TAB_CHANGE: Focus mode active, clearing it before tab change');
+        chatMessages.dataset.focusMode = 'false';
+        delete chatMessages.dataset.focusMessageId;
+        // Clear focus container if it exists
+        const focusContainer = chatMessages.querySelector('.focus-messages-container');
+        if (focusContainer) {
+          focusContainer.remove();
+        }
+        // Clear back row if it exists
+        const backRow = chatMessages.querySelector('.focus-back-row');
+        if (backRow) {
+          backRow.remove();
+        }
+        // Clear messages container
+        chatMessages.innerHTML = '';
+        console.log('✅ TAB_CHANGE: Focus mode cleared, ready for new page messages');
+      }
+      
       // Reload chat history for the new page (uses normalized URL)
       console.log('🔍 TAB_CHANGE: Checking loadChatHistory availability...');
       console.log('🔍 TAB_CHANGE: typeof window.loadChatHistory:', typeof window.loadChatHistory);
-      if (typeof window.loadChatHistory === 'function') {
-        console.log('🔍 TAB_CHANGE: Calling window.loadChatHistory...');
-        await window.loadChatHistory();
-        console.log('✅ TAB_CHANGE: loadChatHistory completed');
-      } else {
-        console.log('❌ TAB_CHANGE: loadChatHistory not available, trying direct call...');
-        // Try calling it directly in case it exists but isn't on window
-        try {
-          if (typeof loadChatHistory === 'function') {
-            console.log('🔍 TAB_CHANGE: Found loadChatHistory as direct function');
-            await loadChatHistory();
-            console.log('✅ TAB_CHANGE: loadChatHistory completed via direct call');
-          } else {
-            console.log('❌ TAB_CHANGE: loadChatHistory not found anywhere');
+      
+      // CRITICAL FIX: Retry mechanism if loadChatHistory not immediately available
+      // Increased retries and delay to handle async script loading
+      let loadAttempts = 0;
+      const maxAttempts = 10; // Increased from 5 to 10
+      const retryDelay = 300; // Increased from 200ms to 300ms
+      
+      const tryLoadChatHistory = async () => {
+        if (typeof window.loadChatHistory === 'function') {
+          console.log('🔍 TAB_CHANGE: Calling window.loadChatHistory...');
+          try {
+            await window.loadChatHistory();
+            console.log('✅ TAB_CHANGE: loadChatHistory completed');
+            return true;
+          } catch (error) {
+            console.error('❌ TAB_CHANGE: Error calling loadChatHistory:', error);
+            return false;
           }
-        } catch (error) {
-          console.log('❌ TAB_CHANGE: Error calling loadChatHistory:', error);
+        }
+        return false;
+      };
+      
+      let loaded = await tryLoadChatHistory();
+      
+      // Retry if not available - wait longer for script to load
+      while (!loaded && loadAttempts < maxAttempts) {
+        loadAttempts++;
+        console.log(`⏳ TAB_CHANGE: loadChatHistory not available, retrying (${loadAttempts}/${maxAttempts})...`);
+        console.log(`⏳ TAB_CHANGE: window.loadChatHistory type: ${typeof window.loadChatHistory}`);
+        console.log(`⏳ TAB_CHANGE: CanopiModule loaded: ${!!window.CanopiModule}`);
+        await new Promise(resolve => setTimeout(resolve, retryDelay));
+        loaded = await tryLoadChatHistory();
+      }
+      
+      if (!loaded) {
+        console.error('❌ TAB_CHANGE: loadChatHistory not available after retries');
+        console.error('❌ TAB_CHANGE: This may cause messages not to display');
+        console.error('❌ TAB_CHANGE: Check if CanopiModule.js is loaded correctly');
+        
+        // CRITICAL FIX: Try to manually trigger loadChatHistory if CanopiModule exists
+        if (window.CanopiModule && typeof window.CanopiModule.loadChatHistory === 'function') {
+          console.log('🔧 TAB_CHANGE: Found loadChatHistory in CanopiModule, calling directly...');
+          try {
+            await window.CanopiModule.loadChatHistory();
+            console.log('✅ TAB_CHANGE: loadChatHistory completed via CanopiModule');
+            loaded = true;
+          } catch (error) {
+            console.error('❌ TAB_CHANGE: Error calling CanopiModule.loadChatHistory:', error);
+          }
+        }
+        
+        // Show error message if still not loaded
+        if (!loaded) {
+          const chatMessages = document.querySelector('.chat-messages');
+          if (chatMessages) {
+            chatMessages.innerHTML = `
+              <div style="padding: 20px; text-align: center; color: var(--text-secondary);">
+                <p>⚠️ Unable to load messages. Please refresh the page.</p>
+                <p style="font-size: 12px; margin-top: 8px;">If this persists, check the console for errors.</p>
+                <p style="font-size: 11px; margin-top: 4px; color: #999;">loadChatHistory not available after ${maxAttempts} retries</p>
+              </div>
+            `;
+          }
         }
       }
       // Update visibility list for the new page (uses normalized URL)
@@ -1896,6 +2195,50 @@ async function startPresenceTracking() {
           window.handlePresenceChange(payload);
         } else {
           console.error('❌ PRESENCE: handlePresenceChange not available');
+        }
+        // COMP METHOD: Check if aura color changed and propagate immediately
+        if (payload.new) {
+          const auraColor = payload.new.aura_color || payload.new.auraColor;
+          if (auraColor) {
+            console.log('🎨 COMP METHOD: Aura color detected in presence update:', auraColor);
+            const userId = payload.new.user_id || payload.new.user_email || payload.new.id;
+            if (userId && typeof window.handleAuraChange === 'function') {
+              console.log(`🎨 COMP METHOD: Triggering handleAuraChange for user ${userId} with color ${auraColor}`);
+              window.handleAuraChange({
+                userId: userId,
+                auraColor: auraColor,
+                source: 'presence_update'
+              }).catch(error => {
+                console.error('❌ COMP METHOD: Error in handleAuraChange from presence update:', error);
+              });
+            } else {
+              console.warn('⚠️ COMP METHOD: Cannot trigger handleAuraChange - missing userId or handler');
+            }
+          }
+        }
+      })
+      .on('broadcast', { event: 'AURA_COLOR_CHANGED' }, (payload) => {
+        console.log('🎨 COMP METHOD: Aura color change broadcast received:', payload);
+        // COMP METHOD: Handle both direct payload and nested payload structure
+        const auraData = payload.payload || payload;
+        const userId = auraData.userId || payload.userId || auraData.user_id;
+        const auraColor = auraData.auraColor || payload.auraColor || auraData.aura_color;
+        
+        console.log(`🎨 COMP METHOD: Extracted userId: ${userId}, auraColor: ${auraColor}`);
+        
+        if (userId && auraColor && typeof window.handleAuraChange === 'function') {
+          console.log(`🎨 COMP METHOD: Triggering handleAuraChange from broadcast for user ${userId} with color ${auraColor}`);
+          window.handleAuraChange({
+            userId: userId,
+            auraColor: auraColor,
+            source: 'broadcast'
+          }).catch(error => {
+            console.error('❌ COMP METHOD: Error in handleAuraChange from broadcast:', error);
+          });
+        } else {
+          console.warn('⚠️ COMP METHOD: Cannot trigger handleAuraChange - missing userId/auraColor or handler');
+          console.warn('⚠️ COMP METHOD: Broadcast payload:', payload);
+          console.warn('⚠️ COMP METHOD: Extracted userId:', userId, 'auraColor:', auraColor);
         }
       })
       .on('postgres_changes', {
@@ -2736,6 +3079,39 @@ function initializeSidepanel() {
            console.log('✅ SETUP: Message input event listeners added');
          }
          
+         // === SETUP TAB EVENT LISTENERS (CRITICAL FIX) ===
+         // CRITICAL FIX: Set up tab listeners AFTER CanopiModule is loaded
+         console.log('🔗 SETUP: Setting up tab event listeners (after CanopiModule load)...');
+         console.log('🔗 SETUP: Checking loadChatHistory availability:', typeof window.loadChatHistory);
+         console.log('🔗 SETUP: CanopiModule available:', !!window.CanopiModule);
+         
+         // CRITICAL FIX: Wait for loadChatHistory if not immediately available
+         if (typeof window.loadChatHistory !== 'function') {
+           console.warn('⚠️ SETUP: loadChatHistory not available, waiting...');
+           let waitAttempts = 0;
+           const maxWaitAttempts = 10;
+           const waitDelay = 200;
+           
+           while (typeof window.loadChatHistory !== 'function' && waitAttempts < maxWaitAttempts) {
+             waitAttempts++;
+             console.log(`⏳ SETUP: Waiting for loadChatHistory (${waitAttempts}/${maxWaitAttempts})...`);
+             await new Promise(resolve => setTimeout(resolve, waitDelay));
+           }
+           
+           if (typeof window.loadChatHistory !== 'function') {
+             console.error('❌ SETUP: loadChatHistory still not available after waiting');
+           } else {
+             console.log('✅ SETUP: loadChatHistory now available');
+           }
+         }
+         
+         if (typeof setupTabListeners === 'function') {
+           setupTabListeners();
+           console.log('✅ SETUP: Tab event listeners added');
+         } else {
+           console.warn('⚠️ SETUP: setupTabListeners function not available');
+         }
+         
          // === INITIALIZE REAL GOOGLE AUTH (FROM COMP) ===
       console.log('🚀 INIT: Initializing real Google auth...');
       if (typeof window.initializeRealGoogleAuth === 'function') {
@@ -2745,14 +3121,32 @@ function initializeSidepanel() {
         console.warn('⚠️ INIT: initializeRealGoogleAuth not available');
       }
       
-      // === INITIALIZE THEME (FROM COMP) ===
-      console.log('🎨 THEME: Initializing theme...');
-      if (typeof window.initializeTheme === 'function') {
-        window.initializeTheme();
-        console.log('✅ THEME: Theme initialized');
-      } else {
-        console.warn('⚠️ THEME: initializeTheme not available');
-      }
+      // === INITIALIZE THEME ===
+      // Initialize theme after user authentication to prevent flash
+      console.log('🎨 THEME: Initializing theme after user authentication...');
+      const initThemeAfterAuth = async () => {
+        // Wait for currentUser to be available (should be set by auth system)
+        let attempts = 0;
+        while (!window.currentUser?.id && attempts < 30) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+          attempts++;
+        }
+
+        if (window.currentUser?.id) {
+          console.log('🎨 THEME: User authenticated, loading theme...');
+          if (typeof window.initializeTheme === 'function') {
+            await window.initializeTheme();
+            console.log('✅ THEME: Theme initialized successfully');
+          } else {
+            console.warn('⚠️ THEME: initializeTheme function not available');
+          }
+        } else {
+          console.warn('⚠️ THEME: User not authenticated within timeout, using defaults');
+        }
+      };
+
+      // Start theme initialization
+      initThemeAfterAuth();
       
       
       // === UPDATE MESSAGE VISUAL HIERARCHY (FROM COMP) ===
@@ -2888,8 +3282,41 @@ function initializeSidepanel() {
           // COMP METHOD: Load communities AFTER authentication with user context
           console.log('🔍 INIT: Loading communities with user context...');
           try {
-            const result = await loadCommunities();
-            console.log('🔍 INIT: Communities loaded with user context:', result);
+            // Initialize CommunitiesModule (SD3: Integrated community dropdown activation)
+            if (typeof CommunitiesModule !== 'undefined') {
+              try {
+                if (!window.communitiesModule) {
+                  window.communitiesModule = new CommunitiesModule();
+                }
+                if (!window.communitiesModule.isInitialized) {
+                  await window.communitiesModule.initialize();
+                  console.log('✅ INIT: CommunitiesModule initialized');
+                }
+              } catch (error) {
+                console.error('❌ INIT: Failed to initialize CommunitiesModule:', error);
+              }
+            }
+
+            // Ensure loadCommunities is available (CommunitiesModule.js must be loaded)
+            if (typeof window.loadCommunities === 'function') {
+              const result = await window.loadCommunities();
+              console.log('🔍 INIT: Communities loaded with user context:', result);
+            } else {
+              console.warn('⚠️ INIT: loadCommunities not available yet, retrying...');
+              // Retry after a short delay
+              setTimeout(async () => {
+                if (typeof window.loadCommunities === 'function') {
+                  try {
+                    const result = await window.loadCommunities();
+                    console.log('🔍 INIT: Communities loaded with user context (retry):', result);
+                  } catch (error) {
+                    console.error('❌ INIT: Error loading communities with user context (retry):', error);
+                  }
+                } else {
+                  console.error('❌ INIT: loadCommunities still not available after retry');
+                }
+              }, 500);
+            }
           } catch (error) {
             console.error('❌ INIT: Error loading communities with user context:', error);
           }
@@ -2987,13 +3414,7 @@ function formatLastSeenDisplay(lastSeen) {
 let profileManager = null;
 if (typeof ProfileManager !== 'undefined') {
   profileManager = new ProfileManager();
-  console.log('✅ ProfileManager initialized');
-  
-  // Set up profile menu and aura modal
-  if (profileManager.setupProfileMenuAndAuraModal) {
-    profileManager.setupProfileMenuAndAuraModal();
-    console.log('✅ ProfileManager: Profile menu and aura modal set up');
-  }
+  console.log('✅ ProfileManager initialized (will set up profile avatar after authentication)');
 } else {
   console.log('⚠️ ProfileManager not available');
 }

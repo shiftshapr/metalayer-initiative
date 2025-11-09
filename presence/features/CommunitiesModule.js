@@ -21,7 +21,8 @@ class CommunitiesModule {
     this.log('INFO', 'Initializing CommunitiesModule...');
     
     try {
-      // TODO: Initialize community systems here
+      // Initialize community dropdown activation
+      this.initializeCommunityDropdown();
       
       this.isInitialized = true;
       this.log('INFO', 'CommunitiesModule initialized successfully');
@@ -29,6 +30,108 @@ class CommunitiesModule {
       this.log('ERROR', 'Failed to initialize CommunitiesModule:', error);
       throw error;
     }
+  }
+
+  /**
+   * Initialize community dropdown activation
+   * Ensures community dropdown is properly activated in sidepanel
+   * SD3: Integrated from COMMUNITY_DROPDOWN_ACTIVATOR.js
+   */
+  initializeCommunityDropdown() {
+    this.log('INFO', 'Initializing community dropdown...');
+    
+    const activateDropdown = () => {
+      const trigger = document.querySelector('.community-dropdown-trigger');
+      const panel = document.getElementById('community-dropdown-panel');
+      
+      if (!trigger || !panel) {
+        this.log('WARN', 'Community dropdown trigger or panel not found, retrying...');
+        setTimeout(activateDropdown, 500);
+        return;
+      }
+
+      this.log('INFO', 'Found community dropdown trigger and panel elements');
+
+      // CRITICAL FIX: Clone trigger to remove any existing listeners
+      const newTrigger = trigger.cloneNode(true);
+      if (trigger.parentNode) {
+        trigger.parentNode.replaceChild(newTrigger, trigger);
+      }
+
+      // CRITICAL FIX: Add mousedown handler first (fires before click)
+      newTrigger.addEventListener('mousedown', (e) => {
+        this.log('DEBUG', 'Community dropdown trigger mousedown event');
+        e.stopPropagation();
+        // Don't prevent default - allow click to fire
+      });
+
+      // CRITICAL FIX: Add click handler
+      newTrigger.addEventListener('click', (e) => {
+        this.log('DEBUG', 'Community dropdown trigger clicked');
+        e.stopPropagation();
+        e.preventDefault();
+        
+        const isVisible = panel.style.display === 'block' || 
+                         (panel.style.display === '' && window.getComputedStyle(panel).display === 'block');
+        
+        if (isVisible) {
+          panel.style.display = 'none';
+          this.log('DEBUG', 'Community dropdown hidden');
+        } else {
+          panel.style.display = 'block';
+          this.log('DEBUG', 'Community dropdown shown');
+        }
+      });
+
+      // CRITICAL FIX: Ensure pointer events are enabled
+      newTrigger.style.pointerEvents = 'auto';
+      newTrigger.style.cursor = 'pointer';
+      newTrigger.style.userSelect = 'none';
+      
+      // Ensure all child elements also allow pointer events
+      const triggerChildren = newTrigger.querySelectorAll('*');
+      triggerChildren.forEach(child => {
+        child.style.pointerEvents = 'auto';
+        child.style.cursor = 'pointer';
+      });
+
+      this.log('INFO', 'Community dropdown event listeners attached');
+
+      // Setup close button
+      const closeBtn = document.getElementById('close-community-dropdown');
+      if (closeBtn) {
+        closeBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          panel.style.display = 'none';
+          this.log('DEBUG', 'Community dropdown closed via close button');
+        });
+      }
+
+      // Close dropdown when clicking outside
+      document.addEventListener('click', (e) => {
+        if (panel.style.display === 'block' || 
+            window.getComputedStyle(panel).display === 'block') {
+          if (!panel.contains(e.target) && !newTrigger.contains(e.target)) {
+            panel.style.display = 'none';
+            this.log('DEBUG', 'Community dropdown closed via outside click');
+          }
+        }
+      });
+
+      return true;
+    };
+
+    // Auto-activate on page load
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => {
+        setTimeout(activateDropdown, 1000);
+      });
+    } else {
+      setTimeout(activateDropdown, 1000);
+    }
+
+    // Export for manual invocation
+    window.activateCommunityDropdown = activateDropdown;
   }
 
   /**
@@ -59,7 +162,22 @@ async function loadCommunities() {
       
       console.log('Loading communities...');
       const response = await api.getCommunities();
+      
+      // CRITICAL FIX: Handle null/undefined response from API (500 errors, connection errors)
+      if (!response || response === null) {
+        console.warn('⚠️ COMMUNITIES: API returned null/undefined response (likely 500 error or connection issue)');
+        // Don't throw - return empty array to prevent breaking the UI
+        console.log('🔧 COMMUNITIES: Returning empty array to prevent UI breakage');
+        return [];
+      }
+      
       let communities = response.communities || response; // Handle both formats
+      
+      // CRITICAL FIX: Ensure communities is an array
+      if (!Array.isArray(communities)) {
+        console.warn('⚠️ COMMUNITIES: Response is not an array, converting...');
+        communities = communities ? [communities] : [];
+      }
       
       // SD1 CRITICAL FIX: Filter out owner/admin fields that contain themetalayer
       console.log('🔍 SD1 FIX: Filtering out owner/admin fields to prevent themetalayer confusion');
@@ -189,26 +307,102 @@ async function loadCommunities() {
       console.error('Failed to load communities:', error);
       console.log(`Failed to load communities: ${error.message}`);
       
+      // CRITICAL FIX: Don't break UI on API errors - use fallback gracefully
       // Fallback: show default community
-      updateCommunityDropdown([{ id: 'default', name: 'Main Community' }]);
+      console.log('🔧 COMMUNITIES: Using fallback default community due to API error');
+      updateCommunityDropdown([{ id: 'comm-001', name: 'Public Square' }]);
+      
+      // CRITICAL FIX: Load chat history even when communities fail to load
+      // Use default community (comm-001) as fallback
+      console.log('🔍 INIT: Attempting to load chat history with default community (comm-001)');
+      if (typeof window.loadChatHistory === 'function') {
+        console.log('🔍 INIT: loadChatHistory available, loading chat history with default community...');
+        try {
+          await window.loadChatHistory('comm-001');
+          console.log('✅ INIT: Chat history loaded successfully with default community');
+        } catch (chatError) {
+          console.error('❌ INIT: Failed to load chat history:', chatError);
+        }
+      } else {
+        console.log('🔍 INIT: loadChatHistory not available, waiting for CanopiModule...');
+        // Wait a bit for CanopiModule to load
+        setTimeout(async () => {
+          if (typeof window.loadChatHistory === 'function') {
+            console.log('🔍 INIT: loadChatHistory now available, loading chat history with default community...');
+            try {
+              await window.loadChatHistory('comm-001');
+              console.log('✅ INIT: Chat history loaded successfully with default community');
+            } catch (chatError) {
+              console.error('❌ INIT: Failed to load chat history:', chatError);
+            }
+          } else {
+            console.log('❌ INIT: loadChatHistory still not available after retry');
+          }
+        }, 1000);
+      }
     }
   }
   
 
-  function updateCommunityDropdown(communities) {
+  async function updateCommunityDropdown(communities) {
     const communityList = document.querySelector('.community-list');
     if (!communityList) return;
+    
+    // Helper functions for state management
+    const getState = window.getState || (window.StateManager && typeof window.StateManager.get === 'function' 
+      ? window.StateManager.get.bind(window.StateManager)
+      : async (key) => {
+          if (window.StateManager && typeof window.StateManager.get === 'function') {
+            return await window.StateManager.get(key);
+          }
+          return null;
+        });
+    const setState = window.setState || (window.StateManager && typeof window.StateManager.set === 'function'
+      ? window.StateManager.set.bind(window.StateManager)
+      : async (key, value) => {
+          if (window.StateManager && typeof window.StateManager.set === 'function') {
+            return await window.StateManager.set(key, value);
+          }
+        });
+    
+    // Get current active communities and primary community
+    const activeCommunities = await getState('activeCommunities') || [];
+    const primaryCommunityId = await getState('primaryCommunity') || (communities[0]?.id);
     
     // Clear existing communities
     communityList.innerHTML = '';
     
-    // Add communities to the list
+    // Update primary community name in header
+    const primaryCommunity = communities.find(c => c.id === primaryCommunityId);
+    const currentCommunityNameEl = document.getElementById('current-community-name');
+    if (currentCommunityNameEl && primaryCommunity) {
+      currentCommunityNameEl.textContent = primaryCommunity.name;
+    }
+    
+    // Add communities to the list with checkboxes and three-dot menu
     communities.forEach((community, index) => {
+      const isActive = activeCommunities.includes(community.id) || (!activeCommunities.length && index === 0);
+      const isPrimary = community.id === primaryCommunityId;
+      
       const li = document.createElement('li');
+      li.className = 'community-item';
+      li.dataset.communityId = community.id;
+      
       li.innerHTML = `
-        <img src="/images/community${index + 1}.png" alt="Community" data-community-fallback="true">
-        <span>${community.name}</span>
-        ${index === 0 ? '<span class="primary-tag">Primary</span>' : ''}
+        <img src="/images/community${index + 1}.png" alt="Community" data-community-fallback="true" class="community-icon">
+        <span class="community-name">${community.name}</span>
+        ${isPrimary ? '<span class="primary-tag">Primary</span>' : ''}
+        <label class="community-checkbox-wrapper">
+          <input type="checkbox" class="community-checkbox" ${isActive ? 'checked' : ''} data-community-id="${community.id}">
+        </label>
+        ${!isPrimary ? `
+        <button class="community-menu-btn" data-community-id="${community.id}" title="Community options">
+          <span>⋯</span>
+        </button>
+        <div class="community-menu" style="display: none;">
+          <button class="menu-item make-primary-btn" data-community-id="${community.id}">Make primary</button>
+        </div>
+        ` : ''}
       `;
       
       // Add error handler for community image
@@ -219,12 +413,140 @@ async function loadCommunities() {
         });
       }
       
-      // Add click handler to switch communities
-      li.addEventListener('click', () => {
-        switchCommunity(community);
+      // Checkbox handler - toggle active status
+      const checkbox = li.querySelector('.community-checkbox');
+      checkbox.addEventListener('change', async (e) => {
+        e.stopPropagation();
+        const communityId = e.target.dataset.communityId;
+        let activeCommunities = await getState('activeCommunities') || [];
+        const currentPrimaryId = await getState('primaryCommunity');
+        
+        if (e.target.checked) {
+          if (!activeCommunities.includes(communityId)) {
+            activeCommunities.push(communityId);
+          }
+        } else {
+          activeCommunities = activeCommunities.filter(id => id !== communityId);
+          // Can't uncheck primary community
+          if (communityId === currentPrimaryId) {
+            e.target.checked = true;
+            alert('Cannot deactivate primary community. Make another community primary first.');
+            return;
+          }
+        }
+        
+        await setState('activeCommunities', activeCommunities);
+        console.log('✅ Community active status updated:', communityId, e.target.checked);
+        
+        // Reload visibility and messages for all active communities
+        if (typeof window.refreshVisibilityAvatars === 'function') {
+          window.refreshVisibilityAvatars();
+        }
+        if (typeof window.loadChatHistory === 'function') {
+          const primary = await getState('primaryCommunity');
+          await window.loadChatHistory(primary);
+        }
       });
       
+      // Three-dot menu handler (only for non-primary communities)
+      const menuBtn = li.querySelector('.community-menu-btn');
+      const menu = li.querySelector('.community-menu');
+      
+      // Only attach handler if menu button exists (non-primary communities only)
+      if (menuBtn && menu) {
+        menuBtn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          // Toggle menu
+          const isVisible = menu.style.display === 'block';
+          // Close all other menus
+          document.querySelectorAll('.community-menu').forEach(m => m.style.display = 'none');
+          menu.style.display = isVisible ? 'none' : 'block';
+        });
+      }
+      
+      // Make primary handler (only for non-primary communities)
+      const makePrimaryBtn = li.querySelector('.make-primary-btn');
+      
+      // Only attach handler if button exists (non-primary communities only)
+      if (makePrimaryBtn && menu) {
+        makePrimaryBtn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const communityId = e.target.dataset.communityId;
+          
+          try {
+            // Get current user
+            const user = await window.authManager.getCurrentUser();
+            const userId = user?.id || user?.user_id;
+            
+            if (!userId) {
+              console.error('❌ Cannot select community: User not authenticated');
+              alert('Please sign in to change your primary community');
+              return;
+            }
+
+            // Get Chrome tab ID
+            let tabId = null;
+            if (window.tabIdManager) {
+              tabId = await window.tabIdManager.getCurrentTabId();
+            }
+
+            // Call API to select community (sets as primary and active)
+            if (window.api && typeof window.api.selectCommunity === 'function') {
+              await window.api.selectCommunity(userId, communityId, tabId);
+              console.log('✅ Community selected via API:', community.name, 'tabId:', tabId);
+            } else {
+              // Fallback to local state if API not available
+              console.warn('⚠️ API not available, using local state fallback');
+              await setState('primaryCommunity', communityId);
+              
+              let activeCommunities = await getState('activeCommunities') || [];
+              if (!activeCommunities.includes(communityId)) {
+                activeCommunities.push(communityId);
+                await setState('activeCommunities', activeCommunities);
+              }
+            }
+            
+            // Update local state for UI
+            await setState('primaryCommunity', communityId);
+            
+            // Ensure it's active
+            let activeCommunities = await getState('activeCommunities') || [];
+            if (!activeCommunities.includes(communityId)) {
+              activeCommunities.push(communityId);
+              await setState('activeCommunities', activeCommunities);
+            }
+            
+            // Close menu and refresh dropdown
+            menu.style.display = 'none';
+            await updateCommunityDropdown(communities);
+            
+            // Update header
+            const currentCommunityNameEl = document.getElementById('current-community-name');
+            if (currentCommunityNameEl) {
+              currentCommunityNameEl.textContent = community.name;
+            }
+            
+            // Reload chat for new primary community
+            if (typeof window.loadChatHistory === 'function') {
+              await window.loadChatHistory(communityId);
+            }
+            
+            console.log('✅ Primary community changed to:', community.name);
+          } catch (error) {
+            console.error('❌ Error selecting community:', error);
+            alert('Failed to change primary community. Please try again.');
+          }
+        });
+      }
+      
       communityList.appendChild(li);
+    });
+    
+    // Close menu when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.community-menu-btn') && !e.target.closest('.community-menu')) {
+        document.querySelectorAll('.community-menu').forEach(m => m.style.display = 'none');
+      }
     });
   }
   
@@ -347,6 +669,21 @@ async function loadCombinedAvatars(communityIds) {
           console.log('✅✅✅ LOAD_VISIBILITY: Found active users using COMP method ✅✅✅');
           console.log('✅ LOAD_VISIBILITY: Count:', users.length);
           
+          // COMP METHOD: Before processing users, cache current aura colors from visibility data
+          // This ensures we preserve aura color updates that haven't been saved to DB yet
+          const auraColorCache = {};
+          if (window.currentVisibilityDataUnfiltered?.active) {
+            window.currentVisibilityDataUnfiltered.active.forEach(user => {
+              const userId = user.id || user.userId || user.user_id;
+              const auraColor = user.aura_color; // COMP METHOD: Use aura_color (snake_case)
+              if (userId && auraColor && auraColor !== window.AVATAR_FALLBACK_COLOR && 
+                  auraColor !== '#ffffff' && auraColor !== 'ffffff') {
+                auraColorCache[userId] = auraColor;
+                console.log(`🔍 COMP METHOD: CommunitiesModule cached aura color for ${userId}: ${auraColor}`);
+              }
+            });
+          }
+          
           // Helper to safely derive a display name
           const safeNameFrom = (u) => {
             const email = u?.user_email;
@@ -396,14 +733,28 @@ async function loadCombinedAvatars(communityIds) {
               console.warn(`COMP FALLBACK: Using generic avatar for ${user.user_email}: ${avatarUrl}`);
             }
             
+            // COMP METHOD: Get user ID for aura color cache lookup
+            const userId = user.user_id || user.userId || user.id || user.user_email;
+            
+            // COMP METHOD: Prioritize cached aura color (from real-time updates) over DB value
+            // This preserves real-time aura color changes that haven't been saved to DB yet
+            // COMP uses aura_color from DB (snake_case)
+            const cachedAuraColor = auraColorCache[userId];
+            const dbAuraColor = user.aura_color;
+            const finalAuraColor = cachedAuraColor || dbAuraColor || window.AVATAR_FALLBACK_COLOR;
+            
+            if (cachedAuraColor && cachedAuraColor !== dbAuraColor) {
+              console.log(`🔍 COMP METHOD: CommunitiesModule using cached aura color for ${userId}: ${cachedAuraColor} (DB had: ${dbAuraColor})`);
+            }
+            
             return {
-              id: user.user_id || user.userId || user.id || user.user_email,
-              userId: user.user_id || user.userId || user.id || user.user_email,
+              id: userId,
+              userId: userId,
               email: user.user_email,
               name: userName,
               handle: userHandle,
               avatarUrl: avatarUrl,
-              auraColor: user.aura_color || window.AVATAR_FALLBACK_COLOR,
+              aura_color: finalAuraColor,
               communityId: 'comm-001',
               communityName: 'Community comm-001',
               lastSeen: user.last_seen,
@@ -446,25 +797,48 @@ async function loadCombinedAvatars(communityIds) {
   
                 if (retryResponse && retryResponse.length > 0) {
                   console.log('🔍 VISIBILITY: Retry successful - found', retryResponse.length, 'active users');
+                  
+                  // COMP METHOD: Cache aura colors before processing retry response
+                  const retryAuraColorCache = {};
+                  if (window.currentVisibilityDataUnfiltered?.active) {
+                    window.currentVisibilityDataUnfiltered.active.forEach(user => {
+                      const userId = user.id || user.userId || user.user_id;
+                      const auraColor = user.aura_color; // COMP METHOD: Use aura_color (snake_case)
+                      if (userId && auraColor && auraColor !== window.AVATAR_FALLBACK_COLOR && 
+                          auraColor !== '#ffffff' && auraColor !== 'ffffff') {
+                        retryAuraColorCache[userId] = auraColor;
+                      }
+                    });
+                  }
+                  
                   // Convert to expected format
                   const formattedResponse = {
-                    active: retryResponse.map(user => ({
-                      id: user.user_email,
-                      userId: user.user_email,
-                      email: user.user_email,
-                      name: user.user_email.split('@')[0],
-                      handle: user.user_email.split('@')[0],
-                      avatarUrl: user.avatar_url,
-                      auraColor: user.aura_color || window.AVATAR_FALLBACK_COLOR,
-                      communityId: 'comm-001',
-                      communityName: 'Community comm-001',
-                      lastSeen: user.last_seen,
-                      availability: null,
-                      customLabel: null,
-                      enterTime: user.enter_time,
-                      isActive: user.is_active,
-                      status: 'online'
-                    })),
+                    active: retryResponse.map(user => {
+                      const userId = user.user_email || user.user_id;
+                      // COMP METHOD: Prioritize cached aura color over DB value
+                      // COMP uses aura_color from DB (snake_case)
+                      const cachedAuraColor = retryAuraColorCache[userId];
+                      const dbAuraColor = user.aura_color;
+                      const finalAuraColor = cachedAuraColor || dbAuraColor || window.AVATAR_FALLBACK_COLOR;
+                      
+                      return {
+                        id: userId,
+                        userId: userId,
+                        email: user.user_email,
+                        name: user.user_email.split('@')[0],
+                        handle: user.user_email.split('@')[0],
+                        avatarUrl: user.avatar_url,
+                        aura_color: finalAuraColor,
+                        communityId: 'comm-001',
+                        communityName: 'Community comm-001',
+                        lastSeen: user.last_seen,
+                        availability: null,
+                        customLabel: null,
+                        enterTime: user.enter_time,
+                        isActive: user.is_active,
+                        status: 'online'
+                      };
+                    }),
                     pageId: currentUri.replace(/[^a-zA-Z0-9]/g, '_'),
                     url: currentUri
                   };

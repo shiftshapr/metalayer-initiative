@@ -120,6 +120,48 @@ async function authenticateWithSupabase(user) {
           window.currentUser.id = appUser.id;
           window.currentUser.user_id = appUser.id;
           console.log('✅ AUTH: Set window.currentUser.id to AppUser UUID:', appUser.id);
+          
+          // CRITICAL FIX: Fetch complete user data including auraColor using the UUID we just got
+          // POST /v1/users/:email may not return auraColor, so do GET /v1/users/:id for complete data
+          try {
+            const completeUserData = await window.api.request(`/v1/users/${appUser.id}`, {
+              method: 'GET'
+            });
+
+            if (completeUserData) {
+              // Set auraColor from the complete user data (same approach as PreRenderInitializer)
+              const auraColor = completeUserData.aura_color || completeUserData.auraColor;
+              if (auraColor) {
+                window.currentUser.auraColor = auraColor;
+                console.log('✅ AUTH: Set window.currentUser.auraColor from complete user data:', auraColor);
+              } else {
+                console.log('ℹ️ AUTH: No auraColor in complete user data (user may not have set one yet)');
+                // Set to null so APIModule.js knows to fetch it
+                window.currentUser.auraColor = null;
+              }
+
+              // Also update avatarUrl if it differs from Google OAuth avatar
+              const dbAvatarUrl = completeUserData.avatar_url || completeUserData.avatarUrl;
+              if (dbAvatarUrl && dbAvatarUrl !== window.currentUser.avatarUrl) {
+                window.currentUser.avatarUrl = dbAvatarUrl;
+                console.log('✅ AUTH: Updated window.currentUser.avatarUrl from database:', dbAvatarUrl);
+              }
+
+              // CRITICAL FIX: Also update AuthManager with complete user data
+              if (window.authManager && typeof window.authManager.updateUserProfile === 'function') {
+                window.authManager.updateUserProfile({
+                  auraColor: window.currentUser.auraColor,
+                  avatarUrl: window.currentUser.avatarUrl,
+                  aura_color: window.currentUser.auraColor
+                });
+                console.log('✅ AUTH: Updated AuthManager with complete user data');
+              }
+            }
+          } catch (error) {
+            console.warn('⚠️ AUTH: Could not fetch complete user data for auraColor:', error);
+            // Set to null so APIModule.js knows to fetch it
+            window.currentUser.auraColor = null;
+          }
         }
       } catch (error) {
         console.warn('⚠️ AUTH: Could not fetch AppUser UUID, will be set on next API call:', error);
@@ -339,6 +381,48 @@ async function authenticateWithSupabase(user) {
           window.currentUser.id = appUser.id;
           window.currentUser.user_id = appUser.id;
           console.log('✅ AUTH: Set window.currentUser.id to AppUser UUID:', appUser.id);
+          
+          // CRITICAL FIX: Fetch complete user data including auraColor using the UUID we just got
+          // POST /v1/users/:email may not return auraColor, so do GET /v1/users/:id for complete data
+          try {
+            const completeUserData = await window.api.request(`/v1/users/${appUser.id}`, {
+              method: 'GET'
+            });
+
+            if (completeUserData) {
+              // Set auraColor from the complete user data (same approach as PreRenderInitializer)
+              const auraColor = completeUserData.aura_color || completeUserData.auraColor;
+              if (auraColor) {
+                window.currentUser.auraColor = auraColor;
+                console.log('✅ AUTH: Set window.currentUser.auraColor from complete user data:', auraColor);
+              } else {
+                console.log('ℹ️ AUTH: No auraColor in complete user data (user may not have set one yet)');
+                // Set to null so APIModule.js knows to fetch it
+                window.currentUser.auraColor = null;
+              }
+
+              // Also update avatarUrl if it differs from Google OAuth avatar
+              const dbAvatarUrl = completeUserData.avatar_url || completeUserData.avatarUrl;
+              if (dbAvatarUrl && dbAvatarUrl !== window.currentUser.avatarUrl) {
+                window.currentUser.avatarUrl = dbAvatarUrl;
+                console.log('✅ AUTH: Updated window.currentUser.avatarUrl from database:', dbAvatarUrl);
+              }
+
+              // CRITICAL FIX: Also update AuthManager with complete user data
+              if (window.authManager && typeof window.authManager.updateUserProfile === 'function') {
+                window.authManager.updateUserProfile({
+                  auraColor: window.currentUser.auraColor,
+                  avatarUrl: window.currentUser.avatarUrl,
+                  aura_color: window.currentUser.auraColor
+                });
+                console.log('✅ AUTH: Updated AuthManager with complete user data');
+              }
+            }
+          } catch (error) {
+            console.warn('⚠️ AUTH: Could not fetch complete user data for auraColor:', error);
+            // Set to null so APIModule.js knows to fetch it
+            window.currentUser.auraColor = null;
+          }
         }
       } catch (error) {
         console.warn('⚠️ AUTH: Could not fetch AppUser UUID, will be set on next API call:', error);

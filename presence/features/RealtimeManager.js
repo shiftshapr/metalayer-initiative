@@ -21,13 +21,26 @@ class RealtimeManager {
     this.log('INFO', 'Initializing RealtimeManager...');
     
     try {
-      // Initialize AurasIntegration if available
+      // COMP METHOD: Initialize AurasIntegration if available
+      // This integration enables real-time aura color propagation
       if (window.aurasIntegration && typeof window.aurasIntegration.initialize === 'function') {
         this.log('INFO', 'Initializing AurasIntegration...');
-        await window.aurasIntegration.initialize();
-        this.log('INFO', 'AurasIntegration initialized successfully');
+        try {
+          const initSuccess = await window.aurasIntegration.initialize();
+          if (initSuccess) {
+            this.log('INFO', 'AurasIntegration initialized successfully');
+          } else {
+            this.log('WARN', 'AurasIntegration initialization returned false - may work with limited functionality');
+            // COMP METHOD: Don't fail completely - aura can still work via Supabase directly
+          }
+        } catch (error) {
+          this.log('ERROR', 'AurasIntegration initialization failed:', error);
+          // COMP METHOD: Don't throw - continue initialization - aura can work via Supabase directly
+          this.log('WARN', 'Continuing without AurasIntegration - aura functionality will use Supabase directly');
+        }
       } else {
         this.log('WARN', 'AurasIntegration not available for initialization');
+        this.log('INFO', 'Aura functionality will use Supabase directly');
       }
       
       // COMP METHOD: Initialize presence tracking
@@ -304,10 +317,20 @@ async function sendSupabaseMessage(message) {
   console.log('supabase_send', { messageType: message.type, timestamp: Date.now() });
   
   try {
-    // COMP METHOD: Only require Auras integration for non-presence messages
-    if (message.type !== 'PRESENCE_UPDATE' && (!window.aurasIntegration || !window.aurasIntegration.isInitialized)) {
-      console.error('❌ SUPABASE: Auras integration not initialized');
-      return false;
+    // COMP METHOD: Auras integration is optional for aura messages - can use Supabase directly
+    // Only warn for non-presence, non-aura messages that require integration
+    if (message.type !== 'PRESENCE_UPDATE' && 
+        message.type !== 'AURA_COLOR_CHANGED' && 
+        (!window.aurasIntegration || !window.aurasIntegration.isInitialized)) {
+      // COMP METHOD: For aura messages, allow them to proceed even without integration
+      // Aura changes can work through Supabase real-time directly
+      if (message.type === 'AURA_COLOR_CHANGED') {
+        console.warn('⚠️ SUPABASE: Auras integration not initialized, using direct Supabase approach for aura change');
+        // Continue with message - aura can work via Supabase directly
+      } else {
+        console.error('❌ SUPABASE: Auras integration not initialized and message type requires it:', message.type);
+        return false;
+      }
     }
     
     console.log('info', 'Sending message via Supabase real-time', {

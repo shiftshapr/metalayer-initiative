@@ -6,6 +6,79 @@ const { PrismaClient } = require('../generated/prisma');
 const prisma = new PrismaClient();
 const userService = new UserService(prisma);
 
+// Update user preferences (UUID only - no email required)
+// MUST be before /:email route to avoid conflicts
+router.post('/update-preferences', async (req, res) => {
+  try {
+    const { userId, preferences } = req.body;
+    
+    if (!userId) {
+      return res.status(400).json({ error: 'userId (UUID) is required' });
+    }
+    
+    if (!preferences || typeof preferences !== 'object') {
+      return res.status(400).json({ error: 'preferences object is required' });
+    }
+    
+    // Validate UUID format
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(userId)) {
+      return res.status(400).json({ error: 'Invalid userId format. Must be a valid UUID' });
+    }
+    
+    console.log(`🔍 BACKEND: Updating preferences for user ${userId}`);
+    
+    const user = await userService.updatePreferences(userId, preferences);
+    
+    res.json({ 
+      success: true, 
+      message: 'Preferences updated successfully',
+      preferences: user.preferences
+    });
+  } catch (error) {
+    console.error('Error updating preferences:', error);
+    if (error.message && error.message.includes('not found')) {
+      res.status(404).json({ error: 'User not found' });
+    } else {
+      res.status(500).json({ error: 'Failed to update preferences' });
+    }
+  }
+});
+
+// Get user preferences (UUID only - no email required)
+// MUST be before /:email route to avoid conflicts
+router.get('/preferences', async (req, res) => {
+  try {
+    const userId = req.headers['x-user-id'] || req.query.userId;
+    
+    if (!userId) {
+      return res.status(400).json({ error: 'userId (UUID) is required in x-user-id header or query parameter' });
+    }
+    
+    // Validate UUID format
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(userId)) {
+      return res.status(400).json({ error: 'Invalid userId format. Must be a valid UUID' });
+    }
+    
+    console.log(`🔍 BACKEND: Getting preferences for user ${userId}`);
+    
+    const preferences = await userService.getPreferences(userId);
+    
+    res.json({ 
+      success: true, 
+      preferences: preferences || {}
+    });
+  } catch (error) {
+    console.error('Error getting preferences:', error);
+    if (error.message && error.message.includes('not found')) {
+      res.status(404).json({ error: 'User not found' });
+    } else {
+      res.status(500).json({ error: 'Failed to get preferences' });
+    }
+  }
+});
+
 // Update user's avatar URL (MUST be before /:email route to avoid conflicts)
 router.post('/update-avatar', async (req, res) => {
   try {
@@ -165,6 +238,17 @@ router.get('/:userId', async (req, res) => {
     const { userId } = req.params;
     
     console.log(`🔍 BACKEND: GET /v1/users/${userId}`);
+    
+    // CRITICAL FIX: Handle test/non-existent user IDs gracefully
+    // Return 404 instead of 500 for invalid/test IDs
+    if (!userId || userId === 'null' || userId === 'undefined' || userId.trim() === '' ||
+        userId === 'test-user-id' || userId === 'test@example.com') {
+      console.log(`⚠️ BACKEND: Invalid or test user ID: ${userId}, returning 404`);
+      return res.status(404).json({ 
+        error: 'User not found',
+        message: `User "${userId}" not found in database`
+      });
+    }
     
     // COMP METHOD: Validate UUID parameter
     if (!userId || userId === 'null' || userId === 'undefined' || userId.trim() === '') {

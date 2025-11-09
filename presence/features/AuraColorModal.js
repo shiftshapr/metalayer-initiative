@@ -47,7 +47,74 @@ class AuraColorModal {
 // ===== AURA COLOR FUNCTIONS (Move from sidepanel.js) =====
 // TODO: Move these functions from sidepanel.js:
 
-function showColorPickerModal() {
+// COMP METHOD: Get current user aura color from database (source of truth)
+async function getCurrentUserAvatarBgColor() {
+  console.log('🎨 COMP METHOD: Fetching current aura color from database...');
+  
+  // COMP METHOD: Priority 1 - Check database via API (source of truth)
+  if (window.currentUser && window.api) {
+    const userId = window.currentUser.id || window.currentUser.user_id;
+    if (userId) {
+      try {
+        console.log('🎨 COMP METHOD: Fetching aura color from API for userId:', userId);
+        const userData = await window.api.request(`/v1/users/${encodeURIComponent(userId)}`, {
+          method: 'GET',
+          allow404: true
+        });
+        
+        // COMP METHOD: API may return auraColor (camelCase), but we standardize to aura_color internally
+        const apiAuraColor = userData.auraColor || userData.aura_color;
+        if (apiAuraColor) {
+          const dbColor = apiAuraColor.startsWith('#') ? apiAuraColor : `#${apiAuraColor}`;
+          console.log('✅ COMP METHOD: Found aura color in database:', dbColor);
+          return dbColor;
+        } else {
+          console.log('⚠️ COMP METHOD: No aura color in database response');
+        }
+      } catch (error) {
+        console.warn('⚠️ COMP METHOD: Failed to fetch from database, using fallback:', error);
+      }
+    }
+  }
+  
+  // COMP METHOD: Priority 2 - Check visibility data (real-time, may be more up-to-date)
+  if (window.currentVisibilityDataUnfiltered?.active) {
+    const userId = window.currentUser?.id || window.currentUser?.user_id;
+    if (userId) {
+      const userInVisibility = window.currentVisibilityDataUnfiltered.active.find(u => 
+        String(u.id || u.userId || u.user_id) === String(userId)
+      );
+      // COMP METHOD: Use aura_color (snake_case) to match COMP standard
+      const visibilityAuraColor = userInVisibility?.aura_color;
+      if (visibilityAuraColor && visibilityAuraColor !== window.AVATAR_FALLBACK_COLOR) {
+        console.log('✅ COMP METHOD: Found aura color in visibility data:', visibilityAuraColor);
+        return visibilityAuraColor;
+      }
+    }
+  }
+  
+  // COMP METHOD: Priority 3 - Check window.currentUser
+  // COMP METHOD: Use aura_color (snake_case) to match COMP standard
+  if (window.currentUser && window.currentUser.aura_color && window.currentUser.aura_color !== window.AVATAR_FALLBACK_COLOR) {
+    console.log('✅ COMP METHOD: Found aura color in window.currentUser:', window.currentUser.aura_color);
+    return window.currentUser.aura_color;
+  }
+  
+  // COMP METHOD: Priority 4 - Fallback to generated color based on name
+  if (window.currentUser) {
+    const name = window.currentUser.user_metadata?.full_name || window.currentUser.name || 'User';
+    const generatedColor = getAvatarColor(name);
+    console.log('⚠️ COMP METHOD: Using generated fallback color:', generatedColor);
+    return generatedColor;
+  }
+  
+  // COMP METHOD: Final fallback
+  const fallbackColor = window.AVATAR_FALLBACK_COLOR || '#ffffff';
+  console.log('⚠️ COMP METHOD: Using default fallback color:', fallbackColor);
+  return fallbackColor;
+}
+
+async function showColorPickerModal() {
   console.log('🎨 COMP METHOD: Opening color picker modal...');
   
   // Check if modal already exists and is visible
@@ -55,6 +122,28 @@ function showColorPickerModal() {
   if (existingModal) {
     console.log('🎨 COMP METHOD: Modal already exists, showing it');
     existingModal.style.display = 'flex';
+    
+    // COMP METHOD: Reset button state in case it was stuck in "Saving..." from previous operation
+    const saveBtn = document.getElementById('color-picker-save');
+    if (saveBtn) {
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'Save Color';
+      console.log('✅ COMP METHOD: Reset save button state');
+    }
+    
+    // COMP METHOD: Update the input with current database value
+    const colorInput = document.getElementById('color-input');
+    if (colorInput) {
+      try {
+        const currentColor = await getCurrentUserAvatarBgColor();
+        const currentHex = currentColor.replace('#', '');
+        colorInput.value = currentHex;
+        updateColorPreview(currentHex);
+        console.log('✅ COMP METHOD: Updated existing modal with database value:', currentColor);
+      } catch (error) {
+        console.error('❌ COMP METHOD: Error updating existing modal:', error);
+      }
+    }
     return;
   }
   
@@ -86,7 +175,7 @@ function showColorPickerModal() {
   document.body.insertAdjacentHTML('beforeend', modalHTML);
   
   // Wait for DOM to be ready before attaching event listeners
-  setTimeout(() => {
+  setTimeout(async () => {
     const modal = document.getElementById('color-picker-modal');
     const colorInput = document.getElementById('color-input');
     const previewCircle = document.getElementById('color-preview-circle');
@@ -100,11 +189,21 @@ function showColorPickerModal() {
       return;
     }
     
-    // Get current color and set initial values
-    const currentColor = getCurrentUserAvatarBgColor();
-    const currentHex = currentColor.replace('#', '');
-    colorInput.value = currentHex;
-    updateColorPreview(currentHex);
+    // COMP METHOD: Get current color from database and set initial values
+    try {
+      const currentColor = await getCurrentUserAvatarBgColor();
+      const currentHex = currentColor.replace('#', '');
+      colorInput.value = currentHex;
+      updateColorPreview(currentHex);
+      console.log('✅ COMP METHOD: Modal initialized with database aura color:', currentColor);
+    } catch (error) {
+      console.error('❌ COMP METHOD: Error fetching current aura color:', error);
+      // Fallback to default
+      const fallbackColor = window.AVATAR_FALLBACK_COLOR || '#ffffff';
+      const currentHex = fallbackColor.replace('#', '');
+      colorInput.value = currentHex;
+      updateColorPreview(currentHex);
+    }
     
     // Remove any existing event listeners to prevent duplicates
     const newColorInput = colorInput.cloneNode(true);
@@ -134,68 +233,195 @@ function showColorPickerModal() {
       updateColorPreview(defaultHex);
     });
     
+    // COMP METHOD: Save button click handler with timeout and proper state management
     saveBtn.addEventListener('click', async () => {
-      const hex = newColorInput.value.replace('#', '');
-      if (isValidHex(hex)) {
-        console.log('🎨 Saving aura color:', '#' + hex);
-        // Use aura color directly - no separate background color function needed
-        const auraColor = '#' + hex;
-        console.log('🎨 Setting aura color:', auraColor);
+      console.log('🎨 COMP METHOD: Save button clicked');
+      
+      // COMP METHOD: Prevent double-clicks by checking if already saving
+      if (saveBtn.disabled && saveBtn.textContent === 'Saving...') {
+        console.log('⚠️ COMP METHOD: Save operation already in progress, ignoring click');
+        return;
+      }
+      
+      // Disable save button to prevent double-clicks
+      saveBtn.disabled = true;
+      saveBtn.textContent = 'Saving...';
+      
+      // COMP METHOD: Set timeout to prevent hanging (30 seconds max)
+      const timeoutId = setTimeout(() => {
+        console.error('❌ COMP METHOD: Save operation timed out after 30 seconds');
+        alert('Save operation timed out. Please try again.');
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Save Color';
+      }, 30000);
+      
+      try {
+        const hex = newColorInput.value.replace('#', '').trim();
         
-        // Apply aura color to profile avatar using unified system
-        if (window.currentUser) {
-          window.currentUser.auraColor = auraColor;
-          updateUI(window.currentUser);
-          
-          // Update all message avatars with new aura color (UUID)
-          console.log('🔍 AURA DEBUG: Updating all message avatars with new aura color');
-          updateAllMessageAvatars(window.currentUser.id, auraColor);
-          
-          // Update all visibility avatars with new aura color (UUID)
-          console.log('🔍 AURA DEBUG: Updating all visibility avatars with new aura color');
-          updateAllVisibilityAvatars(window.currentUser.id, auraColor);
-          
-          // Send aura change via real-time system
-          if (window.aurasIntegration && window.aurasIntegration.isInitialized) {
-            window.aurasIntegration.setAura(window.currentUser.id, auraColor);
-          }
+        // COMP METHOD: Validate hex color
+        if (!isValidHex(hex)) {
+          clearTimeout(timeoutId);
+          alert('Please enter a valid 6-digit hex color (e.g., 45B7D1)');
+          saveBtn.disabled = false;
+          saveBtn.textContent = 'Save Color';
+          return;
         }
         
-        // Save aura color to storage and database
-        if (typeof window.setState === 'function') {
-          window.setState('userAvatarBgColor', auraColor);
+        // COMP METHOD: Format aura color properly
+        const formattedColor = hex.startsWith('#') ? hex : `#${hex}`;
+        console.log('🎨 COMP METHOD: Saving aura color:', formattedColor);
+        
+        // COMP METHOD: Get user ID
+        const userId = window.currentUser?.id || window.currentUser?.user_id;
+        if (!userId) {
+          clearTimeout(timeoutId);
+          console.error('❌ COMP METHOD: No user ID available for saving aura color');
+          alert('Error: User not logged in. Please refresh the page.');
+          saveBtn.disabled = false;
+          saveBtn.textContent = 'Save Color';
+          return;
         }
         
-        // Save aura color to database via API
+        // COMP METHOD: Save aura color to database first (source of truth) with timeout
+        console.log('🎨 COMP METHOD: Saving to database for userId:', userId);
         try {
-          const userId = window.currentUser?.id;
-          if (userId) {
-            console.log('🎨 Saving aura color to database for userId:', userId);
-            const result = await window.api.request(`/v1/users/${encodeURIComponent(userId)}/aura-color`, {
-              method: 'PUT',
-              headers: {
-                'X-User-Id': userId
-              },
-              body: JSON.stringify({
-                auraColor: auraColor
-              })
-            });
-            
-            console.log('✅ Aura color saved to database:', result);
-          }
+          const savePromise = window.api.request(`/v1/users/${encodeURIComponent(userId)}/aura-color`, {
+            method: 'PUT',
+            body: JSON.stringify({
+              auraColor: formattedColor
+            })
+          });
+          
+          // COMP METHOD: Race against timeout
+          const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Database save timeout')), 15000)
+          );
+          
+          const result = await Promise.race([savePromise, timeoutPromise]);
+          clearTimeout(timeoutId);
+          
+          console.log('✅ COMP METHOD: Aura color saved to database:', result);
         } catch (error) {
-          console.error('❌ Error saving aura color to database:', error);
+          clearTimeout(timeoutId);
+          console.error('❌ COMP METHOD: Error saving aura color to database:', error);
+          console.error('❌ COMP METHOD: Error details:', error.message);
+          alert(`Error saving aura color: ${error.message || 'Unknown error'}`);
+          saveBtn.disabled = false;
+          saveBtn.textContent = 'Save Color';
+          return;
         }
         
-        // Update UI with new aura color
-        updateUserAuraInUI(window.currentUser?.id, auraColor);
+        // COMP METHOD: Update window.currentUser immediately
+        // COMP METHOD: Use aura_color (snake_case) to match COMP standard
+        if (window.currentUser) {
+          window.currentUser.aura_color = formattedColor;
+          window.currentUser.auraColor = formattedColor; // Also set camelCase version
+          console.log('✅ COMP METHOD: Updated window.currentUser.aura_color and auraColor');
+        }
         
-        // Broadcast aura change via WebSocket
-        broadcastAuraChange(auraColor);
+        // COMP METHOD: Save to storage (if available)
+        if (typeof window.setState === 'function') {
+          window.setState('userAvatarBgColor', formattedColor);
+        }
         
+        // CRITICAL FIX: Cache in Chrome storage for instant display on next load
+        // Chrome storage persists as long as Chrome profile is logged in
+        if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+          try {
+            await new Promise((resolve) => {
+              chrome.storage.local.set({ userAuraColor: formattedColor, auraColor: formattedColor }, () => {
+                console.log('💾 AURA_COLOR_MODAL: Cached aura color in Chrome storage:', formattedColor);
+                resolve();
+              });
+            });
+          } catch (error) {
+            console.warn('⚠️ AURA_COLOR_MODAL: Could not cache to Chrome storage:', error);
+          }
+        }
+        
+        // COMP METHOD: Update all UI elements (profile, message, visibility avatars) with timeout
+        console.log('🔄 COMP METHOD: Updating all UI elements with new aura color');
+        try {
+          const updatePromise = updateUserAuraInUI(userId, formattedColor);
+          const updateTimeout = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('UI update timeout')), 10000)
+          );
+
+          await Promise.race([updatePromise, updateTimeout]);
+          console.log('✅ COMP METHOD: UI update completed');
+
+          // COMP METHOD: Dispatch event to notify ProfileManager of aura color update
+          document.dispatchEvent(new CustomEvent('auraColorUpdated', {
+            detail: {
+              color: formattedColor,
+              user: window.currentUser,
+              userId: userId
+            }
+          }));
+          console.log('✅ COMP METHOD: Dispatched auraColorUpdated event');
+        } catch (error) {
+          console.warn('⚠️ COMP METHOD: UI update timed out or failed:', error);
+          // Continue anyway - database save was successful
+        }
+        
+        // COMP METHOD: Trigger handleAuraChange immediately for local propagation
+        // This ensures the change propagates even if broadcast fails or for same-user tabs
+        if (typeof window.handleAuraChange === 'function') {
+          try {
+            await window.handleAuraChange({
+              userId: userId,
+              auraColor: formattedColor,
+              source: 'local_save'
+            });
+            console.log('✅ COMP METHOD: Local aura change propagation triggered');
+          } catch (error) {
+            console.warn('⚠️ COMP METHOD: Failed to trigger local aura change propagation:', error);
+          }
+        }
+        
+        // COMP METHOD: Send aura change via real-time system (non-blocking)
+        if (window.aurasIntegration && window.aurasIntegration.isInitialized) {
+          try {
+            window.aurasIntegration.setAura(userId, formattedColor);
+            console.log('✅ COMP METHOD: Aura color set in aurasIntegration');
+          } catch (error) {
+            console.warn('⚠️ COMP METHOD: Failed to set aura in aurasIntegration:', error);
+          }
+        }
+        
+        // COMP METHOD: Broadcast aura change via WebSocket (non-blocking)
+        try {
+          broadcastAuraChange(formattedColor).catch(error => {
+            console.warn('⚠️ COMP METHOD: Failed to broadcast aura change:', error);
+          });
+        } catch (error) {
+          console.warn('⚠️ COMP METHOD: Failed to broadcast aura change:', error);
+        }
+        
+        // COMP METHOD: Trigger visibility refresh after a delay to pick up backend update
+        // This ensures other users' tabs will see the change even if broadcast fails
+        setTimeout(async () => {
+          console.log('🔄 COMP METHOD: Refreshing visibility to pick up backend aura color update');
+          if (typeof window.refreshVisibilityAvatars === 'function') {
+            try {
+              await window.refreshVisibilityAvatars();
+              console.log('✅ COMP METHOD: Visibility refreshed with backend aura color');
+            } catch (error) {
+              console.warn('⚠️ COMP METHOD: Visibility refresh failed:', error);
+            }
+          }
+        }, 2000); // COMP METHOD: Wait 2 seconds for backend to update user_presence
+        
+        // COMP METHOD: Close modal after successful save
+        console.log('✅ COMP METHOD: Aura color change complete, closing modal');
         closeColorPickerModal();
-      } else {
-        alert('Please enter a valid 6-digit hex color (e.g., 45B7D1)');
+        
+      } catch (error) {
+        clearTimeout(timeoutId);
+        console.error('❌ COMP METHOD: Unexpected error in save handler:', error);
+        alert(`Error: ${error.message || 'Unknown error occurred'}`);
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Save Color';
       }
     });
     
@@ -222,17 +448,24 @@ function showColorPickerModal() {
 }
 
 function closeColorPickerModal() {
+  console.log('🎨 COMP METHOD: Closing color picker modal...');
   const modal = document.getElementById('color-picker-modal');
   if (modal) {
     modal.style.display = 'none';
+    
+    // COMP METHOD: Reset button state when closing modal
+    const saveBtn = document.getElementById('color-picker-save');
+    if (saveBtn) {
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'Save Color';
+      console.log('✅ COMP METHOD: Reset save button state on modal close');
+    }
   }
 }
 
 
 // Global functions for user avatar background color configuration (accessible from browser console)
-// REMOVED - No separate background color functions needed
-// window.setUserAvatarBgColor = setUserAvatarBgColor;
-// window.resetUserAvatarBgColor = resetUserAvatarBgColor;
+// COMP METHOD: Export async function for aura color retrieval
 window.getCurrentUserAvatarBgColor = getCurrentUserAvatarBgColor;
 
 // Color Picker Modal Functions
@@ -300,9 +533,10 @@ async function setCustomAvatarColor(color) {
 
 async function resetUserAvatarBgColor() {
   // Reset to default aura color (no custom background color needed)
-  if (window.currentUser) {
-    window.currentUser.auraColor = window.AVATAR_FALLBACK_COLOR; // Default white
-  }
+        // COMP METHOD: Use aura_color (snake_case) to match COMP standard
+        if (window.currentUser) {
+          window.currentUser.aura_color = window.AVATAR_FALLBACK_COLOR; // Default white
+        }
   
   // Remove from chrome storage
   removeStateMultiple(['userAvatarBgColor']);
@@ -332,105 +566,122 @@ async function broadcastAuraColorChange(color) {
 }
 
 
-function updateUserAuraInUI(userId, auraColor) {
+// COMP METHOD: Update aura color in UI for all avatars (profile, message, visibility)
+// COMP METHOD: skipVisibilityRefresh - if true, skips refreshVisibilityAvatars (already handled by caller)
+async function updateUserAuraInUI(userId, auraColor, skipVisibilityRefresh = false) {
   try {
-    const timer = Date.now();
-    console.log('Starting aura color UI update:', {
+    console.log('🎨 AURA_UI_UPDATE: Starting aura color UI update:', {
       userId,
       auraColor,
       isCurrentUser: window.currentUser?.id === userId
     });
     
-    // Update message avatars for this user
-    console.log('Updating message avatars');
-    const messageContainers = document.querySelectorAll('.message');
-    let messageAvatarsUpdated = 0;
-    
-    console.log('Found message containers:', { count: messageContainers.length });
-    
-    messageContainers.forEach((messageContainer, index) => {
-      const avatarContainer = messageContainer.querySelector('.avatar-container');
-      if (avatarContainer) {
-        const messageId = messageContainer.getAttribute('data-message-id');
-        if (messageId) {
-          const messageData = window.currentChatData?.find(msg => msg.id === messageId);
-          if (messageData && messageData.author && (messageData.author.id === userId || messageData.author.user_id === userId)) {
-            // Update the author's aura color
-            messageData.author.auraColor = auraColor;
-            
-            // Re-render the avatar
-            const newAvatarHTML = getSenderAvatar(messageData.author);
-            avatarContainer.innerHTML = newAvatarHTML;
-            
-            messageAvatarsUpdated++;
-            console.log('Updated message avatar:', {
-              messageId,
-              userId,
-              auraColor,
-              avatarIndex: index
-            });
-          }
-        }
-      }
-    });
-    
-    console.log('Message avatars update complete:', {
-      totalContainers: messageContainers.length,
-      avatarsUpdated: messageAvatarsUpdated
-    });
-    
-    // Update visibility avatars
-    console.log('Refreshing visibility avatars');
-    refreshVisibilityAvatars();
-    
-    // Update profile avatar if it's the current user
-    const currentUser = window.currentUser || {};
-    if (currentUser.id === userId) {
-      console.log('Updating profile avatar for current user');
-      const profileAvatarContainer = document.getElementById('user-avatar-container');
-      if (profileAvatarContainer) {
-        // Update profile avatar with new aura color
-        const newProfileAvatarHTML = AvatarUtils.createUnifiedAvatar({
-          id: currentUser.id || currentUser.email,
-          userId: currentUser.id || currentUser.email,
-          name: currentUser.name || currentUser.email,
-          email: currentUser.email,
-          avatarUrl: currentUser.avatarUrl,
-          auraColor: auraColor,
-        }, {
-          size: 24,
-          showAura: true,
-          showStatus: false,
-          context: 'profile'
-        });
-        
-        // Set the HTML directly on the container
-        profileAvatarContainer.innerHTML = newProfileAvatarHTML;
-        console.log('Profile avatar updated using unified avatar:', {
-          userId,
-          auraColor
-        });
-        console.log('🎨 Updated profile avatar for current user with aura ' + auraColor);
+    // COMP METHOD: Update visibility data immediately so aura color propagates
+    if (window.currentVisibilityDataUnfiltered?.active) {
+      const userInVisibility = window.currentVisibilityDataUnfiltered.active.find(u => 
+        String(u.id || u.userId || u.user_id) === String(userId)
+      );
+      if (userInVisibility) {
+        userInVisibility.aura_color = auraColor; // COMP METHOD: Use aura_color (snake_case)
+        console.log('✅ AURA_UI_UPDATE: Updated aura color in visibility data');
       }
     }
     
-    console.log('Aura UI update completed successfully');
+    if (window.currentVisibilityData?.active) {
+      const userInVisibility = window.currentVisibilityData.active.find(u => 
+        String(u.id || u.userId || u.user_id) === String(userId)
+      );
+      if (userInVisibility) {
+        userInVisibility.aura_color = auraColor; // COMP METHOD: Use aura_color (snake_case)
+      }
+    }
+    
+    // COMP METHOD: Update window.currentUser aura color
+    // COMP METHOD: Use aura_color (snake_case) to match COMP standard
+    if (window.currentUser && (window.currentUser.id || window.currentUser.user_id) === userId) {
+      window.currentUser.aura_color = auraColor;
+      console.log('✅ AURA_UI_UPDATE: Updated window.currentUser.aura_color');
+    }
+    
+    // COMP METHOD: Update profile avatar if it's the current user (with debouncing)
+    const currentUser = window.currentUser || {};
+    if (String(currentUser.id || currentUser.user_id) === String(userId)) {
+      console.log('🎨 AURA_UI_UPDATE: Updating profile avatar for current user');
+      const profileAvatarContainer = document.getElementById('user-avatar-container');
+      if (profileAvatarContainer) {
+        // Prevent multiple simultaneous updates
+        if (window.profileAvatarUpdateInProgress) {
+          console.log('⏳ AURA_UI_UPDATE: Profile avatar update already in progress, skipping');
+          return;
+        }
+        
+        window.profileAvatarUpdateInProgress = true;
+        
+        try {
+          // COMP METHOD: Use AvatarUtils.createUnifiedAvatar with await
+          if (window.AvatarUtils && typeof window.AvatarUtils.createUnifiedAvatar === 'function') {
+            const userData = {
+              id: currentUser.id || currentUser.user_id,
+              user_id: currentUser.id || currentUser.user_id,
+              userId: currentUser.id || currentUser.user_id,
+              name: currentUser.name || currentUser.email?.split('@')[0] || 'User',
+              email: currentUser.email,
+              avatarUrl: currentUser.avatarUrl || currentUser.user_metadata?.avatar_url,
+              aura_color: auraColor, // COMP METHOD: Use aura_color (snake_case) to match COMP
+            };
+            
+            const newProfileAvatarHTML = await window.AvatarUtils.createUnifiedAvatar(userData, 'profile', {
+              size: 24,
+              showAura: true,
+              showStatus: false
+            });
+            
+            profileAvatarContainer.innerHTML = newProfileAvatarHTML;
+            console.log('✅ AURA_UI_UPDATE: Profile avatar updated with unified avatar structure');
+          } else {
+            console.error('❌ AURA_UI_UPDATE: AvatarUtils.createUnifiedAvatar not available');
+          }
+        } catch (error) {
+          console.error('❌ AURA_UI_UPDATE: Error updating profile avatar:', error);
+        } finally {
+          window.profileAvatarUpdateInProgress = false;
+        }
+      }
+    }
+    
+    // COMP METHOD: Refresh all message avatars to propagate aura color changes
+    if (typeof window.refreshAllMessageAvatars === 'function') {
+      console.log('🔄 AURA_UI_UPDATE: Refreshing all message avatars with new aura color');
+      await window.refreshAllMessageAvatars();
+    }
+    
+    // COMP METHOD: Refresh visibility avatars
+    // COMP METHOD: Skip if called from handleAuraChange (which already updates visibility via updateVisibleTab)
+    // This prevents unnecessary DB fetches that could overwrite real-time cache updates
+    if (!skipVisibilityRefresh && typeof refreshVisibilityAvatars === 'function') {
+      console.log('🔄 AURA_UI_UPDATE: Refreshing visibility avatars');
+      await refreshVisibilityAvatars();
+    } else if (skipVisibilityRefresh) {
+      console.log('🔄 AURA_UI_UPDATE: Skipping refreshVisibilityAvatars (already handled by handleAuraChange)');
+    }
+    
+    console.log('✅ AURA_UI_UPDATE: Aura UI update completed successfully');
   } catch (error) {
     console.error('❌ AURA_UI_UPDATE: Error updating aura in UI:', error);
-    console.error('AURA_UI_UPDATE: Error updating aura in UI:', error);
-    console.error('Aura UI update failed:', error.message);
+    window.profileAvatarUpdateInProgress = false;
   }
 }
 
 // Get the latest aura color from presence data for any user
 function getLatestAuraColorFromPresence(userId) {
   try {
+    // COMP METHOD: Use aura_color (snake_case) to match COMP standard
     // Check if we have presence data stored
     const presenceData = window.currentPresenceData || window.presenceData;
     if (presenceData && presenceData.active) {
       const user = presenceData.active.find(u => u.id === userId || u.userId === userId || u.email === userId);
-      if (user && user.auraColor) {
-        return user.auraColor;
+      if (user && user.aura_color) {
+        return user.aura_color;
       }
     }
     
@@ -438,14 +689,15 @@ function getLatestAuraColorFromPresence(userId) {
     const visibilityData = window.currentVisibilityData;
     if (visibilityData && visibilityData.active) {
       const user = visibilityData.active.find(u => u.id === userId || u.userId === userId || u.email === userId);
-      if (user && user.auraColor) {
-        return user.auraColor;
+      if (user && user.aura_color) {
+        return user.aura_color;
       }
     }
     
     // Additional fallback: check if this is the current user and get from stored aura color
+    // COMP METHOD: Use aura_color (snake_case) to match COMP standard
     if (window.currentUser && (window.currentUser.id === userId || window.currentUser.user_id === userId)) {
-      const storedAuraColor = window.currentUser.auraColor;
+      const storedAuraColor = window.currentUser.aura_color;
       if (storedAuraColor && storedAuraColor !== null && storedAuraColor !== 'null') {
         return storedAuraColor;
       }
@@ -551,7 +803,7 @@ function updateAllVisibilityAvatars(userId, auraColor) {
   console.log('🔍 AURA DEBUG: Found visibility avatars:', visibilityAvatars.length);
   
   // Also try to find avatars in visibility containers
-  const visibilityContainers = document.querySelectorAll('.visibility-container, .avatars-container, #canopi-visible');
+  const visibilityContainers = document.querySelectorAll('.visibility-container, .avatars-container, #visibility-tab');
   let foundInVisibility = 0;
   
   visibilityContainers.forEach(container => {
@@ -574,33 +826,100 @@ function updateAllVisibilityAvatars(userId, auraColor) {
   });
 }
 
-// Broadcast aura color change to all users on the same page
+// COMP METHOD: Broadcast aura color change via Supabase real-time broadcast
 async function broadcastAuraChange(auraColor) {
   try {
-    console.log('[WEBSOCKET] Broadcasting aura color change:', auraColor);
+    console.log('🎨 COMP METHOD: Broadcasting aura color change:', auraColor);
     
     const user = window.currentUser;
     if (!user) {
-      console.warn('[WEBSOCKET] No user found, cannot broadcast aura change');
+      console.warn('⚠️ COMP METHOD: No user found, cannot broadcast aura change');
+      return;
+    }
+    
+    const userId = user.id || user.user_id;
+    if (!userId) {
+      console.warn('⚠️ COMP METHOD: No user ID found, cannot broadcast aura change');
       return;
     }
     
     // Get current page info
     const urlData = await normalizeCurrentUrl();
+    const pageId = urlData.pageId || window.currentUrlData?.pageId;
     
-    // Send aura change message
-    await sendSupabaseMessage({
-      type: 'AURA_COLOR_CHANGED',
-      userId: user.id || user.user_id,
-      auraColor: auraColor,
-      pageId: urlData.pageId,
-      url: urlData.normalizedUrl,
-      timestamp: Date.now()
-    });
+    if (!pageId) {
+      console.warn('⚠️ COMP METHOD: No page ID found, cannot broadcast aura change');
+      return;
+    }
     
-    console.log('[WEBSOCKET] Aura color change broadcast sent');
+    // COMP METHOD: Use Supabase broadcast for real-time propagation
+    if (window.supabase && window.supabaseRealtimeClient) {
+      try {
+        const channelName = `page-${pageId}`;
+        // COMP METHOD: Try multiple ways to find the channel
+        let channel = null;
+        
+        // Method 1: Direct channel lookup by topic
+        if (window.supabase.realtime && window.supabase.realtime.channels) {
+          const channels = window.supabase.realtime.channels;
+          channel = Array.isArray(channels) 
+            ? channels.find(ch => ch.topic === channelName)
+            : Object.values(channels).find(ch => {
+                const topic = ch.topic || ch.topicName || ch.name;
+                return topic === channelName || topic?.includes(pageId);
+              });
+        }
+        
+        // Method 2: Use supabaseRealtimeClient's channel map
+        if (!channel && window.supabaseRealtimeClient.channels) {
+          channel = window.supabaseRealtimeClient.channels.get(pageId);
+        }
+        
+        if (channel && typeof channel.send === 'function') {
+          const broadcastPayload = {
+            userId: userId,
+            auraColor: auraColor,
+            pageId: pageId,
+            url: urlData.normalizedUrl || urlData.normalized,
+            timestamp: Date.now()
+          };
+          
+          const status = await channel.send({
+            type: 'broadcast',
+            event: 'AURA_COLOR_CHANGED',
+            payload: broadcastPayload
+          });
+          
+          console.log('✅ COMP METHOD: Aura color change broadcast sent via Supabase:', status);
+          return;
+        } else {
+          console.warn('⚠️ COMP METHOD: Channel not found for page:', pageId);
+          console.warn('⚠️ COMP METHOD: Available channels:', {
+            supabaseRealtime: window.supabase.realtime?.channels,
+            supabaseClientChannels: window.supabaseRealtimeClient.channels?.size || 0
+          });
+        }
+      } catch (broadcastError) {
+        console.warn('⚠️ COMP METHOD: Supabase broadcast failed, trying fallback:', broadcastError);
+      }
+    }
+    
+    // COMP METHOD: Fallback to sendSupabaseMessage if broadcast not available
+    if (typeof sendSupabaseMessage === 'function') {
+      await sendSupabaseMessage({
+        type: 'AURA_COLOR_CHANGED',
+        userId: userId,
+        auraColor: auraColor,
+        pageId: pageId,
+        url: urlData.normalizedUrl || urlData.normalized,
+        timestamp: Date.now()
+      });
+      console.log('✅ COMP METHOD: Aura color change sent via sendSupabaseMessage (fallback)');
+    } else {
+      console.warn('⚠️ COMP METHOD: Neither Supabase broadcast nor sendSupabaseMessage available');
+    }
   } catch (error) {
-    console.error('[WEBSOCKET] Error broadcasting aura change:', error);
+    console.error('❌ COMP METHOD: Error broadcasting aura change:', error);
   }
 }
 

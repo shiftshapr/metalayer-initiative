@@ -55,7 +55,7 @@ class StateManager {
       
       // API state
       api: {
-        baseUrl: 'http://216.238.91.120:3003',
+        baseUrl: 'http://216.238.91.120:3002',
         isOnline: true,             // Network connectivity
         lastRequestTime: null,       // Last API request
         requestCount: 0,             // Request counter
@@ -391,7 +391,7 @@ class StateManager {
         retryCount: 0
       },
       api: {
-        baseUrl: 'http://216.238.91.120:3003',
+        baseUrl: 'http://216.238.91.120:3002',
         isOnline: true,
         lastRequestTime: null,
         requestCount: 0,

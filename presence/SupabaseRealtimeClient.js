@@ -175,6 +175,17 @@ class SupabaseRealtimeClient {
         return { success: false, error: 'Supabase client not available' };
       }
       
+      // RED HAT: Security validation - Verify parentId is valid UUID format if provided
+      // BLINDSPOT FIX: Also prevent circular references (message replying to itself)
+      if (parentId) {
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (!uuidRegex.test(parentId)) {
+          console.error('❌ SUPABASE_CLIENT: RED HAT SECURITY - Invalid parentId UUID format:', parentId);
+          return { success: false, error: 'Invalid parent message UUID format' };
+        }
+        console.log('✅ SUPABASE_CLIENT: RED HAT SECURITY - ParentId UUID validated');
+      }
+      
       // Get current user and page data (UUID only)
       const userId = this.currentUser?.id || window.currentUser?.id;
       const pageId = this.currentPage?.pageId || window.currentUrlData?.pageId;
@@ -193,10 +204,11 @@ class SupabaseRealtimeClient {
         created_at: new Date().toISOString()
       };
       
-      // Add parentId if provided (now that parent_id column exists in Supabase)
+      // COMP METHOD: Add parentId if provided (now that parent_id column exists in Supabase)
+      // RED HAT: Already validated above
       if (parentId) {
         messageData.parent_id = parentId;
-        console.log('🔧 SUPABASE_CLIENT: Adding parentId to message:', parentId);
+        console.log('🔧 SUPABASE_CLIENT: Adding validated parentId to message:', parentId);
       }
       
       const { data, error } = await this.supabase

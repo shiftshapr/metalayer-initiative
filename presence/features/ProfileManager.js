@@ -14,29 +14,358 @@ class ProfileManager {
     this.profileData = null;
     this.avatarCache = new Map();
     this.updateCallbacks = [];
-    
+    this.isAuthenticated = false;
+    this.authPromise = null;
+
     console.log('ProfileManager initialized', null, 'profile');
     this.initializeProfileHandlers();
-    this.loadAuraColorFromStorage();
+
+    // CRITICAL FIX: Initialize avatar immediately with available data, don't wait for everything
+    this.initializeProfileAvatarImmediately();
+
+    // Still set up the waiting mechanism for updates
+    this.waitForAuthentication();
   }
 
   /**
-   * Load aura color from storage and apply to currentUser
+   * Wait for authentication AND pre-render initialization to complete using proper async/promises
    */
-  async loadAuraColorFromStorage() {
+  async waitForAuthentication() {
+    console.log('🔧 PROFILE_MANAGER: Waiting for authentication and pre-render data...');
+
+    // Create promises for each dependency
+    const waitForAuth = new Promise((resolve) => {
+      if (window.currentUser && window.currentUser.id) {
+        console.log('🔧 PROFILE_MANAGER: Authentication already available');
+        resolve();
+        return;
+      }
+
+      console.log('🔧 PROFILE_MANAGER: Waiting for authentication...');
+
+      // Listen for auth events (these may already be fired, so check immediately)
+      const checkAuth = () => {
+        if (window.currentUser && window.currentUser.id) {
+          console.log('🔧 PROFILE_MANAGER: Authentication completed:', window.currentUser.email);
+          resolve();
+        }
+      };
+
+      // Check immediately in case auth already happened
+      checkAuth();
+
+      // Listen for future auth completion events
+      document.addEventListener('authUIUpdate', (e) => {
+        if (e.detail?.isAuthenticated && e.detail?.user) {
+          checkAuth();
+        }
+      }, { once: true });
+      document.addEventListener('userUpdated', (e) => {
+        if (e.detail && e.detail.id) {
+          checkAuth();
+        }
+      }, { once: true });
+    });
+
+    const waitForPreRender = new Promise((resolve) => {
+      if (window.preRenderInitializer && window.preRenderInitializer.isInitialized) {
+        console.log('🔧 PROFILE_MANAGER: Pre-render already initialized');
+        resolve();
+        return;
+      }
+
+      console.log('🔧 PROFILE_MANAGER: Waiting for pre-render initialization...');
+
+      // Listen for pre-render events
+      const checkPreRender = () => {
+        if (window.preRenderInitializer && window.preRenderInitializer.isInitialized) {
+          console.log('🔧 PROFILE_MANAGER: Pre-render initialization completed');
+          const preRenderData = window.preRenderInitializer.getPreRenderData();
+          console.log('🔧 PROFILE_MANAGER: Pre-render data:', {
+            hasAuraColor: !!preRenderData.auraColor,
+            hasAvatarUrl: !!preRenderData.avatarUrl,
+            auraColor: preRenderData.auraColor
+          });
+          resolve();
+        }
+      };
+
+      // Check immediately in case pre-render already happened
+      checkPreRender();
+
+      // Listen for future pre-render completion events
+      document.addEventListener('preRenderComplete', checkPreRender, { once: true });
+    });
+
+    // Add timeout as fallback (30 seconds max)
+    const timeout = new Promise((resolve) => {
+      setTimeout(() => {
+        console.warn('🔧 PROFILE_MANAGER: Timeout waiting for full initialization (30s)');
+        console.warn('🔧 PROFILE_MANAGER: Proceeding with available data...');
+        resolve();
+      }, 30000);
+    });
+
+    // Wait for all promises to resolve (auth + pre-render + timeout fallback)
     try {
-      if (typeof window.getState === 'function') {
-        const storedColor = await window.getState('userAvatarBgColor');
-        if (storedColor && storedColor !== window.AVATAR_FALLBACK_COLOR && window.currentUser) {
-          console.log('🔧 PROFILE_MANAGER: Loading aura color from storage:', storedColor);
-          window.currentUser.auraColor = storedColor;
+      await Promise.all([waitForAuth, waitForPreRender, timeout]);
+      console.log('🔧 PROFILE_MANAGER: All initialization promises resolved');
+    } catch (error) {
+      console.error('🔧 PROFILE_MANAGER: Error waiting for promises:', error);
+    }
+
+    // Check final state and proceed
+    const hasUser = window.currentUser && window.currentUser.id;
+    const preRenderReady = window.preRenderInitializer && window.preRenderInitializer.isInitialized;
+
+    if (hasUser) {
+      this.isAuthenticated = true;
+      console.log('🔧 PROFILE_MANAGER: Ready to initialize profile avatar...');
+      await this.initializeProfileAvatar();
+    } else {
+      console.warn('🔧 PROFILE_MANAGER: No authentication available, skipping profile avatar initialization');
+    }
+  }
+
+  /**
+   * CRITICAL FIX: Initialize profile avatar with pre-render data to prevent white flash
+   */
+  async initializeProfileAvatarImmediately() {
+    console.log('🔧 PROFILE_MANAGER: Initializing profile avatar with pre-render data to prevent white flash...');
+
+    // CRITICAL FIX: Wait for PreRenderInitializer to complete before rendering avatar
+    // This prevents the 10-15 second white flash while waiting for database auraColor
+    if (!window.preRenderInitializer?.isInitialized) {
+      console.log('⏳ PROFILE_MANAGER: Waiting for PreRenderInitializer to complete...');
+
+      // Wait for pre-render initialization to complete (max 10 seconds)
+      const preRenderPromise = new Promise((resolve) => {
+        const checkPreRender = () => {
+          if (window.preRenderInitializer?.isInitialized) {
+            console.log('✅ PROFILE_MANAGER: PreRenderInitializer completed, proceeding with avatar setup');
+            resolve();
+          } else {
+            // Check again in 100ms
+            setTimeout(checkPreRender, 100);
+          }
+        };
+
+        // Start checking immediately
+        checkPreRender();
+
+        // Timeout after 10 seconds to prevent infinite waiting
+        setTimeout(() => {
+          console.log('⏰ PROFILE_MANAGER: PreRenderInitializer timeout reached, proceeding anyway');
+          resolve();
+        }, 10000);
+      });
+
+      await preRenderPromise;
+    }
+
+    // Now get the complete pre-render data
+    const currentUser = window.currentUser;
+    const preRenderData = window.preRenderInitializer?.getPreRenderData();
+
+    console.log('🔧 PROFILE_MANAGER: Pre-render data available:', {
+      isInitialized: preRenderData?.isInitialized,
+      hasAuraColor: !!preRenderData?.auraColor,
+      auraColor: preRenderData?.auraColor,
+      hasAvatarUrl: !!preRenderData?.avatarUrl,
+      avatarUrl: preRenderData?.avatarUrl?.substring(0, 50) + '...'
+    });
+
+    // If we have user data, create the avatar with complete information
+    if (currentUser?.id || preRenderData?.userData?.id) {
+      console.log('🔧 PROFILE_MANAGER: User data available, setting up avatar with complete data...');
+
+      // Set basic profile data from currentUser
+      if (currentUser) {
+        this.profileData = { ...currentUser };
+      }
+
+      // CRITICAL FIX: Check Chrome storage FIRST for instant display
+      let auraColorValue = null;
+      if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+        try {
+          const storageResult = await new Promise((resolve) => {
+            chrome.storage.local.get(['userAuraColor', 'auraColor'], (result) => {
+              resolve(result);
+            });
+          });
           
-          // Update profile data if it exists
-          if (this.profileData) {
-            this.profileData.auraColor = storedColor;
+          const cachedAuraColor = storageResult.userAuraColor || storageResult.auraColor;
+          if (cachedAuraColor && cachedAuraColor !== '#ffffff' && cachedAuraColor !== 'white' && cachedAuraColor !== '#fff') {
+            auraColorValue = cachedAuraColor;
+            console.log('🎨 PROFILE_MANAGER: Using aura color from Chrome storage (CACHE):', auraColorValue);
+          }
+        } catch (error) {
+          console.warn('⚠️ PROFILE_MANAGER: Could not read from Chrome storage:', error);
+        }
+      }
+
+      // Apply pre-render aura color (takes precedence over cache - this should be the database value)
+      if (!auraColorValue && preRenderData?.auraColor) {
+        auraColorValue = preRenderData.auraColor;
+        console.log('🎨 PROFILE_MANAGER: Using auraColor from pre-render data (DATABASE):', auraColorValue);
+        
+        // Cache database value in Chrome storage for next time
+        if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+          try {
+            await new Promise((resolve) => {
+              chrome.storage.local.set({ userAuraColor: auraColorValue, auraColor: auraColorValue }, () => {
+                console.log('💾 PROFILE_MANAGER: Cached aura color in Chrome storage:', auraColorValue);
+                resolve();
+              });
+            });
+          } catch (error) {
+            console.warn('⚠️ PROFILE_MANAGER: Could not cache to Chrome storage:', error);
           }
         }
       }
+
+      if (auraColorValue) {
+        if (this.profileData) {
+          this.profileData.auraColor = auraColorValue;
+          this.profileData.aura_color = auraColorValue;
+        }
+        if (currentUser) {
+          currentUser.auraColor = auraColorValue;
+          currentUser.aura_color = auraColorValue;
+        }
+      } else {
+        console.log('⚠️ PROFILE_MANAGER: No auraColor in cache or pre-render data, will fallback to auth data or API fetch');
+      }
+
+      // Apply pre-render avatar URL if available
+      if (preRenderData?.avatarUrl && currentUser) {
+        currentUser.avatarUrl = preRenderData.avatarUrl;
+        if (this.profileData) {
+          this.profileData.avatarUrl = preRenderData.avatarUrl;
+        }
+        console.log('🖼️ PROFILE_MANAGER: Using avatarUrl from pre-render data');
+      }
+
+      // Verify we have the auraColor before rendering
+      if (this.profileData && (this.profileData.auraColor || this.profileData.aura_color)) {
+        console.log('🎉 PROFILE_MANAGER: AuraColor available from pre-render/auth data - no white flash!');
+      } else {
+        console.log('⚠️ PROFILE_MANAGER: AuraColor still missing - will cause white flash');
+      }
+
+      // Set up the profile menu and avatar with complete data
+      await this.setupProfileMenuAndAuraModal();
+
+      console.log('✅ PROFILE_MANAGER: Profile avatar initialized with complete pre-render data');
+    } else {
+      console.log('🔧 PROFILE_MANAGER: No user data available, will initialize when authentication completes');
+    }
+  }
+
+  /**
+   * Initialize profile avatar after authentication
+   */
+  async initializeProfileAvatar() {
+    console.log('🔧 PROFILE_MANAGER: Initializing profile avatar after authentication...');
+
+    // Load aura color from storage if not already set
+    await this.loadAuraColorFromStorage();
+
+    // Set up the profile menu and avatar now that we have user data
+    await this.setupProfileMenuAndAuraModal();
+  }
+
+  /**
+   * Load aura color from pre-render data or storage
+   */
+  async loadAuraColorFromStorage() {
+    try {
+      console.log('🔧 PROFILE_MANAGER: Loading aura color from available sources...');
+
+      // First priority: Check pre-render initializer data
+      if (window.preRenderInitializer?.getPreRenderData) {
+        const preRenderData = window.preRenderInitializer.getPreRenderData();
+        console.log('🔧 PROFILE_MANAGER: Pre-render data available:', {
+          isInitialized: preRenderData.isInitialized,
+          auraColor: preRenderData.auraColor,
+          avatarUrl: preRenderData.avatarUrl
+        });
+
+        if (preRenderData.auraColor && window.currentUser) {
+          console.log('🎨 PROFILE_MANAGER: Using aura color from pre-render data (DATABASE):', preRenderData.auraColor);
+          window.currentUser.auraColor = preRenderData.auraColor;
+          window.currentUser.aura_color = preRenderData.auraColor;
+
+          // Update profile data if it exists
+          if (this.profileData) {
+            this.profileData.auraColor = preRenderData.auraColor;
+            this.profileData.aura_color = preRenderData.auraColor;
+          }
+          console.log('✅ PROFILE_MANAGER: Aura color applied to currentUser and profileData');
+          return; // Don't check storage if we have pre-render data
+        } else if (preRenderData.isInitialized) {
+          console.log('ℹ️ PROFILE_MANAGER: Pre-render initialized but no aura color available');
+        } else {
+          console.log('⏳ PROFILE_MANAGER: Pre-render data available but not yet initialized');
+        }
+      } else {
+        console.log('⚠️ PROFILE_MANAGER: Pre-render initializer not available');
+      }
+
+      // Fallback: Load aura color from state storage (set by aura color modal)
+      if (typeof window.getState === 'function') {
+        const storedColor = window.getState('userAvatarBgColor');
+        console.log('🔧 PROFILE_MANAGER: Checking storage for aura color:', storedColor);
+
+        if (storedColor && storedColor !== window.AVATAR_FALLBACK_COLOR && window.currentUser) {
+          console.log('🎨 PROFILE_MANAGER: Using aura color from storage (USER PREFERENCE):', storedColor);
+          window.currentUser.auraColor = storedColor;
+          window.currentUser.aura_color = storedColor;
+
+          // Update profile data if it exists
+          if (this.profileData) {
+            this.profileData.auraColor = storedColor;
+            this.profileData.aura_color = storedColor;
+          }
+          console.log('✅ PROFILE_MANAGER: Aura color applied from storage');
+        } else {
+          console.log('ℹ️ PROFILE_MANAGER: No valid aura color in storage');
+        }
+      } else {
+        console.log('⚠️ PROFILE_MANAGER: State storage not available');
+      }
+
+      // Last resort: Try to fetch aura color directly from API
+      if (window.currentUser?.id && window.api && !this.profileData?.auraColor) {
+        console.log('🔍 PROFILE_MANAGER: Last resort - fetching aura color directly from API...');
+        try {
+          const userResponse = await window.api.request(`/v1/users/${window.currentUser.id}`, {
+            method: 'GET'
+          });
+
+          if (userResponse && (userResponse.auraColor || userResponse.aura_color)) {
+            const apiAuraColor = userResponse.auraColor || userResponse.aura_color;
+            console.log('🎨 PROFILE_MANAGER: Retrieved aura color from API (fallback):', apiAuraColor);
+
+            window.currentUser.auraColor = apiAuraColor;
+            window.currentUser.aura_color = apiAuraColor;
+
+            // Update profile data if it exists
+            if (this.profileData) {
+              this.profileData.auraColor = apiAuraColor;
+              this.profileData.aura_color = apiAuraColor;
+            }
+
+            console.log('✅ PROFILE_MANAGER: Aura color applied from API fallback');
+            return;
+          } else {
+            console.log('⚠️ PROFILE_MANAGER: API response received but no aura color found');
+          }
+        } catch (apiError) {
+          console.warn('⚠️ PROFILE_MANAGER: API fallback failed:', apiError.message);
+        }
+      }
+
     } catch (error) {
       console.log('🔧 PROFILE_MANAGER: Could not load aura color from storage:', error);
     }
@@ -50,17 +379,22 @@ class ProfileManager {
     document.addEventListener('userUpdated', (event) => {
       this.handleUserUpdate(event.detail);
     });
-    
+
     // Listen for avatar updates
     document.addEventListener('avatarUpdated', (event) => {
       this.handleAvatarUpdate(event.detail);
     });
-    
+
     // Listen for profile UI updates
     document.addEventListener('authUIUpdate', (event) => {
       this.handleAuthUIUpdate(event.detail);
     });
-    
+
+    // Listen for aura color updates
+    document.addEventListener('auraColorUpdated', (event) => {
+      this.handleAuraColorUpdate(event.detail);
+    });
+
     // COMP METHOD: Initialize profile menu and aura modal fixes
     this.initializeProfileMenuAndAuraModal();
   }
@@ -82,9 +416,9 @@ class ProfileManager {
   /**
    * COMP METHOD: Setup profile menu and aura modal
    */
-  setupProfileMenuAndAuraModal() {
+  async setupProfileMenuAndAuraModal() {
     console.log('🔧 PROFILE MANAGER: COMP METHOD - Setting up profile menu and aura modal...');
-    
+
     // Find or create user avatar container
     let userAvatarContainer = document.getElementById('user-avatar-container');
     if (!userAvatarContainer) {
@@ -103,34 +437,105 @@ class ProfileManager {
         background: #f5f5f5;
         margin: 8px;
       `;
-      
+
       // Add to sidebar
       const sidebar = document.querySelector('.sidebar, .sidepanel, #sidebar, #sidepanel') || document.body;
       sidebar.appendChild(userAvatarContainer);
+    } else {
+      console.log('🔧 PROFILE MANAGER: COMP METHOD - Found existing user avatar container, updating size for profile avatar...');
+      // Update existing container size to accommodate profile avatar (32px + 2px aura extension on each side)
+      userAvatarContainer.style.width = '36px';  // 32px avatar + 2px aura extension on each side
+      userAvatarContainer.style.height = '36px'; // 32px avatar + 2px aura extension on each side
+      userAvatarContainer.style.minWidth = '36px';
+      userAvatarContainer.style.minHeight = '36px';
     }
-    
+
     // Create user avatar if it doesn't exist
     let userAvatar = userAvatarContainer.querySelector('.user-avatar');
     if (!userAvatar) {
       console.log('🔧 PROFILE MANAGER: COMP METHOD - Creating user avatar...');
-      userAvatar = document.createElement('div');
-      userAvatar.className = 'user-avatar';
-      userAvatar.style.cssText = `
-        width: 32px;
-        height: 32px;
-        border-radius: 50%;
-        background: #007bff;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: white;
-        font-weight: bold;
-        font-size: 14px;
-      `;
-      
-      const currentUser = window.currentUser || { name: 'User', email: 'user@example.com' };
-      userAvatar.textContent = currentUser.name.charAt(0).toUpperCase();
-      userAvatarContainer.appendChild(userAvatar);
+
+      // Use AvatarUtils for proper avatar creation with aura color
+      if (window.AvatarUtils && window.currentUser) {
+        try {
+          // CRITICAL FIX: Check Chrome storage FIRST for instant display
+          let auraColorValue = this.profileData?.auraColor || this.profileData?.aura_color || window.currentUser.auraColor || window.currentUser.aura_color;
+          let fromChromeStorage = false;
+          
+          if (!auraColorValue && typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+            try {
+              const storageResult = await new Promise((resolve) => {
+                chrome.storage.local.get(['userAuraColor', 'auraColor'], (result) => {
+                  resolve(result);
+                });
+              });
+              
+              const cachedAuraColor = storageResult.userAuraColor || storageResult.auraColor;
+              if (cachedAuraColor && cachedAuraColor !== '#ffffff' && cachedAuraColor !== 'white' && cachedAuraColor !== '#fff') {
+                auraColorValue = cachedAuraColor;
+                fromChromeStorage = true;
+                console.log('🎨 PROFILE MANAGER: Using aura color from Chrome storage (CACHE):', auraColorValue);
+                // Update currentUser and profileData with cached value
+                if (window.currentUser) {
+                  window.currentUser.auraColor = auraColorValue;
+                  window.currentUser.aura_color = auraColorValue;
+                }
+                if (this.profileData) {
+                  this.profileData.auraColor = auraColorValue;
+                  this.profileData.aura_color = auraColorValue;
+                }
+              }
+            } catch (error) {
+              console.warn('⚠️ PROFILE MANAGER: Could not read from Chrome storage:', error);
+            }
+          }
+
+          // CRITICAL FIX: Use profileData if available (has aura color), otherwise fall back to currentUser
+          const userDataForAvatar = {
+            ...(this.profileData || window.currentUser),
+            auraColor: auraColorValue || this.profileData?.auraColor || window.currentUser.auraColor,
+            aura_color: auraColorValue || this.profileData?.aura_color || window.currentUser.aura_color
+          };
+
+          console.log('🔧 PROFILE MANAGER: COMP METHOD - Creating avatar with user data:', {
+            userId: userDataForAvatar.id,
+            auraColor: userDataForAvatar.auraColor,
+            avatarUrl: userDataForAvatar.avatarUrl,
+            usingProfileData: !!this.profileData,
+            fromChromeStorage: fromChromeStorage,
+            timestamp: new Date().toISOString()
+          });
+
+          const avatarHTML = await window.AvatarUtils.createUnifiedAvatar(userDataForAvatar, {
+            context: 'profile',
+            showAura: true,
+            size: 32
+          });
+
+          console.log('🔧 PROFILE MANAGER: COMP METHOD - Avatar HTML generated, updating container at', new Date().toISOString());
+          userAvatarContainer.innerHTML = avatarHTML;
+
+          // Log what was actually inserted
+          console.log('🔧 PROFILE MANAGER: COMP METHOD - Container updated, innerHTML length:', userAvatarContainer.innerHTML.length);
+          console.log('🔧 PROFILE MANAGER: COMP METHOD - Container updated, checking for aura element...');
+          const auraElement = userAvatarContainer.querySelector('.avatar-aura');
+          if (auraElement) {
+            console.log('✅ PROFILE MANAGER: COMP METHOD - Aura element found with background:', auraElement.style.backgroundColor);
+          } else {
+            console.log('⚠️ PROFILE MANAGER: COMP METHOD - Aura element NOT found in avatar HTML');
+          }
+
+          console.log('✅ PROFILE MANAGER: COMP METHOD - User avatar created using AvatarUtils with aura color');
+        } catch (error) {
+          console.error('🔧 PROFILE MANAGER: COMP METHOD - Error creating avatar with AvatarUtils:', error);
+          // Fallback to simple avatar
+          this.createFallbackAvatar();
+        }
+      } else {
+        console.log('⚠️ PROFILE MANAGER: COMP METHOD - AvatarUtils or currentUser not available, using fallback');
+        // Fallback avatar creation
+        this.createFallbackAvatar();
+      }
     }
     
     // Add click handler
@@ -146,12 +551,12 @@ class ProfileManager {
   /**
    * COMP METHOD: Toggle user menu
    */
-  toggleUserMenu() {
+  async toggleUserMenu() {
     console.log('🔧 PROFILE MANAGER: COMP METHOD - Toggling user menu...');
-    
+
     let userMenu = document.getElementById('user-menu');
     if (!userMenu) {
-      this.createUserMenu();
+      await this.createUserMenu();
     } else {
       const isVisible = userMenu.style.display !== 'none';
       userMenu.style.display = isVisible ? 'none' : 'block';
@@ -162,7 +567,7 @@ class ProfileManager {
   /**
    * COMP METHOD: Create user menu
    */
-  createUserMenu() {
+  async createUserMenu() {
     console.log('🔧 PROFILE MANAGER: COMP METHOD - Creating user menu...');
     
     const userMenu = document.createElement('div');
@@ -182,13 +587,32 @@ class ProfileManager {
     `;
     
     const currentUser = window.currentUser || { name: 'User', email: 'user@example.com' };
-    
+
+    // Create small avatar using AvatarUtils if available
+    let smallAvatarHTML = '';
+    if (window.AvatarUtils && currentUser) {
+      try {
+        smallAvatarHTML = await window.AvatarUtils.createUnifiedAvatar(currentUser, {
+          context: 'menu',
+          showAura: true,
+          size: 24
+        });
+      } catch (error) {
+        console.error('🔧 PROFILE MANAGER: COMP METHOD - Error creating small avatar:', error);
+        smallAvatarHTML = `<div class="user-avatar-small" style="width: 24px; height: 24px; border-radius: 50%; background: #007bff; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 12px;">
+          ${currentUser.name.charAt(0).toUpperCase()}
+        </div>`;
+      }
+    } else {
+      smallAvatarHTML = `<div class="user-avatar-small" style="width: 24px; height: 24px; border-radius: 50%; background: #007bff; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 12px;">
+        ${currentUser.name.charAt(0).toUpperCase()}
+      </div>`;
+    }
+
     userMenu.innerHTML = `
       <div class="user-menu-header" style="padding: 12px; border-bottom: 1px solid #eee;">
         <div class="user-info" style="display: flex; align-items: center; gap: 8px;">
-          <div class="user-avatar-small" style="width: 24px; height: 24px; border-radius: 50%; background: #007bff; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 12px;">
-            ${currentUser.name.charAt(0).toUpperCase()}
-          </div>
+          ${smallAvatarHTML}
           <div>
             <div class="user-name" style="font-weight: bold; font-size: 14px;">${currentUser.name}</div>
             <div class="user-id" style="font-size: 12px; color: #666;">${currentUser.id || currentUser.user_id}</div>
@@ -240,15 +664,39 @@ class ProfileManager {
       };
     }
     
-    // Theme toggle button
+    // Theme toggle button - CRITICAL FIX: Ensure button is clickable and handler is attached
     const themeToggleBtn = document.getElementById('theme-toggle-btn');
     if (themeToggleBtn) {
-      themeToggleBtn.onclick = (e) => {
+      // Remove any existing handlers first
+      themeToggleBtn.onclick = null;
+      themeToggleBtn.removeEventListener('click', this._themeToggleHandler);
+      
+      // Create handler function
+      this._themeToggleHandler = async (e) => {
         e.preventDefault();
+        e.stopPropagation();
         console.log('🔧 PROFILE MANAGER: COMP METHOD - Theme toggle button clicked');
+        await this.toggleTheme();
+        // CRITICAL: Close profile menu after theme toggle
         this.hideUserMenu();
-        this.toggleTheme();
       };
+      
+      // Attach handler
+      themeToggleBtn.addEventListener('click', this._themeToggleHandler);
+      
+      // Mark as handled to prevent duplicate handlers
+      themeToggleBtn.dataset.handlerAttached = 'true';
+      
+      // Ensure button is active and clickable
+      themeToggleBtn.style.pointerEvents = 'auto';
+      themeToggleBtn.style.cursor = 'pointer';
+      themeToggleBtn.style.opacity = '1';
+      themeToggleBtn.style.visibility = 'visible';
+      themeToggleBtn.disabled = false;
+      
+      console.log('✅ PROFILE MANAGER: Theme toggle button handler attached and activated');
+    } else {
+      console.warn('❌ PROFILE MANAGER: Theme toggle button not found');
     }
     
     // Logout button
@@ -412,19 +860,39 @@ class ProfileManager {
   /**
    * COMP METHOD: Toggle theme
    */
-  toggleTheme() {
+  async toggleTheme() {
     console.log('🔧 PROFILE MANAGER: COMP METHOD - Toggling theme');
-    const body = document.body;
-    const isDark = body.classList.contains('dark-theme');
-    
-    if (isDark) {
-      body.classList.remove('dark-theme');
-      localStorage.setItem('theme', 'light');
-      console.log('✅ PROFILE MANAGER: COMP METHOD - Switched to light theme');
+    // Use the global toggleTheme function if available, otherwise use data-theme attribute
+    if (typeof window.toggleTheme === 'function') {
+      console.log('🔧 PROFILE MANAGER: Using window.toggleTheme');
+      await window.toggleTheme();
     } else {
-      body.classList.add('dark-theme');
-      localStorage.setItem('theme', 'dark');
-      console.log('✅ PROFILE MANAGER: COMP METHOD - Switched to dark theme');
+      // Fallback: Use data-theme attribute (matches UIManager system)
+      const body = document.body;
+      const currentTheme = body.getAttribute('data-theme') || 'light';
+      const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+      
+      body.setAttribute('data-theme', newTheme);
+      document.documentElement.setAttribute('data-theme', newTheme);
+      
+      // Update icon and text
+      const themeIcon = document.getElementById('theme-icon');
+      const themeText = document.getElementById('theme-text');
+      if (themeIcon) {
+        themeIcon.textContent = newTheme === 'dark' ? '☀️' : '🌙';
+      }
+      if (themeText) {
+        themeText.textContent = newTheme === 'dark' ? 'Light mode' : 'Dark mode';
+      }
+      
+      // Save to localStorage
+      if (typeof window.setState === 'function') {
+        window.setState('theme', newTheme);
+      } else {
+        localStorage.setItem('theme', newTheme);
+      }
+      
+      console.log(`✅ PROFILE MANAGER: Switched to ${newTheme} theme`);
     }
   }
 
@@ -453,18 +921,56 @@ class ProfileManager {
   /**
    * Handle user profile updates
    */
-  handleUserUpdate(user) {
+  async handleUserUpdate(user) {
     console.log('User profile updated', user);
-    
+
     // SD1 CRITICAL DEBUG: Log what user data is being set for profile avatar
     console.log('🔍 SD1 PROFILE DEBUG: === PROFILE MANAGER USER UPDATE ===');
     console.log('🔍 SD1 PROFILE DEBUG: User email:', user?.email);
     console.log('🔍 SD1 PROFILE DEBUG: User name:', user?.name);
     console.log('🔍 SD1 PROFILE DEBUG: User avatarUrl:', user?.avatarUrl);
+    console.log('🔍 SD1 PROFILE DEBUG: User auraColor (before fetch):', user?.auraColor);
     console.log('🔍 SD1 PROFILE DEBUG: Full user object:', user);
     console.log('🔍 SD1 PROFILE DEBUG: === END PROFILE MANAGER USER UPDATE ===');
-    
+
     this.profileData = user;
+
+    // CRITICAL: Ensure we have auraColor for profile avatar
+    // First priority: from user object (if included in update)
+    if (this.profileData.auraColor) {
+      console.log('✅ PROFILE_MANAGER: Using auraColor from user object:', this.profileData.auraColor);
+    }
+    // Second priority: from window.currentUser (should have been set during auth)
+    else if (window.currentUser?.auraColor) {
+      this.profileData.auraColor = window.currentUser.auraColor;
+      console.log('✅ PROFILE_MANAGER: Using auraColor from window.currentUser:', window.currentUser.auraColor);
+    }
+    // Third priority: fetch from API if user ID is available
+    else if (this.profileData.id && window.api) {
+      console.log('🔍 PROFILE_MANAGER: Fetching auraColor from API for user:', this.profileData.id);
+      try {
+        const userResponse = await window.api.request(`/v1/users/${this.profileData.id}`, {
+          method: 'GET'
+        });
+        if (userResponse && (userResponse.auraColor || userResponse.aura_color)) {
+          const auraColor = userResponse.auraColor || userResponse.aura_color;
+          this.profileData.auraColor = auraColor;
+          // Also update window.currentUser for consistency
+          if (window.currentUser) {
+            window.currentUser.auraColor = auraColor;
+            window.currentUser.aura_color = auraColor;
+          }
+          console.log('✅ PROFILE_MANAGER: Fetched auraColor from API:', auraColor);
+        } else {
+          console.log('ℹ️ PROFILE_MANAGER: No auraColor found in API response');
+        }
+      } catch (error) {
+        console.warn('⚠️ PROFILE_MANAGER: Failed to fetch auraColor from API:', error);
+      }
+    } else {
+      console.log('ℹ️ PROFILE_MANAGER: No auraColor available yet (may be set later)');
+    }
+
     this.updateProfileUI();
     
     // Notify callbacks
@@ -491,20 +997,86 @@ class ProfileManager {
   }
 
   /**
+   * Handle aura color updates
+   */
+  async handleAuraColorUpdate(auraData) {
+    console.log('🔧 PROFILE_MANAGER: Handling aura color update:', auraData);
+
+    const { color, user } = auraData;
+
+    // Update profile data if it's the current user
+    if (this.profileData && user && (this.profileData.id === user.id || this.profileData.id === user.user_id)) {
+      this.profileData.auraColor = color;
+      console.log('🔧 PROFILE_MANAGER: Updated profile data aura color:', color);
+
+      // Refresh the profile avatar with the new aura color
+      await this.updateUserAvatar();
+    }
+  }
+
+  /**
    * Handle authentication UI updates
    */
-  handleAuthUIUpdate(authData) {
+  async handleAuthUIUpdate(authData) {
+    console.log('🔧 PROFILE_MANAGER: Handling auth UI update:', authData?.isAuthenticated);
+
     if (authData.isAuthenticated && authData.user) {
       // SD1 CRITICAL DEBUG: Log what user data is being set for profile avatar
       console.log('🔍 SD1 PROFILE DEBUG: === PROFILE MANAGER AUTH UPDATE ===');
       console.log('🔍 SD1 PROFILE DEBUG: Auth user email:', authData.user?.email);
       console.log('🔍 SD1 PROFILE DEBUG: Auth user name:', authData.user?.name);
       console.log('🔍 SD1 PROFILE DEBUG: Auth user avatarUrl:', authData.user?.avatarUrl);
+      console.log('🔍 SD1 PROFILE DEBUG: Auth user auraColor (before fetch):', authData.user?.auraColor);
       console.log('🔍 SD1 PROFILE DEBUG: Full auth user object:', authData.user);
       console.log('🔍 SD1 PROFILE DEBUG: === END PROFILE MANAGER AUTH UPDATE ===');
-      
+
       this.profileData = authData.user;
-      this.updateProfileUI();
+
+      // CRITICAL: Ensure we have auraColor for profile avatar
+      // First priority: from authData.user (if included in auth response)
+      if (this.profileData.auraColor) {
+        console.log('✅ PROFILE_MANAGER: Using auraColor from authData.user:', this.profileData.auraColor);
+      }
+      // Second priority: from window.currentUser (set by AuthModule)
+      else if (window.currentUser?.auraColor) {
+        this.profileData.auraColor = window.currentUser.auraColor;
+        console.log('✅ PROFILE_MANAGER: Using auraColor from window.currentUser:', window.currentUser.auraColor);
+      }
+      // Third priority: fetch from API if user ID is available
+      else if (this.profileData.id && window.api) {
+        console.log('🔍 PROFILE_MANAGER: Fetching auraColor from API for user:', this.profileData.id);
+        try {
+          const userResponse = await window.api.request(`/v1/users/${this.profileData.id}`, {
+            method: 'GET'
+          });
+          if (userResponse && (userResponse.auraColor || userResponse.aura_color)) {
+            const auraColor = userResponse.auraColor || userResponse.aura_color;
+            this.profileData.auraColor = auraColor;
+            // Also update window.currentUser for consistency
+            if (window.currentUser) {
+              window.currentUser.auraColor = auraColor;
+              window.currentUser.aura_color = auraColor;
+            }
+            console.log('✅ PROFILE_MANAGER: Fetched auraColor from API:', auraColor);
+          } else {
+            console.log('ℹ️ PROFILE_MANAGER: No auraColor found in API response');
+          }
+        } catch (error) {
+          console.warn('⚠️ PROFILE_MANAGER: Failed to fetch auraColor from API:', error);
+        }
+      } else {
+        console.log('ℹ️ PROFILE_MANAGER: No auraColor available yet (may be set later)');
+      }
+
+      // If authentication just completed, we need to initialize the profile avatar
+      if (!this.isAuthenticated) {
+        console.log('🔧 PROFILE_MANAGER: Authentication completed, initializing profile avatar...');
+        this.isAuthenticated = true;
+        await this.initializeProfileAvatar();
+      } else {
+        // Just update the UI with new data
+        this.updateProfileUI();
+      }
     } else {
       this.clearProfileUI();
     }
@@ -513,7 +1085,7 @@ class ProfileManager {
   /**
    * Update profile UI with current user data
    */
-  updateProfileUI() {
+  async updateProfileUI() {
     if (!this.profileData) {
       console.warn('No profile data available for UI update', null, 'profile');
       return;
@@ -521,12 +1093,13 @@ class ProfileManager {
     
     console.log('Updating profile UI', {
       user: this.profileData.email,
-      hasAvatar: !!this.profileData.avatarUrl
+      hasAvatar: !!this.profileData.avatarUrl,
+      auraColor: this.profileData.auraColor
     });
     
     try {
       this.updateUserInfo();
-      this.updateUserAvatar();
+      await this.updateUserAvatar(); // CRITICAL: Wait for avatar update to complete
       this.updateUserMenu();
     } catch (error) {
       console.error('Profile UI update failed', error, 'profile');
@@ -554,29 +1127,182 @@ class ProfileManager {
    * Update user avatar display
    */
   async updateUserAvatar() {
+    console.log('🔧 PROFILE_MANAGER: updateUserAvatar called at', new Date().toISOString());
+
     const userAvatarContainer = document.getElementById('user-avatar-container');
-    
+
     if (!userAvatarContainer) {
       console.warn('User avatar container not found', null, 'profile');
       return;
     }
-    
-    console.log('Updating user avatar', {
+
+    console.log('🔧 PROFILE_MANAGER: Updating user avatar with data:', {
       avatarUrl: this.profileData.avatarUrl,
-      auraColor: this.profileData.auraColor
+      auraColor: this.profileData.auraColor,
+      profileDataId: this.profileData.id,
+      timestamp: new Date().toISOString()
     });
+    
+    // CRITICAL FIX: Ensure we have auraColor for the profile avatar
+    // Priority: Chrome Storage (cache) > PreRenderInitializer (database) > profileData > currentUser > API fetch
+    let auraColorValue = this.profileData.auraColor || this.profileData.aura_color;
+
+    // CRITICAL FIX: Check Chrome storage FIRST for instant display (persists across sessions)
+    if (!auraColorValue && typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+      try {
+        const storageResult = await new Promise((resolve) => {
+          chrome.storage.local.get(['userAuraColor', 'auraColor'], (result) => {
+            resolve(result);
+          });
+        });
+        
+        const cachedAuraColor = storageResult.userAuraColor || storageResult.auraColor;
+        if (cachedAuraColor && cachedAuraColor !== '#ffffff' && cachedAuraColor !== 'white' && cachedAuraColor !== '#fff') {
+          auraColorValue = cachedAuraColor;
+          console.log('🎨 PROFILE_MANAGER: Using aura color from Chrome storage (CACHE):', auraColorValue);
+        }
+      } catch (error) {
+        console.warn('⚠️ PROFILE_MANAGER: Could not read from Chrome storage:', error);
+      }
+    }
+
+    // CRITICAL FIX: Check pre-render data as SECONDARY source (database value)
+    if (!auraColorValue && window.preRenderInitializer?.getPreRenderData) {
+      const preRenderData = window.preRenderInitializer.getPreRenderData();
+      if (preRenderData.auraColor) {
+        auraColorValue = preRenderData.auraColor;
+        console.log('🎨 PROFILE_MANAGER: Using aura color from pre-render data (DATABASE):', auraColorValue);
+        
+        // CRITICAL FIX: Cache database value in Chrome storage for next time
+        if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+          try {
+            await new Promise((resolve) => {
+              chrome.storage.local.set({ userAuraColor: auraColorValue, auraColor: auraColorValue }, () => {
+                console.log('💾 PROFILE_MANAGER: Cached aura color in Chrome storage:', auraColorValue);
+                resolve();
+              });
+            });
+          } catch (error) {
+            console.warn('⚠️ PROFILE_MANAGER: Could not cache to Chrome storage:', error);
+          }
+        }
+      }
+    }
+
+    // Fallback to window.currentUser if pre-render data not available
+    if (!auraColorValue && window.currentUser?.auraColor) {
+      auraColorValue = window.currentUser.auraColor;
+      console.log('✅ PROFILE_MANAGER: Using auraColor from window.currentUser:', auraColorValue);
+    }
+
+    // CRITICAL FIX: Resolve Promise if auraColor is a Promise
+    if (auraColorValue && typeof auraColorValue === 'object' && typeof auraColorValue.then === 'function') {
+      console.log('🔧 PROFILE_MANAGER: auraColor is a Promise, awaiting resolution...');
+      try {
+        auraColorValue = await auraColorValue;
+        console.log(`✅ PROFILE_MANAGER: Resolved auraColor Promise: ${auraColorValue}`);
+      } catch (e) {
+        console.warn(`⚠️ PROFILE_MANAGER: Error resolving auraColor Promise:`, e);
+        auraColorValue = null; // Treat as missing, will fetch from API
+      }
+    }
+
+    // CRITICAL FIX: Validate auraColor - treat #ffffff as missing
+    if (auraColorValue === '#ffffff' || auraColorValue === 'white' || auraColorValue === '#fff') {
+      console.log('⚠️ PROFILE_MANAGER: auraColor is fallback white, treating as missing (will fetch from API)');
+      auraColorValue = null;
+    }
+
+    // CRITICAL FIX: Fetch from API if still missing
+    if (!auraColorValue && this.profileData.id && window.api) {
+      console.log('🔍 PROFILE_MANAGER: Fetching auraColor from API for profile avatar...');
+      try {
+        const userResponse = await window.api.request(`/v1/users/${this.profileData.id}`, {
+          method: 'GET'
+        });
+
+        if (userResponse && (userResponse.auraColor || userResponse.aura_color)) {
+          const apiAuraColor = userResponse.auraColor || userResponse.aura_color;
+          
+          // Validate API response - treat #ffffff as missing
+          if (apiAuraColor !== '#ffffff' && apiAuraColor !== 'white' && apiAuraColor !== '#fff') {
+            auraColorValue = apiAuraColor;
+            this.profileData.auraColor = apiAuraColor;
+            this.profileData.aura_color = apiAuraColor;
+            
+            // Update window.currentUser for consistency
+            if (window.currentUser) {
+              window.currentUser.auraColor = apiAuraColor;
+              window.currentUser.aura_color = apiAuraColor;
+            }
+            
+            // CRITICAL FIX: Cache API value in Chrome storage for instant display next time
+            if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+              try {
+                await new Promise((resolve) => {
+                  chrome.storage.local.set({ userAuraColor: apiAuraColor, auraColor: apiAuraColor }, () => {
+                    console.log('💾 PROFILE_MANAGER: Cached API aura color in Chrome storage:', apiAuraColor);
+                    resolve();
+                  });
+                });
+              } catch (error) {
+                console.warn('⚠️ PROFILE_MANAGER: Could not cache API value to Chrome storage:', error);
+              }
+            }
+            
+            console.log('✅ PROFILE_MANAGER: Fetched auraColor from API for profile avatar:', apiAuraColor);
+          } else {
+            console.log('⚠️ PROFILE_MANAGER: API returned fallback white, treating as missing');
+          }
+        }
+      } catch (error) {
+        console.warn('⚠️ PROFILE_MANAGER: Could not fetch auraColor from API for profile avatar:', error);
+      }
+    }
+
+    // Update profileData with resolved value
+    if (auraColorValue) {
+      this.profileData.auraColor = auraColorValue;
+      this.profileData.aura_color = auraColorValue;
+    }
     
     try {
       // Use AvatarUtils for consistent avatar creation
+      // CRITICAL FIX: Create user object with resolved auraColor value
+      const userForAvatar = {
+        ...this.profileData,
+        auraColor: auraColorValue || this.profileData.auraColor,
+        aura_color: auraColorValue || this.profileData.aura_color
+      };
+
       if (window.AvatarUtils) {
-        const avatarHTML = await window.AvatarUtils.createUnifiedAvatar(this.profileData, {
+        console.log('🔧 PROFILE_MANAGER: Calling AvatarUtils.createUnifiedAvatar with:', {
+          userId: userForAvatar.id,
+          auraColor: userForAvatar.auraColor,
+          aura_color: userForAvatar.aura_color,
+          avatarUrl: userForAvatar.avatarUrl,
+          source: auraColorValue ? 'resolved' : 'profileData'
+        });
+
+        const avatarHTML = await window.AvatarUtils.createUnifiedAvatar(userForAvatar, {
           context: 'profile',
           showAura: true,
           size: 32
         });
-        
+
         userAvatarContainer.innerHTML = avatarHTML;
-        console.log('Avatar updated using AvatarUtils', null);
+        console.log('✅ PROFILE_MANAGER: Avatar updated using AvatarUtils with auraColor:', this.profileData.auraColor);
+        console.log('📄 PROFILE_MANAGER: Generated avatar HTML:', avatarHTML.substring(0, 200) + '...');
+
+        // Log what was actually inserted and check for aura element
+        console.log('🔧 PROFILE_MANAGER: updateUserAvatar - Container updated, checking for aura element...');
+        const auraElement = userAvatarContainer.querySelector('.avatar-aura');
+        if (auraElement) {
+          console.log('✅ PROFILE_MANAGER: updateUserAvatar - Aura element found with background:', auraElement.style.backgroundColor);
+        } else {
+          console.log('⚠️ PROFILE_MANAGER: updateUserAvatar - Aura element NOT found in avatar HTML');
+          console.log('⚠️ PROFILE_MANAGER: updateUserAvatar - Full container HTML:', userAvatarContainer.innerHTML);
+        }
       } else {
         console.warn('AvatarUtils not available, using fallback', null, 'profile');
         this.createFallbackAvatar();
@@ -593,18 +1319,16 @@ class ProfileManager {
   createFallbackAvatar() {
     const userAvatarContainer = document.getElementById('user-avatar-container');
     if (!userAvatarContainer) return;
-    
+
+    const currentUser = window.currentUser || { name: 'User', email: 'user@example.com' };
     const fallbackHTML = `
-      <div style="position: relative; width: 32px; height: 32px;">
-        <div style="position: absolute; top: -2px; left: -2px; width: 36px; height: 36px; border-radius: 50%; background-color: ${this.profileData.auraColor || window.AVATAR_FALLBACK_COLOR}; z-index: 1;"></div>
-        <img src="${this.profileData.avatarUrl || 'https://lh3.googleusercontent.com/a/default-user=s96-c'}" 
-             alt="${this.profileData.name || 'User'}" 
-             style="position: relative; z-index: 2; width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 2px solid ${this.profileData.auraColor || window.AVATAR_FALLBACK_COLOR};">
+      <div class="user-avatar" style="width: 32px; height: 32px; border-radius: 50%; background: #007bff; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 14px;">
+        ${currentUser.name.charAt(0).toUpperCase()}
       </div>
     `;
-    
+
     userAvatarContainer.innerHTML = fallbackHTML;
-    console.log('Fallback avatar created', null);
+    console.log('🔧 PROFILE MANAGER: COMP METHOD - Fallback avatar created');
   }
 
   /**
@@ -945,35 +1669,33 @@ function addAuraButtonClickHandler() {
 }
 
 function addThemeToggleButtonClickHandler() {
+  // NOTE: This function is now handled by ProfileManager.addEventListeners()
+  // Keeping this function for backwards compatibility but it should not be called
+  // as ProfileManager handles the theme toggle button
   const themeToggleBtn = document.getElementById('theme-toggle-btn');
   if (themeToggleBtn) {
-    themeToggleBtn.addEventListener('click', (e) => {
-      console.log('🌙 COMP METHOD: Theme toggle button clicked!');
-      e.stopPropagation(); // Prevent menu from closing
-      if (typeof window.toggleTheme === 'function') {
-        window.toggleTheme();
-      } else {
-        console.log('❌ toggleTheme not available, creating COMP method toggle');
-        // COMP METHOD: Create theme toggle if not available
-        window.toggleTheme = function() {
-          console.log('🔧 THEME_TOGGLE: Toggling theme');
-          const body = document.body;
-          const isDark = body.classList.contains('dark-theme');
-          
-          if (isDark) {
-            body.classList.remove('dark-theme');
-            localStorage.setItem('theme', 'light');
-            console.log('✅ THEME_TOGGLE: Switched to light theme');
-          } else {
-            body.classList.add('dark-theme');
-            localStorage.setItem('theme', 'dark');
-            console.log('✅ THEME_TOGGLE: Switched to dark theme');
-          }
-        };
-        window.toggleTheme();
-      }
-    });
-    console.log('✅ COMP METHOD: Theme toggle button click handler added');
+    // Check if handler is already attached by ProfileManager
+    if (themeToggleBtn.dataset.handlerAttached !== 'true') {
+      themeToggleBtn.addEventListener('click', async (e) => {
+        console.log('🌙 COMP METHOD: Theme toggle button clicked! (fallback handler)');
+        e.stopPropagation();
+        if (typeof window.toggleTheme === 'function') {
+          await window.toggleTheme();
+        } else {
+          console.log('❌ toggleTheme not available');
+        }
+        // CRITICAL: Close profile menu after theme toggle
+        const userMenu = document.getElementById('user-menu');
+        if (userMenu) {
+          userMenu.style.display = 'none';
+        }
+      });
+      // CRITICAL FIX: Set handler attached flag so diagnostic knows handler is attached
+      themeToggleBtn.dataset.handlerAttached = 'true';
+      console.log('✅ COMP METHOD: Theme toggle button fallback handler added and flagged');
+    } else {
+      console.log('✅ COMP METHOD: Theme toggle button already handled by ProfileManager');
+    }
   } else {
     console.log('❌ Theme toggle button not found');
   }

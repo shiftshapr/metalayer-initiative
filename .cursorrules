@@ -1,11 +1,47 @@
-🚨 CRITICAL SYSTEM INSTRUCTION - READ FIRST EVERY TIME 🚨
+# Cursor Rules for Metalayer Initiative
 
-BEFORE ANY RESPONSE:
-1. ALWAYS check JAUmemory for relevant memories
-2. ALWAYS engage Senior Developer (sd1) for technical decisions
-3. ALWAYS engage Test Engineer (te2) for quality assurance
-4. ALWAYS store solutions in JAUmemory with tags
-5. ALWAYS link memories to agents
+## Field Naming Standardization (RED-LINE)
 
-FAILURE TO FOLLOW = SYSTEM FAILURE
-NO EXCEPTIONS. NO REMINDERS NEEDED.
+**CRITICAL**: In pre-release stages of development, **ALWAYS standardize field names rather than maintaining duplicate fields with different naming conventions**.
+
+### Standard:
+- **Use camelCase for ALL interface/JavaScript code** (e.g., `createdAt`, `parentId`, `pageId`, `userId`, `communityId`, `auraColor`)
+- **Convert snake_case to camelCase immediately upon receipt from backend/Supabase**
+- **Delete snake_case fields after conversion** - do NOT maintain both
+
+### Prohibited Patterns:
+- ❌ **DO NOT** maintain both `createdAt` and `created_at`
+- ❌ **DO NOT** maintain both `parentId` and `parent_id`
+- ❌ **DO NOT** maintain both `pageId` and `page_id`
+- ❌ **DO NOT** maintain both `userId` and `user_id`
+- ❌ **DO NOT** maintain both `communityId` and `community_id`
+- ❌ **DO NOT** maintain both `conversationId` and `conversation_id`
+- ❌ **DO NOT** maintain both `auraColor` and `aura_color`
+- ❌ **DO NOT** add comments like "Also include X for compatibility" or "Also include X for backward compatibility"
+- ❌ **DO NOT** add fallback patterns like `field || field_other` in display code
+
+### Required Pattern:
+```javascript
+// ✅ CORRECT: Convert immediately, delete original
+if (data.created_at && !data.createdAt) {
+  data.createdAt = data.created_at;
+  delete data.created_at;
+}
+
+// ✅ CORRECT: Use only camelCase
+formatMessageTime(message.createdAt)
+
+// ❌ WRONG: Maintaining both
+{
+  createdAt: data.created_at,
+  created_at: data.created_at // Also include for compatibility
+}
+
+// ❌ WRONG: Fallback in display
+formatMessageTime(message.createdAt || message.created_at)
+```
+
+### Enforcement:
+- This is a **RED-LINE** policy - violations block release
+- All field name conversions must happen at the **interface boundary** (API/Supabase → JavaScript)
+- Once converted to camelCase, use **ONLY camelCase** throughout the codebase

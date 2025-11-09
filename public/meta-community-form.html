@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create Meta-Community - Canopi</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #333;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+            color: white;
+            padding: 40px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .content {
+            padding: 40px;
+        }
+
+        .form-section {
+            margin-bottom: 30px;
+        }
+
+        .form-section h2 {
+            color: #4f46e5;
+            font-size: 1.5rem;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e5e7eb;
+        }
+
+        .form-group {
+            margin-bottom: 24px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #374151;
+            font-size: 0.95rem;
+        }
+
+        .form-group label.required::after {
+            content: " *";
+            color: #ef4444;
+        }
+
+        .form-group input[type="text"],
+        .form-group input[type="email"],
+        .form-group input[type="tel"],
+        .form-group input[type="url"],
+        .form-group textarea {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 16px;
+            font-family: inherit;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #4f46e5;
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+        }
+
+        .form-group textarea {
+            min-height: 120px;
+            resize: vertical;
+        }
+
+        .form-group textarea.large {
+            min-height: 200px;
+        }
+
+        .form-group .help-text {
+            font-size: 0.875rem;
+            color: #6b7280;
+            margin-top: 6px;
+        }
+
+        .logo-upload {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .logo-preview {
+            width: 120px;
+            height: 120px;
+            border: 2px dashed #d1d5db;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #f9fafb;
+            overflow: hidden;
+        }
+
+        .logo-preview img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+
+        .logo-preview-placeholder {
+            color: #9ca3af;
+            font-size: 0.875rem;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .file-input-wrapper {
+            position: relative;
+            display: inline-block;
+        }
+
+        .file-input-wrapper input[type="file"] {
+            position: absolute;
+            opacity: 0;
+            width: 0.1px;
+            height: 0.1px;
+            overflow: hidden;
+        }
+
+        .file-input-label {
+            display: inline-block;
+            padding: 10px 20px;
+            background: #f3f4f6;
+            border: 2px dashed #d1d5db;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 0.95rem;
+            color: #374151;
+        }
+
+        .file-input-label:hover {
+            background: #e5e7eb;
+            border-color: #9ca3af;
+        }
+
+        .submit-section {
+            margin-top: 40px;
+            padding-top: 30px;
+            border-top: 2px solid #e5e7eb;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+            color: white;
+            border: none;
+            padding: 14px 32px;
+            font-size: 1rem;
+            font-weight: 600;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            width: 100%;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(79, 70, 229, 0.3);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .success-message {
+            background: #d1fae5;
+            border: 2px solid #10b981;
+            color: #065f46;
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 24px;
+            display: none;
+        }
+
+        .error-message {
+            background: #fee2e2;
+            border: 2px solid #ef4444;
+            color: #991b1b;
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 24px;
+            display: none;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .loading.active {
+            display: block;
+        }
+
+        .spinner {
+            border: 3px solid #f3f4f6;
+            border-top: 3px solid #4f46e5;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @media (max-width: 640px) {
+            .header h1 {
+                font-size: 2rem;
+            }
+
+            .content {
+                padding: 24px;
+            }
+
+            .logo-upload {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Create Meta-Community</h1>
+            <p>Join the wait list to create your own meta-community</p>
+        </div>
+
+        <div class="content">
+            <div class="success-message" id="successMessage">
+                <strong>✅ Success!</strong> Your meta-community application has been submitted. We'll review it and get back to you soon.
+            </div>
+
+            <div class="error-message" id="errorMessage"></div>
+
+            <form id="metaCommunityForm">
+                <!-- Meta-Community Details Section -->
+                <div class="form-section">
+                    <h2>Meta-Community Details</h2>
+
+                    <div class="form-group">
+                        <label for="name" class="required">Name</label>
+                        <input type="text" id="name" name="name" required 
+                               placeholder="e.g., Developer Community" 
+                               maxlength="100">
+                        <div class="help-text">The name of your meta-community</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="email" class="required">Email Address</label>
+                        <input type="email" id="email" name="email" required 
+                               placeholder="your@email.com">
+                        <div class="help-text">We'll use this to contact you about your application</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="phone">Phone Number</label>
+                        <input type="tel" id="phone" name="phone" 
+                               placeholder="+1 (555) 123-4567">
+                        <div class="help-text">Optional - for urgent communications</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="purpose" class="required">Purpose</label>
+                        <textarea id="purpose" name="purpose" required 
+                                  placeholder="Describe the purpose and goals of your meta-community..."
+                                  class="large"></textarea>
+                        <div class="help-text">What is your meta-community's mission and purpose?</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="codeOfConduct" class="required">Code of Conduct</label>
+                        <textarea id="codeOfConduct" name="codeOfConduct" required 
+                                  placeholder="Outline the rules and expectations for community members..."
+                                  class="large"></textarea>
+                        <div class="help-text">Define the standards of behavior for your community</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="logo">Logo</label>
+                        <div class="logo-upload">
+                            <div class="logo-preview" id="logoPreview">
+                                <div class="logo-preview-placeholder">
+                                    No logo selected<br>
+                                    <small>(Max 2MB, PNG/JPG)</small>
+                                </div>
+                            </div>
+                            <div class="file-input-wrapper">
+                                <input type="file" id="logo" name="logo" accept="image/png,image/jpeg,image/jpg" 
+                                       onchange="handleLogoPreview(event)">
+                                <label for="logo" class="file-input-label">Choose Logo</label>
+                            </div>
+                        </div>
+                        <div class="help-text">Upload your community logo (optional, max 2MB)</div>
+                    </div>
+                </div>
+
+                <!-- Links Section -->
+                <div class="form-section">
+                    <h2>Links</h2>
+
+                    <div class="form-group">
+                        <label for="communityLink">Community / DAO Link</label>
+                        <input type="url" id="communityLink" name="communityLink" 
+                               placeholder="https://example.com/dao">
+                        <div class="help-text">Link to your community's website, DAO, or main platform</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="onboardingInstructions" class="required">Onboarding Instructions</label>
+                        <textarea id="onboardingInstructions" name="onboardingInstructions" required 
+                                  placeholder="Provide clear instructions for new members on how to join and get started..."
+                                  class="large"></textarea>
+                        <div class="help-text">How should new members join and get started in your community?</div>
+                    </div>
+                </div>
+
+                <div class="submit-section">
+                    <button type="submit" class="btn" id="submitBtn">
+                        Submit Application
+                    </button>
+                    <div class="loading" id="loading">
+                        <div class="spinner"></div>
+                        <div>Submitting your application...</div>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+            ? 'http://localhost:3002'
+            : window.location.origin;
+
+        function handleLogoPreview(event) {
+            const file = event.target.files[0];
+            const preview = document.getElementById('logoPreview');
+            
+            if (file) {
+                if (file.size > 2 * 1024 * 1024) {
+                    alert('Logo file size must be less than 2MB');
+                    event.target.value = '';
+                    return;
+                }
+                
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    preview.innerHTML = `<img src="${e.target.result}" alt="Logo preview">`;
+                };
+                reader.readAsDataURL(file);
+            } else {
+                preview.innerHTML = `
+                    <div class="logo-preview-placeholder">
+                        No logo selected<br>
+                        <small>(Max 2MB, PNG/JPG)</small>
+                    </div>
+                `;
+            }
+        }
+
+        document.getElementById('metaCommunityForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const submitBtn = document.getElementById('submitBtn');
+            const loading = document.getElementById('loading');
+            const successMessage = document.getElementById('successMessage');
+            const errorMessage = document.getElementById('errorMessage');
+            
+            // Hide previous messages
+            successMessage.style.display = 'none';
+            errorMessage.style.display = 'none';
+            
+            // Show loading state
+            submitBtn.disabled = true;
+            loading.classList.add('active');
+            
+            try {
+                const formData = new FormData(this);
+                
+                // Validate required fields
+                const name = formData.get('name');
+                const email = formData.get('email');
+                const purpose = formData.get('purpose');
+                const codeOfConduct = formData.get('codeOfConduct');
+                const onboardingInstructions = formData.get('onboardingInstructions');
+                
+                if (!name || !email || !purpose || !codeOfConduct || !onboardingInstructions) {
+                    throw new Error('Please fill in all required fields');
+                }
+                
+                // Submit form data
+                const response = await fetch(`${API_BASE}/v1/meta-communities/waitlist`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.error || 'Failed to submit application');
+                }
+                
+                // Show success message
+                successMessage.style.display = 'block';
+                this.reset();
+                document.getElementById('logoPreview').innerHTML = `
+                    <div class="logo-preview-placeholder">
+                        No logo selected<br>
+                        <small>(Max 2MB, PNG/JPG)</small>
+                    </div>
+                `;
+                
+                // Scroll to top
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+                
+            } catch (error) {
+                console.error('Error submitting form:', error);
+                errorMessage.textContent = error.message || 'An error occurred. Please try again.';
+                errorMessage.style.display = 'block';
+            } finally {
+                submitBtn.disabled = false;
+                loading.classList.remove('active');
+            }
+        });
+    </script>
+</body>
+</html>
+
+
+
+
+
+

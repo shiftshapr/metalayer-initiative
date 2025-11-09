@@ -7,6 +7,28 @@
     }
 
     console.log("Content script loaded for Collaborative Sidebar.");
+    
+    // Early injection: Check for share page immediately and inject markers
+    // This runs before DOM is ready, so the share page can detect extension faster
+    (function earlyInject() {
+        const isSharePage = window.location.pathname.includes('/share-message') || 
+                           window.location.search.includes('message=') ||
+                           (window.location.hostname === 'share.canopi.live' && window.location.search.includes('message='));
+        
+        if (isSharePage && document.documentElement) {
+            document.documentElement.setAttribute('data-canopi-extension', 'true');
+            if (!window.CanopiExtension) {
+                window.CanopiExtension = {
+                    installed: true,
+                    version: chrome.runtime.getManifest().version,
+                    sendMessage: (message, callback) => {
+                        chrome.runtime.sendMessage(message, callback);
+                    }
+                };
+            }
+            console.log('🔗 Content script: Early share page markers injected');
+        }
+    })();
 
     // Listen for messages from the sidepanel
     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -15,6 +37,58 @@
             sendResponse({ content: pageContent });
         }
     });
+
+    // Detect if this is a share message page and inject extension marker
+    // Check both pathname and query params (for root redirect case)
+    // Note: Markers may already be injected above, but we still set up listeners
+    const isSharePage = window.location.pathname.includes('/share-message') || 
+                       window.location.search.includes('message=') ||
+                       (window.location.hostname === 'share.canopi.live' && window.location.search.includes('message='));
+    
+    if (isSharePage) {
+        // Ensure markers are set (in case they weren't set earlier)
+        if (!document.documentElement.hasAttribute('data-canopi-extension')) {
+            document.documentElement.setAttribute('data-canopi-extension', 'true');
+        }
+        
+        // Ensure global flag is set
+        if (!window.CanopiExtension) {
+            window.CanopiExtension = {
+                installed: true,
+                version: chrome.runtime.getManifest().version,
+                // Expose a method for the share page to send messages
+                sendMessage: (message, callback) => {
+                    chrome.runtime.sendMessage(message, callback);
+                }
+            };
+        }
+
+        // Listen for share page messages via postMessage
+        window.addEventListener('message', (event) => {
+            // Only accept messages from same origin
+            if (event.origin !== window.location.origin) return;
+
+            if (event.data && event.data.type === 'CHECK_CANOPI_EXTENSION') {
+                window.postMessage({
+                    type: 'CANOPI_EXTENSION_RESPONSE',
+                    installed: true,
+                    extensionId: chrome.runtime.id
+                }, window.location.origin);
+            }
+
+            // Forward OPEN_SHARED_MESSAGE to background script
+            if (event.data && event.data.type === 'OPEN_SHARED_MESSAGE') {
+                chrome.runtime.sendMessage(event.data, (response) => {
+                    // Forward response back to share page
+                    window.postMessage({
+                        type: 'OPEN_SHARED_MESSAGE_RESPONSE',
+                        success: response ? response.success : false,
+                        error: response ? response.error : null
+                    }, window.location.origin);
+                });
+            }
+        });
+    }
 
     // Create the trigger button
     const triggerButton = document.createElement('button');
