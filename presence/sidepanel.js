@@ -8,6 +8,10 @@ let eventBus = null;
 let lifecycleManager = null;
 let supabaseRealtimeClient = null;
 
+// 4-STATE STATUS: Feature flag (default: enabled for new implementation)
+// Set to false to disable 4-state status and use 2-state fallback
+window.ENABLE_4STATE_STATUS = window.ENABLE_4STATE_STATUS !== undefined ? window.ENABLE_4STATE_STATUS : true;
+
 // Initialize real Google auth for actual profile pictures
 let realGoogleAuth = null;
 
@@ -688,11 +692,20 @@ async function refreshVisibilityAvatars() {
           
           // COMP METHOD: Map from COMP format to visibility format
           // COMP returns: { user_email, user_id, is_active, last_seen, enter_time, status, isActive, enterTime, lastSeen, name, avatar_url, aura_color }
-          // COMP METHOD: Prioritize cached aura color (from real-time updates) over DB value
-          // COMP METHOD: Use string normalization for reliable cache lookup
-          const normalizedUserId = String(userId);
-          const cachedAuraColor = auraColorCache[normalizedUserId];
-          const dbAuraColor = user.aura_color; // COMP METHOD: COMP uses aura_color (snake_case) from DB
+      // COMP METHOD: Prioritize cached aura color (from real-time updates) over DB value
+      // COMP METHOD: Use string normalization for reliable cache lookup
+      const normalizedUserId = String(userId);
+      const cachedAuraColor = auraColorCache[normalizedUserId];
+      // ROOT CAUSE FIX: For current user, prioritize window.currentUser.aura_color over DB value
+      // This ensures the latest aura color from settings is used, not stale DB value
+      let dbAuraColor = user.aura_color; // COMP METHOD: COMP uses aura_color (snake_case) from DB
+      if (window.currentUser && String(window.currentUser.id || window.currentUser.user_id) === normalizedUserId) {
+        // Current user: use window.currentUser.aura_color if available (most up-to-date)
+        if (window.currentUser.aura_color && window.currentUser.aura_color !== '#ffffff' && window.currentUser.aura_color !== 'ffffff') {
+          dbAuraColor = window.currentUser.aura_color;
+          console.log(`🔍 COMP DEBUG: Using currentUser.aura_color for ${normalizedUserId}: ${dbAuraColor}`);
+        }
+      }
           const finalAuraColor = cachedAuraColor || dbAuraColor || window.AVATAR_FALLBACK_COLOR;
           
           // COMP METHOD: Always prefer cached color if it exists (real-time updates take precedence)
@@ -1017,11 +1030,31 @@ async function updateUI(user) {
       // CRITICAL: USE SAME SIZE AS VISIBILITY/MESSAGE AVATARS (32px) FOR CONSISTENCY
       try {
         if (typeof window.AvatarUtils !== 'undefined' && window.AvatarUtils.createUnifiedAvatar) {
-          const avatarHTML = await window.AvatarUtils.createUnifiedAvatar(userData, {
+          // ROOT CAUSE FIX: Enable status dots on profile avatar
+          // Ensure availability is set for status dots
+          if (!userData.availability) {
+            // Try to get from currentUser first
+            if (window.currentUser && (window.currentUser.availability || window.currentUser.globalAvailability)) {
+              userData.availability = window.currentUser.availability || window.currentUser.globalAvailability;
+            } else if (window.currentVisibilityDataUnfiltered?.active) {
+              // Try to get from visibility data
+              const currentUserInVisibility = window.currentVisibilityDataUnfiltered.active.find(u => 
+                String(u.id || u.userId || u.user_id) === String(window.currentUser?.id)
+              );
+              if (currentUserInVisibility && currentUserInVisibility.availability) {
+                userData.availability = currentUserInVisibility.availability;
+              }
+            }
+            // Default to AVAILABLE if active, OFFLINE if not
+            if (!userData.availability) {
+              userData.availability = (userData.isActive || userData.is_active) ? 'AVAILABLE' : 'OFFLINE';
+            }
+          }
+          
+          const avatarHTML = await window.AvatarUtils.createUnifiedAvatar(userData, 'profile', {
             size: 32,  // MUST MATCH visibility (32px) and message (32px)
-            showStatus: false,  // No status dot on profile avatar
+            showStatus: true,  // ROOT CAUSE FIX: Enable status dots on profile avatar
             showAura: true,     // Show aura color
-            context: 'profile'
           });
           
           console.log('[UPDATE_UI] Setting avatar HTML using AvatarUtils.createUnifiedAvatar() - UNIFIED RENDERING');
@@ -3414,6 +3447,8 @@ function formatLastSeenDisplay(lastSeen) {
 let profileManager = null;
 if (typeof ProfileManager !== 'undefined') {
   profileManager = new ProfileManager();
+  // ROOT CAUSE FIX: Expose instance globally for UnifiedStorageSync
+  window.profileManager = profileManager;
   console.log('✅ ProfileManager initialized (will set up profile avatar after authentication)');
 } else {
   console.log('⚠️ ProfileManager not available');

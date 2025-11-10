@@ -399,17 +399,38 @@ class MetaLayerAPI {
         pageId = normalizedUrl.pageId;
       }
       
-      console.log(`🔍 CHAT_API: Querying Supabase messages table for pageId: ${pageId}`);
+      console.log(`🔍 CHAT_API: Querying Supabase messages table for pageId: ${pageId}, communityId: ${communityId}`);
       
       // Query Supabase messages table directly
       let query = window.supabase.from('messages').select('*');
+      
+      // ROOT CAUSE DEBUG: Check what pageIds exist in database
       if (pageId) {
         query = query.eq('page_id', pageId);
+        console.log(`🔍 CHAT_API: Filtering by pageId: ${pageId}`);
+      } else {
+        console.log(`⚠️ CHAT_API: No pageId provided, querying all pages`);
       }
+      
       if (communityId) {
         query = query.eq('community_id', communityId);
+        console.log(`🔍 CHAT_API: Filtering by communityId: ${communityId}`);
+      } else {
+        console.log(`⚠️ CHAT_API: No communityId provided, querying all communities`);
       }
+      
       const { data: messages, error: messagesError } = await query.order('created_at', { ascending: true });
+      
+      // ROOT CAUSE DEBUG: Log what we found
+      if (messages && messages.length > 0) {
+        console.log(`✅ CHAT_API: Found ${messages.length} messages`);
+        console.log(`🔍 CHAT_API: Sample message pageIds:`, messages.slice(0, 3).map(m => m.page_id));
+      } else {
+        console.log(`⚠️ CHAT_API: No messages found with filters: pageId=${pageId}, communityId=${communityId}`);
+        // Debug: Query without filters to see what exists
+        const { data: allMessages } = await window.supabase.from('messages').select('page_id, community_id').limit(10);
+        console.log(`🔍 CHAT_API: Sample messages in DB (first 10):`, allMessages);
+      }
       
       if (messagesError) {
         console.error('❌ CHAT_API: Supabase query failed:', messagesError);

@@ -397,7 +397,7 @@ async function loadCommunities() {
         </label>
         ${!isPrimary ? `
         <button class="community-menu-btn" data-community-id="${community.id}" title="Community options">
-          <span>⋯</span>
+          <span class="action-dots">⋮</span>
         </button>
         <div class="community-menu" style="display: none;">
           <button class="menu-item make-primary-btn" data-community-id="${community.id}">Make primary</button>
@@ -454,13 +454,31 @@ async function loadCommunities() {
       
       // Only attach handler if menu button exists (non-primary communities only)
       if (menuBtn && menu) {
-        menuBtn.addEventListener('click', async (e) => {
+        // ROOT CAUSE FIX: Remove existing handlers to prevent duplicates
+        const newMenuBtn = menuBtn.cloneNode(true);
+        menuBtn.parentNode.replaceChild(newMenuBtn, menuBtn);
+        
+        newMenuBtn.addEventListener('click', async (e) => {
           e.stopPropagation();
+          e.preventDefault();
           // Toggle menu
           const isVisible = menu.style.display === 'block';
           // Close all other menus
           document.querySelectorAll('.community-menu').forEach(m => m.style.display = 'none');
           menu.style.display = isVisible ? 'none' : 'block';
+          
+          // ROOT CAUSE FIX: Add click-outside handler with delay to prevent immediate closing
+          if (!isVisible) {
+            setTimeout(() => {
+              const clickOutsideHandler = (clickE) => {
+                if (!menu.contains(clickE.target) && !newMenuBtn.contains(clickE.target)) {
+                  menu.style.display = 'none';
+                  document.removeEventListener('click', clickOutsideHandler);
+                }
+              };
+              document.addEventListener('click', clickOutsideHandler);
+            }, 100);
+          }
         });
       }
       

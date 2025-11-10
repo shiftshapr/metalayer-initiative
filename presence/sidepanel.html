@@ -19,6 +19,10 @@
   <!-- Load Enhanced Logger System -->
   <!-- Load Avatar Utilities FIRST (CRITICAL DEPENDENCY) -->
   <script src="utils/AvatarUtils.js"></script>
+  <!-- Load Status Dot Helper (4-state status system) -->
+  <script src="utils/StatusDotHelper.js"></script>
+  <!-- Load Unified Storage Sync Functions EARLY (ensures functions are available immediately) -->
+  <script src="utils/UnifiedStorageSync.js"></script>
   <!-- CRITICAL: Load Pre-Render Initializer EARLY for theme and avatar data -->
   <script src="PreRenderInitializer.js"></script>
   <!-- AvatarUtilsChecker.js removed - AvatarUtils.js now self-validates -->
@@ -72,6 +76,7 @@
   <script src="features/PeopleModule.js"></script>
   <script src="features/RoomsModule.js"></script>
   <script src="features/SettingsModule.js"></script>
+  <script src="features/SettingsHeadlineManager.js"></script>
   <script src="real-google-auth.js"></script>
   
   <!-- Load Notification Manager -->
@@ -261,6 +266,31 @@
       <!-- Settings Tab Content -->
       <div id="settings-tab" class="main-tab-content">
         <h3>Settings</h3>
+        
+        <!-- Headline Settings (CRUD) -->
+        <div class="settings-section">
+          <h4>📝 Headline</h4>
+          <div class="setting-item">
+            <label for="settings-headline-input">Headline (max 1000 characters):</label>
+            <textarea 
+              id="settings-headline-input" 
+              class="settings-headline-textarea"
+              maxlength="1000"
+              rows="4"
+              placeholder="Enter your headline here..."
+              style="width: 100%; padding: 8px; margin: 8px 0; border: 1px solid #ccc; border-radius: 4px; font-family: inherit; resize: vertical;"
+            ></textarea>
+            <div class="headline-char-count" style="text-align: right; font-size: 0.85em; color: #666; margin-top: 4px;">
+              <span id="headline-char-count">0</span> / 1000 characters
+            </div>
+            <div class="headline-actions" style="display: flex; gap: 8px; margin-top: 8px;">
+              <button id="headline-save-btn" class="headline-btn save-btn" style="padding: 6px 12px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9em;">💾 Save</button>
+              <button id="headline-cancel-btn" class="headline-btn cancel-btn" style="padding: 6px 12px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9em;">❌ Cancel</button>
+              <button id="headline-delete-btn" class="headline-btn delete-btn" style="padding: 6px 12px; background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9em;">🗑️ Delete</button>
+            </div>
+            <div id="headline-status" class="headline-status" style="margin-top: 8px; padding: 8px; border-radius: 4px; display: none; font-size: 0.9em;"></div>
+          </div>
+        </div>
         
         <!-- Notification Settings -->
         <div class="settings-section">
@@ -501,8 +531,6 @@
   <script src="pre-render-init.js"></script>
 
   <!-- Load test scripts for debugging -->
-  <script src="test-pre-render-init.js"></script>
-  <script src="test-pre-render-aura.js"></script>
 
         </body>
         </html>

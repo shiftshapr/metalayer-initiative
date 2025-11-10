@@ -1,0 +1,347 @@
+/**
+ * SETTINGS HEADLINE MANAGER - CRUD Operations for Settings Headline
+ * Handles Create, Read, Update, Delete operations for user headline
+ */
+
+class SettingsHeadlineManager {
+  constructor() {
+    this.maxLength = 1000;
+    this.currentHeadline = null;
+    this.originalHeadline = null;
+    this.isInitialized = false;
+  }
+
+  /**
+   * Initialize headline manager
+   */
+  async initialize() {
+    if (this.isInitialized) {
+      console.log('⚠️ SETTINGS_HEADLINE: Already initialized');
+      return;
+    }
+
+    console.log('🔧 SETTINGS_HEADLINE: Initializing headline manager...');
+
+    try {
+      // Get DOM elements
+      this.headlineInput = document.getElementById('settings-headline-input');
+      this.charCount = document.getElementById('headline-char-count');
+      this.saveBtn = document.getElementById('headline-save-btn');
+      this.cancelBtn = document.getElementById('headline-cancel-btn');
+      this.deleteBtn = document.getElementById('headline-delete-btn');
+      this.statusDiv = document.getElementById('headline-status');
+
+      if (!this.headlineInput || !this.charCount || !this.saveBtn || !this.cancelBtn || !this.deleteBtn) {
+        console.warn('⚠️ SETTINGS_HEADLINE: Required DOM elements not found');
+        return;
+      }
+
+      // Load existing headline
+      await this.readHeadline();
+
+      // Set up event listeners
+      this.setupEventListeners();
+
+      this.isInitialized = true;
+      console.log('✅ SETTINGS_HEADLINE: Headline manager initialized');
+    } catch (error) {
+      console.error('❌ SETTINGS_HEADLINE: Failed to initialize:', error);
+    }
+  }
+
+  /**
+   * Set up event listeners
+   */
+  setupEventListeners() {
+    // Character count update
+    this.headlineInput.addEventListener('input', () => {
+      this.updateCharCount();
+    });
+
+    // Save button
+    this.saveBtn.addEventListener('click', () => {
+      this.saveHeadline();
+    });
+
+    // Cancel button
+    this.cancelBtn.addEventListener('click', () => {
+      this.cancelEdit();
+    });
+
+    // Delete button
+    this.deleteBtn.addEventListener('click', () => {
+      this.deleteHeadline();
+    });
+
+    // Enter key to save (Ctrl+Enter or Cmd+Enter)
+    this.headlineInput.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        this.saveHeadline();
+      }
+    });
+
+    console.log('✅ SETTINGS_HEADLINE: Event listeners attached');
+  }
+
+  /**
+   * Update character count display
+   */
+  updateCharCount() {
+    const currentLength = this.headlineInput.value.length;
+    this.charCount.textContent = currentLength;
+    
+    // Update color based on length
+    if (currentLength > this.maxLength * 0.9) {
+      this.charCount.style.color = '#dc3545'; // Red
+    } else if (currentLength > this.maxLength * 0.75) {
+      this.charCount.style.color = '#ffc107'; // Yellow
+    } else {
+      this.charCount.style.color = '#666'; // Gray
+    }
+  }
+
+  /**
+   * READ: Load headline from storage
+   */
+  async readHeadline() {
+    try {
+      console.log('📖 SETTINGS_HEADLINE: Reading headline...');
+
+      // Try Chrome storage first
+      const storageData = await chrome.storage.local.get(['settingsHeadline']);
+      if (storageData.settingsHeadline) {
+        this.currentHeadline = storageData.settingsHeadline;
+        this.originalHeadline = storageData.settingsHeadline;
+        this.headlineInput.value = this.currentHeadline;
+        this.updateCharCount();
+        console.log('✅ SETTINGS_HEADLINE: Headline loaded from Chrome storage');
+        return;
+      }
+
+      // Try API if available
+      if (window.currentUser && window.currentUser.id) {
+        try {
+          const response = await fetch(`http://216.238.91.120:3002/v1/users/${window.currentUser.id}/preferences`, {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${await this.getAuthToken()}`
+            }
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            if (data.preferences && data.preferences.headline) {
+              this.currentHeadline = data.preferences.headline;
+              this.originalHeadline = data.preferences.headline;
+              this.headlineInput.value = this.currentHeadline;
+              this.updateCharCount();
+              
+              // Save to Chrome storage for faster access
+              await chrome.storage.local.set({ settingsHeadline: this.currentHeadline });
+              console.log('✅ SETTINGS_HEADLINE: Headline loaded from API');
+              return;
+            }
+          }
+        } catch (apiError) {
+          console.warn('⚠️ SETTINGS_HEADLINE: API read failed, using local storage only:', apiError);
+        }
+      }
+
+      // No headline found
+      this.currentHeadline = '';
+      this.originalHeadline = '';
+      this.headlineInput.value = '';
+      this.updateCharCount();
+      console.log('ℹ️ SETTINGS_HEADLINE: No headline found, starting fresh');
+    } catch (error) {
+      console.error('❌ SETTINGS_HEADLINE: Failed to read headline:', error);
+      this.showStatus('Error loading headline', 'error');
+    }
+  }
+
+  /**
+   * CREATE/UPDATE: Save headline
+   */
+  async saveHeadline() {
+    try {
+      const newHeadline = this.headlineInput.value.trim();
+
+      // Validate length
+      if (newHeadline.length > this.maxLength) {
+        this.showStatus(`Headline exceeds maximum length of ${this.maxLength} characters`, 'error');
+        return;
+      }
+
+      console.log('💾 SETTINGS_HEADLINE: Saving headline...');
+
+      // Save to Chrome storage
+      await chrome.storage.local.set({ settingsHeadline: newHeadline });
+      this.currentHeadline = newHeadline;
+      this.originalHeadline = newHeadline;
+
+      // Save to API if available
+      if (window.currentUser && window.currentUser.id) {
+        try {
+          const response = await fetch(`http://216.238.91.120:3002/v1/users/${window.currentUser.id}/preferences`, {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${await this.getAuthToken()}`
+            },
+            body: JSON.stringify({
+              preferences: {
+                headline: newHeadline
+              }
+            })
+          });
+
+          if (response.ok) {
+            console.log('✅ SETTINGS_HEADLINE: Headline saved to API');
+          } else {
+            console.warn('⚠️ SETTINGS_HEADLINE: API save failed, but saved locally');
+          }
+        } catch (apiError) {
+          console.warn('⚠️ SETTINGS_HEADLINE: API save error, but saved locally:', apiError);
+        }
+      }
+
+      this.showStatus('Headline saved successfully', 'success');
+      console.log('✅ SETTINGS_HEADLINE: Headline saved');
+    } catch (error) {
+      console.error('❌ SETTINGS_HEADLINE: Failed to save headline:', error);
+      this.showStatus('Error saving headline', 'error');
+    }
+  }
+
+  /**
+   * DELETE: Delete headline
+   */
+  async deleteHeadline() {
+    try {
+      if (!confirm('Are you sure you want to delete your headline?')) {
+        return;
+      }
+
+      console.log('🗑️ SETTINGS_HEADLINE: Deleting headline...');
+
+      // Clear from Chrome storage
+      await chrome.storage.local.remove(['settingsHeadline']);
+      this.currentHeadline = '';
+      this.originalHeadline = '';
+      this.headlineInput.value = '';
+      this.updateCharCount();
+
+      // Delete from API if available
+      if (window.currentUser && window.currentUser.id) {
+        try {
+          const response = await fetch(`http://216.238.91.120:3002/v1/users/${window.currentUser.id}/preferences`, {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${await this.getAuthToken()}`
+            },
+            body: JSON.stringify({
+              preferences: {
+                headline: null
+              }
+            })
+          });
+
+          if (response.ok) {
+            console.log('✅ SETTINGS_HEADLINE: Headline deleted from API');
+          } else {
+            console.warn('⚠️ SETTINGS_HEADLINE: API delete failed, but deleted locally');
+          }
+        } catch (apiError) {
+          console.warn('⚠️ SETTINGS_HEADLINE: API delete error, but deleted locally:', apiError);
+        }
+      }
+
+      this.showStatus('Headline deleted successfully', 'success');
+      console.log('✅ SETTINGS_HEADLINE: Headline deleted');
+    } catch (error) {
+      console.error('❌ SETTINGS_HEADLINE: Failed to delete headline:', error);
+      this.showStatus('Error deleting headline', 'error');
+    }
+  }
+
+  /**
+   * Cancel edit and restore original
+   */
+  cancelEdit() {
+    this.headlineInput.value = this.originalHeadline || '';
+    this.updateCharCount();
+    this.showStatus('Changes cancelled', 'info');
+    console.log('❌ SETTINGS_HEADLINE: Edit cancelled');
+  }
+
+  /**
+   * Show status message
+   */
+  showStatus(message, type = 'info') {
+    if (!this.statusDiv) return;
+
+    this.statusDiv.textContent = message;
+    this.statusDiv.style.display = 'block';
+
+    // Set color based on type
+    switch (type) {
+      case 'success':
+        this.statusDiv.style.backgroundColor = '#d4edda';
+        this.statusDiv.style.color = '#155724';
+        this.statusDiv.style.border = '1px solid #c3e6cb';
+        break;
+      case 'error':
+        this.statusDiv.style.backgroundColor = '#f8d7da';
+        this.statusDiv.style.color = '#721c24';
+        this.statusDiv.style.border = '1px solid #f5c6cb';
+        break;
+      default:
+        this.statusDiv.style.backgroundColor = '#d1ecf1';
+        this.statusDiv.style.color = '#0c5460';
+        this.statusDiv.style.border = '1px solid #bee5eb';
+    }
+
+    // Auto-hide after 3 seconds
+    setTimeout(() => {
+      this.statusDiv.style.display = 'none';
+    }, 3000);
+  }
+
+  /**
+   * Get authentication token
+   */
+  async getAuthToken() {
+    try {
+      if (window.authManager && typeof window.authManager.getAuthToken === 'function') {
+        return await window.authManager.getAuthToken();
+      }
+      // Fallback to Chrome identity API
+      return new Promise((resolve) => {
+        chrome.identity.getAuthToken({ interactive: false }, (token) => {
+          resolve(token || '');
+        });
+      });
+    } catch (error) {
+      console.warn('⚠️ SETTINGS_HEADLINE: Failed to get auth token:', error);
+      return '';
+    }
+  }
+}
+
+// Initialize when DOM is ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => {
+    window.settingsHeadlineManager = new SettingsHeadlineManager();
+    window.settingsHeadlineManager.initialize();
+  });
+} else {
+  window.settingsHeadlineManager = new SettingsHeadlineManager();
+  window.settingsHeadlineManager.initialize();
+}
+
+// Export for global access
+window.SettingsHeadlineManager = SettingsHeadlineManager;
+

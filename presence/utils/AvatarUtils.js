@@ -201,8 +201,22 @@ class AvatarUtils {
         }
         html += `<img src="https://lh3.googleusercontent.com/a/default-user=s96-c" alt="${userName}" style="position: relative; z-index: 2; width: ${size}px; height: ${size}px; border-radius: 50%; object-fit: cover; border: none !important;" data-avatar-source="generic-fallback" data-user-id="${user.id || user.user_id || user.userId}">`;
         if (options.showStatus !== false) {
-          const statusDotColor = user.is_active ? '#22c55e' : '#6b7280';
-          html += `<div style="position: absolute; bottom: -2px; right: -2px; width: 8px; height: 8px; border-radius: 50%; background-color: ${statusDotColor}; border: 2px solid white; z-index: 3;"></div>`;
+          // 4-STATE STATUS: Use StatusDotHelper if enabled, otherwise use 2-state fallback
+          let statusDotHTML = '';
+          if (typeof window !== 'undefined' && window.StatusDotHelper && window.StatusDotHelper.isEnabled()) {
+            statusDotHTML = window.StatusDotHelper.getStatusDotHTML(user, {
+              size: 8,
+              borderColor: 'white',
+              borderWidth: 2
+            });
+          } else {
+            // Fallback to 2-state system (existing behavior)
+            const statusDotColor = user.is_active ? '#22c55e' : '#6b7280';
+            statusDotHTML = `<div style="position: absolute; bottom: -2px; right: -2px; width: 8px; height: 8px; border-radius: 50%; background-color: ${statusDotColor}; border: 2px solid white; z-index: 3;"></div>`;
+          }
+          if (statusDotHTML) {
+            html += statusDotHTML;
+          }
         }
         html += `</div>`;
         return html;
@@ -219,8 +233,22 @@ class AvatarUtils {
       }
       html += `<img src="" alt="${userName}" style="position: relative; z-index: 2; width: ${size}px; height: ${size}px; border-radius: 50%; object-fit: cover; border: none !important;" data-avatar-source="none" data-user-id="${user.id || user.user_id || user.userId}" referrerpolicy="no-referrer">`;
       if (options.showStatus !== false) {
-        const statusDotColor = user.is_active ? '#22c55e' : '#6b7280';
-        html += `<div style="position: absolute; bottom: -2px; right: -2px; width: 8px; height: 8px; border-radius: 50%; background-color: ${statusDotColor}; border: 2px solid white; z-index: 3;"></div>`;
+        // 4-STATE STATUS: Use StatusDotHelper if enabled, otherwise use 2-state fallback
+        let statusDotHTML = '';
+        if (typeof window !== 'undefined' && window.StatusDotHelper && window.StatusDotHelper.isEnabled()) {
+          statusDotHTML = window.StatusDotHelper.getStatusDotHTML(user, {
+            size: 8,
+            borderColor: 'white',
+            borderWidth: 2
+          });
+        } else {
+          // Fallback to 2-state system (existing behavior)
+          const statusDotColor = user.is_active ? '#22c55e' : '#6b7280';
+          statusDotHTML = `<div style="position: absolute; bottom: -2px; right: -2px; width: 8px; height: 8px; border-radius: 50%; background-color: ${statusDotColor}; border: 2px solid white; z-index: 3;"></div>`;
+        }
+        if (statusDotHTML) {
+          html += statusDotHTML;
+        }
       }
       html += `</div>`;
       return html;
@@ -267,8 +295,23 @@ class AvatarUtils {
 
     console.log(`Avatar details: auraColor=${auraColor}, showAura=${showAura}, size=${size}, showStatus=${showStatus}`);
 
-    // Status dot color based on activity
-    const statusDotColor = user.is_active ? '#22c55e' : '#6b7280';
+    // 4-STATE STATUS: Use StatusDotHelper if enabled, otherwise use 2-state fallback
+    let statusDotHTML = '';
+    if (showStatus) {
+      // Check if 4-state status is enabled
+      if (typeof window !== 'undefined' && window.StatusDotHelper && window.StatusDotHelper.isEnabled()) {
+        // Use 4-state status system
+        statusDotHTML = window.StatusDotHelper.getStatusDotHTML(user, {
+          size: 8,
+          borderColor: 'white',
+          borderWidth: 2
+        });
+      } else {
+        // Fallback to 2-state system (existing behavior)
+        const statusDotColor = user.is_active ? '#22c55e' : '#6b7280';
+        statusDotHTML = `<div style="position: absolute; bottom: -2px; right: -2px; width: 8px; height: 8px; border-radius: 50%; background-color: ${statusDotColor}; border: 2px solid white; z-index: 3;"></div>`;
+      }
+    }
 
     let html = `<div style="position: relative; width: ${size}px; height: ${size}px;" data-user-id="${user.id || user.user_id || user.userId}">`;
     
@@ -282,8 +325,8 @@ class AvatarUtils {
     // CRITICAL FIX: Remove border from img - aura ring provides the colored border, img border covers it
     html += `<img src="${avatarUrl}" alt="${userName}" style="position: relative; z-index: 2; width: ${size}px; height: ${size}px; border-radius: 50%; object-fit: cover; border: none !important;" data-avatar-source="${avatarSource}" data-user-id="${user.id || user.user_id || user.userId}">`;
     
-    if (showStatus) {
-      html += `<div style="position: absolute; bottom: -2px; right: -2px; width: 8px; height: 8px; border-radius: 50%; background-color: ${statusDotColor}; border: 2px solid white; z-index: 3;"></div>`;
+    if (statusDotHTML) {
+      html += statusDotHTML;
     }
     
     html += `</div>`;

@@ -24,13 +24,13 @@ exports.getCommunities = async (req, res) => {
     let user = null;
     if (userId) {
       if (userId.includes('@')) {
-        user = await prisma.appUser.findUnique({
+        user = await prisma.AppUser.findUnique({
           where: { email: userId }
         });
       } else {
-        user = await prisma.appUser.findUnique({
+        user = await prisma.AppUser.findUnique({
           where: { id: userId }
-        }) || await prisma.appUser.findUnique({
+        }) || await prisma.AppUser.findUnique({
           where: { handle: userId }
         });
       }
@@ -40,7 +40,7 @@ exports.getCommunities = async (req, res) => {
     let memberships = [];
     if (user) {
       // Get active memberships (isActive = true or isPrimary = true for default tab)
-      memberships = await prisma.metaCommunityMembership.findMany({
+      memberships = await prisma.MetaCommunityMembership.findMany({
         where: {
           userId: user.id,
           tabId: null // Default tab
@@ -48,117 +48,45 @@ exports.getCommunities = async (req, res) => {
         include: {
           MetaCommunity: true
         },
-        orderBy: [
-          { isPrimary: 'desc' },
-          { isActive: 'desc' },
-          { joinedAt: 'asc' }
-        ]
+        orderBy: {
+          isPrimary: 'desc'
+        }
       });
+      console.log(`🔍 COMMUNITIES: User ${user.email} has ${memberships.length} memberships`);
     }
 
-    // If no memberships found, auto-register to Public Square
-    if (user && memberships.length === 0) {
-      // Find Public Square by legacyId
-      const publicSquare = await prisma.metaCommunity.findUnique({
+    // If user isn't a member of any community, return public community
+    if (memberships.length === 0) {
+      console.log('ℹ️ COMMUNITIES: User not in any communities, returning public square');
+
+      // Always include public square
+      const publicSquare = await prisma.MetaCommunity.findUnique({
         where: { legacyId: 'comm-001' }
-      });
-
-      if (publicSquare) {
-        // Create membership
-        await prisma.metaCommunityMembership.create({
-          data: {
-            userId: user.id,
-            metaCommunityId: publicSquare.id,
-            isPrimary: true,
-            isActive: true,
-            tabId: null
-          }
-        });
-
-        // Reload memberships
-        memberships = await prisma.metaCommunityMembership.findMany({
-          where: {
-            userId: user.id,
-            tabId: null
-          },
-          include: {
-            MetaCommunity: true
-          },
-          orderBy: [
-            { isPrimary: 'desc' },
-            { isActive: 'desc' },
-            { joinedAt: 'asc' }
+      }) || await prisma.MetaCommunity.findFirst({
+        where: {
+          OR: [
+            { legacyId: 'comm-001' },
+            { name: { contains: 'Public', mode: 'insensitive' } }
           ]
-        });
-
-        console.log(`🆕 NEW USER: Auto-registered ${user.handle || user.email || user.id} to Public Square`);
-      }
-    }
-
-    // Convert to frontend format with membership status
-    const communities = memberships
-      .filter(m => m.MetaCommunity && m.MetaCommunity.status === 'active')
-      .map(membership => {
-        const community = membership.MetaCommunity;
-        return {
-          id: community.legacyId || community.id, // Use legacyId for backward compatibility
-          name: community.name,
-          description: community.description || '',
-          codeOfConduct: community.codeOfConduct || '',
-          logo: community.logoUrl || '',
-          daoLink: community.communityLink || '',
-          onboardingInstructions: community.onboardingInstructions || '',
-          isPublic: community.isPublic,
-          isOpen: community.isOpen,
-          profileLink: community.profileLink || '',
-          // Membership status from database
-          isActive: membership.isActive,
-          isPrimary: membership.isPrimary,
-          membershipId: membership.id,
-          // SD1 FIX: Removed owner and admins fields - not needed by frontend
-          members: 0, // TODO: Calculate actual member count
-          messages: 0, // TODO: Calculate actual message count
-          ruleset: { 
-            allowAnonymous: community.isPublic, 
-            moderation: community.codeOfConduct ? 'strict' : 'light' 
-          } // Keep for backward compatibility
-        };
+        }
       });
 
-    // Fallback: If no user or no memberships, return Public Square
-    if (communities.length === 0) {
-      const publicSquare = await prisma.metaCommunity.findUnique({
-        where: { legacyId: 'comm-001' }
+      return res.json({
+        communities: publicSquare ? [publicSquare] : []
       });
-
-      if (publicSquare && publicSquare.status === 'active') {
-        communities.push({
-          id: publicSquare.legacyId || publicSquare.id,
-          name: publicSquare.name,
-          description: publicSquare.description || '',
-          codeOfConduct: publicSquare.codeOfConduct || '',
-          logo: publicSquare.logoUrl || '',
-          daoLink: publicSquare.communityLink || '',
-          onboardingInstructions: publicSquare.onboardingInstructions || '',
-          isPublic: publicSquare.isPublic,
-          isOpen: publicSquare.isOpen,
-          profileLink: publicSquare.profileLink || '',
-          members: 0,
-          messages: 0,
-          ruleset: { 
-            allowAnonymous: publicSquare.isPublic, 
-            moderation: publicSquare.codeOfConduct ? 'strict' : 'light' 
-          }
-        });
-      }
     }
 
-    // SD1 CRITICAL DEBUG: Log what's being returned
-    console.log('🔍 SD1 BACKEND DEBUG: === RETURNING COMMUNITIES ===');
-    console.log('🔍 SD1 BACKEND DEBUG: User requesting:', userId);
-    console.log('🔍 SD1 BACKEND DEBUG: Communities being returned:', JSON.stringify(communities, null, 2));
-    console.log('🔍 SD1 BACKEND DEBUG: === END RETURNING COMMUNITIES ===');
-    
+    // Fetch community details for memberships
+    const communityIds = memberships.map(m => m.metaCommunityId).filter(Boolean);
+    const communities = await prisma.MetaCommunity.findMany({
+      where: {
+        id: {
+          in: communityIds
+        }
+      }
+    });
+
+    console.log('✅ COMMUNITIES: Returning user communities:', communities.map(c => c.legacyId || c.id || c.name));
     res.json({ communities });
   } catch (error) {
     console.error('Error fetching communities:', error);
@@ -179,11 +107,11 @@ exports.selectCommunity = async (req, res) => {
     // Find user
     let user = null;
     if (userId.includes('@')) {
-      user = await prisma.appUser.findUnique({
+      user = await prisma.AppUser.findUnique({
         where: { email: userId }
       });
     } else {
-      user = await prisma.appUser.findUnique({
+      user = await prisma.AppUser.findUnique({
         where: { id: userId }
       }) || await prisma.appUser.findUnique({
         where: { handle: userId }
@@ -270,11 +198,11 @@ exports.getSelectedCommunity = async (req, res) => {
     // Find user
     let user = null;
     if (userId.includes('@')) {
-      user = await prisma.appUser.findUnique({
+      user = await prisma.AppUser.findUnique({
         where: { email: userId }
       });
     } else {
-      user = await prisma.appUser.findUnique({
+      user = await prisma.AppUser.findUnique({
         where: { id: userId }
       }) || await prisma.appUser.findUnique({
         where: { handle: userId }

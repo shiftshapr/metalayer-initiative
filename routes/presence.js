@@ -162,11 +162,11 @@ router.get('/communities', authenticateUser, async (req, res) => {
   const { communityIds, minutes = 0.5 } = req.query; // CRITICAL FIX: Reduced from 5 minutes to 30 seconds for faster visibility updates
   const { id: currentUserId } = req.user;
 
-  if (!communityIds) {
-    return res.status(400).json({ error: 'communityIds is required (comma-separated)' });
+  // ROOT CAUSE FIX: Make communityIds optional - if not provided, return all active users
+  let communityIdArray = [];
+  if (communityIds) {
+    communityIdArray = communityIds.split(',').map(id => id.trim()).filter(id => id.length > 0);
   }
-
-  const communityIdArray = communityIds.split(',').map(id => id.trim());
 
   try {
     const activeUsers = await presenceService.getActiveUsersByCommunities(
@@ -177,8 +177,12 @@ router.get('/communities', authenticateUser, async (req, res) => {
     
     res.json({ active: activeUsers });
   } catch (error) {
-    console.error('Error getting active users for communities:', error);
-    res.status(500).json({ error: 'Failed to get active users for communities' });
+    console.error('❌ Error getting active users for communities:', error);
+    console.error('   Error details:', error.message, error.stack);
+    res.status(500).json({ 
+      error: 'Failed to get active users for communities',
+      details: error.message 
+    });
   }
 });
 
@@ -242,6 +246,249 @@ router.get('/stats', async (req, res) => {
   } catch (error) {
     console.error('Error getting presence stats:', error);
     res.status(500).json({ error: 'Failed to get presence stats' });
+  }
+});
+
+// GET /v1/presence/availability - Get user's current availability status (HYBRID: Global + Per-Tab Override)
+// pageId is optional: if provided, returns status for that tab (override or global), else returns global status
+router.get('/availability', authenticateUser, async (req, res) => {
+  const { pageId } = req.query;
+  const { id: userId } = req.user;
+
+  console.log(`🎯 AVAILABILITY_API: GET request - userId: ${userId}, pageId: ${pageId || 'GLOBAL'}`);
+
+  try {
+    // Get user's global status
+    const user = await prisma.appUser.findUnique({
+      where: { id: userId },
+      select: {
+        globalAvailability: true,
+        availabilityUpdatedAt: true
+      }
+    });
+
+    const globalStatus = user?.globalAvailability || 'AVAILABLE'; // Default to AVAILABLE
+    const globalUpdatedAt = user?.availabilityUpdatedAt;
+
+    // If no pageId, return global status
+    if (!pageId) {
+      res.json({
+        success: true,
+        availability: globalStatus,
+        scope: 'global',
+        isActive: true,
+        lastUpdated: globalUpdatedAt,
+        message: 'Global status (applies to all tabs)'
+      });
+      return;
+    }
+
+    // If pageId provided, check for per-tab override first
+    const tabOverride = await prisma.presenceEvent.findFirst({
+      where: {
+        user_id: userId,
+        page_id: pageId,
+        kind: 'AVAILABILITY'
+      },
+      orderBy: {
+        created_at: 'desc'
+      },
+      select: {
+        availability: true,
+        created_at: true
+      }
+    });
+
+    // Also check user_presence for current active status
+    const userPresence = await prisma.user_presence.findFirst({
+      where: {
+        user_id: userId,
+        page_id: pageId,
+        is_active: true
+      },
+      select: {
+        is_active: true,
+        updated_at: true
+      }
+    });
+
+    // Determine current status: override takes precedence, else use global
+    let currentStatus = globalStatus;
+    let scope = 'global';
+    let lastUpdated = globalUpdatedAt;
+
+    if (tabOverride && tabOverride.availability) {
+      // Per-tab override exists
+      currentStatus = tabOverride.availability;
+      scope = 'override';
+      lastUpdated = tabOverride.created_at;
+    }
+
+    // If user is not active on this tab, status is OFFLINE
+    if (!userPresence || !userPresence.is_active) {
+      currentStatus = 'OFFLINE';
+      scope = 'offline';
+    }
+
+    res.json({
+      success: true,
+      availability: currentStatus,
+      scope: scope, // 'global', 'override', or 'offline'
+      isActive: userPresence?.is_active || false,
+      lastUpdated: lastUpdated,
+      globalStatus: globalStatus, // Include global for reference
+      hasOverride: !!tabOverride
+    });
+  } catch (error) {
+    console.error('❌ AVAILABILITY_API: Error getting availability:', error);
+    res.status(500).json({
+      error: 'Failed to get availability',
+      message: error.message
+    });
+  }
+});
+
+// POST /v1/presence/availability - Update user availability status (HYBRID: Global or Per-Tab Override)
+// pageId is optional: if provided, creates per-tab override, else updates global status
+router.post('/availability', authenticateUser, async (req, res) => {
+  const { pageId, availability, isGlobal } = req.body;
+  const { id: userId } = req.user;
+
+  console.log(`🎯 AVAILABILITY_API: POST request - userId: ${userId}, pageId: ${pageId || 'GLOBAL'}, availability: ${availability}, isGlobal: ${isGlobal}`);
+
+  if (!availability) {
+    return res.status(400).json({ error: 'availability is required' });
+  }
+
+  // Validate availability value (4-state system)
+  if (!['AVAILABLE', 'BUSY', 'AWAY', 'OFFLINE'].includes(availability)) {
+    return res.status(400).json({
+      error: 'Invalid availability. Must be AVAILABLE, BUSY, AWAY, or OFFLINE'
+    });
+  }
+
+  try {
+    // Determine if this is a global update or per-tab override
+    const updateGlobal = !pageId || isGlobal === true;
+
+    if (updateGlobal) {
+      // Update global status
+      const updatedUser = await prisma.appUser.update({
+        where: { id: userId },
+        data: {
+          globalAvailability: availability,
+          availabilityUpdatedAt: new Date()
+        },
+        select: {
+          globalAvailability: true,
+          availabilityUpdatedAt: true
+        }
+      });
+
+      console.log(`✅ AVAILABILITY_API: Global status updated:`, updatedUser);
+
+      // Broadcast to all tabs via real-time (will be handled by real-time subscription)
+      res.json({
+        success: true,
+        availability: updatedUser.globalAvailability,
+        scope: 'global',
+        updatedAt: updatedUser.availabilityUpdatedAt,
+        message: `Global availability updated to ${availability} (applies to all tabs)`
+      });
+    } else {
+      // Create per-tab override
+      const presenceEvent = await presenceService.recordPresenceEvent(
+        userId,
+        pageId,
+        'AVAILABILITY',
+        availability,
+        null, // customLabel
+        null  // pageUrl
+      );
+
+      console.log(`✅ AVAILABILITY_API: Per-tab override created:`, presenceEvent);
+
+      // Update user_presence table to reflect availability change
+      const userPresence = await prisma.user_presence.updateMany({
+        where: {
+          user_id: userId,
+          page_id: pageId,
+          is_active: true
+        },
+        data: {
+          updated_at: new Date()
+        }
+      });
+
+      console.log(`✅ AVAILABILITY_API: User presence updated:`, userPresence);
+
+      res.json({
+        success: true,
+        presenceEvent,
+        scope: 'override',
+        availability,
+        message: `Per-tab availability override updated to ${availability}`
+      });
+    }
+  } catch (error) {
+    console.error('❌ AVAILABILITY_API: Error updating availability:', error);
+    const code = error.code || error.name;
+    const message = error.message;
+    res.status(500).json({
+      error: 'Failed to update availability',
+      code,
+      message
+    });
+  }
+});
+
+// DELETE /v1/presence/availability - Clear/delete user availability status (FULL CRUD - DELETE)
+router.delete('/availability', authenticateUser, async (req, res) => {
+  const { pageId } = req.query;
+  const { id: userId } = req.user;
+
+  console.log(`🎯 AVAILABILITY_API: DELETE request - userId: ${userId}, pageId: ${pageId}`);
+
+  if (!pageId) {
+    return res.status(400).json({ error: 'pageId is required' });
+  }
+
+  try {
+    // Record EXIT event to clear availability
+    const exitEvent = await presenceService.recordPresenceEvent(
+      userId,
+      pageId,
+      'EXIT',
+      null, // availability
+      null, // customLabel
+      null  // pageUrl
+    );
+
+    // Update user_presence to mark as inactive
+    const userPresence = await prisma.user_presence.updateMany({
+      where: {
+        user_id: userId,
+        page_id: pageId
+      },
+      data: {
+        is_active: false,
+        updated_at: new Date()
+      }
+    });
+
+    console.log(`✅ AVAILABILITY_API: Status cleared (user marked offline):`, userPresence);
+
+    res.json({
+      success: true,
+      exitEvent,
+      message: 'Availability status cleared (user marked offline)'
+    });
+  } catch (error) {
+    console.error('❌ AVAILABILITY_API: Error clearing availability:', error);
+    res.status(500).json({
+      error: 'Failed to clear availability',
+      message: error.message
+    });
   }
 });
 

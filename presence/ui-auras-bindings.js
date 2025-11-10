@@ -223,20 +223,244 @@
 
   /**
    * Add aura controls to user interface
+   * FIX: Make async to fetch aura color from database
+   * FIX: Separate Status from Aura Settings
    */
-  function addAuraControls() {
-    // Find or create aura controls container
-    const controlsContainer = getOrCreateAuraControlsContainer();
+  async function addAuraControls() {
+    const settingsTab = document.getElementById('settings-tab');
+    if (!settingsTab) {
+      console.warn('⚠️ UI AURAS: Settings tab not found');
+      return;
+    }
     
-    // Add aura color picker
-    const colorPicker = createAuraColorPicker();
-    controlsContainer.appendChild(colorPicker);
+    // FIX: Create separate sections for Aura and Status
+    // Aura Settings Section
+    let auraSection = settingsTab.querySelector('.aura-settings-section');
+    if (!auraSection) {
+      auraSection = document.createElement('div');
+      auraSection.className = 'settings-section aura-settings-section';
+      auraSection.innerHTML = '<h4>🎨 Aura Settings</h4>';
+      settingsTab.appendChild(auraSection);
+    }
+    
+    // Add aura color picker (async - fetches from database)
+    const colorPicker = await createAuraColorPicker();
+    auraSection.appendChild(colorPicker);
     
     // Add aura intensity slider
     const intensitySlider = createAuraIntensitySlider();
-    controlsContainer.appendChild(intensitySlider);
+    auraSection.appendChild(intensitySlider);
     
-    console.log('✅ UI AURAS: Aura controls added');
+    // Status Settings Section (SEPARATE from Aura)
+    let statusSection = settingsTab.querySelector('.status-settings-section');
+    if (!statusSection) {
+      statusSection = document.createElement('div');
+      statusSection.className = 'settings-section status-settings-section';
+      statusSection.innerHTML = '<h4>🟢 Status Settings</h4>';
+      settingsTab.appendChild(statusSection);
+    }
+    
+    // Add status selector to Status section (not Aura section)
+    const statusSelector = createStatusSelector();
+    statusSection.appendChild(statusSelector);
+    
+    console.log('✅ UI AURAS: Aura and Status controls added (separated)');
+  }
+  
+  /**
+   * Create status selector for 4-state status system
+   * FIX: Add ability to set status (AVAILABLE, BUSY, AWAY)
+   */
+  function createStatusSelector() {
+    const selector = document.createElement('div');
+    selector.className = 'status-selector';
+    selector.innerHTML = `
+      <label for="status-select">Status:</label>
+      <select id="status-select" style="padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-color); color: var(--text-color);">
+        <option value="AVAILABLE">🟢 Available</option>
+        <option value="BUSY">🟡 Busy</option>
+        <option value="AWAY">🔴 Away</option>
+      </select>
+      <span id="status-display" style="margin-left: 8px; font-size: 0.9em; color: var(--text-color-secondary);"></span>
+    `;
+    
+    // Add change handler
+    const statusSelect = selector.querySelector('#status-select');
+    const statusDisplay = selector.querySelector('#status-display');
+    
+    // ROOT CAUSE FIX: Fetch current status (Chrome storage first, then database)
+    (async () => {
+      try {
+        let currentStatus = null;
+        let statusSource = 'default';
+        
+        // Step 1: Check Chrome storage FIRST
+        if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+          try {
+            const storageResult = await new Promise((resolve) => {
+              chrome.storage.local.get(['userAvailability', 'availability', 'globalAvailability'], (result) => {
+                resolve(result);
+              });
+            });
+            
+            const cachedStatus = storageResult.userAvailability || storageResult.availability || storageResult.globalAvailability;
+            if (cachedStatus && ['AVAILABLE', 'BUSY', 'AWAY', 'OFFLINE'].includes(cachedStatus)) {
+              currentStatus = cachedStatus;
+              statusSource = 'Chrome storage';
+              console.log('✅ UI AURAS: Found status in Chrome storage:', currentStatus);
+            }
+          } catch (error) {
+            console.warn('⚠️ UI AURAS: Error reading Chrome storage:', error);
+          }
+        }
+        
+        // Step 2: Fallback to database if not in Chrome storage
+        if (!currentStatus && window.currentUser && window.currentUser.id && window.api && typeof window.api.request === 'function') {
+          try {
+            const globalData = await window.api.request('/v1/presence/availability', {
+              method: 'GET'
+            });
+            
+            if (globalData && globalData.availability) {
+              currentStatus = globalData.availability;
+              statusSource = 'database';
+              console.log('✅ UI AURAS: Fetched status from database:', currentStatus);
+              
+              // Cache it in Chrome storage for next time
+              if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+                chrome.storage.local.set({ 
+                  userAvailability: currentStatus, 
+                  availability: currentStatus, 
+                  globalAvailability: currentStatus 
+                });
+              }
+            }
+          } catch (error) {
+            console.warn('⚠️ UI AURAS: Error fetching from database:', error);
+          }
+        }
+        
+        // Step 3: Fallback to currentUser object
+        if (!currentStatus && window.currentUser) {
+          currentStatus = window.currentUser.availability || window.currentUser.globalAvailability;
+          if (currentStatus) {
+            statusSource = 'currentUser object';
+            console.log('✅ UI AURAS: Found status in currentUser:', currentStatus);
+          }
+        }
+        
+        // Step 4: Default if nothing found
+        if (!currentStatus) {
+          currentStatus = 'AVAILABLE';
+          statusSource = 'default';
+          console.log('ℹ️ UI AURAS: No status found, using default: AVAILABLE');
+        }
+        
+        // Set the select value
+        statusSelect.value = currentStatus;
+        const scopeText = ' (Global)';
+        statusDisplay.textContent = `${currentStatus}${scopeText} (${statusSource})`;
+        
+      } catch (error) {
+        console.warn('⚠️ UI AURAS: Error fetching current status:', error);
+        statusSelect.value = 'AVAILABLE';
+        statusDisplay.textContent = 'AVAILABLE (Global - error)';
+      }
+    })();
+    
+    // Add toggle for global vs per-tab (DISABLED for now - always global)
+    const scopeToggle = document.createElement('div');
+    scopeToggle.style.marginTop = '8px';
+    scopeToggle.innerHTML = `
+      <label style="font-size: 0.85em; display: flex; align-items: center; gap: 8px; opacity: 0.6;">
+        <input type="checkbox" id="status-global-toggle" checked disabled>
+        <span>Apply to all tabs</span>
+      </label>
+    `;
+    selector.appendChild(scopeToggle);
+
+    const globalToggle = scopeToggle.querySelector('#status-global-toggle');
+    // Always global for now (checkbox is disabled)
+    const isAlwaysGlobal = true;
+
+    statusSelect.addEventListener('change', async (e) => {
+      const newStatus = e.target.value;
+      // ROOT CAUSE FIX: Always use global status (checkbox is disabled)
+      const isGlobal = isAlwaysGlobal; // Always true for now
+      
+      // Show loading state
+      statusDisplay.textContent = 'Saving...';
+      statusSelect.disabled = true;
+      
+      try {
+        // ROOT CAUSE FIX: Update BOTH Chrome storage AND database
+        if (typeof window.updateAvailabilityEverywhere === 'function') {
+          await window.updateAvailabilityEverywhere(newStatus);
+          console.log('✅ UI AURAS: Status updated everywhere:', newStatus);
+          
+          const scopeText = ' (Global - saved)';
+          statusDisplay.textContent = `${newStatus}${scopeText} ✓`;
+          
+          // Re-fetch to confirm it's in database
+          setTimeout(async () => {
+            try {
+              const verifyData = await window.api.request('/v1/presence/availability', {
+                method: 'GET'
+              });
+              if (verifyData && verifyData.availability === newStatus) {
+                statusDisplay.textContent = `${newStatus}${scopeText} ✓ (verified)`;
+                console.log('✅ UI AURAS: Status verified in database');
+              }
+            } catch (verifyError) {
+              console.warn('⚠️ UI AURAS: Could not verify status:', verifyError);
+            }
+            
+            setTimeout(() => {
+              statusDisplay.textContent = `${newStatus}${scopeText}`;
+            }, 2000);
+          }, 500);
+        } else {
+          // Fallback: Update manually if function not available
+          console.warn('⚠️ UI AURAS: updateAvailabilityEverywhere not available, using fallback');
+          
+          // Update Chrome storage
+          if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+            chrome.storage.local.set({ 
+              userAvailability: newStatus, 
+              availability: newStatus, 
+              globalAvailability: newStatus 
+            });
+          }
+          
+          // Update database
+          if (window.currentUser && window.currentUser.id && window.api && typeof window.api.request === 'function') {
+            const requestBody = {
+              availability: newStatus,
+              isGlobal: true
+            };
+
+            const result = await window.api.request('/v1/presence/availability', {
+              method: 'POST',
+              body: JSON.stringify(requestBody)
+            });
+            
+            if (result && result.success) {
+              const scopeText = ' (Global - saved)';
+              statusDisplay.textContent = `${newStatus}${scopeText} ✓`;
+            } else {
+              statusDisplay.textContent = 'Error - not saved';
+            }
+          }
+        }
+      } catch (error) {
+        console.error('❌ UI AURAS: Error updating status:', error);
+        statusDisplay.textContent = `Error: ${error.message || 'Failed to save'}`;
+      } finally {
+        statusSelect.disabled = false;
+      }
+    });
+    
+    return selector;
   }
 
   /**
@@ -272,19 +496,64 @@
 
   /**
    * Create aura color picker
+   * FIX: Fetch current aura color from database instead of using fallback
    */
-  function createAuraColorPicker() {
+  async function createAuraColorPicker() {
     const picker = document.createElement('div');
     picker.className = 'aura-color-picker';
+    
+    // ROOT CAUSE FIX: Fetch current user's aura color (Chrome storage first, then database)
+    let currentAuraColor = window.AVATAR_FALLBACK_COLOR;
+    try {
+      // Use unified getCurrentUserAuraColor function if available
+      if (typeof window.getCurrentUserAuraColor === 'function') {
+        currentAuraColor = await window.getCurrentUserAuraColor();
+        console.log('✅ UI AURAS: Fetched aura color using getCurrentUserAuraColor:', currentAuraColor);
+      } else {
+        // Fallback: Check Chrome storage first
+        if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+          const storageResult = await new Promise((resolve) => {
+            chrome.storage.local.get(['userAuraColor', 'auraColor'], (result) => {
+              resolve(result);
+            });
+          });
+          const cachedColor = storageResult.userAuraColor || storageResult.auraColor;
+          if (cachedColor && cachedColor !== '#ffffff' && cachedColor !== 'ffffff') {
+            currentAuraColor = cachedColor;
+            console.log('✅ UI AURAS: Found aura color in Chrome storage:', currentAuraColor);
+          }
+        }
+        
+        // Fallback to database if not in Chrome storage
+        if (currentAuraColor === window.AVATAR_FALLBACK_COLOR && window.currentUser && window.currentUser.id) {
+          if (window.api && typeof window.api.request === 'function') {
+            const userData = await window.api.request(`/v1/users/${window.currentUser.id}`, {
+              method: 'GET'
+            });
+            if (userData) {
+              currentAuraColor = userData.aura_color || userData.auraColor || window.currentUser.auraColor || window.AVATAR_FALLBACK_COLOR;
+              console.log('✅ UI AURAS: Fetched aura color from database:', currentAuraColor);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.warn('⚠️ UI AURAS: Error fetching aura color, using fallback:', error);
+    }
+    
     picker.innerHTML = `
       <label for="aura-color">Aura Color:</label>
-      <input type="color" id="aura-color" value="${window.AVATAR_FALLBACK_COLOR}">
+      <input type="color" id="aura-color" value="${currentAuraColor}">
+      <span id="aura-color-display" style="margin-left: 8px; font-size: 0.9em; color: var(--text-color-secondary);">${currentAuraColor}</span>
     `;
     
     // Add change handler
     const colorInput = picker.querySelector('#aura-color');
+    const colorDisplay = picker.querySelector('#aura-color-display');
     colorInput.addEventListener('change', (e) => {
-      handleAuraColorChange(e.target.value);
+      const newColor = e.target.value;
+      colorDisplay.textContent = newColor;
+      handleAuraColorChange(newColor);
     });
     
     return picker;
@@ -317,12 +586,43 @@
 
   /**
    * Handle aura color change
+   * ROOT CAUSE FIX: Update BOTH Chrome storage AND database
    */
   async function handleAuraColorChange(color) {
     try {
-      if (window.aurasIntegration) {
-        await window.aurasIntegration.updateAura(color);
-        console.log('✅ UI AURAS: Aura color updated:', color);
+      if (!window.currentUser || !window.currentUser.id) {
+        console.warn('⚠️ UI AURAS: Cannot update aura - user not authenticated');
+        return;
+      }
+      
+      // ROOT CAUSE FIX: Use unified function to update both Chrome storage AND database
+      if (typeof window.updateAuraColorEverywhere === 'function') {
+        await window.updateAuraColorEverywhere(color);
+        console.log('✅ UI AURAS: Aura color updated everywhere:', color);
+      } else {
+        // Fallback: Update manually if function not available
+        console.warn('⚠️ UI AURAS: updateAuraColorEverywhere not available, using fallback');
+        
+        // Update Chrome storage
+        if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+          chrome.storage.local.set({ userAuraColor: color, auraColor: color });
+        }
+        
+        // Update database
+        if (window.api && typeof window.api.request === 'function') {
+          await window.api.request(`/v1/users/${window.currentUser.id}/aura-color`, {
+            method: 'PUT',
+            body: JSON.stringify({
+              auraColor: color
+            })
+          });
+        }
+        
+        // Update local objects
+        if (window.currentUser) {
+          window.currentUser.auraColor = color;
+          window.currentUser.aura_color = color;
+        }
       }
     } catch (error) {
       console.error('❌ UI AURAS: Error updating aura color:', error);
@@ -331,31 +631,189 @@
 
   /**
    * Handle aura intensity change
+   * FIX: Implement FULL CRUD - Update aura intensity in database
    */
   async function handleAuraIntensityChange(intensity) {
     try {
-      if (window.aurasIntegration) {
-        // Get current aura color
+      if (!window.currentUser || !window.currentUser.id) {
+        console.warn('⚠️ UI AURAS: Cannot update aura intensity - user not authenticated');
+        return;
+      }
+      
+        // FIX: Update in database using API module (FULL CRUD)
+        if (window.api && typeof window.api.request === 'function') {
+          // Get current aura color first
+          const currentColor = window.currentUser.auraColor || window.currentUser.aura_color || window.AVATAR_FALLBACK_COLOR;
+          
+          // Use PATCH endpoint for general updates
+          const result = await window.api.request(`/v1/users/${window.currentUser.id}`, {
+            method: 'PATCH',
+            body: JSON.stringify({
+              aura_intensity: intensity,
+              aura_color: currentColor // Preserve color
+            })
+          });
+        
+        if (result) {
+          console.log('✅ UI AURAS: Aura intensity updated in database:', intensity);
+          // Update local user object
+          if (window.currentUser) {
+            window.currentUser.auraIntensity = intensity;
+            window.currentUser.aura_intensity = intensity;
+          }
+        } else {
+          console.error('❌ UI AURAS: Failed to update aura intensity in database');
+        }
+      } else if (window.aurasIntegration) {
+        // Fallback to aurasIntegration if API not available
         const currentAura = await window.aurasIntegration.getUserAura();
         const color = currentAura ? currentAura.aura_color : window.AVATAR_FALLBACK_COLOR;
-        
         await window.aurasIntegration.updateAura(color, intensity);
-        console.log('✅ UI AURAS: Aura intensity updated:', intensity);
+        console.log('✅ UI AURAS: Aura intensity updated via aurasIntegration:', intensity);
+      } else {
+        console.error('❌ UI AURAS: No API method available to update aura intensity');
       }
     } catch (error) {
       console.error('❌ UI AURAS: Error updating aura intensity:', error);
     }
   }
 
+  /**
+   * Initialize theme handler with FULL CRUD
+   * FIX: Hook up theme mode to database
+   */
+  function initializeThemeHandler() {
+    const themeSelect = document.getElementById('theme-select');
+    if (!themeSelect) {
+      console.warn('⚠️ UI AURAS: Theme select not found');
+      return;
+    }
+    
+    // ROOT CAUSE FIX: Fetch current theme (Chrome storage first, then database)
+    (async () => {
+      try {
+        let currentTheme = null;
+        let themeSource = 'default';
+        
+        // Use unified getCurrentUserTheme function if available
+        if (typeof window.getCurrentUserTheme === 'function') {
+          currentTheme = await window.getCurrentUserTheme();
+          themeSource = 'getCurrentUserTheme';
+          console.log('✅ UI AURAS: Fetched theme using getCurrentUserTheme:', currentTheme);
+        } else {
+          // Fallback: Check Chrome storage first
+          if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+            const storageResult = await new Promise((resolve) => {
+              chrome.storage.local.get(['theme', 'userTheme'], (result) => {
+                resolve(result);
+              });
+            });
+            const cachedTheme = storageResult.theme || storageResult.userTheme;
+            if (cachedTheme && ['light', 'dark', 'auto'].includes(cachedTheme)) {
+              currentTheme = cachedTheme;
+              themeSource = 'Chrome storage';
+              console.log('✅ UI AURAS: Found theme in Chrome storage:', currentTheme);
+            }
+          }
+          
+          // Fallback to database if not in Chrome storage
+          if (!currentTheme && window.currentUser && window.currentUser.id) {
+            if (window.api && typeof window.api.request === 'function') {
+              const userData = await window.api.request(`/v1/users/${window.currentUser.id}`, {
+                method: 'GET'
+              });
+              if (userData && userData.theme) {
+                currentTheme = userData.theme;
+                themeSource = 'database';
+                console.log('✅ UI AURAS: Fetched theme from database:', currentTheme);
+              }
+            }
+          }
+          
+          // Fallback to localStorage
+          if (!currentTheme) {
+            currentTheme = localStorage.getItem('theme') || 'light';
+            themeSource = 'localStorage';
+          }
+        }
+        
+        themeSelect.value = currentTheme || 'light';
+        console.log(`✅ UI AURAS: Theme set to ${currentTheme} (source: ${themeSource})`);
+      } catch (error) {
+        console.warn('⚠️ UI AURAS: Error fetching theme, using default:', error);
+        themeSelect.value = 'light';
+      }
+    })();
+    
+    // ROOT CAUSE FIX: Handle theme change - Update BOTH Chrome storage AND database
+    themeSelect.addEventListener('change', async (e) => {
+      const newTheme = e.target.value;
+      
+      try {
+        // ROOT CAUSE FIX: Use unified function to update both Chrome storage AND database
+        if (typeof window.updateThemeEverywhere === 'function') {
+          await window.updateThemeEverywhere(newTheme);
+          console.log('✅ UI AURAS: Theme updated everywhere:', newTheme);
+        } else {
+          // Fallback: Update manually if function not available
+          console.warn('⚠️ UI AURAS: updateThemeEverywhere not available, using fallback');
+          
+          // Update Chrome storage
+          if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+            chrome.storage.local.set({ theme: newTheme, userTheme: newTheme });
+          }
+          
+          // Update localStorage (for compatibility)
+          localStorage.setItem('theme', newTheme);
+          
+          // Update DOM immediately
+          document.documentElement.setAttribute('data-theme', newTheme);
+          document.body.setAttribute('data-theme', newTheme);
+          
+          // Update profile menu
+          const themeIcon = document.getElementById('theme-icon');
+          const themeText = document.getElementById('theme-text');
+          if (themeIcon) {
+            themeIcon.textContent = newTheme === 'dark' ? '☀️' : '🌙';
+          }
+          if (themeText) {
+            themeText.textContent = newTheme === 'dark' ? 'Light mode' : 'Dark mode';
+          }
+          
+          // Update database
+          if (window.currentUser && window.currentUser.id && window.api && typeof window.api.request === 'function') {
+            await window.api.request(`/v1/users/${window.currentUser.id}`, {
+              method: 'PATCH',
+              body: JSON.stringify({
+                theme: newTheme
+              })
+            });
+          }
+          
+          // Update local objects
+          if (window.currentUser) {
+            window.currentUser.theme = newTheme;
+          }
+        }
+      } catch (error) {
+        console.error('❌ UI AURAS: Error updating theme:', error);
+      }
+    });
+    
+    console.log('✅ UI AURAS: Theme handler initialized with FULL CRUD');
+  }
+
   // Initialize when DOM is ready
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
+    document.addEventListener('DOMContentLoaded', async () => {
       initializeAurasBindings();
-      addAuraControls();
+      await addAuraControls();
+      initializeThemeHandler();
     });
   } else {
     initializeAurasBindings();
-    addAuraControls();
+    addAuraControls().catch(err => console.error('❌ UI AURAS: Error adding aura controls:', err));
+    initializeThemeHandler();
   }
 
 })();

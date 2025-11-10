@@ -272,13 +272,28 @@ router.get('/:userId', async (req, res) => {
     
     console.log(`✅ BACKEND: Found user: ${user.id}, avatarUrl: ${user.avatarUrl}`);
     
+    // ROOT CAUSE FIX: Parse preferences if it's a string (JSON stored as string in some DBs)
+    let preferences = user.preferences;
+    if (typeof preferences === 'string') {
+      try {
+        preferences = JSON.parse(preferences);
+      } catch (e) {
+        console.warn('⚠️ BACKEND: Failed to parse preferences JSON:', e);
+        preferences = {};
+      }
+    }
+    
     res.json({ 
       id: user.id,
       email: user.email,
       name: user.name,
       handle: user.handle,
       avatarUrl: user.avatarUrl,
-      auraColor: user.auraColor
+      auraColor: user.auraColor,
+      aura_color: user.auraColor, // Also include snake_case
+      theme: preferences?.theme || 'light', // ROOT CAUSE FIX: Include theme from preferences (with fallback)
+      aura_intensity: user.aura_intensity || 0.5, // ROOT CAUSE FIX: Include aura intensity
+      preferences: preferences || {} // ROOT CAUSE FIX: Include full preferences object
     });
   } catch (error) {
     console.error('Error getting user by userId:', error);
@@ -418,6 +433,105 @@ router.get('/:userId/display-visibility-after-exit', async (req, res) => {
   } catch (error) {
     console.error('Error getting display visibility after exit:', error);
     res.status(500).json({ error: 'Failed to get display visibility after exit' });
+  }
+});
+
+// FIX: Add PATCH endpoint for general user updates (FULL CRUD)
+router.patch('/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const updates = req.body;
+    const requestUserId = req.headers['x-user-id'];
+    
+    if (!requestUserId) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    
+    // Only allow users to update their own data
+    if (requestUserId !== userId) {
+      return res.status(403).json({ error: 'Forbidden: Cannot update other users' });
+    }
+    
+    console.log(`🔍 BACKEND: PATCH /v1/users/${userId}`, updates);
+    
+    // Validate UUID format
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(userId)) {
+      return res.status(400).json({ error: 'Invalid userId format. Must be a valid UUID' });
+    }
+    
+    // Get user service
+    const userService = new (require('../services/userService'))(prisma);
+    
+    // Build update object - only allow specific fields
+    const allowedFields = ['aura_color', 'auraColor', 'aura_intensity', 'auraIntensity', 'theme'];
+    const updateData = {};
+    
+    if (updates.aura_color || updates.auraColor) {
+      const auraColor = updates.aura_color || updates.auraColor;
+      // Validate hex color format
+      const hexColorRegex = /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/;
+      if (!hexColorRegex.test(auraColor)) {
+        return res.status(400).json({ error: 'Invalid color format. Must be a valid hex color' });
+      }
+      updateData.aura_color = auraColor;
+    }
+    
+    if (updates.aura_intensity !== undefined || updates.auraIntensity !== undefined) {
+      const intensity = updates.aura_intensity || updates.auraIntensity;
+      if (typeof intensity !== 'number' || intensity < 0 || intensity > 1) {
+        return res.status(400).json({ error: 'Aura intensity must be a number between 0 and 1' });
+      }
+      updateData.aura_intensity = intensity;
+    }
+    
+    if (updates.theme) {
+      if (!['light', 'dark'].includes(updates.theme)) {
+        return res.status(400).json({ error: 'Theme must be "light" or "dark"' });
+      }
+      // Store theme in preferences
+      const user = await userService.getUser(userId);
+      if (user) {
+        const preferences = user.preferences || {};
+        preferences.theme = updates.theme;
+        await userService.updatePreferences(userId, preferences);
+      }
+    }
+    
+    // Update user if there are any allowed fields
+    if (Object.keys(updateData).length > 0) {
+      const updatedUser = await prisma.appUser.update({
+        where: { id: userId },
+        data: updateData,
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          aura_color: true,
+          aura_intensity: true,
+          preferences: true
+        }
+      });
+      
+      res.json({
+        success: true,
+        message: 'User updated successfully',
+        user: updatedUser
+      });
+    } else {
+      res.json({
+        success: true,
+        message: 'No updates to apply',
+        user: await userService.getUser(userId)
+      });
+    }
+  } catch (error) {
+    console.error('Error updating user:', error);
+    if (error.code === 'P2025') {
+      res.status(404).json({ error: 'User not found' });
+    } else {
+      res.status(500).json({ error: 'Failed to update user' });
+    }
   }
 });
 

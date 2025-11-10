@@ -119,9 +119,44 @@ class UserService {
    */
   async getUser(userId) {
     try {
+      // ROOT CAUSE FIX: Explicitly include preferences field to ensure it's returned
       const user = await this.prisma.AppUser.findUnique({
-        where: { id: userId }
+        where: { id: userId },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          handle: true,
+          avatarUrl: true,
+          auraColor: true, // ROOT CAUSE FIX: Only select auraColor (camelCase) - Prisma schema doesn't have aura_color
+          preferences: true, // ROOT CAUSE FIX: Explicitly include preferences
+          isVerified: true,
+          isSuperAdmin: true,
+          createdAt: true,
+          updatedAt: true
+        }
       });
+
+      if (user) {
+        let preferences = user.preferences;
+        if (typeof preferences === 'string') {
+          try {
+            preferences = JSON.parse(preferences);
+          } catch (parseError) {
+            console.warn('⚠️ USER_SERVICE: Failed to parse user preferences JSON:', parseError);
+            preferences = null;
+          }
+          user.preferences = preferences;
+        }
+
+        const auraIntensity =
+          preferences?.auraIntensity ??
+          preferences?.aura_intensity ??
+          null;
+
+        // Preserve legacy snake_case field for downstream consumers
+        user.aura_intensity = auraIntensity;
+      }
 
       return user;
     } catch (error) {

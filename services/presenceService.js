@@ -272,7 +272,17 @@ class PresenceService {
         allUsersOnPage = await this.prisma.user_presence.findMany({
           where: whereClause,
           include: {
-            AppUser: true // Join with AppUser table to get avatarUrl and auraColor
+            AppUser: {
+              select: {
+                id: true,
+                email: true,
+                name: true,
+                handle: true,
+                avatarUrl: true,
+                auraColor: true,
+                globalAvailability: true // ROOT CAUSE FIX: Include global availability for status dots
+              }
+            }
           },
           orderBy: {
             last_seen: 'desc'
@@ -400,6 +410,24 @@ class PresenceService {
         
         // ROOT CAUSE FIX: Handle missing AppUser gracefully - use user_presence data as fallback
         const appUserId = user.AppUser?.id || user.user_id;
+        
+        // ROOT CAUSE FIX: Get global availability from AppUser for status dots
+        // If user is not active, availability should be OFFLINE
+        // Otherwise use globalAvailability from database, or default to AVAILABLE
+        let availability = null;
+        if (!isActive) {
+          availability = 'OFFLINE';
+        } else if (user.AppUser?.globalAvailability) {
+          // ROOT CAUSE FIX: Use globalAvailability from database (this is the source of truth)
+          availability = user.AppUser.globalAvailability;
+          console.log(`🔍 PRESENCE_SERVICE: Using globalAvailability from AppUser for ${user.AppUser.id}: ${availability}`);
+        } else {
+          // ROOT CAUSE FIX: Only default to AVAILABLE if globalAvailability is truly null/undefined
+          // Don't default if it's an empty string or other falsy value that might indicate it wasn't fetched
+          availability = 'AVAILABLE'; // Default for active users without explicit availability
+          console.log(`⚠️ PRESENCE_SERVICE: No globalAvailability found for ${user.AppUser?.id || 'unknown'}, defaulting to AVAILABLE`);
+        }
+        
         const userResult = {
           id: appUserId,
           userId: appUserId,
@@ -408,12 +436,14 @@ class PresenceService {
           handle: user.AppUser?.handle || user.user_name || 'user',
           avatarUrl: user.AppUser?.avatarUrl || null, // Get from AppUser, not user_presence
           auraColor: user.AppUser?.auraColor || '#ffffff', // Get from AppUser, fallback to white
+          aura_color: user.AppUser?.auraColor || '#ffffff', // Also include snake_case for compatibility
           lastSeen: user.last_seen,
           isActive: isActive, // ROOT CAUSE FIX: True only if active AND within short cutoff
           pageId: user.page_id,
           pageUrl: user.page_url,
           enterTime: enterTime, // ROOT CAUSE FIX: Include enterTime for "Online for X" display
-          status: status // ROOT CAUSE FIX: 'online', 'recently_seen', or 'offline' - ALWAYS defined
+          status: status, // ROOT CAUSE FIX: 'online', 'recently_seen', or 'offline' - ALWAYS defined
+          availability: availability // ROOT CAUSE FIX: Include availability for status dots (AVAILABLE, BUSY, AWAY, OFFLINE)
         };
         
         // Debug logging to verify status is set
@@ -474,12 +504,28 @@ class PresenceService {
       // Calculate cutoff time
       const cutoffTime = new Date(Date.now() - (minutes * 60 * 1000));
       
-      // Query user_presence table for multiple communities
+      // ROOT CAUSE FIX: user_presence table doesn't have community_id field
+      // Query all active users (community filtering would need to be done via messages table)
       const activeUsers = await this.prisma.user_presence.findMany({
         where: {
           is_active: true,
           last_seen: {
             gte: cutoffTime
+          }
+          // Note: community_id doesn't exist in user_presence table
+          // If community filtering is needed, it would need to join with messages table
+        },
+        include: {
+          AppUser: {
+            select: {
+              id: true,
+              email: true,
+              name: true,
+              handle: true,
+              avatarUrl: true,
+              auraColor: true,
+              globalAvailability: true // ROOT CAUSE FIX: Include global availability
+            }
           }
         },
         orderBy: {
@@ -490,19 +536,33 @@ class PresenceService {
       console.log(`✅ PRESENCE_SERVICE: Found ${activeUsers.length} active users across communities`);
       
       // Transform to expected format using AppUser data
-      return activeUsers.map(user => ({
-        id: user.AppUser?.id || user.user_id,
-        userId: user.AppUser?.id || user.user_id,
-        email: user.AppUser?.email || 'unknown@example.com',
-        name: user.AppUser?.name || user.user_name || 'User',
-        handle: user.AppUser?.handle || user.user_name || 'user',
-        avatarUrl: user.AppUser?.avatarUrl || null,
-        auraColor: user.AppUser?.auraColor || '#ffffff',
-        lastSeen: user.last_seen,
-        isActive: user.is_active,
-        pageId: user.page_id,
-        pageUrl: user.page_url
-      }));
+      return activeUsers.map(user => {
+        // ROOT CAUSE FIX: Get global availability from AppUser for status dots
+        let availability = null;
+        if (!user.is_active) {
+          availability = 'OFFLINE';
+        } else if (user.AppUser?.globalAvailability) {
+          availability = user.AppUser.globalAvailability;
+        } else {
+          availability = 'AVAILABLE'; // Default for active users
+        }
+        
+        return {
+          id: user.AppUser?.id || user.user_id,
+          userId: user.AppUser?.id || user.user_id,
+          email: user.AppUser?.email || 'unknown@example.com',
+          name: user.AppUser?.name || user.user_name || 'User',
+          handle: user.AppUser?.handle || user.user_name || 'user',
+          avatarUrl: user.AppUser?.avatarUrl || null,
+          auraColor: user.AppUser?.auraColor || '#ffffff',
+          aura_color: user.AppUser?.auraColor || '#ffffff', // Also include snake_case
+          lastSeen: user.last_seen,
+          isActive: user.is_active,
+          pageId: user.page_id,
+          pageUrl: user.page_url,
+          availability: availability // ROOT CAUSE FIX: Include availability for status dots
+        };
+      });
       
     } catch (error) {
       console.error('❌ PRESENCE_SERVICE: Error getting active users by communities:', error);

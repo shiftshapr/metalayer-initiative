@@ -267,22 +267,28 @@ class UrlNormalizationService {
     
     console.log(`🔍 URL_NORMALIZE_BACKEND: Fetching fresh rules from database...`);
     try {
-      const rules = await this.prisma.urlNormalizationRule.findMany({
+      const normalizationModel = this.prisma?.urlNormalizationRule;
+      if (!normalizationModel || typeof normalizationModel.findMany !== 'function') {
+        console.log('⚠️ URL_NORMALIZE_BACKEND: urlNormalizationRule model not found, returning empty rules');
+        return [];
+      }
+
+      const rulesArray = await normalizationModel.findMany({
         where: { isActive: true },
         orderBy: { priority: 'desc' }
       });
-      
-      console.log(`🔍 URL_NORMALIZE_BACKEND: Fetched ${rules.length} rules from database`);
-      
+
+      console.log(`🔍 URL_NORMALIZE_BACKEND: Fetched ${rulesArray.length} rules from database`);
+
       // Update cache
       this.rulesCache.clear();
-      rules.forEach(rule => {
+      rulesArray.forEach(rule => {
         this.rulesCache.set(rule.id, rule);
       });
       this.lastCacheUpdate = now;
       
       console.log(`✅ URL_NORMALIZE_BACKEND: Rules cached successfully`);
-      return rules;
+      return rulesArray;
     } catch (error) {
       console.error('❌ URL_NORMALIZE_BACKEND: Error fetching normalization rules:', error);
       return [];

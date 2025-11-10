@@ -406,3 +406,4 @@ window.runProfileAvatarAuraOrchestration = runProfileAvatarAuraOrchestration;
 
 console.log('✅ Profile Avatar Aura Orchestration loaded. Call runProfileAvatarAuraOrchestration() to run.');
 
+

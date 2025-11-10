@@ -46,6 +46,14 @@ class RealtimeManager {
       // COMP METHOD: Initialize presence tracking
       this.initializePresenceTracking();
       
+      // FIX: Initialize user_presence table subscription for real-time visibility updates
+      this.initializeUserPresenceSubscription();
+      
+      // 4-STATE STATUS: Initialize availability status real-time subscription (if enabled)
+      if (typeof window !== 'undefined' && window.ENABLE_4STATE_STATUS !== false) {
+        this.initializeAvailabilitySubscription();
+      }
+      
       this.isInitialized = true;
       this.log('INFO', 'RealtimeManager initialized successfully');
     } catch (error) {
@@ -182,6 +190,221 @@ class RealtimeManager {
     const levels = { ERROR: 0, WARN: 1, INFO: 2, DEBUG: 3 };
     if (levels[level] <= levels[this.logLevel]) {
       console.log(`[RealtimeManager] [${level}] ${message}`, ...args);
+    }
+  }
+
+  /**
+   * FIX: Initialize real-time subscription for user_presence table changes
+   * This ensures visibility updates when users join/leave pages
+   */
+  initializeUserPresenceSubscription() {
+    this.log('INFO', '🔔 PRESENCE: Initializing user_presence subscription...');
+    
+    if (!window.supabase) {
+      this.log('WARN', '⚠️ PRESENCE: Supabase not available for user_presence subscription');
+      return;
+    }
+
+    try {
+      // Subscribe to user_presence table changes (INSERT, UPDATE, DELETE)
+      // FIX: Subscribe to each event type separately for reliability
+      const presenceChannel = window.supabase
+        .channel('user-presence-changes')
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'user_presence'
+          },
+          (payload) => {
+            this.log('INFO', '🔔 PRESENCE: user_presence INSERT detected:', payload);
+            handlePresenceChange({
+              eventType: 'INSERT',
+              new: payload.new,
+              old: null
+            });
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'user_presence'
+          },
+          (payload) => {
+            this.log('INFO', '🔔 PRESENCE: user_presence UPDATE detected:', payload);
+            handlePresenceChange({
+              eventType: 'UPDATE',
+              new: payload.new,
+              old: payload.old
+            });
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'DELETE',
+            schema: 'public',
+            table: 'user_presence'
+          },
+          (payload) => {
+            this.log('INFO', '🔔 PRESENCE: user_presence DELETE detected:', payload);
+            handlePresenceChange({
+              eventType: 'DELETE',
+              new: null,
+              old: payload.old
+            });
+          }
+        )
+        .subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            this.log('INFO', '✅ PRESENCE: user_presence subscription active (all events)');
+          } else if (status === 'CHANNEL_ERROR') {
+            this.log('ERROR', '❌ PRESENCE: user_presence subscription error');
+          }
+        });
+
+      // Store channel reference for cleanup
+      this.userPresenceChannel = presenceChannel;
+    } catch (error) {
+      this.log('ERROR', '❌ PRESENCE: Failed to initialize user_presence subscription:', error);
+    }
+  }
+
+  /**
+   * 4-STATE STATUS: Initialize real-time subscription for availability changes
+   */
+  initializeAvailabilitySubscription() {
+    this.log('INFO', '🎯 STATUS: Initializing availability subscription...');
+    
+    if (!window.supabase) {
+      this.log('WARN', '⚠️ STATUS: Supabase not available for availability subscription');
+      return;
+    }
+
+    try {
+      // Subscribe to PresenceEvent table changes for AVAILABILITY events
+      const availabilityChannel = window.supabase
+        .channel('availability-changes')
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'PresenceEvent',
+            filter: 'kind=eq.AVAILABILITY'
+          },
+          (payload) => {
+            this.log('INFO', '🎯 STATUS: Availability change detected:', payload);
+            this.handleAvailabilityChange(payload);
+          }
+        )
+        .subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            this.log('INFO', '✅ STATUS: Availability subscription active');
+          } else if (status === 'CHANNEL_ERROR') {
+            this.log('ERROR', '❌ STATUS: Availability subscription error');
+          }
+        });
+
+      // Store channel reference for cleanup
+      this.availabilityChannel = availabilityChannel;
+    } catch (error) {
+      this.log('ERROR', '❌ STATUS: Failed to initialize availability subscription:', error);
+    }
+  }
+
+  /**
+   * 4-STATE STATUS: Handle availability change event
+   * @param {Object} payload - Supabase realtime payload
+   */
+  handleAvailabilityChange(payload) {
+    try {
+      const { new: newEvent } = payload;
+      const { userId, availability } = newEvent;
+
+      this.log('INFO', `🎯 STATUS: User ${userId} changed availability to ${availability}`);
+
+      // Update all status dots for this user in the DOM
+      this.updateUserStatusDots(userId, availability);
+
+      // Update visibility data if available
+      if (window.currentVisibilityDataUnfiltered && window.currentVisibilityDataUnfiltered.active) {
+        const user = window.currentVisibilityDataUnfiltered.active.find(
+          u => u.userId === userId || u.id === userId
+        );
+        if (user) {
+          user.availability = availability;
+          this.log('INFO', `✅ STATUS: Updated visibility data for user ${userId}`);
+        }
+      }
+
+      // Trigger custom event for other modules
+      window.dispatchEvent(new CustomEvent('availabilityChanged', {
+        detail: { userId, availability }
+      }));
+
+    } catch (error) {
+      this.log('ERROR', '❌ STATUS: Error handling availability change:', error);
+    }
+  }
+
+  /**
+   * 4-STATE STATUS: Update all status dots for a user in the DOM
+   * @param {string} userId - User ID
+   * @param {string} availability - New availability status
+   */
+  updateUserStatusDots(userId, availability) {
+    try {
+      // Find all status dots for this user
+      const statusDots = document.querySelectorAll(`.status-dot[data-user-id="${userId}"]`);
+      
+      if (statusDots.length === 0) {
+        this.log('INFO', `ℹ️ STATUS: No status dots found for user ${userId}`);
+        return;
+      }
+
+      // Get new color using StatusDotHelper if available
+      let newColor = null;
+      if (window.StatusDotHelper) {
+        const mockUser = { availability, is_active: true };
+        newColor = window.StatusDotHelper.getStatusDotColor(mockUser);
+      } else {
+        // Fallback color map
+        const colorMap = {
+          'AVAILABLE': '#22c55e',  // Green
+          'BUSY': '#eab308',       // Yellow
+          'AWAY': '#ef4444',       // Red
+        };
+        newColor = colorMap[availability] || '#22c55e';
+      }
+
+      // Update all status dots
+      statusDots.forEach(dot => {
+        dot.style.backgroundColor = newColor;
+        dot.setAttribute('data-availability', availability);
+        dot.setAttribute('title', availability);
+        this.log('INFO', `✅ STATUS: Updated status dot for user ${userId} to ${availability} (${newColor})`);
+      });
+
+    } catch (error) {
+      this.log('ERROR', '❌ STATUS: Error updating status dots:', error);
+    }
+  }
+
+  /**
+   * Cleanup subscriptions
+   */
+  cleanup() {
+    if (this.availabilityChannel) {
+      this.availabilityChannel.unsubscribe();
+      this.log('INFO', '🧹 STATUS: Availability subscription cleaned up');
+    }
+    if (this.userPresenceChannel) {
+      this.userPresenceChannel.unsubscribe();
+      this.log('INFO', '🧹 PRESENCE: user_presence subscription cleaned up');
     }
   }
 }

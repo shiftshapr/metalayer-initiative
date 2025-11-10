@@ -461,17 +461,17 @@ async function updateVisibleTab(avatars) {
     return;
   }
   
-  // SD4 ARCHITECTURE FIX: Do NOT update tab if it's not active
-  const isVisibilityTabActive = document.getElementById('visibility-tab')?.classList.contains('active');
-  if (!isVisibilityTabActive) {
-    console.warn('⚠️ VISIBILITY: Attempting to update visibility-tab when it is not active - SKIPPING');
+  // FIX: Update tab even when not active (data will be ready when user switches)
+  // Only skip if tab doesn't exist at all
+  const visibilityTab = document.getElementById('visibility-tab');
+  if (!visibilityTab) {
+    console.warn('⚠️ VISIBILITY: Visibility tab not found in DOM - SKIPPING');
     return;
   }
   
-  // Double-check with TabContextManager if available
-  if (window.tabContextManager && !window.tabContextManager.isTabActive('visibility-tab')) {
-    console.warn('⚠️ VISIBILITY: TabContextManager confirms tab is not active - SKIPPING');
-    return;
+  const isVisibilityTabActive = visibilityTab.classList.contains('active');
+  if (!isVisibilityTabActive) {
+    console.log('ℹ️ VISIBILITY: Tab not active, but updating anyway (data will be ready when user switches)');
   }
   
   console.log('🔍 VISIBILITY: Updating visible tab with', avatars.length, 'avatars');
@@ -481,31 +481,57 @@ async function updateVisibleTab(avatars) {
   const currentUserId = window.currentUser?.id || window.currentUser?.user_id;
   console.log('🔍 VISIBILITY: Current user email:', currentUserEmail, 'ID:', currentUserId);
   
-  // ROOT CAUSE FIX: Filter out ONLY the current user - show all other users
-  // CRITICAL: Use UUID matching, not email matching - different profiles may have same email
+  // FIX: Filter out current user - visibility list should NOT show current user
+  // Simple and reliable: Use UUID matching for accuracy
   const usersWithAvatars = avatars.filter(avatar => {
-    // Match by UUID (primary) or email (fallback if UUID not available)
     const avatarId = avatar.id || avatar.userId || avatar.user_id;
     const isCurrentUser = (currentUserId && avatarId && String(avatarId) === String(currentUserId)) ||
                         (!currentUserId && avatar.email === currentUserEmail);
     
     if (isCurrentUser) {
-      console.log('🔍 VISIBILITY: 🚫 FILTERING OUT current user from their own visibility list');
-      console.log('🔍 VISIBILITY: Current user ID:', currentUserId, 'Avatar ID:', avatarId);
-      return false;
+      return false; // Filter out current user
     }
-    
     return true;
   });
   
-  console.log('🔍 VISIBILITY: Showing', usersWithAvatars.length, 'users with real avatars (filtered from', avatars.length, 'total)');
+  console.log('🔍 VISIBILITY: Showing', usersWithAvatars.length, 'users with real avatars (filtered from', avatars.length, 'total - current user excluded)');
   
   // COMP METHOD: Create visible users UI with unified avatars (aura ring behind image)
   const avatarHTMLPromises = usersWithAvatars.map(async (avatar) => {
     // RED-LINE: Standardize auraColor - convert snake_case if present
     if (avatar.aura_color && !avatar.auraColor) {
       avatar.auraColor = avatar.aura_color;
-      delete avatar.aura_color;
+    }
+    // Ensure both formats exist for compatibility
+    if (avatar.auraColor && !avatar.aura_color) {
+      avatar.aura_color = avatar.auraColor;
+    }
+    
+    // FIX: Ensure avatar has all required fields for status dots
+    // Status dots need: availability, is_active
+    if (!avatar.hasOwnProperty('is_active')) {
+      avatar.is_active = avatar.isActive !== false && (avatar.status === 'online' || avatar.status === 'active');
+    }
+    // ROOT CAUSE FIX: Use availability from database if present, otherwise map from status
+    // CRITICAL: For current user, prioritize window.currentUser.availability/globalAvailability
+    const currentUserId = window.currentUser?.id || window.currentUser?.user_id;
+    const avatarId = avatar.id || avatar.userId || avatar.user_id;
+    if (currentUserId && avatarId && String(currentUserId) === String(avatarId)) {
+      // Current user: use window.currentUser.availability/globalAvailability (most up-to-date)
+      avatar.availability = window.currentUser.availability || window.currentUser.globalAvailability || avatar.availability;
+      console.log(`🔍 VISIBILITY: Using currentUser.availability for current user ${avatarId}: ${avatar.availability}`);
+    }
+    
+    if (!avatar.availability) {
+      if (avatar.status === 'online' || avatar.status === 'active') {
+        // If user is active but no availability set, default to AVAILABLE
+        avatar.availability = 'AVAILABLE';
+      } else if (avatar.status === 'offline' || !avatar.isActive) {
+        avatar.availability = 'OFFLINE';
+      } else {
+        // Default to AVAILABLE for active users without explicit status
+        avatar.availability = 'AVAILABLE';
+      }
     }
     
     // COMP METHOD: Use unified avatar structure with aura ring behind image
@@ -515,7 +541,7 @@ async function updateVisibleTab(avatars) {
         avatarHTML = await window.AvatarUtils.createUnifiedAvatar(avatar, 'visibility', {
           size: 24,
           showAura: true,
-          showStatus: true
+          showStatus: true  // FIX: Ensure status dots are shown
         });
       } else {
         // Fallback to simple img if AvatarUtils not available
@@ -526,11 +552,11 @@ async function updateVisibleTab(avatars) {
       avatarHTML = `<img src="${avatar.avatarUrl}" alt="${avatar.name || avatar.email}" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover; border: 2px solid ${avatar.aura_color || window.AVATAR_FALLBACK_COLOR};">`;
     }
     
+    // FIX: Ensure unified avatar structure - avatarHTML already includes the wrapper div
+    // Remove extra avatar-container wrapper to match message avatar structure
     return `
       <li class="item" style="display: flex; align-items: center; gap: 8px; padding: 8px; border-bottom: 1px solid var(--border-color);">
-        <div class="avatar-container" style="position: relative;">
-          ${avatarHTML}
-        </div>
+        ${avatarHTML}
         <div class="user-info" style="flex: 1;">
           <div class="user-name" style="font-weight: bold; color: var(--text-primary); font-size: 12px;">${avatar.name || avatar.email}</div>
           <div class="user-status" style="color: var(--text-secondary); font-size: 10px;">

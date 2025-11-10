@@ -873,8 +873,17 @@ async function loadChatHistory(communityId = null) {
     }
     // Handle combined conversations from all communities
     if (allConversations.length > 0) {
+      console.log('🔍 CHAT_LOAD: Processing', allConversations.length, 'conversations');
       // Process each conversation as a thread
       for (const conversation of allConversations) {
+        console.log('🔍 CHAT_LOAD: Checking conversation:', {
+          id: conversation.id,
+          hasPosts: !!conversation.posts,
+          postsLength: conversation.posts?.length || 0,
+          postsType: typeof conversation.posts,
+          conversationKeys: Object.keys(conversation),
+          fullConversation: conversation
+        });
         if (conversation.posts && conversation.posts.length > 0) {
           console.log('🔍 CHAT_LOAD: Processing conversation with posts:', conversation.posts.length);
           console.log('🔍 CHAT_LOAD: All posts in conversation:', conversation.posts.map(p => ({ id: p.id, body: p.body, createdAt: p.createdAt, parentId: p.parentId })));
@@ -887,7 +896,10 @@ async function loadChatHistory(communityId = null) {
           console.log('🔍 CHAT_LOAD: Found main thread posts:', mainThreadPosts.length);
           console.log('🔍 CHAT_LOAD: Main thread posts:', mainThreadPosts.map(p => ({ id: p.id, body: p.body, createdAt: p.createdAt })));
           
-          if (mainThreadPosts.length === 0) return; // Skip if no main thread posts
+          if (mainThreadPosts.length === 0) {
+            console.log('⚠️ CHAT_LOAD: No main thread posts in this conversation, skipping to next conversation');
+            continue; // ROOT CAUSE FIX: Use continue instead of return to process remaining conversations
+          }
           
           // Add ALL main thread posts in chronological order
           for (let i = 0; i < mainThreadPosts.length; i++) {
@@ -3201,7 +3213,7 @@ async function addMessageToChat(message) {
       avatarHTML = await window.AvatarUtils.createUnifiedAvatar(author, 'message', {
         size: 32,
         showAura: true,
-        showStatus: false
+        showStatus: true  // FIX: Enable status dots on message avatars
       });
       console.log('✅ ADD_MESSAGE: Created unified avatar with aura ring for', senderName);
     } else {
@@ -8011,6 +8023,15 @@ window.refreshAllReactionDisplays = window.refreshAllReactionDisplays || async f
     function getAuraColorForUserId(userId) {
       if (!userId) return null;
       
+      // ROOT CAUSE FIX: For current user, prioritize window.currentUser.aura_color (most up-to-date)
+      if (window.currentUser && String(window.currentUser.id || window.currentUser.user_id) === String(userId)) {
+        const currentUserAuraColor = window.currentUser.aura_color || window.currentUser.auraColor;
+        if (currentUserAuraColor && currentUserAuraColor !== window.AVATAR_FALLBACK_COLOR && currentUserAuraColor !== '#ffffff' && currentUserAuraColor !== 'ffffff') {
+          console.log(`🔍 AVATARS: Using currentUser.aura_color for ${userId}: ${currentUserAuraColor}`);
+          return currentUserAuraColor;
+        }
+      }
+      
       // COMP METHOD: Check visibility data first (most up-to-date, includes real-time updates)
       if (window.currentVisibilityDataUnfiltered?.active) {
         const user = window.currentVisibilityDataUnfiltered.active.find(u => 
@@ -8091,20 +8112,49 @@ window.refreshAllReactionDisplays = window.refreshAllReactionDisplays || async f
             }
           }
           
-          // COMP METHOD: Get aura color with priority: userData > visibility data > fallback
-          // COMP METHOD: Use aura_color (snake_case) to match COMP standard
-          const auraColor = userData.aura_color || getAuraColorForUserId(authorId) || window.AVATAR_FALLBACK_COLOR;
+          // ROOT CAUSE FIX: Get aura color with priority: currentUser (for current user) > userData > visibility data > fallback
+          // For current user, always use window.currentUser.aura_color (most up-to-date from database)
+          let auraColor = null;
+          if (window.currentUser && String(window.currentUser.id || window.currentUser.user_id) === String(authorId)) {
+            // Current user: use window.currentUser.aura_color (fetched from database, most up-to-date)
+            auraColor = window.currentUser.aura_color || window.currentUser.auraColor;
+            console.log(`🔍 AVATARS: Using currentUser.aura_color for current user ${authorId}: ${auraColor}`);
+          }
+          
+          // Fallback to userData or visibility data
+          if (!auraColor || auraColor === window.AVATAR_FALLBACK_COLOR || auraColor === '#ffffff') {
+            auraColor = userData.aura_color || getAuraColorForUserId(authorId) || window.AVATAR_FALLBACK_COLOR;
+          }
+          
           // COMP METHOD: Set aura_color to match COMP
           userData.aura_color = auraColor;
+          userData.auraColor = auraColor; // Also set camelCase for compatibility
           
-          console.log(`🔧 AVATARS: Refreshing avatar for message ${messageId}, author ${authorId}, aura color: ${auraColor}`);
+          // ROOT CAUSE FIX: Ensure availability is set for status dots
+          // CRITICAL: For current user, prioritize window.currentUser.availability/globalAvailability over isActive
+          if (window.currentUser && String(window.currentUser.id || window.currentUser.user_id) === String(authorId)) {
+            // Current user: use window.currentUser.availability/globalAvailability (most up-to-date from database)
+            userData.availability = window.currentUser.availability || window.currentUser.globalAvailability || userData.availability;
+            console.log(`🔍 AVATARS: Using currentUser.availability for current user ${authorId}: ${userData.availability}`);
+          }
+          
+          // For other users or if availability not set, use userData.availability or fallback to isActive
+          if (!userData.availability) {
+            if (userData.isActive || userData.is_active) {
+              userData.availability = 'AVAILABLE'; // Default for active users
+            } else {
+              userData.availability = 'OFFLINE';
+            }
+          }
+          
+          console.log(`🔧 AVATARS: Refreshing avatar for message ${messageId}, author ${authorId}, aura color: ${auraColor}, availability: ${userData.availability}`);
           
           // COMP METHOD: Recreate unified avatar with aura ring behind image
           if (window.AvatarUtils && typeof window.AvatarUtils.createUnifiedAvatar === 'function') {
             const newAvatarHTML = await window.AvatarUtils.createUnifiedAvatar(userData, 'message', {
               size: 32,
               showAura: true,
-              showStatus: false
+              showStatus: true  // FIX: Enable status dots on message avatars
             });
             avatarContainer.innerHTML = newAvatarHTML;
             console.log(`✅ AVATARS: Recreated unified avatar with aura ring for message ${messageId}`);

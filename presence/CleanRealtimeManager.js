@@ -31,6 +31,13 @@ class CleanRealtimeManager {
     try {
       this.supabase = supabaseClient;
       this.isInitialized = true;
+      
+      // FIX: Initialize user_presence subscription for real-time visibility updates
+      this._setupUserPresenceSubscription();
+      
+      // HYBRID: Initialize global availability subscription for real-time status sync
+      this._setupGlobalAvailabilitySubscription();
+      
       this.log('INFO', 'CleanRealtimeManager initialized');
       return true;
     } catch (error) {
@@ -97,6 +104,11 @@ class CleanRealtimeManager {
       // ROOT CAUSE FIX: Use ONLY Postgres Changes - no presence channels
       await this._setupPostgresChanges(pageId);
       
+      // FIX: Ensure user_presence subscription is active (set up during initialize)
+      if (!this.userPresenceChannel) {
+        this._setupUserPresenceSubscription();
+      }
+      
       this.currentPageId = pageId;
       this.isConnected = true;
       this.isConnecting = false;
@@ -108,6 +120,164 @@ class CleanRealtimeManager {
       this.isConnecting = false;
       this.log('ERROR', 'Failed to join page:', error);
       return false;
+    }
+  }
+
+  /**
+   * FIX: Set up user_presence table subscription for real-time visibility updates
+   */
+  _setupUserPresenceSubscription() {
+    if (!this.supabase) {
+      this.log('WARN', 'Supabase not available for user_presence subscription');
+      return;
+    }
+
+    // Skip if already set up
+    if (this.userPresenceChannel) {
+      this.log('DEBUG', 'user_presence subscription already active');
+      return;
+    }
+
+    try {
+      this.log('INFO', 'Setting up user_presence subscription...');
+      
+      const presenceChannel = this.supabase
+        .channel('user-presence-changes')
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'user_presence'
+          },
+          (payload) => {
+            this.log('DEBUG', 'user_presence INSERT detected:', payload);
+            if (typeof window !== 'undefined' && typeof window.handlePresenceChange === 'function') {
+              window.handlePresenceChange({
+                eventType: 'INSERT',
+                new: payload.new,
+                old: null
+              });
+            }
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'user_presence'
+          },
+          (payload) => {
+            this.log('DEBUG', 'user_presence UPDATE detected:', payload);
+            if (typeof window !== 'undefined' && typeof window.handlePresenceChange === 'function') {
+              window.handlePresenceChange({
+                eventType: 'UPDATE',
+                new: payload.new,
+                old: payload.old
+              });
+            }
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'DELETE',
+            schema: 'public',
+            table: 'user_presence'
+          },
+          (payload) => {
+            this.log('DEBUG', 'user_presence DELETE detected:', payload);
+            if (typeof window !== 'undefined' && typeof window.handlePresenceChange === 'function') {
+              window.handlePresenceChange({
+                eventType: 'DELETE',
+                new: null,
+                old: payload.old
+              });
+            }
+          }
+        )
+        .subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            this.log('INFO', '✅ user_presence subscription active');
+          } else if (status === 'CHANNEL_ERROR') {
+            this.log('ERROR', '❌ user_presence subscription error');
+          }
+        });
+
+      this.userPresenceChannel = presenceChannel;
+      this.log('INFO', 'user_presence subscription set up');
+    } catch (error) {
+      this.log('ERROR', 'Failed to set up user_presence subscription:', error);
+    }
+  }
+
+  /**
+   * HYBRID: Set up global availability subscription for real-time status sync across all tabs
+   */
+  _setupGlobalAvailabilitySubscription() {
+    if (!this.supabase) {
+      this.log('WARN', 'Supabase not available for global availability subscription');
+      return;
+    }
+
+    // Skip if already set up
+    if (this.globalAvailabilityChannel) {
+      this.log('DEBUG', 'global availability subscription already active');
+      return;
+    }
+
+    try {
+      this.log('INFO', 'Setting up global availability subscription...');
+      
+      const globalStatusChannel = this.supabase
+        .channel('global-availability-changes')
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'AppUser',
+            filter: 'globalAvailability=neq.null' // Only when status changes
+          },
+          (payload) => {
+            this.log('DEBUG', 'Global availability UPDATE detected:', payload);
+            
+            // Dispatch event for all tabs to update
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('globalAvailabilityChanged', {
+                detail: {
+                  userId: payload.new.id,
+                  availability: payload.new.globalAvailability,
+                  updatedAt: payload.new.availabilityUpdatedAt,
+                  oldAvailability: payload.old?.globalAvailability
+                }
+              }));
+
+              // Also update status selector if it exists
+              const statusSelect = document.getElementById('status-select');
+              const statusDisplay = document.getElementById('status-display');
+              if (statusSelect && payload.new.globalAvailability) {
+                statusSelect.value = payload.new.globalAvailability;
+                if (statusDisplay) {
+                  statusDisplay.textContent = `${payload.new.globalAvailability} (Global - all tabs)`;
+                }
+              }
+            }
+          }
+        )
+        .subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            this.log('INFO', '✅ Global availability subscription active');
+          } else if (status === 'CHANNEL_ERROR') {
+            this.log('ERROR', '❌ Global availability subscription error');
+          }
+        });
+
+      this.globalAvailabilityChannel = globalStatusChannel;
+      this.log('INFO', 'Global availability subscription set up');
+    } catch (error) {
+      this.log('ERROR', 'Failed to set up global availability subscription:', error);
     }
   }
 

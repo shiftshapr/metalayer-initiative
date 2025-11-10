@@ -323,6 +323,12 @@
     --user-menu-border: #ccc;
     --user-menu-shadow: 0 2px 8px rgba(0,0,0,0.1);
 
+    /* 4-STATE STATUS DOT COLORS (Light Theme) */
+    --status-available: #22c55e; /* Green - Available */
+    --status-busy: #eab308;      /* Yellow - Working/Busy */
+    --status-away: #ef4444;      /* Red - Away */
+    --status-offline: #6b7280;   /* Gray - Offline */
+
     --sidebar-width: 320px; /* Adjust as needed */
 }
 
@@ -347,6 +353,12 @@
     --user-menu-bg: #3a3a3a; /* Lighter gray */
     --user-menu-border: #555555; /* Lighter gray */
     --user-menu-shadow: 0 2px 8px rgba(0,0,0,0.3);
+
+    /* 4-STATE STATUS DOT COLORS (Dark Theme - Brighter for visibility) */
+    --status-available: #34d399; /* Brighter green - Available */
+    --status-busy: #fbbf24;      /* Brighter yellow - Working/Busy */
+    --status-away: #f87171;      /* Brighter red - Away */
+    --status-offline: #9ca3af;   /* Lighter gray - Offline */
 }
 
 body {
@@ -758,6 +770,20 @@ body {
     align-items: center;
     justify-content: center;
     min-width: 24px;
+    position: relative; /* ROOT CAUSE FIX: Enable positioning for menu */
+}
+
+/* ROOT CAUSE FIX: Style action dots to match message action dots - vertical ellipsis (⋮) */
+.community-menu-btn .action-dots {
+    opacity: 1 !important;
+    display: inline-block !important;
+    visibility: visible !important;
+    font-size: 16px !important;
+    color: var(--text-secondary) !important;
+    background: none !important;
+    line-height: 1;
+    pointer-events: auto !important;
+    cursor: pointer !important;
 }
 
 .community-menu-btn:hover {

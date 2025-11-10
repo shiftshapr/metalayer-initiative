@@ -458,36 +458,23 @@ class ProfileManager {
       // Use AvatarUtils for proper avatar creation with aura color
       if (window.AvatarUtils && window.currentUser) {
         try {
-          // CRITICAL FIX: Check Chrome storage FIRST for instant display
-          let auraColorValue = this.profileData?.auraColor || this.profileData?.aura_color || window.currentUser.auraColor || window.currentUser.aura_color;
+          // ROOT CAUSE FIX: Use getCurrentUserAuraColor() for latest aura color (prioritizes Chrome storage, then database)
+          let auraColorValue = null;
           let fromChromeStorage = false;
           
-          if (!auraColorValue && typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+          if (typeof window.getCurrentUserAuraColor === 'function') {
             try {
-              const storageResult = await new Promise((resolve) => {
-                chrome.storage.local.get(['userAuraColor', 'auraColor'], (result) => {
-                  resolve(result);
-                });
-              });
-              
-              const cachedAuraColor = storageResult.userAuraColor || storageResult.auraColor;
-              if (cachedAuraColor && cachedAuraColor !== '#ffffff' && cachedAuraColor !== 'white' && cachedAuraColor !== '#fff') {
-                auraColorValue = cachedAuraColor;
-                fromChromeStorage = true;
-                console.log('🎨 PROFILE MANAGER: Using aura color from Chrome storage (CACHE):', auraColorValue);
-                // Update currentUser and profileData with cached value
-                if (window.currentUser) {
-                  window.currentUser.auraColor = auraColorValue;
-                  window.currentUser.aura_color = auraColorValue;
-                }
-                if (this.profileData) {
-                  this.profileData.auraColor = auraColorValue;
-                  this.profileData.aura_color = auraColorValue;
-                }
-              }
+              auraColorValue = await window.getCurrentUserAuraColor();
+              console.log('🎨 PROFILE MANAGER: Using aura color from getCurrentUserAuraColor():', auraColorValue);
+              fromChromeStorage = true; // getCurrentUserAuraColor prioritizes Chrome storage
             } catch (error) {
-              console.warn('⚠️ PROFILE MANAGER: Could not read from Chrome storage:', error);
+              console.warn('⚠️ PROFILE MANAGER: Error calling getCurrentUserAuraColor():', error);
             }
+          }
+          
+          // Fallback to profileData/currentUser if getCurrentUserAuraColor not available
+          if (!auraColorValue) {
+            auraColorValue = this.profileData?.auraColor || this.profileData?.aura_color || window.currentUser?.auraColor || window.currentUser?.aura_color;
           }
 
           // CRITICAL FIX: Use profileData if available (has aura color), otherwise fall back to currentUser
@@ -506,9 +493,29 @@ class ProfileManager {
             timestamp: new Date().toISOString()
           });
 
-          const avatarHTML = await window.AvatarUtils.createUnifiedAvatar(userDataForAvatar, {
-            context: 'profile',
+          // ROOT CAUSE FIX: Ensure availability is set for status dots
+          if (!userDataForAvatar.availability) {
+            // Try to get from currentUser first
+            if (window.currentUser && (window.currentUser.availability || window.currentUser.globalAvailability)) {
+              userDataForAvatar.availability = window.currentUser.availability || window.currentUser.globalAvailability;
+            } else if (window.currentVisibilityDataUnfiltered?.active) {
+              // Try to get from visibility data
+              const currentUserInVisibility = window.currentVisibilityDataUnfiltered.active.find(u => 
+                String(u.id || u.userId || u.user_id) === String(window.currentUser?.id)
+              );
+              if (currentUserInVisibility && currentUserInVisibility.availability) {
+                userDataForAvatar.availability = currentUserInVisibility.availability;
+              }
+            }
+            // Default to AVAILABLE if active, OFFLINE if not
+            if (!userDataForAvatar.availability) {
+              userDataForAvatar.availability = (userDataForAvatar.isActive || userDataForAvatar.is_active) ? 'AVAILABLE' : 'OFFLINE';
+            }
+          }
+          
+          const avatarHTML = await window.AvatarUtils.createUnifiedAvatar(userDataForAvatar, 'profile', {
             showAura: true,
+            showStatus: true,  // ROOT CAUSE FIX: Enable status dots on profile avatar
             size: 32
           });
 
@@ -538,12 +545,24 @@ class ProfileManager {
       }
     }
     
-    // Add click handler
-    userAvatarContainer.onclick = (e) => {
+    // ROOT CAUSE FIX: Remove existing handler if it exists, then add new one
+    // Use a data attribute to track if handler is already attached
+    if (userAvatarContainer.dataset.clickHandlerAttached === 'true') {
+      // Handler already attached, skip to prevent duplicates
+      console.log('🔧 PROFILE MANAGER: Click handler already attached, skipping');
+      return;
+    }
+    
+    // ROOT CAUSE FIX: Add click handler with proper event handling
+    userAvatarContainer.addEventListener('click', (e) => {
       e.stopPropagation();
+      e.preventDefault();
       console.log('🔧 PROFILE MANAGER: COMP METHOD - Profile avatar clicked');
-      this.toggleUserMenu();
-    };
+      this.toggleUserMenu(e); // Pass event to toggleUserMenu
+    });
+    
+    // Mark handler as attached
+    userAvatarContainer.dataset.clickHandlerAttached = 'true';
     
     console.log('✅ PROFILE MANAGER: COMP METHOD - Profile menu and aura modal setup complete');
   }
@@ -551,16 +570,53 @@ class ProfileManager {
   /**
    * COMP METHOD: Toggle user menu
    */
-  async toggleUserMenu() {
+  async toggleUserMenu(e) {
     console.log('🔧 PROFILE MANAGER: COMP METHOD - Toggling user menu...');
+
+    // ROOT CAUSE FIX: Stop event propagation to prevent immediate click-outside handler
+    if (e) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
 
     let userMenu = document.getElementById('user-menu');
     if (!userMenu) {
+      console.log('🔧 PROFILE MANAGER: COMP METHOD - Menu not found, creating...');
       await this.createUserMenu();
-    } else {
-      const isVisible = userMenu.style.display !== 'none';
+      userMenu = document.getElementById('user-menu');
+    }
+    
+    if (userMenu) {
+      const isVisible = userMenu.style.display !== 'none' && userMenu.style.display !== '';
       userMenu.style.display = isVisible ? 'none' : 'block';
-      console.log('🔧 PROFILE MANAGER: COMP METHOD - Menu toggled:', !isVisible);
+      
+      // ROOT CAUSE FIX: Ensure menu is positioned correctly
+      const userAvatarContainer = document.getElementById('user-avatar-container');
+      if (userAvatarContainer && !isVisible) {
+        // Position menu relative to avatar container
+        const rect = userAvatarContainer.getBoundingClientRect();
+        userMenu.style.position = 'absolute';
+        userMenu.style.top = `${rect.height + 4}px`;
+        userMenu.style.right = '0';
+        userMenu.style.zIndex = '10000';
+        
+        // ROOT CAUSE FIX: Add click-outside handler AFTER menu is shown, with longer delay
+        // Use requestAnimationFrame to ensure menu is in DOM before adding handler
+        requestAnimationFrame(() => {
+          setTimeout(() => {
+            this.addClickOutsideHandler();
+          }, 500); // ROOT CAUSE FIX: Increased delay to 500ms to prevent immediate closing from same click event
+        });
+      } else if (isVisible) {
+        // Menu is closing, remove click-outside handler
+        if (this._clickOutsideHandler) {
+          document.removeEventListener('click', this._clickOutsideHandler);
+        }
+      }
+      
+      console.log('🔧 PROFILE MANAGER: COMP METHOD - Menu toggled:', !isVisible, 'display:', userMenu.style.display);
+    } else {
+      console.error('❌ PROFILE MANAGER: COMP METHOD - Failed to create or find user menu');
     }
   }
 
@@ -581,9 +637,9 @@ class ProfileManager {
       border: 1px solid #ddd;
       border-radius: 8px;
       box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-      z-index: 1000;
+      z-index: 10000;
       min-width: 200px;
-      display: block;
+      display: none;
     `;
     
     const currentUser = window.currentUser || { name: 'User', email: 'user@example.com' };
@@ -624,6 +680,10 @@ class ProfileManager {
           <span>🎨</span>
           <span>Change Aura Color</span>
         </button>
+        <button class="menu-action" id="visibility-settings-btn" style="width: 100%; padding: 8px 12px; border: none; background: none; text-align: left; cursor: pointer; display: flex; align-items: center; gap: 8px;">
+          <span>👁️</span>
+          <span>Visibility Settings</span>
+        </button>
         <button class="menu-action" id="theme-toggle-btn" style="width: 100%; padding: 8px 12px; border: none; background: none; text-align: left; cursor: pointer; display: flex; align-items: center; gap: 8px;">
           <span>🌙</span>
           <span>Toggle Theme</span>
@@ -635,14 +695,30 @@ class ProfileManager {
       </div>
     `;
     
-    // Add to avatar container
+    // ROOT CAUSE FIX: Add to avatar container with proper positioning
     const userAvatarContainer = document.getElementById('user-avatar-container');
     if (userAvatarContainer) {
+      // Ensure container has position: relative for absolute positioning
+      if (window.getComputedStyle(userAvatarContainer).position === 'static') {
+        userAvatarContainer.style.position = 'relative';
+      }
       userAvatarContainer.appendChild(userMenu);
+      
+      // ROOT CAUSE FIX: Position menu correctly
+      const rect = userAvatarContainer.getBoundingClientRect();
+      userMenu.style.position = 'absolute';
+      userMenu.style.top = `${rect.height + 4}px`;
+      userMenu.style.right = '0';
+      userMenu.style.zIndex = '10000';
+    } else {
+      console.error('❌ PROFILE MANAGER: COMP METHOD - User avatar container not found');
     }
     
     // Add event listeners
     this.addUserMenuEventListeners();
+    
+    // ROOT CAUSE FIX: Add click-outside handler
+    this.addClickOutsideHandler();
     
     console.log('✅ PROFILE MANAGER: COMP METHOD - User menu created');
   }
@@ -662,6 +738,91 @@ class ProfileManager {
         this.hideUserMenu();
         this.showColorPickerModal();
       };
+    }
+    
+    // Visibility settings button - FIX: Add link to visibility tab
+    const visibilitySettingsBtn = document.getElementById('visibility-settings-btn');
+    if (visibilitySettingsBtn) {
+      // Remove any existing handler to prevent duplicates
+      visibilitySettingsBtn.onclick = null;
+      visibilitySettingsBtn.removeEventListener('click', this._visibilitySettingsHandler);
+      
+      // Create handler function
+      this._visibilitySettingsHandler = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log('🔧 PROFILE MANAGER: COMP METHOD - Visibility settings button clicked');
+        this.hideUserMenu();
+        
+        // FIX: Switch to visibility tab - try multiple methods for reliability
+        let switched = false;
+        
+        // ROOT CAUSE FIX: Switch to settings tab (not visibility tab)
+        // Method 1: Try button click
+        const selectors = [
+          'button[data-tab="settings-tab"]',
+          '.main-nav-tab[data-tab="settings-tab"]',
+          'button[aria-controls="settings-tab"]',
+          '[data-tab="settings-tab"]',
+          '.nav-tab[data-tab="settings-tab"]'
+        ];
+        
+        for (const selector of selectors) {
+          const button = document.querySelector(selector);
+          if (button) {
+            button.click();
+            console.log(`✅ PROFILE MANAGER: Switched to settings tab via selector: ${selector}`);
+            switched = true;
+            break;
+          }
+        }
+        
+        // Method 2: Direct tab activation if button click didn't work
+        if (!switched) {
+          const settingsTab = document.getElementById('settings-tab');
+          const allTabs = document.querySelectorAll('.main-tab-content');
+          const allTabButtons = document.querySelectorAll('.main-nav-tab, button[data-tab]');
+          
+          if (settingsTab) {
+            // Hide all tabs
+            allTabs.forEach(tab => tab.classList.remove('active'));
+            // Show settings tab
+            settingsTab.classList.add('active');
+            
+            // Update button states
+            allTabButtons.forEach(btn => {
+              btn.classList.remove('active');
+              if (btn.getAttribute('data-tab') === 'settings-tab' || btn.getAttribute('aria-controls') === 'settings-tab') {
+                btn.classList.add('active');
+              }
+            });
+            
+            console.log('✅ PROFILE MANAGER: Directly activated settings tab');
+            switched = true;
+          }
+        }
+        
+        // Method 3: Dispatch custom event as last resort
+        if (!switched) {
+          const tabSwitchEvent = new CustomEvent('tabSwitch', { detail: { tabId: 'settings-tab' } });
+          window.dispatchEvent(tabSwitchEvent);
+          console.log('✅ PROFILE MANAGER: Dispatched tab switch event for settings tab');
+        }
+      };
+      
+      // Attach handler
+      visibilitySettingsBtn.addEventListener('click', this._visibilitySettingsHandler);
+      visibilitySettingsBtn.dataset.handlerAttached = 'true';
+      
+      // ROOT CAUSE FIX: Ensure button is active and clickable
+      visibilitySettingsBtn.style.pointerEvents = 'auto';
+      visibilitySettingsBtn.style.cursor = 'pointer';
+      visibilitySettingsBtn.style.opacity = '1';
+      visibilitySettingsBtn.disabled = false;
+      
+      console.log('✅ PROFILE MANAGER: Visibility settings button handler added and activated');
+    } else {
+      console.warn('⚠️ PROFILE MANAGER: Visibility settings button not found in DOM');
     }
     
     // Theme toggle button - CRITICAL FIX: Ensure button is clickable and handler is attached
@@ -720,13 +881,49 @@ class ProfileManager {
     const userMenu = document.getElementById('user-menu');
     if (userMenu) {
       userMenu.style.display = 'none';
+      console.log('🔧 PROFILE MANAGER: COMP METHOD - User menu hidden');
     }
+  }
+  
+  /**
+   * ROOT CAUSE FIX: Add click-outside handler to close menu
+   */
+  addClickOutsideHandler() {
+    // Remove existing handler if any
+    if (this._clickOutsideHandler) {
+      document.removeEventListener('click', this._clickOutsideHandler);
+      this._clickOutsideHandler = null;
+    }
+    
+    // Create new handler
+    this._clickOutsideHandler = (e) => {
+      const userAvatarContainer = document.getElementById('user-avatar-container');
+      const userMenu = document.getElementById('user-menu');
+      
+      if (userAvatarContainer && userMenu && userMenu.style.display !== 'none') {
+        // Check if click is outside both avatar container and menu
+        if (!userAvatarContainer.contains(e.target) && !userMenu.contains(e.target)) {
+          console.log('🔧 PROFILE MANAGER: Click outside detected, hiding menu');
+          userMenu.style.display = 'none';
+          // Remove handler when menu closes
+          if (this._clickOutsideHandler) {
+            document.removeEventListener('click', this._clickOutsideHandler);
+            this._clickOutsideHandler = null;
+          }
+        }
+      }
+    };
+    
+    // Add listener with delay to prevent immediate closing from the click that opened the menu
+    setTimeout(() => {
+      document.addEventListener('click', this._clickOutsideHandler, true); // Use capture phase
+    }, 300); // Increased delay to ensure menu is fully rendered
   }
 
   /**
    * COMP METHOD: Show color picker modal
    */
-  showColorPickerModal() {
+  async showColorPickerModal() {
     console.log('🔧 PROFILE MANAGER: COMP METHOD - Showing color picker modal...');
     
     // Check if modal already exists
@@ -753,8 +950,8 @@ class ProfileManager {
       z-index: 10000;
     `;
     
-    // COMP METHOD: Get current user's database aura color
-    const currentAuraColor = this.getCurrentUserAuraColor();
+    // COMP METHOD: Get current user's aura color (Chrome storage first, then database)
+    const currentAuraColor = await getCurrentUserAuraColor();
     const currentColorHex = currentAuraColor.replace('#', '');
     const displayColor = currentAuraColor || window.AVATAR_FALLBACK_COLOR;
     
@@ -823,8 +1020,8 @@ class ProfileManager {
     
     // Reset button
     if (resetBtn) {
-      resetBtn.onclick = () => {
-        const currentColor = getCurrentUserAuraColor();
+      resetBtn.onclick = async () => {
+        const currentColor = await getCurrentUserAuraColor();
         const currentHex = currentColor.replace('#', '');
         colorInput.value = currentHex;
         previewCircle.style.background = currentColor;
@@ -834,12 +1031,15 @@ class ProfileManager {
     
     // Save button
     if (saveBtn) {
-      saveBtn.onclick = () => {
+      saveBtn.onclick = async () => {
         const color = colorInput.value;
         if (color.length === 6) {
-          console.log('🔧 PROFILE MANAGER: COMP METHOD - Saving aura color:', color);
-          // Store aura color locally
-          chrome.storage.local.set({ userAuraColor: '#' + color });
+          const colorHex = '#' + color;
+          console.log('🔧 PROFILE MANAGER: COMP METHOD - Saving aura color:', colorHex);
+          
+          // ROOT CAUSE FIX: Update BOTH Chrome storage AND database
+          await updateAuraColorEverywhere(colorHex);
+          
           modal.style.display = 'none';
         } else {
           alert('Please enter a valid 6-digit hex color');
@@ -869,13 +1069,13 @@ class ProfileManager {
     } else {
       // Fallback: Use data-theme attribute (matches UIManager system)
       const body = document.body;
-      const currentTheme = body.getAttribute('data-theme') || 'light';
+      const currentTheme = body.getAttribute('data-theme') || document.documentElement.getAttribute('data-theme') || localStorage.getItem('theme') || 'light';
       const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
       
       body.setAttribute('data-theme', newTheme);
       document.documentElement.setAttribute('data-theme', newTheme);
       
-      // Update icon and text
+      // Update icon and text in profile menu
       const themeIcon = document.getElementById('theme-icon');
       const themeText = document.getElementById('theme-text');
       if (themeIcon) {
@@ -885,11 +1085,43 @@ class ProfileManager {
         themeText.textContent = newTheme === 'dark' ? 'Light mode' : 'Dark mode';
       }
       
-      // Save to localStorage
-      if (typeof window.setState === 'function') {
-        window.setState('theme', newTheme);
+      // ROOT CAUSE FIX: Update settings tab theme select if it exists
+      const themeSelect = document.getElementById('theme-select');
+      if (themeSelect) {
+        themeSelect.value = newTheme;
+        console.log('✅ PROFILE MANAGER: Updated settings tab theme select to:', newTheme);
+      }
+      
+      // ROOT CAUSE FIX: Update BOTH Chrome storage AND database
+      if (typeof window.updateThemeEverywhere === 'function') {
+        await window.updateThemeEverywhere(newTheme);
+        console.log('✅ PROFILE MANAGER: Theme updated everywhere:', newTheme);
       } else {
+        // Fallback: Update manually if function not available
+        console.warn('⚠️ PROFILE MANAGER: updateThemeEverywhere not available, using fallback');
+        
+        // Update Chrome storage
+        if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+          chrome.storage.local.set({ theme: newTheme, userTheme: newTheme });
+        }
+        
+        // Update localStorage (for compatibility)
         localStorage.setItem('theme', newTheme);
+        
+        // Update database
+        if (window.currentUser && window.currentUser.id && window.api && typeof window.api.request === 'function') {
+          await window.api.request(`/v1/users/${window.currentUser.id}`, {
+            method: 'PATCH',
+            body: JSON.stringify({
+              theme: newTheme
+            })
+          });
+        }
+        
+        // Update local objects
+        if (window.currentUser) {
+          window.currentUser.theme = newTheme;
+        }
       }
       
       console.log(`✅ PROFILE MANAGER: Switched to ${newTheme} theme`);
@@ -934,6 +1166,13 @@ class ProfileManager {
     console.log('🔍 SD1 PROFILE DEBUG: === END PROFILE MANAGER USER UPDATE ===');
 
     this.profileData = user;
+
+    // ROOT CAUSE FIX: Sync Chrome storage with database when user updates
+    if (window.syncStorageWithDatabase && typeof window.syncStorageWithDatabase === 'function') {
+      window.syncStorageWithDatabase().catch(err => {
+        console.warn('⚠️ PROFILE_MANAGER: Error syncing storage with database:', err);
+      });
+    }
 
     // CRITICAL: Ensure we have auraColor for profile avatar
     // First priority: from user object (if included in update)
@@ -1143,9 +1382,21 @@ class ProfileManager {
       timestamp: new Date().toISOString()
     });
     
-    // CRITICAL FIX: Ensure we have auraColor for the profile avatar
-    // Priority: Chrome Storage (cache) > PreRenderInitializer (database) > profileData > currentUser > API fetch
-    let auraColorValue = this.profileData.auraColor || this.profileData.aura_color;
+    // ROOT CAUSE FIX: Use getCurrentUserAuraColor() for latest aura color (prioritizes Chrome storage, then database)
+    let auraColorValue = null;
+    if (typeof window.getCurrentUserAuraColor === 'function') {
+      try {
+        auraColorValue = await window.getCurrentUserAuraColor();
+        console.log('🎨 PROFILE_MANAGER: Got aura color from getCurrentUserAuraColor():', auraColorValue);
+      } catch (error) {
+        console.warn('⚠️ PROFILE_MANAGER: Error calling getCurrentUserAuraColor():', error);
+      }
+    }
+    
+    // Fallback to profileData if getCurrentUserAuraColor not available
+    if (!auraColorValue) {
+      auraColorValue = this.profileData?.auraColor || this.profileData?.aura_color;
+    }
 
     // CRITICAL FIX: Check Chrome storage FIRST for instant display (persists across sessions)
     if (!auraColorValue && typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
@@ -1284,9 +1535,36 @@ class ProfileManager {
           source: auraColorValue ? 'resolved' : 'profileData'
         });
 
-        const avatarHTML = await window.AvatarUtils.createUnifiedAvatar(userForAvatar, {
-          context: 'profile',
+        // ROOT CAUSE FIX: Ensure availability is set for status dots
+        // CRITICAL: Prioritize window.currentUser.availability/globalAvailability (most up-to-date)
+        if (window.currentUser && String(window.currentUser.id || window.currentUser.user_id) === String(userForAvatar.id || userForAvatar.userId)) {
+          // Current user: use window.currentUser.availability/globalAvailability (most up-to-date from database)
+          userForAvatar.availability = window.currentUser.availability || window.currentUser.globalAvailability || userForAvatar.availability;
+          console.log(`🔍 PROFILE_MANAGER: Using currentUser.availability for profile avatar: ${userForAvatar.availability}`);
+        }
+        
+        if (!userForAvatar.availability) {
+          // Try to get from currentUser first
+          if (window.currentUser && (window.currentUser.availability || window.currentUser.globalAvailability)) {
+            userForAvatar.availability = window.currentUser.availability || window.currentUser.globalAvailability;
+          } else if (window.currentVisibilityDataUnfiltered?.active) {
+            // Try to get from visibility data
+            const currentUserInVisibility = window.currentVisibilityDataUnfiltered.active.find(u => 
+              String(u.id || u.userId || u.user_id) === String(window.currentUser?.id)
+            );
+            if (currentUserInVisibility && currentUserInVisibility.availability) {
+              userForAvatar.availability = currentUserInVisibility.availability;
+            }
+          }
+          // Default to AVAILABLE if active, OFFLINE if not
+          if (!userForAvatar.availability) {
+            userForAvatar.availability = (userForAvatar.isActive || userForAvatar.is_active) ? 'AVAILABLE' : 'OFFLINE';
+          }
+        }
+        
+        const avatarHTML = await window.AvatarUtils.createUnifiedAvatar(userForAvatar, 'profile', {
           showAura: true,
+          showStatus: true,  // ROOT CAUSE FIX: Enable status dots on profile avatar
           size: 32
         });
 
@@ -1491,17 +1769,146 @@ class ProfileManager {
 }
 
 // ===== GLOBAL AVATAR FUNCTIONS =====
-// COMP METHOD: Get current user's database aura color for modal
-function getCurrentUserAuraColor() {
-  console.log('🔍 AURA_MODAL: Getting current user aura color from database');
+// ROOT CAUSE FIX: Unified function to update aura color in BOTH Chrome storage AND database
+async function updateAuraColorEverywhere(color) {
+  console.log('🔄 AURA_UPDATE: Updating aura color everywhere:', color);
   
-  // First try to get from current user object
+  if (!color || !color.startsWith('#')) {
+    console.error('❌ AURA_UPDATE: Invalid color format:', color);
+    return false;
+  }
+  
+  try {
+    // Step 1: Update Chrome storage
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+      await new Promise((resolve, reject) => {
+        chrome.storage.local.set({ userAuraColor: color, auraColor: color }, () => {
+          if (chrome.runtime.lastError) {
+            console.error('❌ AURA_UPDATE: Error saving to Chrome storage:', chrome.runtime.lastError);
+            reject(chrome.runtime.lastError);
+          } else {
+            console.log('✅ AURA_UPDATE: Saved to Chrome storage:', color);
+            resolve();
+          }
+        });
+      });
+    }
+    
+    // Step 2: Update database via API
+    if (window.currentUser && window.currentUser.id && window.api && typeof window.api.request === 'function') {
+      try {
+        const result = await window.api.request(`/v1/users/${window.currentUser.id}/aura-color`, {
+          method: 'PUT',
+          body: JSON.stringify({
+            auraColor: color
+          })
+        });
+        
+        if (result) {
+          console.log('✅ AURA_UPDATE: Saved to database:', color);
+        } else {
+          console.error('❌ AURA_UPDATE: Database update returned no result');
+        }
+      } catch (error) {
+        console.error('❌ AURA_UPDATE: Error saving to database:', error);
+        // Don't throw - Chrome storage update succeeded
+      }
+    } else {
+      console.warn('⚠️ AURA_UPDATE: Cannot update database - missing user or API');
+    }
+    
+    // Step 3: Update local user object immediately
+    if (window.currentUser) {
+      window.currentUser.auraColor = color;
+      window.currentUser.aura_color = color;
+      console.log('✅ AURA_UPDATE: Updated window.currentUser');
+    }
+    
+    // Step 4: Update visibility cache immediately to prevent stale data
+    if (window.currentVisibilityDataUnfiltered?.active) {
+      const currentUserInVisibility = window.currentVisibilityDataUnfiltered.active.find(u => 
+        String(u.id || u.userId || u.user_id) === String(window.currentUser?.id)
+      );
+      if (currentUserInVisibility) {
+        currentUserInVisibility.aura_color = color;
+        currentUserInVisibility.auraColor = color;
+        console.log('✅ AURA_UPDATE: Updated visibility cache');
+      }
+    }
+    
+    if (window.currentVisibilityData?.active) {
+      const currentUserInVisibility = window.currentVisibilityData.active.find(u => 
+        String(u.id || u.userId || u.user_id) === String(window.currentUser?.id)
+      );
+      if (currentUserInVisibility) {
+        currentUserInVisibility.aura_color = color;
+        currentUserInVisibility.auraColor = color;
+      }
+    }
+    
+    // Step 5: Trigger real-time update and avatar refresh
+    if (window.handleAuraChange) {
+      window.handleAuraChange({
+        userId: window.currentUser?.id,
+        aura_color: color
+      });
+    }
+    
+    // Step 6: Force refresh all message avatars to show new color
+    if (typeof window.refreshAllMessageAvatars === 'function') {
+      console.log('🔄 AURA_UPDATE: Refreshing all message avatars with new aura color');
+      await window.refreshAllMessageAvatars();
+    }
+    
+    // Step 7: Refresh visibility avatars
+    if (typeof window.refreshVisibilityAvatars === 'function') {
+      console.log('🔄 AURA_UPDATE: Refreshing visibility avatars');
+      await window.refreshVisibilityAvatars();
+    }
+    
+    console.log('✅ AURA_UPDATE: Aura color update complete');
+    return true;
+  } catch (error) {
+    console.error('❌ AURA_UPDATE: Error updating aura color:', error);
+    return false;
+  }
+}
+
+// COMP METHOD: Get current user's aura color (Chrome storage first, then database fallback)
+async function getCurrentUserAuraColor() {
+  console.log('🔍 AURA_MODAL: Getting current user aura color (Chrome storage first, then database)');
+  
+  // ROOT CAUSE FIX: Check Chrome storage FIRST
+  if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+    try {
+      const storageResult = await new Promise((resolve) => {
+        chrome.storage.local.get(['userAuraColor', 'auraColor'], (result) => {
+          resolve(result);
+        });
+      });
+      
+      const cachedAuraColor = storageResult.userAuraColor || storageResult.auraColor;
+      if (cachedAuraColor && cachedAuraColor !== '#ffffff' && cachedAuraColor !== 'ffffff' && cachedAuraColor !== window.AVATAR_FALLBACK_COLOR) {
+        console.log(`✅ AURA_MODAL: Found aura color in Chrome storage: ${cachedAuraColor}`);
+        return cachedAuraColor;
+      }
+    } catch (error) {
+      console.warn('⚠️ AURA_MODAL: Error reading Chrome storage:', error);
+    }
+  }
+  
+  // Fallback 1: Try to get from current user object (from database)
   if (window.currentUser && window.currentUser.auraColor && window.currentUser.auraColor !== window.AVATAR_FALLBACK_COLOR) {
     console.log(`✅ AURA_MODAL: Found database aura color in currentUser: ${window.currentUser.auraColor}`);
     return window.currentUser.auraColor;
   }
   
-  // Try to get from visibility data
+  if (window.currentUser && window.currentUser.aura_color && window.currentUser.aura_color !== window.AVATAR_FALLBACK_COLOR) {
+    console.log(`✅ AURA_MODAL: Found database aura_color in currentUser: ${window.currentUser.aura_color}`);
+    return window.currentUser.aura_color;
+  }
+  
+  // Fallback 2: Try to get from visibility data (database)
   if (window.currentVisibilityData && window.currentVisibilityData.active) {
     const currentUserEmail = window.currentUser?.email;
     if (currentUserEmail) {
@@ -1510,10 +1917,14 @@ function getCurrentUserAuraColor() {
         console.log(`✅ AURA_MODAL: Found database aura color in visibility data: ${userData.auraColor}`);
         return userData.auraColor;
       }
+      if (userData && userData.aura_color && userData.aura_color !== window.AVATAR_FALLBACK_COLOR) {
+        console.log(`✅ AURA_MODAL: Found database aura_color in visibility data: ${userData.aura_color}`);
+        return userData.aura_color;
+      }
     }
   }
   
-  // Try to get from unfiltered visibility data
+  // Fallback 3: Try to get from unfiltered visibility data (database)
   if (window.currentVisibilityDataUnfiltered && window.currentVisibilityDataUnfiltered.active) {
     const currentUserEmail = window.currentUser?.email;
     if (currentUserEmail) {
@@ -1522,11 +1933,37 @@ function getCurrentUserAuraColor() {
         console.log(`✅ AURA_MODAL: Found database aura color in unfiltered visibility data: ${userData.auraColor}`);
         return userData.auraColor;
       }
+      if (userData && userData.aura_color && userData.aura_color !== window.AVATAR_FALLBACK_COLOR) {
+        console.log(`✅ AURA_MODAL: Found database aura_color in unfiltered visibility data: ${userData.aura_color}`);
+        return userData.aura_color;
+      }
     }
   }
   
-  // Fallback to default
-  console.log('⚠️ AURA_MODAL: No database aura color found, using default');
+  // Fallback 4: Try to fetch from database via API
+  if (window.currentUser && window.currentUser.id && window.api && typeof window.api.request === 'function') {
+    try {
+      const userData = await window.api.request(`/v1/users/${window.currentUser.id}`, {
+        method: 'GET'
+      });
+      if (userData && (userData.aura_color || userData.auraColor)) {
+        const dbColor = userData.aura_color || userData.auraColor;
+        if (dbColor && dbColor !== window.AVATAR_FALLBACK_COLOR) {
+          console.log(`✅ AURA_MODAL: Fetched aura color from database API: ${dbColor}`);
+          // Cache it in Chrome storage for next time
+          if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+            chrome.storage.local.set({ userAuraColor: dbColor, auraColor: dbColor });
+          }
+          return dbColor;
+        }
+      }
+    } catch (error) {
+      console.warn('⚠️ AURA_MODAL: Error fetching from database API:', error);
+    }
+  }
+  
+  // Final fallback to default
+  console.log('⚠️ AURA_MODAL: No aura color found, using default');
   return window.AVATAR_FALLBACK_COLOR;
 }
 
@@ -1668,38 +2105,6 @@ function addAuraButtonClickHandler() {
   }
 }
 
-function addThemeToggleButtonClickHandler() {
-  // NOTE: This function is now handled by ProfileManager.addEventListeners()
-  // Keeping this function for backwards compatibility but it should not be called
-  // as ProfileManager handles the theme toggle button
-  const themeToggleBtn = document.getElementById('theme-toggle-btn');
-  if (themeToggleBtn) {
-    // Check if handler is already attached by ProfileManager
-    if (themeToggleBtn.dataset.handlerAttached !== 'true') {
-      themeToggleBtn.addEventListener('click', async (e) => {
-        console.log('🌙 COMP METHOD: Theme toggle button clicked! (fallback handler)');
-        e.stopPropagation();
-        if (typeof window.toggleTheme === 'function') {
-          await window.toggleTheme();
-        } else {
-          console.log('❌ toggleTheme not available');
-        }
-        // CRITICAL: Close profile menu after theme toggle
-        const userMenu = document.getElementById('user-menu');
-        if (userMenu) {
-          userMenu.style.display = 'none';
-        }
-      });
-      // CRITICAL FIX: Set handler attached flag so diagnostic knows handler is attached
-      themeToggleBtn.dataset.handlerAttached = 'true';
-      console.log('✅ COMP METHOD: Theme toggle button fallback handler added and flagged');
-    } else {
-      console.log('✅ COMP METHOD: Theme toggle button already handled by ProfileManager');
-    }
-  } else {
-    console.log('❌ Theme toggle button not found');
-  }
-}
 
 function addLogoutButtonClickHandler() {
   const logoutBtn = document.getElementById('logout-btn');
@@ -1744,8 +2149,101 @@ function addLogoutButtonClickHandler() {
 function addAllProfileMenuHandlers() {
   console.log('🎯 PROFILE_MENU: Adding all profile menu handlers...');
   addAuraButtonClickHandler();
-  addThemeToggleButtonClickHandler();
   addLogoutButtonClickHandler();
+  
+  // ROOT CAUSE FIX: Ensure visibility settings button handler is added
+  const profileManager = window.profileManager || (window.ProfileManager && window.ProfileManager.instance);
+  if (profileManager) {
+    const visibilityBtn = document.getElementById('visibility-settings-btn');
+    if (visibilityBtn) {
+      // Check if handler is already attached
+      if (!visibilityBtn.dataset.handlerAttached) {
+        console.log('🔧 PROFILE_MENU: Visibility button found but handler not attached, attaching now...');
+        
+        // Remove any existing handlers first
+        visibilityBtn.onclick = null;
+        if (profileManager._visibilitySettingsHandler) {
+          visibilityBtn.removeEventListener('click', profileManager._visibilitySettingsHandler);
+        }
+        
+        // Create handler function if it doesn't exist
+        if (!profileManager._visibilitySettingsHandler) {
+          profileManager._visibilitySettingsHandler = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('🔧 PROFILE MANAGER: COMP METHOD - Visibility settings button clicked');
+            profileManager.hideUserMenu();
+            
+            // ROOT CAUSE FIX: Switch to settings tab (not visibility tab)
+            let switched = false;
+            const selectors = [
+              'button[data-tab="settings-tab"]',
+              '.main-nav-tab[data-tab="settings-tab"]',
+              'button[aria-controls="settings-tab"]',
+              '[data-tab="settings-tab"]',
+              '.nav-tab[data-tab="settings-tab"]'
+            ];
+            
+            for (const selector of selectors) {
+              const button = document.querySelector(selector);
+              if (button) {
+                button.click();
+                console.log(`✅ PROFILE MANAGER: Switched to settings tab via selector: ${selector}`);
+                switched = true;
+                break;
+              }
+            }
+            
+            // Method 2: Direct tab activation
+            if (!switched) {
+              const settingsTab = document.getElementById('settings-tab');
+              const allTabs = document.querySelectorAll('.main-tab-content');
+              const allTabButtons = document.querySelectorAll('.main-nav-tab, button[data-tab]');
+              
+              if (settingsTab) {
+                allTabs.forEach(tab => tab.classList.remove('active'));
+                settingsTab.classList.add('active');
+                allTabButtons.forEach(btn => {
+                  btn.classList.remove('active');
+                  if (btn.getAttribute('data-tab') === 'settings-tab' || btn.getAttribute('aria-controls') === 'settings-tab') {
+                    btn.classList.add('active');
+                  }
+                });
+                console.log('✅ PROFILE MANAGER: Directly activated settings tab');
+                switched = true;
+              }
+            }
+            
+            // Method 3: Dispatch custom event
+            if (!switched) {
+              const tabSwitchEvent = new CustomEvent('tabSwitch', { detail: { tabId: 'settings-tab' } });
+              window.dispatchEvent(tabSwitchEvent);
+              console.log('✅ PROFILE MANAGER: Dispatched tab switch event for settings tab');
+            }
+          };
+        }
+        
+        // Attach handler
+        visibilityBtn.addEventListener('click', profileManager._visibilitySettingsHandler);
+        visibilityBtn.dataset.handlerAttached = 'true';
+        
+        // Ensure button is active and clickable
+        visibilityBtn.style.pointerEvents = 'auto';
+        visibilityBtn.style.cursor = 'pointer';
+        visibilityBtn.style.opacity = '1';
+        visibilityBtn.disabled = false;
+        
+        console.log('✅ PROFILE_MENU: Visibility button handler attached and activated');
+      } else {
+        console.log('✅ PROFILE_MENU: Visibility button handler already attached');
+      }
+    } else {
+      console.warn('⚠️ PROFILE_MENU: Visibility button not found in DOM');
+    }
+  } else {
+    console.warn('⚠️ PROFILE_MENU: ProfileManager instance not found');
+  }
+  
   console.log('✅ PROFILE_MENU: All profile menu handlers added');
 }
 
@@ -1903,9 +2401,359 @@ function getAvatarColor(name) {
   return `hsl(${hue}, 70%, 50%)`;
 }
 
+// ROOT CAUSE FIX: Unified function to update availability status in BOTH Chrome storage AND database
+async function updateAvailabilityEverywhere(availability) {
+  console.log('🔄 STATUS_UPDATE: Updating availability everywhere:', availability);
+  
+  if (!availability || !['AVAILABLE', 'BUSY', 'AWAY', 'OFFLINE'].includes(availability)) {
+    console.error('❌ STATUS_UPDATE: Invalid availability:', availability);
+    return false;
+  }
+  
+  try {
+    // Step 1: Update Chrome storage
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+      await new Promise((resolve, reject) => {
+        chrome.storage.local.set({ 
+          userAvailability: availability, 
+          availability: availability, 
+          globalAvailability: availability 
+        }, () => {
+          if (chrome.runtime.lastError) {
+            console.error('❌ STATUS_UPDATE: Error saving to Chrome storage:', chrome.runtime.lastError);
+            reject(chrome.runtime.lastError);
+          } else {
+            console.log('✅ STATUS_UPDATE: Saved to Chrome storage:', availability);
+            resolve();
+          }
+        });
+      });
+    }
+    
+    // Step 2: Update database via API
+    if (window.currentUser && window.currentUser.id && window.api && typeof window.api.request === 'function') {
+      try {
+        const result = await window.api.request('/v1/presence/availability', {
+          method: 'POST',
+          body: JSON.stringify({
+            availability: availability,
+            isGlobal: true
+          })
+        });
+        
+        if (result && result.success) {
+          console.log('✅ STATUS_UPDATE: Saved to database:', availability);
+        } else {
+          console.error('❌ STATUS_UPDATE: Database update returned no result');
+        }
+      } catch (error) {
+        console.error('❌ STATUS_UPDATE: Error saving to database:', error);
+        // Don't throw - Chrome storage update succeeded
+      }
+    } else {
+      console.warn('⚠️ STATUS_UPDATE: Cannot update database - missing user or API');
+    }
+    
+    // Step 3: Update local user object immediately
+    if (window.currentUser) {
+      window.currentUser.availability = availability;
+      window.currentUser.globalAvailability = availability;
+      console.log('✅ STATUS_UPDATE: Updated window.currentUser');
+    }
+    
+    // Step 4: Update visibility cache immediately to prevent stale data
+    if (window.currentVisibilityDataUnfiltered?.active) {
+      const currentUserInVisibility = window.currentVisibilityDataUnfiltered.active.find(u => 
+        String(u.id || u.userId || u.user_id) === String(window.currentUser?.id)
+      );
+      if (currentUserInVisibility) {
+        currentUserInVisibility.availability = availability;
+        console.log('✅ STATUS_UPDATE: Updated visibility cache');
+      }
+    }
+    
+    if (window.currentVisibilityData?.active) {
+      const currentUserInVisibility = window.currentVisibilityData.active.find(u => 
+        String(u.id || u.userId || u.user_id) === String(window.currentUser?.id)
+      );
+      if (currentUserInVisibility) {
+        currentUserInVisibility.availability = availability;
+      }
+    }
+    
+    // Step 5: Refresh profile avatar to show new status dot
+    const profileManagerInstance = window.profileManager || (window.ProfileManager && window.ProfileManager.instance) || this;
+    if (profileManagerInstance && typeof profileManagerInstance.updateUserAvatar === 'function') {
+      try {
+        console.log('🔄 STATUS_UPDATE: Refreshing profile avatar with new status');
+        await profileManagerInstance.updateUserAvatar();
+        console.log('✅ STATUS_UPDATE: Profile avatar refreshed');
+      } catch (error) {
+        console.warn('⚠️ STATUS_UPDATE: Error refreshing profile avatar:', error);
+      }
+    }
+    
+    // Step 6: Force refresh all message avatars to show new status
+    if (typeof window.refreshAllMessageAvatars === 'function') {
+      console.log('🔄 STATUS_UPDATE: Refreshing all message avatars with new status');
+      await window.refreshAllMessageAvatars();
+    }
+    
+    // Step 7: Refresh visibility avatars
+    if (typeof window.refreshVisibilityAvatars === 'function') {
+      console.log('🔄 STATUS_UPDATE: Refreshing visibility avatars');
+      await window.refreshVisibilityAvatars();
+    }
+    
+    console.log('✅ STATUS_UPDATE: Availability update complete');
+    return true;
+  } catch (error) {
+    console.error('❌ STATUS_UPDATE: Error updating availability:', error);
+    return false;
+  }
+}
+
+// ROOT CAUSE FIX: Unified function to update theme in BOTH Chrome storage AND database
+async function updateThemeEverywhere(theme) {
+  console.log('🔄 THEME_UPDATE: Updating theme everywhere:', theme);
+  
+  if (!theme || !['light', 'dark', 'auto'].includes(theme)) {
+    console.error('❌ THEME_UPDATE: Invalid theme:', theme);
+    return false;
+  }
+  
+  try {
+    // Step 1: Update Chrome storage
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+      await new Promise((resolve, reject) => {
+        chrome.storage.local.set({ theme: theme, userTheme: theme }, () => {
+          if (chrome.runtime.lastError) {
+            console.error('❌ THEME_UPDATE: Error saving to Chrome storage:', chrome.runtime.lastError);
+            reject(chrome.runtime.lastError);
+          } else {
+            console.log('✅ THEME_UPDATE: Saved to Chrome storage:', theme);
+            resolve();
+          }
+        });
+      });
+    }
+    
+    // Step 2: Update localStorage (for compatibility)
+    localStorage.setItem('theme', theme);
+    
+    // Step 3: Update DOM immediately for instant feedback
+    document.documentElement.setAttribute('data-theme', theme);
+    document.body.setAttribute('data-theme', theme);
+    
+    // Step 4: Update database via API
+    if (window.currentUser && window.currentUser.id && window.api && typeof window.api.request === 'function') {
+      try {
+        const result = await window.api.request(`/v1/users/${window.currentUser.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            theme: theme
+          })
+        });
+        
+        if (result) {
+          console.log('✅ THEME_UPDATE: Saved to database:', theme);
+        } else {
+          console.error('❌ THEME_UPDATE: Database update returned no result');
+        }
+      } catch (error) {
+        console.error('❌ THEME_UPDATE: Error saving to database:', error);
+        // Don't throw - Chrome storage update succeeded
+      }
+    } else {
+      console.warn('⚠️ THEME_UPDATE: Cannot update database - missing user or API');
+    }
+    
+    // Step 5: Update local user object immediately
+    if (window.currentUser) {
+      window.currentUser.theme = theme;
+      console.log('✅ THEME_UPDATE: Updated window.currentUser');
+    }
+    
+    // Step 6: Update profile menu theme icon and text
+    const themeIcon = document.getElementById('theme-icon');
+    const themeText = document.getElementById('theme-text');
+    if (themeIcon) {
+      themeIcon.textContent = theme === 'dark' ? '☀️' : '🌙';
+    }
+    if (themeText) {
+      themeText.textContent = theme === 'dark' ? 'Light mode' : 'Dark mode';
+    }
+    
+    // Step 7: Update settings tab theme select if it exists
+    const themeSelect = document.getElementById('theme-select');
+    if (themeSelect) {
+      themeSelect.value = theme;
+      console.log('✅ THEME_UPDATE: Updated settings tab theme select');
+    }
+    
+    console.log('✅ THEME_UPDATE: Theme update complete');
+    return true;
+  } catch (error) {
+    console.error('❌ THEME_UPDATE: Error updating theme:', error);
+    return false;
+  }
+}
+
+// ROOT CAUSE FIX: Get current user's theme (Chrome storage first, then database fallback)
+async function getCurrentUserTheme() {
+  console.log('🔍 THEME_GET: Getting current user theme (Chrome storage first, then database)');
+  
+  // ROOT CAUSE FIX: Check Chrome storage FIRST
+  if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+    try {
+      const storageResult = await new Promise((resolve) => {
+        chrome.storage.local.get(['theme', 'userTheme'], (result) => {
+          resolve(result);
+        });
+      });
+      
+      const cachedTheme = storageResult.theme || storageResult.userTheme;
+      if (cachedTheme && ['light', 'dark', 'auto'].includes(cachedTheme)) {
+        console.log(`✅ THEME_GET: Found theme in Chrome storage: ${cachedTheme}`);
+        return cachedTheme;
+      }
+    } catch (error) {
+      console.warn('⚠️ THEME_GET: Error reading Chrome storage:', error);
+    }
+  }
+  
+  // Fallback 1: Try localStorage (for compatibility)
+  const localStorageTheme = localStorage.getItem('theme');
+  if (localStorageTheme && ['light', 'dark', 'auto'].includes(localStorageTheme)) {
+    console.log(`✅ THEME_GET: Found theme in localStorage: ${localStorageTheme}`);
+    // Cache it in Chrome storage for next time
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+      chrome.storage.local.set({ theme: localStorageTheme, userTheme: localStorageTheme });
+    }
+    return localStorageTheme;
+  }
+  
+  // Fallback 2: Try to get from current user object (from database)
+  if (window.currentUser && window.currentUser.theme) {
+    const userTheme = window.currentUser.theme;
+    if (['light', 'dark', 'auto'].includes(userTheme)) {
+      console.log(`✅ THEME_GET: Found theme in currentUser: ${userTheme}`);
+      return userTheme;
+    }
+  }
+  
+  // Fallback 3: Try to fetch from database via API
+  if (window.currentUser && window.currentUser.id && window.api && typeof window.api.request === 'function') {
+    try {
+      const userData = await window.api.request(`/v1/users/${window.currentUser.id}`, {
+        method: 'GET'
+      });
+      if (userData && userData.theme) {
+        console.log(`✅ THEME_GET: Fetched theme from database API: ${userData.theme}`);
+        // Cache it in Chrome storage for next time
+        if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+          chrome.storage.local.set({ theme: userData.theme, userTheme: userData.theme });
+        }
+        // Also update localStorage for compatibility
+        localStorage.setItem('theme', userData.theme);
+        return userData.theme;
+      }
+    } catch (error) {
+      console.warn('⚠️ THEME_GET: Error fetching from database API:', error);
+    }
+  }
+  
+  // Fallback 4: Check DOM attribute
+  const domTheme = document.body.getAttribute('data-theme') || document.documentElement.getAttribute('data-theme');
+  if (domTheme && ['light', 'dark', 'auto'].includes(domTheme)) {
+    console.log(`✅ THEME_GET: Found theme in DOM: ${domTheme}`);
+    return domTheme;
+  }
+  
+  // Final fallback to default
+  console.log('⚠️ THEME_GET: No theme found, using default: light');
+  return 'light';
+}
+
+// ROOT CAUSE FIX: Get current user's availability (Chrome storage first, then database fallback)
+async function getCurrentUserAvailability() {
+  console.log('🔍 STATUS_GET: Getting current user availability (Chrome storage first, then database)');
+  
+  // ROOT CAUSE FIX: Check Chrome storage FIRST
+  if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+    try {
+      const storageResult = await new Promise((resolve) => {
+        chrome.storage.local.get(['userAvailability', 'availability', 'globalAvailability'], (result) => {
+          resolve(result);
+        });
+      });
+      
+      const cachedAvailability = storageResult.userAvailability || storageResult.availability || storageResult.globalAvailability;
+      if (cachedAvailability && ['AVAILABLE', 'BUSY', 'AWAY', 'OFFLINE'].includes(cachedAvailability)) {
+        console.log(`✅ STATUS_GET: Found availability in Chrome storage: ${cachedAvailability}`);
+        return cachedAvailability;
+      }
+    } catch (error) {
+      console.warn('⚠️ STATUS_GET: Error reading Chrome storage:', error);
+    }
+  }
+  
+  // Fallback 1: Try to get from current user object (from database)
+  if (window.currentUser) {
+    const userAvailability = window.currentUser.availability || window.currentUser.globalAvailability;
+    if (userAvailability && ['AVAILABLE', 'BUSY', 'AWAY', 'OFFLINE'].includes(userAvailability)) {
+      console.log(`✅ STATUS_GET: Found availability in currentUser: ${userAvailability}`);
+      return userAvailability;
+    }
+  }
+  
+  // Fallback 2: Try to get from visibility data (database)
+  if (window.currentVisibilityDataUnfiltered?.active) {
+    const currentUserInVisibility = window.currentVisibilityDataUnfiltered.active.find(u => 
+      String(u.id || u.userId || u.user_id) === String(window.currentUser?.id)
+    );
+    if (currentUserInVisibility && currentUserInVisibility.availability) {
+      console.log(`✅ STATUS_GET: Found availability in visibility data: ${currentUserInVisibility.availability}`);
+      return currentUserInVisibility.availability;
+    }
+  }
+  
+  // Fallback 3: Try to fetch from database via API
+  if (window.currentUser && window.currentUser.id && window.api && typeof window.api.request === 'function') {
+    try {
+      const statusData = await window.api.request('/v1/presence/availability', {
+        method: 'GET'
+      });
+      if (statusData && statusData.availability) {
+        console.log(`✅ STATUS_GET: Fetched availability from database API: ${statusData.availability}`);
+        // Cache it in Chrome storage for next time
+        if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+          chrome.storage.local.set({ 
+            userAvailability: statusData.availability, 
+            availability: statusData.availability, 
+            globalAvailability: statusData.availability 
+          });
+        }
+        return statusData.availability;
+      }
+    } catch (error) {
+      console.warn('⚠️ STATUS_GET: Error fetching from database API:', error);
+    }
+  }
+  
+  // Final fallback to default
+  console.log('⚠️ STATUS_GET: No availability found, using default: AVAILABLE');
+  return 'AVAILABLE';
+}
+
 // Make available globally
 window.ProfileManager = ProfileManager;
 window.getCurrentUserAuraColor = getCurrentUserAuraColor;
+window.updateAuraColorEverywhere = updateAuraColorEverywhere;
+window.getCurrentUserTheme = getCurrentUserTheme;
+window.updateThemeEverywhere = updateThemeEverywhere;
+window.getCurrentUserAvailability = getCurrentUserAvailability;
+window.updateAvailabilityEverywhere = updateAvailabilityEverywhere;
 window.getCurrentUserAvatarBgColor = getCurrentUserAvatarBgColor;
 window.getCurrentUserAvatarColor = getCurrentUserAvatarColor;
 window.setCustomAvatarColor = setCustomAvatarColor;
@@ -1914,7 +2762,6 @@ window.handleAvatarClick = handleAvatarClick;
 window.handleClickOutside = handleClickOutside;
 window.addProfileAvatarClickHandler = addProfileAvatarClickHandler;
 window.addAuraButtonClickHandler = addAuraButtonClickHandler;
-window.addThemeToggleButtonClickHandler = addThemeToggleButtonClickHandler;
 window.addLogoutButtonClickHandler = addLogoutButtonClickHandler;
 window.addAllProfileMenuHandlers = addAllProfileMenuHandlers;
 window.showColorPickerModal = showColorPickerModal;

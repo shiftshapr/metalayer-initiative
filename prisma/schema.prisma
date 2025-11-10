@@ -110,23 +110,26 @@ model Anchor {
 }
 
 model AppUser {
-  id               String             @id @db.Uuid
-  handle           String             @unique
-  email            String?            @unique
-  name             String?
-  avatarUrl        String // Changed from String? to String (non-null required)
-  isVerified       Boolean            @default(false)
-  isSuperAdmin     Boolean            @default(false)
-  createdAt        DateTime           @default(now())
-  updatedAt        DateTime
-  auraColor        String?
-  preferences      Json?              // User preferences (theme, etc.) - stored as JSON
-  Conversation     Conversation[]
-  ModerationAction ModerationAction[]
-  Post             Post[]
-  PresenceEvent    PresenceEvent[]
-  Reaction         Reaction[]
-  SpaceMember      SpaceMember[]
+  id                    String             @id @db.Uuid
+  handle                String             @unique
+  email                 String?            @unique
+  name                  String?
+  avatarUrl             String // Changed from String? to String (non-null required)
+  isVerified            Boolean            @default(false)
+  isSuperAdmin          Boolean            @default(false)
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime
+  auraColor             String?
+  preferences           Json? // User preferences (theme, etc.) - stored as JSON
+  globalAvailability    Availability? // Global status (applies to all tabs by default)
+  availabilityUpdatedAt DateTime? // When global status was last updated
+  Conversation          Conversation[]
+  ModerationAction      ModerationAction[]
+  Post                  Post[]
+  PresenceEvent         PresenceEvent[]
+  Reaction              Reaction[]
+  SpaceMember           SpaceMember[]
+  MetaCommunityMembership MetaCommunityMembership[]
 
   // Updated relationships using UUID foreign keys
   message_deletions message_deletions[]
@@ -358,6 +361,59 @@ model MetaCommunityWaitlist {
 
   @@index([status])
   @@index([submittedAt])
+}
+
+/// Meta-communities (actual communities)
+model MetaCommunity {
+  id                     String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                   String
+  description            String?   @db.Text
+  codeOfConduct          String?   @db.Text
+  logoUrl                String?
+  communityLink          String?
+  onboardingInstructions String?   @db.Text
+  isPublic               Boolean   @default(true)
+  isOpen                 Boolean   @default(true)
+  profileLink            String?
+  legacyId               String?   // For backward compatibility (e.g., "comm-001")
+  createdAt              DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt              DateTime  @default(now()) @db.Timestamptz(6)
+  submittedEmail         String?
+  submittedPhone         String?
+  purpose                String?   @db.Text
+  status                 String    @default("active") // active, archived, pending
+  reviewedAt             DateTime? @db.Timestamptz(6)
+  reviewedBy             String?   @db.Uuid
+  reviewNotes            String?   @db.Text
+  meta_domain            String?   @map("meta-domain")
+
+  MetaCommunityMembership MetaCommunityMembership[]
+
+  @@index([status])
+  @@index([legacyId])
+  @@index([createdAt])
+}
+
+/// User memberships in meta-communities
+model MetaCommunityMembership {
+  id              String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId           String         @db.Uuid
+  metaCommunityId  String         @db.Uuid
+  isActive         Boolean        @default(true)
+  isPrimary        Boolean        @default(false)
+  tabId            Int?          // null for default tab, integer for specific tab
+  joinedAt         DateTime       @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime       @default(now()) @db.Timestamptz(6)
+
+  AppUser          AppUser        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  MetaCommunity    MetaCommunity  @relation(fields: [metaCommunityId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, metaCommunityId, tabId])
+  @@index([userId])
+  @@index([metaCommunityId])
+  @@index([tabId])
+  @@index([isPrimary])
+  @@index([isActive])
 }
 
 /// User bookmarks for messages

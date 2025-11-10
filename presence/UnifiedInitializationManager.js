@@ -142,6 +142,10 @@ class UnifiedInitializationManager {
     if (typeof window.CleanRealtimeManager !== 'undefined') {
       this.realtimeManager = new window.CleanRealtimeManager();
       await this.realtimeManager.initialize(window.supabase);
+      
+      // FIX: Expose instance globally for diagnostics and other modules
+      window.realtimeManager = this.realtimeManager;
+      
       console.log('✅ UnifiedInitializationManager: Clean Realtime Manager initialized');
     } else {
       console.warn('⚠️ UnifiedInitializationManager: CleanRealtimeManager not available');

@@ -1163,51 +1163,65 @@ async function setTheme(theme) {
     if (themeText) themeText.textContent = 'Dark mode';
   }
   
-  // CRITICAL: Save theme preference to database only (no localStorage)
-  // Theme is persisted in AppUser.preferences JSON field
-  if (window.currentUser?.id && window.api) {
-    try {
-      console.log('🔧 THEME: Saving theme preference to AppUser:', theme);
-      
-      // CRITICAL: Only UUID is required - no email needed
-      const userId = window.currentUser?.id;
-      if (!userId) {
-        console.error('❌ THEME: No userId (UUID) available for API request');
-        console.error('   window.currentUser:', window.currentUser);
-        return;
+  // ROOT CAUSE FIX: Use unified function to update both Chrome storage AND database
+  if (typeof window.updateThemeEverywhere === 'function') {
+    await window.updateThemeEverywhere(theme);
+    console.log('✅ THEME: Theme updated everywhere via updateThemeEverywhere');
+  } else {
+    // Fallback: Update manually if unified function not available
+    // CRITICAL: Save theme preference to database only (no localStorage)
+    // Theme is persisted in AppUser.preferences JSON field
+    if (window.currentUser?.id && window.api) {
+      try {
+        console.log('🔧 THEME: Saving theme preference to AppUser:', theme);
+        
+        // CRITICAL: Only UUID is required - no email needed
+        const userId = window.currentUser?.id;
+        if (!userId) {
+          console.error('❌ THEME: No userId (UUID) available for API request');
+          console.error('   window.currentUser:', window.currentUser);
+          return;
+        }
+        
+        // Validate UUID format
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (!uuidRegex.test(userId)) {
+          console.error('❌ THEME: Invalid userId format:', userId);
+          return;
+        }
+        
+        console.log('✅ THEME: Using userId (UUID) for API:', userId);
+        
+        await window.api.request('/v1/users/update-preferences', {
+          method: 'POST',
+          body: JSON.stringify({
+            userId: userId,
+            preferences: {
+              theme: theme
+            }
+          })
+        });
+        console.log('✅ THEME: Theme preference saved to AppUser');
+      } catch (error) {
+        console.error('❌ THEME: Error saving theme preference:', error);
+        // Non-critical - continue even if API call fails
       }
-      
-      // Validate UUID format
-      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-      if (!uuidRegex.test(userId)) {
-        console.error('❌ THEME: Invalid userId format:', userId);
-        return;
-      }
-      
-      console.log('✅ THEME: Using userId (UUID) for API:', userId);
-      
-      await window.api.request('/v1/users/update-preferences', {
-        method: 'POST',
-        body: JSON.stringify({
-          userId: userId,
-          preferences: {
-            theme: theme
-          }
-        })
-      });
-      console.log('✅ THEME: Theme preference saved to AppUser');
-    } catch (error) {
-      console.error('❌ THEME: Error saving theme preference:', error);
-      // Non-critical - continue even if API call fails
     }
   }
 }
 
+// ROOT CAUSE FIX: Updated to use unified updateThemeEverywhere function
 async function toggleTheme() {
-  const currentTheme = document.body.getAttribute('data-theme') || 'light';
+  const currentTheme = document.body.getAttribute('data-theme') || await (window.getCurrentUserTheme ? window.getCurrentUserTheme() : Promise.resolve('light'));
   const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-  // CRITICAL FIX: setTheme already handles API call, no need to duplicate
-  await setTheme(newTheme);
+  
+  // ROOT CAUSE FIX: Use unified function to update both Chrome storage AND database
+  if (typeof window.updateThemeEverywhere === 'function') {
+    await window.updateThemeEverywhere(newTheme);
+  } else {
+    // Fallback to setTheme if unified function not available
+    await setTheme(newTheme);
+  }
 }
 
 // Make available globally
