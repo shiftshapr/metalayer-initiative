@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Timeline - Canopi</title>
+  
+  <!-- Load Supabase Configuration -->
+  <script src="../presence/config.js"></script>
+  <script src="../presence/lib/supabase.min.js"></script>
+  
+  <!-- Load Extension Styles (for consistency) -->
+  <link rel="stylesheet" href="../presence/sidepanel.css">
+  
+  <!-- Timeline-specific styles -->
+  <link rel="stylesheet" href="styles/timeline.css">
+</head>
+<body>
+  <div id="timeline-app" class="timeline-container">
+    <!-- Header -->
+    <header class="timeline-header">
+      <div class="timeline-header-content">
+        <h1 class="timeline-title">Timeline</h1>
+        <div class="timeline-header-actions">
+          <button id="add-profile-btn" class="btn-secondary">Add Profile</button>
+          <select id="persistence-select" class="select-input">
+            <option value="all">All Time</option>
+            <option value="1y">Last Year</option>
+            <option value="30d">Last 30 Days</option>
+            <option value="7d">Last 7 Days</option>
+            <option value="1d">Last 24 Hours</option>
+          </select>
+        </div>
+      </div>
+    </header>
+
+    <!-- Filters -->
+    <div class="timeline-filters" id="timeline-filters">
+      <!-- Filters will be rendered here by TimelineFilters component -->
+    </div>
+
+    <!-- Profile Selector Modal (hidden by default) -->
+    <div id="profile-selector-modal" class="modal hidden">
+      <div class="modal-content">
+        <h2>Add Profile to Timeline</h2>
+        <input type="text" id="profile-search-input" placeholder="Search by username or UUID" class="input-field">
+        <div id="profile-search-results" class="profile-search-results"></div>
+        <div class="modal-actions">
+          <button id="cancel-profile-select" class="btn-secondary">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Timeline View -->
+    <main class="timeline-main">
+      <!-- Single Profile View -->
+      <div id="single-profile-view" class="timeline-view">
+        <div id="timeline-items" class="timeline-items">
+          <!-- Timeline items will be rendered here -->
+          <div class="loading-state">Loading timeline...</div>
+        </div>
+      </div>
+
+      <!-- Multi-Profile View (hidden by default) -->
+      <div id="multi-profile-view" class="timeline-view hidden">
+        <div id="multi-profile-columns" class="multi-profile-columns">
+          <!-- Profile columns will be rendered here -->
+        </div>
+      </div>
+
+      <!-- Empty State -->
+      <div id="empty-state" class="empty-state hidden">
+        <p>No timeline activities found.</p>
+      </div>
+
+      <!-- Error State -->
+      <div id="error-state" class="error-state hidden">
+        <p>Error loading timeline. Please try again.</p>
+      </div>
+    </main>
+
+    <!-- Loading Indicator -->
+    <div id="loading-indicator" class="loading-indicator hidden">
+      <div class="spinner"></div>
+    </div>
+  </div>
+
+  <!-- Load Timeline Modules -->
+  <script type="module" src="timeline-app.js"></script>
+</body>
+</html>
+
