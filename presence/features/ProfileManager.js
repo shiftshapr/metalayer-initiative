@@ -593,6 +593,9 @@ class ProfileManager {
       // ROOT CAUSE FIX: Ensure menu is positioned correctly
       const userAvatarContainer = document.getElementById('user-avatar-container');
       if (userAvatarContainer && !isVisible) {
+        // Menu is being shown - CRITICAL FIX: Re-attach event listeners
+        this.addUserMenuEventListeners();
+        
         // Position menu relative to avatar container
         const rect = userAvatarContainer.getBoundingClientRect();
         userMenu.style.position = 'absolute';
@@ -655,13 +658,15 @@ class ProfileManager {
         });
       } catch (error) {
         console.error('🔧 PROFILE MANAGER: COMP METHOD - Error creating small avatar:', error);
+        const displayNameOrName = currentUser.displayName || currentUser.name || 'U';
         smallAvatarHTML = `<div class="user-avatar-small" style="width: 24px; height: 24px; border-radius: 50%; background: #007bff; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 12px;">
-          ${currentUser.name.charAt(0).toUpperCase()}
+          ${displayNameOrName.charAt(0).toUpperCase()}
         </div>`;
       }
     } else {
+      const displayNameOrName = currentUser.displayName || currentUser.name || 'U';
       smallAvatarHTML = `<div class="user-avatar-small" style="width: 24px; height: 24px; border-radius: 50%; background: #007bff; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 12px;">
-        ${currentUser.name.charAt(0).toUpperCase()}
+        ${displayNameOrName.charAt(0).toUpperCase()}
       </div>`;
     }
 
@@ -670,7 +675,7 @@ class ProfileManager {
         <div class="user-info" style="display: flex; align-items: center; gap: 8px;">
           ${smallAvatarHTML}
           <div>
-            <div class="user-name" style="font-weight: bold; font-size: 14px;">${currentUser.name}</div>
+            <div class="user-name" style="font-weight: bold; font-size: 14px;">${currentUser.displayName || currentUser.name || 'User'}</div>
             <div class="user-id" style="font-size: 12px; color: #666;">${currentUser.id || currentUser.user_id}</div>
           </div>
         </div>
@@ -685,8 +690,8 @@ class ProfileManager {
           <span>Visibility Settings</span>
         </button>
         <button class="menu-action" id="theme-toggle-btn" style="width: 100%; padding: 8px 12px; border: none; background: none; text-align: left; cursor: pointer; display: flex; align-items: center; gap: 8px;">
-          <span>🌙</span>
-          <span>Toggle Theme</span>
+          <span id="theme-icon-menu">🌙</span>
+          <span id="theme-text-menu">Toggle Theme</span>
         </button>
         <button class="menu-action" id="logout-btn" style="width: 100%; padding: 8px 12px; border: none; background: none; text-align: left; cursor: pointer; display: flex; align-items: center; gap: 8px; color: #d32f2f;">
           <span>🚪</span>
@@ -720,7 +725,50 @@ class ProfileManager {
     // ROOT CAUSE FIX: Add click-outside handler
     this.addClickOutsideHandler();
     
+    // CRITICAL FIX: Initialize theme icon/text based on current theme
+    this.updateProfileMenuTheme();
+    
+    // FIX: Listen for preference changes to update display name and theme
+    if (window.EventBus) {
+      window.EventBus.on('preference:changed', (data) => {
+        if (data.key === 'displayName' || data.key === 'theme') {
+          this.updateUserMenuDisplay();
+          if (data.key === 'theme') {
+            this.updateProfileMenuTheme();
+          }
+        }
+      });
+    }
+    
+    // Also listen for native custom events
+    document.addEventListener('preferenceChanged', (e) => {
+      if (e.detail && (e.detail.key === 'displayName' || e.detail.key === 'theme')) {
+        this.updateUserMenuDisplay();
+        if (e.detail.key === 'theme') {
+          this.updateProfileMenuTheme();
+        }
+      }
+    });
+    
     console.log('✅ PROFILE MANAGER: COMP METHOD - User menu created');
+  }
+  
+  /**
+   * Update profile menu theme icon and text based on current theme
+   */
+  updateProfileMenuTheme() {
+    const currentTheme = document.body.getAttribute('data-theme') || 
+                        document.documentElement.getAttribute('data-theme') || 
+                        'light';
+    const themeIconMenu = document.getElementById('theme-icon-menu');
+    const themeTextMenu = document.getElementById('theme-text-menu');
+    
+    if (themeIconMenu) {
+      themeIconMenu.textContent = currentTheme === 'dark' ? '☀️' : '🌙';
+    }
+    if (themeTextMenu) {
+      themeTextMenu.textContent = currentTheme === 'dark' ? 'Light mode' : 'Dark mode';
+    }
   }
 
   /**
@@ -808,6 +856,14 @@ class ProfileManager {
           window.dispatchEvent(tabSwitchEvent);
           console.log('✅ PROFILE MANAGER: Dispatched tab switch event for settings tab');
         }
+        
+        // CRITICAL FIX: Ensure event listeners are attached when settings tab opens
+        setTimeout(async () => {
+          if (window.visibilitySettingsManager && typeof window.visibilitySettingsManager.ensureEventListeners === 'function') {
+            await window.visibilitySettingsManager.ensureEventListeners();
+            console.log('✅ PROFILE MANAGER: Ensured visibility settings event listeners after tab switch');
+          }
+        }, 100);
       };
       
       // Attach handler
@@ -837,7 +893,13 @@ class ProfileManager {
         e.preventDefault();
         e.stopPropagation();
         console.log('🔧 PROFILE MANAGER: COMP METHOD - Theme toggle button clicked');
+        console.log('🔍 DIAGNOSTIC: Profile menu theme toggle clicked');
+        const beforeTheme = document.body.getAttribute('data-theme') || document.documentElement.getAttribute('data-theme') || 'light';
+        console.log('🔍 DIAGNOSTIC: Theme before toggle:', beforeTheme);
         await this.toggleTheme();
+        const afterTheme = document.body.getAttribute('data-theme') || document.documentElement.getAttribute('data-theme') || 'light';
+        console.log('🔍 DIAGNOSTIC: Theme after toggle:', afterTheme);
+        console.log('🔍 DIAGNOSTIC: Theme changed:', beforeTheme !== afterTheme ? 'YES ✅' : 'NO ❌');
         // CRITICAL: Close profile menu after theme toggle
         this.hideUserMenu();
       };
@@ -1062,66 +1124,100 @@ class ProfileManager {
    */
   async toggleTheme() {
     console.log('🔧 PROFILE MANAGER: COMP METHOD - Toggling theme');
-    // Use the global toggleTheme function if available, otherwise use data-theme attribute
-    if (typeof window.toggleTheme === 'function') {
+    
+    // Get current theme from DOM or storage
+    const currentTheme = document.body.getAttribute('data-theme') || 
+                        document.documentElement.getAttribute('data-theme') || 
+                        await (window.getCurrentUserTheme ? window.getCurrentUserTheme() : Promise.resolve('light'));
+    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    
+    console.log('🔧 PROFILE MANAGER: Current theme:', currentTheme, 'New theme:', newTheme);
+    console.log('🔍 DIAGNOSTIC: UserPreferencesManager available:', !!window.userPreferencesManager);
+    console.log('🔍 DIAGNOSTIC: UserPreferencesManager initialized:', window.userPreferencesManager?.isInitialized);
+    
+    // CRITICAL FIX: Use UserPreferencesManager (unified preference system) - ensure it saves to both Chrome storage and database
+    if (window.userPreferencesManager && window.userPreferencesManager.isInitialized) {
+      console.log('✅ PROFILE MANAGER: Using UserPreferencesManager to toggle theme');
+      // FIX: Save immediately (not batched) to ensure database save happens right away
+      const saved = await window.userPreferencesManager.savePreference('theme', newTheme, { batch: false });
+      console.log('🔍 DIAGNOSTIC: UserPreferencesManager savePreference result:', saved);
+      
+      // Verify it was saved to Chrome storage
+      const chromeStorage = await chrome.storage.local.get(['theme']);
+      console.log('🔍 DIAGNOSTIC: Theme in Chrome storage after save:', chromeStorage.theme);
+      console.log('✅ PROFILE MANAGER: Theme saved via UserPreferencesManager:', newTheme);
+      
+      // CRITICAL FIX: Update profile menu theme UI immediately after saving
+      // Don't wait for event listeners - update directly to ensure UI reflects the change
+      this.updateProfileMenuTheme();
+      console.log('✅ PROFILE MANAGER: Profile menu theme UI updated immediately');
+    } else if (typeof window.updateThemeEverywhere === 'function') {
+      // Fallback to old system during transition
+      console.log('⚠️ PROFILE MANAGER: UserPreferencesManager not available, using updateThemeEverywhere fallback');
+      await window.updateThemeEverywhere(newTheme);
+    } else if (typeof window.toggleTheme === 'function') {
       console.log('🔧 PROFILE MANAGER: Using window.toggleTheme');
       await window.toggleTheme();
-    } else {
-      // Fallback: Use data-theme attribute (matches UIManager system)
-      const body = document.body;
-      const currentTheme = body.getAttribute('data-theme') || document.documentElement.getAttribute('data-theme') || localStorage.getItem('theme') || 'light';
-      const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
       
-      body.setAttribute('data-theme', newTheme);
+      // Update profile menu icon and text after theme change
+      const themeIconMenu = document.getElementById('theme-icon-menu');
+      const themeTextMenu = document.getElementById('theme-text-menu');
+      if (themeIconMenu) {
+        themeIconMenu.textContent = newTheme === 'dark' ? '☀️' : '🌙';
+      }
+      if (themeTextMenu) {
+        themeTextMenu.textContent = newTheme === 'dark' ? 'Light mode' : 'Dark mode';
+      }
+    } else {
+      // Fallback: Update manually if function not available
+      console.warn('⚠️ PROFILE MANAGER: updateThemeEverywhere not available, using fallback');
+      
+      // Update DOM immediately
       document.documentElement.setAttribute('data-theme', newTheme);
+      document.body.setAttribute('data-theme', newTheme);
       
       // Update icon and text in profile menu
-      const themeIcon = document.getElementById('theme-icon');
-      const themeText = document.getElementById('theme-text');
-      if (themeIcon) {
-        themeIcon.textContent = newTheme === 'dark' ? '☀️' : '🌙';
+      const themeIconMenu = document.getElementById('theme-icon-menu');
+      const themeTextMenu = document.getElementById('theme-text-menu');
+      if (themeIconMenu) {
+        themeIconMenu.textContent = newTheme === 'dark' ? '☀️' : '🌙';
       }
-      if (themeText) {
-        themeText.textContent = newTheme === 'dark' ? 'Light mode' : 'Dark mode';
-      }
-      
-      // ROOT CAUSE FIX: Update settings tab theme select if it exists
-      const themeSelect = document.getElementById('theme-select');
-      if (themeSelect) {
-        themeSelect.value = newTheme;
-        console.log('✅ PROFILE MANAGER: Updated settings tab theme select to:', newTheme);
+      if (themeTextMenu) {
+        themeTextMenu.textContent = newTheme === 'dark' ? 'Light mode' : 'Dark mode';
       }
       
-      // ROOT CAUSE FIX: Update BOTH Chrome storage AND database
-      if (typeof window.updateThemeEverywhere === 'function') {
-        await window.updateThemeEverywhere(newTheme);
-        console.log('✅ PROFILE MANAGER: Theme updated everywhere:', newTheme);
-      } else {
-        // Fallback: Update manually if function not available
-        console.warn('⚠️ PROFILE MANAGER: updateThemeEverywhere not available, using fallback');
-        
-        // Update Chrome storage
-        if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-          chrome.storage.local.set({ theme: newTheme, userTheme: newTheme });
-        }
-        
-        // Update localStorage (for compatibility)
-        localStorage.setItem('theme', newTheme);
-        
-        // Update database
-        if (window.currentUser && window.currentUser.id && window.api && typeof window.api.request === 'function') {
+      // Update settings tab theme toggle if it exists
+      const themeToggle = document.getElementById('theme-toggle');
+      if (themeToggle) {
+        themeToggle.checked = newTheme === 'dark';
+      }
+      
+      // Update Chrome storage
+      if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+        await chrome.storage.local.set({ theme: newTheme, userTheme: newTheme });
+      }
+      
+      // Update localStorage (for compatibility)
+      localStorage.setItem('theme', newTheme);
+      
+      // Update database
+      if (window.currentUser && window.currentUser.id && window.api && typeof window.api.request === 'function') {
+        try {
           await window.api.request(`/v1/users/${window.currentUser.id}`, {
             method: 'PATCH',
             body: JSON.stringify({
               theme: newTheme
             })
           });
+          console.log('✅ PROFILE MANAGER: Theme saved to database:', newTheme);
+        } catch (error) {
+          console.error('❌ PROFILE MANAGER: Error saving theme to database:', error);
         }
-        
-        // Update local objects
-        if (window.currentUser) {
-          window.currentUser.theme = newTheme;
-        }
+      }
+      
+      // Update local objects
+      if (window.currentUser) {
+        window.currentUser.theme = newTheme;
       }
       
       console.log(`✅ PROFILE MANAGER: Switched to ${newTheme} theme`);
@@ -1357,7 +1453,8 @@ class ProfileManager {
       }
     
     if (userMenuName) {
-      const displayName = this.profileData.name || this.profileData.email;
+      // FIX: Use displayName first, fallback to name, then email
+      const displayName = this.profileData.displayName || this.profileData.name || this.profileData.email || 'User';
       userMenuName.textContent = displayName;
       }
   }
@@ -1601,7 +1698,7 @@ class ProfileManager {
     const currentUser = window.currentUser || { name: 'User', email: 'user@example.com' };
     const fallbackHTML = `
       <div class="user-avatar" style="width: 32px; height: 32px; border-radius: 50%; background: #007bff; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 14px;">
-        ${currentUser.name.charAt(0).toUpperCase()}
+        ${(currentUser.displayName || currentUser.name || 'U').charAt(0).toUpperCase()}
       </div>
     `;
 
@@ -1615,9 +1712,10 @@ class ProfileManager {
   updateUserMenu() {
     // Update any user menu elements
     const userMenuElements = document.querySelectorAll('[data-user-menu]');
+    const displayName = this.profileData?.displayName || this.profileData?.name || this.profileData?.email || 'User';
     userMenuElements.forEach(element => {
       if (element.dataset.userMenu === 'name') {
-        element.textContent = this.profileData.name || this.profileData.email;
+        element.textContent = displayName;
       } else if (element.dataset.userMenu === 'email') {
         element.textContent = this.profileData.email;
       }
@@ -2574,21 +2672,34 @@ async function updateThemeEverywhere(theme) {
       console.log('✅ THEME_UPDATE: Updated window.currentUser');
     }
     
-    // Step 6: Update profile menu theme icon and text
+    // Step 6: Update profile menu theme icon and text (both IDs)
     const themeIcon = document.getElementById('theme-icon');
     const themeText = document.getElementById('theme-text');
+    const themeIconMenu = document.getElementById('theme-icon-menu');
+    const themeTextMenu = document.getElementById('theme-text-menu');
+    
     if (themeIcon) {
       themeIcon.textContent = theme === 'dark' ? '☀️' : '🌙';
     }
     if (themeText) {
       themeText.textContent = theme === 'dark' ? 'Light mode' : 'Dark mode';
     }
+    if (themeIconMenu) {
+      themeIconMenu.textContent = theme === 'dark' ? '☀️' : '🌙';
+    }
+    if (themeTextMenu) {
+      themeTextMenu.textContent = theme === 'dark' ? 'Light mode' : 'Dark mode';
+    }
     
-    // Step 7: Update settings tab theme select if it exists
-    const themeSelect = document.getElementById('theme-select');
-    if (themeSelect) {
-      themeSelect.value = theme;
-      console.log('✅ THEME_UPDATE: Updated settings tab theme select');
+    // Step 7: Update settings tab theme toggle if it exists
+    const themeToggle = document.getElementById('theme-toggle');
+    if (themeToggle) {
+      themeToggle.checked = theme === 'dark';
+      // Trigger updateThemeStatus to update slider position
+      if (window.visibilitySettingsManager && typeof window.visibilitySettingsManager.updateThemeStatus === 'function') {
+        window.visibilitySettingsManager.updateThemeStatus();
+      }
+      console.log('✅ THEME_UPDATE: Updated settings tab theme toggle');
     }
     
     console.log('✅ THEME_UPDATE: Theme update complete');

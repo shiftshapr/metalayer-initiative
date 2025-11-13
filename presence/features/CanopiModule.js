@@ -855,6 +855,45 @@ async function loadChatHistory(communityId = null) {
     }
     console.log('✅ CHAT_LOAD: Found .chat-messages element');
     
+    // UX FIX: Hide messages container while loading to prevent one-at-a-time appearance
+    const originalChatVisibility = chatMessages.style.visibility;
+    const originalChatOpacity = chatMessages.style.opacity;
+    const originalChatPosition = chatMessages.style.position;
+    
+    // CRITICAL FIX: Ensure container has position: relative for absolutely positioned loading indicator
+    if (window.getComputedStyle(chatMessages).position === 'static') {
+      chatMessages.style.position = 'relative';
+    }
+    
+    chatMessages.style.visibility = 'hidden';
+    chatMessages.style.opacity = '0';
+    console.log('🔍 CHAT_LOAD: Hidden chat container to prevent one-at-a-time message appearance');
+    
+    // CRITICAL FIX: Ensure loading indicator is visible even when container is hidden
+    const loadingIndicator = chatMessages.querySelector('.chat-loading-indicator');
+    if (loadingIndicator) {
+      loadingIndicator.style.visibility = 'visible';
+      loadingIndicator.style.opacity = '1';
+      loadingIndicator.style.display = 'flex';
+      loadingIndicator.style.position = 'absolute';
+      loadingIndicator.style.top = '0';
+      loadingIndicator.style.left = '0';
+      loadingIndicator.style.right = '0';
+      loadingIndicator.style.bottom = '0';
+      loadingIndicator.style.zIndex = '1000';
+      loadingIndicator.style.background = 'var(--background-primary, #fff)';
+      console.log('✅ CHAT_LOAD: Loading indicator made visible and positioned absolutely');
+    } else {
+      // Create loading indicator if it doesn't exist
+      chatMessages.innerHTML = `
+        <div class="chat-loading-indicator" style="visibility: visible; opacity: 1; display: flex; position: absolute; top: 0; left: 0; right: 0; bottom: 0; z-index: 1000; background: var(--background-primary, #fff); flex-direction: column; align-items: center; justify-content: center; padding: 40px;">
+          <div class="loading-spinner"></div>
+          <div class="loading-text">Loading messages...</div>
+        </div>
+      `;
+      console.log('✅ CHAT_LOAD: Created loading indicator with absolute positioning');
+    }
+    
     // Log current messages before adding new ones
     const currentMessages = chatMessages.querySelectorAll('.message');
     console.log('🔍 CHAT_LOAD: Current message IDs:', Array.from(currentMessages).map(m => m.getAttribute('data-message-id')));
@@ -867,6 +906,13 @@ async function loadChatHistory(communityId = null) {
       const loadingIndicator = chatMessages.querySelector('.chat-loading-indicator');
       if (loadingIndicator) {
         loadingIndicator.remove();
+      }
+      // Restore visibility for empty state
+      chatMessages.style.visibility = originalChatVisibility || 'visible';
+      chatMessages.style.opacity = originalChatOpacity || '1';
+      // Restore position if it was changed
+      if (originalChatPosition && originalChatPosition !== 'relative') {
+        chatMessages.style.position = originalChatPosition;
       }
       chatMessages.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 20px;">No messages yet. Start a conversation!</p>';
       return;
@@ -901,7 +947,13 @@ async function loadChatHistory(communityId = null) {
             continue; // ROOT CAUSE FIX: Use continue instead of return to process remaining conversations
           }
           
-          // Add ALL main thread posts in chronological order
+          // PERFORMANCE FIX: Batch fetch all author data in parallel, then add messages synchronously
+          // This ensures: 1) Fast performance (parallel API calls), 2) No visual movement (correct order)
+          
+          // Step 1: Prepare all messages and identify which need author enrichment
+          const messagesToEnrich = [];
+          const enrichedMessages = new Map(); // Cache for enriched messages
+          
           for (let i = 0; i < mainThreadPosts.length; i++) {
             const mainThreadPost = mainThreadPosts[i];
             
@@ -911,149 +963,132 @@ async function loadChatHistory(communityId = null) {
             // Add conversation info to main thread post
             mainThreadPost.conversationId = conversation.id;
             mainThreadPost.conversationTitle = conversation.title;
-            mainThreadPost.conversation = conversation; // Include full conversation data
+            mainThreadPost.conversation = conversation;
             mainThreadPost.isReply = false;
-            mainThreadPost.isFirstInThread = (i === 0); // Only the first post is "first in thread"
+            mainThreadPost.isFirstInThread = (i === 0);
             const nonDeletedReplies = directReplies.filter(r => !r.deletedAt && r.body && r.body.trim() !== '[Deleted]');
-            mainThreadPost.hasReplies = nonDeletedReplies.length > 0; // Only count NON-DELETED replies
-            mainThreadPost.replyCount = nonDeletedReplies.length; // Count only non-deleted replies for display
-            
-            // COMPREHENSIVE DELETED MESSAGE DEBUGGING
-            if (directReplies.length > 0) {
-              console.log('DELETED_MSG_DEBUG: Found direct replies for deleted message');
-            }
+            mainThreadPost.hasReplies = nonDeletedReplies.length > 0;
+            mainThreadPost.replyCount = nonDeletedReplies.length;
             
             // Check if this message should be skipped
             if (mainThreadPost.deletedAt && !mainThreadPost.hasReplies) {
               continue;
-            } else if (mainThreadPost.deletedAt && mainThreadPost.hasReplies) {
-              }
-            // Calculate reaction count for this specific message
+            }
+            
+            // Calculate reaction count
             const messageReactions = conversation.reactions ? conversation.reactions.filter(r => r.postId === mainThreadPost.id) : [];
             mainThreadPost.reactionCount = messageReactions.length;
             
-            // COMP METHOD: Use exact COMP filtering logic
-            // COMP METHOD: Comprehensive debugging exactly as COMP does
-            console.log('🔍 COMP DEBUG: === MAIN THREAD MESSAGE ANALYSIS ===');
-            console.log('🔍 COMP DEBUG: Message ID:', mainThreadPost.id);
-            console.log('🔍 COMP DEBUG: Message deletedAt:', mainThreadPost.deletedAt);
-            console.log('🔍 COMP DEBUG: Message body:', JSON.stringify(mainThreadPost.body));
-            console.log('🔍 COMP DEBUG: Message body trimmed:', mainThreadPost.body ? mainThreadPost.body.trim() : 'NO_BODY');
-            console.log('🔍 COMP DEBUG: Body equals [Deleted]:', mainThreadPost.body ? mainThreadPost.body.trim() === '[Deleted]' : 'NO_BODY');
-            console.log('🔍 COMP DEBUG: Total direct replies:', directReplies.length);
-            console.log('🔍 COMP DEBUG: Non-deleted replies:', directReplies.filter(r => !r.deletedAt).length);
-            console.log('🔍 COMP DEBUG: hasReplies:', mainThreadPost.hasReplies);
-            console.log('🔍 COMP DEBUG: replyCount:', mainThreadPost.replyCount);
-            if (directReplies.length > 0) {
-              console.log('🔍 COMP DEBUG: Direct replies details:', directReplies.map(r => ({ id: r.id, deletedAt: r.deletedAt, body: r.body })));
-            }
-            
-            // COMP METHOD: First check - only deletedAt field (EXACT COMP LOGIC)
-            if (mainThreadPost.deletedAt && !mainThreadPost.hasReplies) {
-              console.log('🔍 COMP DEBUG: SKIPPING deleted main thread without replies (deletedAt check):', mainThreadPost.id);
-              continue;
-            } else if (mainThreadPost.deletedAt && mainThreadPost.hasReplies) {
-              console.log('🔍 COMP DEBUG: SHOWING deleted main thread WITH replies (deletedAt check):', mainThreadPost.id);
-            }
-            
-            // COMP METHOD: Second check - Skip deleted main thread unless it has NON-DELETED replies (EXACT COMP LOGIC)
-            // Check both deletedAt field and [Deleted] body content
+            // COMP METHOD: Filtering logic
             const isMainThreadDeleted = mainThreadPost.deletedAt || (mainThreadPost.body && mainThreadPost.body.trim() === '[Deleted]');
             if (isMainThreadDeleted && !mainThreadPost.hasReplies) {
-              console.log('🔍 COMP DEBUG: SKIPPING deleted main thread without NON-DELETED replies:', mainThreadPost.id, 'hasReplies:', mainThreadPost.hasReplies, 'totalReplies:', directReplies.length, 'nonDeletedReplies:', directReplies.filter(r => !r.deletedAt).length);
-              continue; // Skip this deleted main thread, but continue with others
+              continue;
             }
             
-            // COMP METHOD: Debug when deleted main thread has non-deleted replies (EXACT COMP LOGIC)
-            if (mainThreadPost.deletedAt && mainThreadPost.hasReplies) {
-              console.log('🔍 COMP DEBUG: Deleted main thread WITH non-deleted replies:', mainThreadPost.id, 'hasReplies:', mainThreadPost.hasReplies, 'totalReplies:', directReplies.length, 'nonDeletedReplies:', directReplies.filter(r => !r.deletedAt).length);
+            // Ensure createdAt is set
+            if (!mainThreadPost.createdAt && mainThreadPost.created_at) {
+              mainThreadPost.createdAt = mainThreadPost.created_at;
             }
             
-            // Add the main thread post to chat
-            console.log('🔍 CHAT_LOAD: Adding main thread post:', mainThreadPost.id);
-            console.log('🔍 CHAT_LOAD: Main thread post details:', { id: mainThreadPost.id, body: mainThreadPost.body, createdAt: mainThreadPost.createdAt });
-            
-            // COMP METHOD: Add message to chat using window.addMessageToChat
+            // Check if enrichment is needed
+            const needsEnrichment = !mainThreadPost.author || !mainThreadPost.author?.avatarUrl;
+            if (needsEnrichment && typeof convertSupabaseMessageToAPIFormat === 'function') {
+              messagesToEnrich.push(mainThreadPost);
+            } else {
+              // Already has author data, cache it
+              enrichedMessages.set(mainThreadPost.id, mainThreadPost);
+            }
+          }
+          
+          // Step 2: Batch fetch all author data in parallel
+          console.log(`🔍 CHAT_LOAD: Batch enriching ${messagesToEnrich.length} messages in parallel...`);
+          const enrichmentPromises = messagesToEnrich.map(async (mainThreadPost) => {
             try {
-              console.log('🔍 CHAT_LOAD: About to call window.addMessageToChat with:', mainThreadPost.id);
-              console.log('🔍 CHAT_LOAD: window.addMessageToChat type:', typeof window.addMessageToChat);
-              console.log('🔍 CHAT_LOAD: window.addMessageToChat function:', window.addMessageToChat);
-              
-              // CRITICAL DEBUG: Check if message already exists in DOM
-              const existingMessage = document.querySelector(`.message[data-message-id="${mainThreadPost.id}"]`);
-              console.log('🔍 CHAT_LOAD: Existing message in DOM:', !!existingMessage);
-              if (existingMessage) {
-                console.log('🔍 CHAT_LOAD: Message already exists, wrapper will dedupe:', mainThreadPost.id);
-              }
-              
+              const enriched = await convertSupabaseMessageToAPIFormat(mainThreadPost);
+              // Preserve metadata
+              enriched.hasReplies = mainThreadPost.hasReplies;
+              enriched.replyCount = mainThreadPost.replyCount;
+              enriched.createdAt = enriched.createdAt || enriched.created_at || mainThreadPost.createdAt || mainThreadPost.created_at;
+              enrichedMessages.set(mainThreadPost.id, enriched);
+              return enriched;
+            } catch (error) {
+              console.error(`❌ CHAT_LOAD: Error enriching message ${mainThreadPost.id}:`, error);
+              // Fallback to original message
+              enrichedMessages.set(mainThreadPost.id, mainThreadPost);
+              return mainThreadPost;
+            }
+          });
+          
+          // Wait for all enrichments to complete
+          await Promise.all(enrichmentPromises);
+          console.log('✅ CHAT_LOAD: All author data fetched, adding messages to DOM...');
+          
+          // Step 3: Add messages synchronously in correct order (no async operations)
+          for (let i = 0; i < mainThreadPosts.length; i++) {
+            const mainThreadPost = mainThreadPosts[i];
+            
+            // Skip if already filtered out
+            if (!enrichedMessages.has(mainThreadPost.id)) {
+              continue;
+            }
+            
+            const postForRender = enrichedMessages.get(mainThreadPost.id);
+            
+            try {
               if (typeof window.addMessageToChat !== 'function') {
-                console.error('❌ CHAT_LOAD: window.addMessageToChat is not a function:', typeof window.addMessageToChat);
-                return;
+                console.error('❌ CHAT_LOAD: window.addMessageToChat is not a function');
+                continue;
               }
               
-              console.log('🔍 CHAT_LOAD: Calling window.addMessageToChat now...');
-              
-              // CRITICAL FIX: Remove loading indicator before adding first message
-              // This ensures messages are hidden until loaded
-              const loadingIndicator = chatMessages.querySelector('.chat-loading-indicator');
-              if (loadingIndicator) {
-                loadingIndicator.remove();
-                console.log('✅ CHAT_LOAD: Removed loading indicator before first message');
-              }
-
-              // ROOT CAUSE FIX: Ensure createdAt and hasReplies are preserved
-              if (!mainThreadPost.createdAt && mainThreadPost.created_at) {
-                mainThreadPost.createdAt = mainThreadPost.created_at;
-              }
-              
-              // Ensure author enrichment for history path before render
-              let postForRender = mainThreadPost;
-              try {
-                const needsEnrichment = !postForRender?.author || !postForRender?.author?.avatarUrl;
-                if (needsEnrichment && typeof convertSupabaseMessageToAPIFormat === 'function') {
-                  postForRender = await convertSupabaseMessageToAPIFormat(postForRender);
-                  // Preserve hasReplies and replyCount after conversion
-                  postForRender.hasReplies = mainThreadPost.hasReplies;
-                  postForRender.replyCount = mainThreadPost.replyCount;
-                  postForRender.createdAt = postForRender.createdAt || postForRender.created_at || mainThreadPost.createdAt || mainThreadPost.created_at;
-                }
-              } catch (_) {}
-              
-              // Call addMessageToChat with enriched message
+              // Add message synchronously (all data is already enriched)
               const result = await window.addMessageToChat(postForRender);
-              console.log('🔍 CHAT_LOAD: addMessageToChat returned:', result);
-              console.log('✅ CHAT_LOAD: Main thread post added to chat');
+              console.log('✅ CHAT_LOAD: Main thread post added to chat:', mainThreadPost.id);
             } catch (error) {
               console.error('❌ CHAT_LOAD: Error adding main thread post:', error);
-              console.error('❌ CHAT_LOAD: Error stack:', error.stack);
-              console.error('❌ CHAT_LOAD: Error message:', error.message);
-            }
-              
-              // CRITICAL DEBUG: Verify message was added to DOM
-              if (mainThreadPost.body === 'Google a' || mainThreadPost.body === 'Google b') {
-                const addedMessage = document.querySelector(`[data-message-id="${mainThreadPost.id}"]`);
-                console.log('🚨🚨🚨 CRITICAL DEBUG: Message in DOM after addMessageToChat:', !!addedMessage);
-                if (addedMessage) {
-                  console.log('🚨🚨🚨 CRITICAL DEBUG: Message element:', addedMessage);
-                  console.log('🚨🚨🚨 CRITICAL DEBUG: Message visible:', addedMessage.offsetHeight > 0);
-              }
             }
             
-            // CRITICAL FIX: DO NOT add replies in default mode - replies should ONLY show in focus mode
-            // Replies are loaded when user clicks on a message to enter focus mode
-            // This prevents replies from appearing in the default chat view
+            // Find direct replies for logging
+            const directReplies = sortedPosts.filter(p => p.parentId === mainThreadPost.id);
             console.log(`ℹ️ CHAT_LOAD: Skipping ${directReplies.length} replies in default mode (replies only show in focus mode)`);
           }
           
-          // Update message count tracking after processing all messages in this conversation
-          const allMessages = document.querySelectorAll('.message');
-          lastMessageCount = allMessages.length;
-          if (allMessages.length > 0) {
-            const lastMessage = allMessages[allMessages.length - 1];
-            lastMessageId = lastMessage.getAttribute('data-message-id');
-            console.log('🔍 CHAT_LOAD: Updated last message ID:', lastMessageId);
-          }
+          // All messages added in correct order for this conversation
+          console.log('✅ CHAT_LOAD: All messages added for conversation:', conversation.id);
         }
+      }
+      
+      // CRITICAL FIX: Restore visibility AFTER all conversations are processed, not inside the loop
+      // This ensures messages appear even if there are multiple conversations or errors
+      console.log('✅ CHAT_LOAD: All conversations processed, restoring visibility...');
+      
+      // UX FIX: Wait a brief moment for async operations (reactions, bookmarks) to start
+      // This prevents messages from appearing one at a time
+      await new Promise(resolve => setTimeout(resolve, 150));
+      console.log('✅ CHAT_LOAD: Brief delay completed to allow async operations');
+      
+      // Show all messages at once
+      chatMessages.style.visibility = originalChatVisibility || 'visible';
+      chatMessages.style.opacity = originalChatOpacity || '1';
+      // Restore position if it was changed (only restore if we have an original value)
+      if (originalChatPosition && originalChatPosition !== 'relative') {
+        chatMessages.style.position = originalChatPosition;
+      }
+      console.log('✅ CHAT_LOAD: All messages now visible');
+      
+      // Remove loading indicator after all messages are visible
+      const loadingIndicator = chatMessages.querySelector('.chat-loading-indicator');
+      if (loadingIndicator) {
+        loadingIndicator.remove();
+        console.log('✅ CHAT_LOAD: Removed loading indicator after all messages loaded and visible');
+      }
+      
+      // Update message count tracking after processing all messages
+      const allMessages = document.querySelectorAll('.message');
+      lastMessageCount = allMessages.length;
+      if (allMessages.length > 0) {
+        const lastMessage = allMessages[allMessages.length - 1];
+        lastMessageId = lastMessage.getAttribute('data-message-id');
+        console.log('🔍 CHAT_LOAD: Updated last message ID:', lastMessageId);
       }
     } else {
       // CRITICAL FIX: Remove loading indicator before showing placeholder
@@ -1061,7 +1096,14 @@ async function loadChatHistory(communityId = null) {
       if (loadingIndicator) {
         loadingIndicator.remove();
       }
-      chatMessages.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 20px;">Chat history appears here.</p>';
+      // CRITICAL FIX: Restore visibility for empty state
+      chatMessages.style.visibility = originalChatVisibility || 'visible';
+      chatMessages.style.opacity = originalChatOpacity || '1';
+      // Restore position if it was changed
+      if (originalChatPosition && originalChatPosition !== 'relative') {
+        chatMessages.style.position = originalChatPosition;
+      }
+      chatMessages.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 20px;">No messages yet. Be the first to start the conversation!</p>';
     }
     
     // CRITICAL FIX: Update lastLoadedUri after successfully loading messages
@@ -1079,9 +1121,40 @@ async function loadChatHistory(communityId = null) {
       lastLoadedUri = finalUri;
       console.log('CHAT_LOAD: Updated lastLoadedUri after error to:', finalUri);
     }
+    
+    // CRITICAL FIX: Restore visibility even on error to prevent messages from being permanently hidden
+    const chatMessages = document.querySelector('.chat-messages');
+    if (chatMessages) {
+      const originalChatVisibility = chatMessages.style.visibility || 'visible';
+      const originalChatOpacity = chatMessages.style.opacity || '1';
+      chatMessages.style.visibility = originalChatVisibility;
+      chatMessages.style.opacity = originalChatOpacity;
+      // Note: originalChatPosition might not be available in error handler, so we'll leave position as-is
+      console.log('✅ CHAT_LOAD: Restored visibility after error');
+      
+      // Remove loading indicator on error
+      const loadingIndicator = chatMessages.querySelector('.chat-loading-indicator');
+      if (loadingIndicator) {
+        loadingIndicator.remove();
+        console.log('✅ CHAT_LOAD: Removed loading indicator after error');
+      }
+    }
   } finally {
     // Reset loading flag
     isLoadingChatHistory = false;
+    
+    // CRITICAL FIX: Ensure visibility is always restored in finally block as last resort
+    const chatMessages = document.querySelector('.chat-messages');
+    if (chatMessages) {
+      const computedVisibility = window.getComputedStyle(chatMessages).visibility;
+      const computedOpacity = window.getComputedStyle(chatMessages).opacity;
+      if (computedVisibility === 'hidden' || computedOpacity === '0') {
+        console.warn('⚠️ CHAT_LOAD: Visibility still hidden in finally block, restoring...');
+        chatMessages.style.visibility = 'visible';
+        chatMessages.style.opacity = '1';
+        console.log('✅ CHAT_LOAD: Visibility restored in finally block');
+      }
+    }
   }
 }
 
@@ -1806,7 +1879,7 @@ function showTooltip(element, message, duration = 2000) {
   tooltip.className = 'share-tooltip';
   tooltip.textContent = message;
   tooltip.style.cssText = `
-    position: absolute;
+    position: fixed;
     background: #1f2937;
     color: white;
     padding: 8px 12px;
@@ -1818,6 +1891,9 @@ function showTooltip(element, message, duration = 2000) {
     pointer-events: none;
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
     animation: tooltipFadeIn 0.2s ease-out;
+    max-width: 300px;
+    overflow: hidden;
+    text-overflow: ellipsis;
   `;
   
   // Add animation
@@ -1837,22 +1913,42 @@ function showTooltip(element, message, duration = 2000) {
     document.head.appendChild(style);
   }
   
-  // Position tooltip above the button
+  // Position tooltip above the button using fixed positioning to prevent layout shift
   document.body.appendChild(tooltip);
   const rect = element.getBoundingClientRect();
-  tooltip.style.left = `${rect.left + (rect.width / 2) - (tooltip.offsetWidth / 2)}px`;
-  tooltip.style.top = `${rect.top - tooltip.offsetHeight - 8}px`;
+  const scrollX = window.pageXOffset || document.documentElement.scrollLeft;
+  const scrollY = window.pageYOffset || document.documentElement.scrollTop;
+  
+  // Calculate position relative to viewport (for fixed positioning)
+  const tooltipWidth = tooltip.offsetWidth || 100; // Estimate if not yet rendered
+  const tooltipHeight = tooltip.offsetHeight || 30;
+  let left = rect.left + scrollX + (rect.width / 2) - (tooltipWidth / 2);
+  let top = rect.top + scrollY - tooltipHeight - 8;
   
   // Adjust if tooltip goes off screen
+  if (left < scrollX + 8) {
+    left = scrollX + 8;
+  }
+  if (left + tooltipWidth > scrollX + window.innerWidth - 8) {
+    left = scrollX + window.innerWidth - tooltipWidth - 8;
+  }
+  if (top < scrollY + 8) {
+    top = rect.bottom + scrollY + 8; // Show below if no room above
+  }
+  
+  tooltip.style.left = `${left}px`;
+  tooltip.style.top = `${top}px`;
+  
+  // Recalculate after tooltip is positioned to ensure accurate placement
   const tooltipRect = tooltip.getBoundingClientRect();
   if (tooltipRect.left < 8) {
-    tooltip.style.left = '8px';
+    tooltip.style.left = `${scrollX + 8}px`;
   }
   if (tooltipRect.right > window.innerWidth - 8) {
-    tooltip.style.left = `${window.innerWidth - tooltipRect.width - 8}px`;
+    tooltip.style.left = `${scrollX + window.innerWidth - tooltipRect.width - 8}px`;
   }
   if (tooltipRect.top < 8) {
-    tooltip.style.top = `${rect.bottom + 8}px`;
+    tooltip.style.top = `${rect.bottom + scrollY + 8}px`;
   }
   
   // Remove tooltip after duration
@@ -1871,13 +1967,51 @@ async function handleCopyLink(message) {
     // Get the actual page URL where the message exists
     let pageUrl = null;
     
-    // Try to get page URL from message data first
-    if (message.pageUrl || message.conversation?.page?.url) {
+    // Helper function to clean URL - removes Google's transient params
+    // Video sites (YouTube, etc.) don't use Google's params, so we can safely remove them for all sites
+    const cleanPageUrl = (url) => {
+      try {
+        const urlObj = new URL(url);
+        
+        // Remove Google's transient query parameters (they're not needed for share links)
+        // Video sites don't use these params anyway, so safe to remove for all sites
+        const transientParams = ['zx', 'no_sw_cr', 'gws_rd', 'source', 'ei', 'ved', 'gs_lcp', 'oq', 'aqs'];
+        const params = new URLSearchParams(urlObj.search);
+        
+        // Remove transient parameters
+        transientParams.forEach(param => params.delete(param));
+        
+        // Rebuild search string
+        urlObj.search = params.toString();
+        
+        // Always remove hash (we'll add our own message hash)
+        urlObj.hash = '';
+        return urlObj.toString();
+      } catch (e) {
+        console.warn('🔗 SHARE: Could not clean page URL:', e);
+        return url; // Return original if cleaning fails
+      }
+    };
+    
+    // Priority order for page URL (prevents Google's transient params):
+    // 1. currentUrlData.rawUrl (captured before page modifications)
+    // 2. currentUrlData.canonicalUrl (fallback)
+    // 3. message.pageUrl (from message data)
+    // 4. active tab URL (cleaned to remove transient params)
+    
+    if (window.currentUrlData?.rawUrl) {
+      // rawUrl is captured early, before Google adds transient params
+      pageUrl = window.currentUrlData.rawUrl;
+      pageUrl = cleanPageUrl(pageUrl);
+      console.log('🔗 SHARE: Using page URL from currentUrlData.rawUrl (captured before Google modifications):', pageUrl);
+    } else if (window.currentUrlData?.canonicalUrl) {
+      pageUrl = window.currentUrlData.canonicalUrl;
+      pageUrl = cleanPageUrl(pageUrl);
+      console.log('🔗 SHARE: Using page URL from currentUrlData.canonicalUrl (cleaned):', pageUrl);
+    } else if (message.pageUrl || message.conversation?.page?.url) {
       pageUrl = message.pageUrl || message.conversation.page.url;
-      console.log('🔗 SHARE: Using page URL from message data:', pageUrl);
-    } else if (window.currentUrlData?.rawUrl || window.currentUrlData?.canonicalUrl) {
-      pageUrl = window.currentUrlData.rawUrl || window.currentUrlData.canonicalUrl;
-      console.log('🔗 SHARE: Using page URL from currentUrlData:', pageUrl);
+      pageUrl = cleanPageUrl(pageUrl);
+      console.log('🔗 SHARE: Using page URL from message data (cleaned):', pageUrl);
     } else {
       // Fallback: Try to get from active tab
       try {
@@ -1886,11 +2020,9 @@ async function handleCopyLink(message) {
             chrome.tabs.query({ active: true, currentWindow: true }, resolve);
           });
           if (tabs && tabs.length > 0 && tabs[0].url) {
-            // Remove hash from tab URL to get base page URL
-            const tabUrl = new URL(tabs[0].url);
-            tabUrl.hash = '';
-            pageUrl = tabUrl.toString();
-            console.log('🔗 SHARE: Using page URL from active tab:', pageUrl);
+            // Clean URL - removes transient params but keeps important ones (like YouTube v=)
+            pageUrl = cleanPageUrl(tabs[0].url);
+            console.log('🔗 SHARE: Using page URL from active tab (cleaned):', pageUrl);
           }
         }
       } catch (tabError) {
@@ -1899,10 +2031,8 @@ async function handleCopyLink(message) {
       
       // Last fallback: use window.location if not in extension context
       if (!pageUrl && !window.location.href.includes('chrome-extension://')) {
-        const urlObj = new URL(window.location.href);
-        urlObj.hash = '';
-        pageUrl = urlObj.toString();
-        console.log('🔗 SHARE: Using window.location as fallback:', pageUrl);
+        pageUrl = cleanPageUrl(window.location.href);
+        console.log('🔗 SHARE: Using window.location as fallback (cleaned):', pageUrl);
       }
     }
     
@@ -1914,7 +2044,12 @@ async function handleCopyLink(message) {
     // Format: share.canopi.live?message=ID&page=ENCODED_PAGE_URL&conversation=ID
     const resolverBase = 'https://share.canopi.live';
     const encodedPageUrl = encodeURIComponent(pageUrl);
-    const shareUrl = `${resolverBase}?message=${message.id}&page=${encodedPageUrl}&conversation=${encodeURIComponent(message.conversationId || '')}`;
+    // Only include conversation if it exists and is not 'conv-undefined'
+    const conversationId = message.conversationId || message.conversation_id || '';
+    const conversationParam = conversationId && conversationId !== 'conv-undefined' && conversationId !== 'undefined'
+      ? `&conversation=${encodeURIComponent(conversationId)}`
+      : '';
+    const shareUrl = `${resolverBase}?message=${message.id}&page=${encodedPageUrl}${conversationParam}`;
     
     console.log('🔗 SHARE: Generated resolver URL:', shareUrl);
     
@@ -5411,7 +5546,19 @@ async function handleMessageFocus(message) {
   const currentPageId = window.currentUrlData?.pageId || window.currentPage?.pageId;
   const communityId = mainMessage.communityId || message.communityId || (window.activeCommunities && window.activeCommunities[0]) || 'comm-001';
   
-  if (currentPageId && window.supabase && (mainMessage.hasReplies || mainMessage.replyCount > 0)) {
+  // CRITICAL FIX: Always try to load replies if message has replies flag, even if replyCount is 0
+  const shouldLoadReplies = mainMessage.hasReplies || (mainMessage.replyCount && mainMessage.replyCount > 0);
+  console.log('🔍 DIAGNOSTIC: Loading replies for focus mode');
+  console.log('🔍 DIAGNOSTIC: Message ID:', mainMessage.id);
+  console.log('🔍 DIAGNOSTIC: hasReplies:', mainMessage.hasReplies);
+  console.log('🔍 DIAGNOSTIC: replyCount:', mainMessage.replyCount);
+  console.log('🔍 DIAGNOSTIC: shouldLoadReplies:', shouldLoadReplies);
+  console.log('🔍 DIAGNOSTIC: currentPageId:', currentPageId);
+  console.log('🔍 DIAGNOSTIC: communityId:', communityId);
+  console.log('🔍 DIAGNOSTIC: supabase available:', !!window.supabase);
+  console.log('🔍 DIAGNOSTIC: ReplyLoader available:', !!(window.ReplyLoader && typeof window.ReplyLoader.loadAllReplies === 'function'));
+  
+  if (currentPageId && window.supabase && shouldLoadReplies) {
     try {
       // MODULAR ARCHITECTURE: Use ReplyLoader utility for reply loading
       if (window.ReplyLoader && typeof window.ReplyLoader.loadAllReplies === 'function') {
@@ -5419,52 +5566,86 @@ async function handleMessageFocus(message) {
         
         if (allRepliesData && allRepliesData.length > 0) {
           console.log(`✅ FOCUS: Found ${allRepliesData.length} replies for main message ${mainMessage.id}`);
+          console.log('🔍 DIAGNOSTIC: Processing', allRepliesData.length, 'replies...');
           
           for (const replyData of allRepliesData) {
             // MODULAR ARCHITECTURE: Use ReplyLoader to format reply
             const reply = await window.ReplyLoader.formatReply(replyData, mainMessage, currentPageId, communityId);
+            console.log('🔍 DIAGNOSTIC: Formatted reply:', reply.id);
             
             // CRITICAL FIX: Ensure input field exists before loading any replies
             const inputField = chatMessages.querySelector('.focus-message-input-container');
             if (!inputField) {
               console.warn(`⚠️ FOCUS: Input field not ready, skipping reply ${reply.id} - will load after input is ready`);
+              console.log('🔍 DIAGNOSTIC: Input field missing, skipping reply');
               continue; // Skip this reply, will be loaded when input is ready
             }
             
             // CRITICAL FIX: Check if reply already exists
             const existingReply = chatMessages.querySelector(`[data-message-id="${reply.id}"]`);
             if (!existingReply) {
-              // CRITICAL FIX: Hide reply initially, will be shown after input field is confirmed ready
+              // CRITICAL FIX: Add reply immediately - don't hide it
+              console.log('🔍 DIAGNOSTIC: Reply does not exist, adding to focus mode...');
               await addMessageToFocus(reply, true);
-              // Find the reply element after adding it
-              await new Promise(resolve => requestAnimationFrame(resolve));
-              const replyElement = chatMessages.querySelector(`[data-message-id="${reply.id}"]`);
-              if (replyElement) {
-                // Hide reply until input field is confirmed ready
-                replyElement.style.display = 'none';
-                replyElement.dataset.pendingVisibility = 'true';
-                console.log(`⏸️ FOCUS: Reply ${reply.id} hidden pending input field confirmation`);
+              console.log(`✅ FOCUS: Added reply ${reply.id} to focus mode`);
+              
+              // Verify it was added and is visible
+              const addedReply = chatMessages.querySelector(`[data-message-id="${reply.id}"]`);
+              if (addedReply) {
+                const width = addedReply.offsetWidth;
+                const height = addedReply.offsetHeight;
+                const display = addedReply.style.display;
+                console.log('🔍 DIAGNOSTIC: Reply added, dimensions:', width, '×', height, 'display:', display || 'default');
+                if (width === 0 || height === 0) {
+                  console.log('⚠️ DIAGNOSTIC: Reply has zero dimensions, forcing visibility...');
+                  addedReply.style.display = 'flex';
+                  addedReply.style.visibility = 'visible';
+                  addedReply.style.opacity = '1';
+                }
+              } else {
+                console.log('❌ DIAGNOSTIC: Reply was not added to DOM');
               }
             } else {
-              // CRITICAL FIX: If reply exists, ensure it's hidden until input is ready
-              if (existingReply.dataset.pendingVisibility === 'true') {
-                // Keep it hidden, will be shown later
-                console.log(`⏸️ FOCUS: Existing reply ${reply.id} still pending visibility`);
-              } else {
-                // Check dimensions and make visible if input is ready
-                const width = existingReply.offsetWidth;
-                const height = existingReply.offsetHeight;
-                if (width === 0 || height === 0) {
-                  console.log(`⚠️ FOCUS: Reply ${reply.id} exists but has zero dimensions (${width}px × ${height}px), making visible`);
-                  if (window.MessageVisibilityManager && typeof window.MessageVisibilityManager.showReply === 'function') {
-                    await window.MessageVisibilityManager.showReply(existingReply, reply.id);
-                  }
+              // CRITICAL FIX: If reply exists, ensure it's visible
+              console.log('🔍 DIAGNOSTIC: Reply exists, checking visibility...');
+              const width = existingReply.offsetWidth;
+              const height = existingReply.offsetHeight;
+              const display = existingReply.style.display;
+              const pendingVisibility = existingReply.dataset.pendingVisibility;
+              console.log('🔍 DIAGNOSTIC: Existing reply state - display:', display, 'dimensions:', width, '×', height, 'pendingVisibility:', pendingVisibility);
+              
+              if (existingReply.style.display === 'none' || existingReply.dataset.pendingVisibility === 'true') {
+                existingReply.style.display = '';
+                existingReply.removeAttribute('data-pending-visibility');
+                console.log(`✅ FOCUS: Made existing reply ${reply.id} visible`);
+                console.log('🔍 DIAGNOSTIC: Reply visibility updated');
+              }
+              // Check dimensions and make visible if needed
+              if (width === 0 || height === 0) {
+                console.log(`⚠️ FOCUS: Reply ${reply.id} exists but has zero dimensions (${width}px × ${height}px), making visible`);
+                if (window.MessageVisibilityManager && typeof window.MessageVisibilityManager.showReply === 'function') {
+                  await window.MessageVisibilityManager.showReply(existingReply, reply.id);
+                  console.log('🔍 DIAGNOSTIC: Used MessageVisibilityManager.showReply');
+                } else {
+                  // Fallback: Force display
+                  existingReply.style.display = 'flex';
+                  existingReply.style.visibility = 'visible';
+                  existingReply.style.opacity = '1';
+                  console.log('🔍 DIAGNOSTIC: Used fallback to force display');
                 }
+                // Verify after fix
+                const afterWidth = existingReply.offsetWidth;
+                const afterHeight = existingReply.offsetHeight;
+                console.log('🔍 DIAGNOSTIC: After fix - dimensions:', afterWidth, '×', afterHeight);
+              } else {
+                console.log('🔍 DIAGNOSTIC: Reply already visible with proper dimensions');
               }
             }
           }
+          console.log('🔍 DIAGNOSTIC: Finished processing all replies');
         } else {
           console.log(`ℹ️ FOCUS: No replies found for main message ${mainMessage.id}`);
+          console.log('🔍 DIAGNOSTIC: No replies to display');
         }
       } else {
         console.warn(`⚠️ FOCUS: ReplyLoader utility not available, falling back to inline logic`);
@@ -5475,7 +5656,13 @@ async function handleMessageFocus(message) {
           .eq('parent_id', mainMessage.id)
           .eq('page_id', currentPageId)
           .eq('community_id', communityId)
+          .is('deleted_at', null) // CRITICAL FIX: Only load non-deleted replies
           .order('created_at', { ascending: true });
+        
+        console.log(`🔍 FOCUS: Fallback query found ${directReplies?.length || 0} replies`);
+        if (error) {
+          console.error(`❌ FOCUS: Fallback query error:`, error);
+        }
         
         if (error) {
           console.error(`❌ FOCUS: Error loading replies for ${mainMessage.id}:`, error);
@@ -5528,9 +5715,11 @@ async function handleMessageFocus(message) {
       await Promise.all(Array.from(allReplies).map(async reply => {
         const messageId = reply.dataset.messageId || reply.getAttribute('data-message-id') || 'unknown';
         
-        // CRITICAL FIX: If reply was hidden pending input field, show it now
-        if (reply.dataset.pendingVisibility === 'true') {
-          reply.style.display = 'flex';
+        // CRITICAL FIX: Always ensure reply is visible
+        if (reply.dataset.pendingVisibility === 'true' || reply.style.display === 'none') {
+          reply.style.display = '';
+          reply.style.visibility = 'visible';
+          reply.style.opacity = '1';
           reply.removeAttribute('data-pending-visibility');
           console.log(`✅ FOCUS: Showing pending reply ${messageId} (input field is ready)`);
         }
@@ -5539,6 +5728,10 @@ async function handleMessageFocus(message) {
         const height = reply.offsetHeight;
         if (width === 0 || height === 0) {
           console.log(`🔍 FOCUS: Making reply ${messageId} visible (zero dimensions: ${width}px × ${height}px)`);
+          // Force display
+          reply.style.display = 'flex';
+          reply.style.visibility = 'visible';
+          reply.style.opacity = '1';
           if (window.MessageVisibilityManager && typeof window.MessageVisibilityManager.showReply === 'function') {
             await window.MessageVisibilityManager.showReply(reply, messageId);
           }
