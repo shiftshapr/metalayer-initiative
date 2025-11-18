@@ -1,0 +1,61 @@
+// Dynamic Pricing Schema
+// Add these models to support dynamic token-based pricing
+
+/// Dynamic pricing configuration for resources
+model DynamicPricingConfig {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  resourceType      String    // e.g., "cursor", "presence", "feature"
+  resourceId        String?   // Optional: specific resource instance (e.g., page ID)
+  freeTierLimit     Int       @default(3) // Number of free users
+  maxCapacity       Int       @default(25) // Maximum capacity
+  pricingTiers      Json      // Array of PricingTier objects
+  optimizationEnabled Boolean @default(true)
+  metadata          Json?     // Additional configuration
+  created_at        DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime  @default(now()) @db.Timestamptz(6)
+
+  @@unique([resourceType, resourceId])
+  @@index([resourceType])
+  @@index([resourceId])
+}
+
+/// Resource usage tracking
+model ResourceUsage {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  resourceType      String    // e.g., "cursor", "presence"
+  resourceId        String?   // Optional: specific resource instance
+  userId            String    @db.Uuid
+  isActive          Boolean   @default(true)
+  expiresAt         DateTime  @db.Timestamptz(6) // When usage expires
+  endedAt           DateTime? @db.Timestamptz(6)
+  costPaid          Float?    @db.Decimal(20, 8) // Cost paid for this usage
+  created_at        DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at         DateTime  @default(now()) @db.Timestamptz(6)
+
+  AppUser           AppUser   @relation("ResourceUsage", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([resourceType, resourceId])
+  @@index([userId])
+  @@index([isActive])
+  @@index([expiresAt])
+  @@index([resourceType, resourceId, isActive])
+}
+
+/// Pricing optimization data for ML/analytics
+model PricingOptimizationData {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  resourceType      String
+  resourceId        String?
+  timestamp         DateTime  @default(now()) @db.Timestamptz(6)
+  currentUsage      Int       // Current usage count
+  currentCost       Float     @db.Decimal(20, 8) // Current average cost
+  demandLevel       Float     @db.Decimal(3, 2) // 0.00 to 1.00
+  availabilityLevel Float     @db.Decimal(3, 2) // 0.00 to 1.00
+  conversionRate    Float?    @db.Decimal(3, 2) // 0.00 to 1.00
+  metadata          Json?     // Additional data
+
+  @@index([resourceType, resourceId])
+  @@index([timestamp(sort: Desc)])
+  @@index([resourceType, timestamp(sort: Desc)])
+}
+

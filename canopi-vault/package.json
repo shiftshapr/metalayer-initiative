@@ -1,0 +1,49 @@
+{
+  "name": "@canopi/vault",
+  "version": "0.1.0",
+  "description": "Canopi Personal Vault - User-controlled encrypted storage with Web3Auth integration",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest",
+    "lint": "eslint src --ext .ts",
+    "type-check": "tsc --noEmit"
+  },
+  "keywords": [
+    "vault",
+    "encryption",
+    "web3auth",
+    "wallet",
+    "data-sovereignty",
+    "personal-storage"
+  ],
+  "author": "Canopi",
+  "license": "MIT",
+  "dependencies": {
+    "@web3auth/modal": "^7.0.0",
+    "@web3auth/base": "^7.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0",
+    "vitest": "^1.0.0",
+    "eslint": "^8.0.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0"
+  },
+  "peerDependencies": {
+    "ethers": "^6.0.0"
+  }
+}
+
+
+

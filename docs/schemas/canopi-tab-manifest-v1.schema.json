@@ -1,0 +1,517 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Canopi Sidebar Tab Module Manifest",
+  "description": "Schema for Canopi Sidebar Tab SDK module manifests",
+  "type": "object",
+  "required": [
+    "manifestVersion",
+    "id",
+    "name",
+    "version",
+    "description",
+    "author",
+    "store",
+    "sdk",
+    "host",
+    "tab",
+    "entry"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "format": "uri"
+    },
+    "manifestVersion": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "Manifest schema version"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(\\.[a-z0-9-]+)+$|^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+      "description": "Unique module identifier (reverse-domain or UUID)"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100,
+      "description": "Human-readable module name"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+(-[a-zA-Z0-9]+)?$",
+      "description": "Module version (semver)"
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500,
+      "description": "Brief module description"
+    },
+    "author": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "email": {
+          "type": "string",
+          "format": "email"
+        },
+        "url": {
+          "type": "string",
+          "format": "uri"
+        }
+      }
+    },
+    "store": {
+      "type": "object",
+      "required": ["packageName", "category", "icon"],
+      "properties": {
+        "packageName": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]+$",
+          "description": "Unique store package identifier"
+        },
+        "category": {
+          "type": "string",
+          "enum": ["utility", "productivity", "archive", "analytics", "social", "developer", "other"]
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "icon": {
+          "type": "object",
+          "required": ["16", "48", "128"],
+          "properties": {
+            "16": {
+              "type": "string"
+            },
+            "48": {
+              "type": "string"
+            },
+            "128": {
+              "type": "string"
+            }
+          }
+        },
+        "screenshots": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uri"
+          }
+        },
+        "homepage": {
+          "type": "string",
+          "format": "uri"
+        },
+        "repository": {
+          "type": "string",
+          "format": "uri"
+        },
+        "license": {
+          "type": "string"
+        }
+      }
+    },
+    "sdk": {
+      "type": "object",
+      "required": ["minimumVersion"],
+      "properties": {
+        "minimumVersion": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+(-[a-zA-Z0-9]+)?$"
+        },
+        "targetVersion": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+(-[a-zA-Z0-9]+)?$"
+        },
+        "compatibleVersions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^\\d+\\.\\d+\\.\\d+(-[a-zA-Z0-9]+)?$"
+          }
+        }
+      }
+    },
+    "host": {
+      "type": "object",
+      "required": ["minimumVersion"],
+      "properties": {
+        "minimumVersion": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+(-[a-zA-Z0-9]+)?$"
+        },
+        "requiredFeatures": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "tab": {
+      "type": "object",
+      "required": ["id", "title", "icon"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]+$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 50
+        },
+        "icon": {
+          "type": "string"
+        },
+        "order": {
+          "type": "number"
+        },
+        "badge": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "type": {
+              "type": "string",
+              "enum": ["count", "dot", "text"]
+            }
+          }
+        },
+        "defaultOpen": {
+          "type": "boolean"
+        },
+        "persistent": {
+          "type": "boolean"
+        }
+      }
+    },
+    "entry": {
+      "type": "object",
+      "required": ["main"],
+      "properties": {
+        "main": {
+          "type": "string"
+        },
+        "styles": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "assets": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "permissions": {
+      "type": "object",
+      "properties": {
+        "required": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "optional": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "permissionScopes": {
+      "type": "object",
+      "patternProperties": {
+        "^[a-z0-9:]+$": {
+          "type": "object",
+          "required": ["description", "required"],
+          "properties": {
+            "description": {
+              "type": "string"
+            },
+            "required": {
+              "type": "boolean"
+            },
+            "userPrompt": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "config": {
+      "type": "object",
+      "properties": {
+        "settings": {
+          "type": "object",
+          "patternProperties": {
+            "^[a-z0-9_]+$": {
+              "type": "object",
+              "required": ["type", "label"],
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "enum": ["string", "number", "boolean", "select", "multiselect", "json"]
+                },
+                "label": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "default": true,
+                "required": {
+                  "type": "boolean"
+                },
+                "options": {
+                  "type": "array"
+                },
+                "validation": {
+                  "type": "object",
+                  "properties": {
+                    "min": {
+                      "type": "number"
+                    },
+                    "max": {
+                      "type": "number"
+                    },
+                    "pattern": {
+                      "type": "string"
+                    },
+                    "enum": {
+                      "type": "array"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "lifecycle": {
+      "type": "object",
+      "properties": {
+        "onInit": {
+          "type": "string"
+        },
+        "onActivate": {
+          "type": "string"
+        },
+        "onDeactivate": {
+          "type": "string"
+        },
+        "onDestroy": {
+          "type": "string"
+        }
+      }
+    },
+    "apis": {
+      "type": "object",
+      "properties": {
+        "bridge": {
+          "type": "object",
+          "properties": {
+            "events": {
+              "type": "object",
+              "patternProperties": {
+                "^[a-z0-9:]+$": {
+                  "type": "object",
+                  "required": ["type", "direction"],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "enum": ["request", "response", "notification"]
+                    },
+                    "direction": {
+                      "type": "string",
+                      "enum": ["host->tab", "tab->host", "bidirectional"]
+                    },
+                    "schema": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "type": "object",
+      "properties": {
+        "modules": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "external": {
+          "type": "object",
+          "patternProperties": {
+            "^[a-z0-9-]+$": {
+              "type": "object",
+              "required": ["version"],
+              "properties": {
+                "version": {
+                  "type": "string"
+                },
+                "cdn": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "security": {
+      "type": "object",
+      "properties": {
+        "contentSecurityPolicy": {
+          "type": "object",
+          "properties": {
+            "scriptSrc": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "connectSrc": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "styleSrc": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "imgSrc": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "signedBy": {
+          "type": "string"
+        },
+        "signature": {
+          "type": "string"
+        }
+      }
+    },
+    "telemetry": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "events": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "diagnostics": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "level": {
+              "type": "string",
+              "enum": ["none", "error", "warn", "info", "debug"]
+            }
+          }
+        }
+      }
+    },
+    "localization": {
+      "type": "object",
+      "properties": {
+        "defaultLocale": {
+          "type": "string",
+          "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
+        },
+        "supportedLocales": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
+          }
+        },
+        "messages": {
+          "type": "object",
+          "patternProperties": {
+            "^[a-z]{2}(-[A-Z]{2})?$": {
+              "type": "object",
+              "patternProperties": {
+                "^.+$": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "build": {
+      "type": "object",
+      "properties": {
+        "target": {
+          "type": "string",
+          "enum": ["es2015", "es2017", "es2020", "esnext"]
+        },
+        "minify": {
+          "type": "boolean"
+        },
+        "sourceMap": {
+          "type": "boolean"
+        }
+      }
+    },
+    "updates": {
+      "type": "object",
+      "properties": {
+        "autoUpdate": {
+          "type": "boolean"
+        },
+        "updateUrl": {
+          "type": "string",
+          "format": "uri"
+        },
+        "rollbackOnError": {
+          "type": "boolean"
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}
+
+
+
+
+

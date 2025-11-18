@@ -1714,9 +1714,14 @@ html[data-theme="dark"] .focus-message-input-container {
 }
 
 /* Action dropdown - hidden by default, moved to body when shown */
+/* FIX: Action dropdown with boundary detection support */
 .action-dropdown {
   display: none;
   pointer-events: auto !important;
+  position: absolute;
+  z-index: 1000;
+  /* Allow JavaScript to adjust position */
+  min-width: 150px;
 }
 
 /* CRITICAL FIX: Dropdown visible when explicitly shown */
@@ -4314,6 +4319,39 @@ div.message.message-reply.visible div.message-content-wrapper div.message-header
 
 /* --- Mini-Profile Modal --- */
 /* Keep previous basic modal styles for now, can refine later */
+/* FIX: Dark treatment for visibility modal */
+body.dark #visibility-access-modal .modal-content,
+[data-theme="dark"] #visibility-access-modal .modal-content {
+  background: var(--background-secondary, #1e1e1e);
+  color: var(--text-primary, #ffffff);
+  border: 1px solid var(--border-color, #333);
+}
+
+body.dark #visibility-access-modal .modal-header,
+[data-theme="dark"] #visibility-access-modal .modal-header {
+  background: var(--background-secondary, #1e1e1e);
+  color: var(--text-primary, #ffffff);
+  border-bottom: 1px solid var(--border-color, #333);
+}
+
+body.dark #visibility-access-modal .modal-body,
+[data-theme="dark"] #visibility-access-modal .modal-body {
+  color: var(--text-primary, #ffffff);
+}
+
+body.dark #visibility-access-modal #go-visible-btn,
+[data-theme="dark"] #visibility-access-modal #go-visible-btn {
+  background: var(--primary-color, #007bff);
+  color: #ffffff;
+}
+
+body.dark #visibility-access-modal #cancel-visibility-btn,
+[data-theme="dark"] #visibility-access-modal #cancel-visibility-btn {
+  background: var(--background-tertiary, #2d2d2d);
+  color: var(--text-primary, #ffffff);
+  border: 1px solid var(--border-color, #333);
+}
+
 .modal {
   position: fixed; /* Stay in place */
   z-index: 1000; /* Sit on top */
@@ -4520,3 +4558,268 @@ div.message.message-reply.visible div.message-content-wrapper div.message-header
 .message-reply.visible .action-dots {
   opacity: 1 !important;
 } 
+/* ============================================================================
+   MESSAGE LOADING OVERLAY & LAZY LOADING
+   ============================================================================ */
+
+/* Overlay spinner - full screen loading overlay */
+.message-loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+.message-loading-overlay.visible {
+  opacity: 1;
+  pointer-events: all;
+}
+
+.message-loading-overlay.hiding {
+  opacity: 0;
+}
+
+.message-loading-spinner-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 32px;
+  background: var(--background-primary, #ffffff);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+}
+
+.message-loading-spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid var(--border-color, #e5e7eb);
+  border-top-color: var(--primary-color, #3b82f6);
+  border-radius: 50%;
+  animation: message-spinner-rotate 0.8s linear infinite;
+}
+
+.message-loading-message {
+  color: var(--text-primary, #1f2937);
+  font-size: 14px;
+  font-weight: 500;
+  text-align: center;
+}
+
+@keyframes message-spinner-rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Lazy loading sentinel - invisible element at bottom of message list */
+.message-load-sentinel {
+  height: 1px;
+  width: 100%;
+  margin: 20px 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .message-loading-spinner-container {
+    background: var(--background-primary, #1f2937);
+  }
+  
+  .message-loading-message {
+    color: var(--text-primary, #f9fafb);
+  }
+  
+  .message-loading-overlay {
+    background: rgba(0, 0, 0, 0.85);
+  }
+}
+
+
+/* ============================================================================
+   UNIFIED MESSAGE DISPLAY - FOCUS MODES
+   ============================================================================ */
+
+/* Focus mode containers */
+.chat-messages.focus-mode-parent {
+  /* Parent in focus - emphasizes parent message */
+}
+
+.chat-messages.focus-mode-child {
+  /* Child in focus - highlights selected child */
+}
+
+.chat-messages.focus-mode-default {
+  /* Default view - standard message list */
+}
+
+/* Parent in focus styling */
+.message.parent-in-focus {
+  padding: 20px;
+  margin-bottom: 16px;
+  background: var(--background-primary, #ffffff);
+  border: 2px solid var(--primary-color, #3b82f6);
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.children-collapsed {
+  margin-top: 16px;
+  padding-left: 24px;
+  border-left: 2px solid var(--border-color, #e5e7eb);
+}
+
+.children-collapsed .message.collapsed {
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  opacity: 0.7;
+  font-size: 0.9em;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.children-collapsed .message.collapsed:hover {
+  opacity: 1;
+  background: var(--background-secondary, #f9fafb);
+}
+
+/* Child in focus styling */
+.parent-header-compact {
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  background: var(--background-secondary, #f9fafb);
+  border-radius: 8px;
+  border-left: 4px solid var(--primary-color, #3b82f6);
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.parent-header-compact:hover {
+  background: var(--background-tertiary, #f3f4f6);
+}
+
+.parent-header-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.9em;
+}
+
+.parent-author {
+  font-weight: 600;
+  color: var(--text-primary, #1f2937);
+}
+
+.parent-content-preview {
+  color: var(--text-secondary, #6b7280);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.message.child-in-focus {
+  padding: 20px;
+  margin: 16px 0;
+  background: var(--background-primary, #ffffff);
+  border: 2px solid var(--accent-color, #10b981);
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
+  position: relative;
+}
+
+.message.child-in-focus::before {
+  content: 'Focused';
+  position: absolute;
+  top: -12px;
+  left: 20px;
+  background: var(--accent-color, #10b981);
+  color: white;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 0.75em;
+  font-weight: 600;
+}
+
+/* Top reply chain styling */
+.top-reply-chain {
+  margin-top: 12px;
+  padding-left: 24px;
+  position: relative;
+}
+
+.reply-chain-line {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--border-color, #e5e7eb);
+}
+
+.top-reply-content {
+  padding: 12px;
+  background: var(--background-secondary, #f9fafb);
+  border-radius: 8px;
+  margin-left: 12px;
+}
+
+.top-reply-author {
+  font-weight: 600;
+  font-size: 0.9em;
+  color: var(--text-primary, #1f2937);
+  margin-bottom: 4px;
+}
+
+.top-reply-text {
+  font-size: 0.9em;
+  color: var(--text-secondary, #6b7280);
+  line-height: 1.4;
+}
+
+.show-more-replies-btn {
+  margin-top: 8px;
+  padding: 4px 12px;
+  background: transparent;
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: 4px;
+  color: var(--primary-color, #3b82f6);
+  font-size: 0.85em;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.show-more-replies-btn:hover {
+  background: var(--primary-color, #3b82f6);
+  color: white;
+}
+
+/* Highlighted message */
+.message.highlighted {
+  animation: message-highlight 2s ease;
+  border-left: 4px solid var(--accent-color, #10b981);
+}
+
+@keyframes message-highlight {
+  0% {
+    background: rgba(16, 185, 129, 0.2);
+  }
+  100% {
+    background: transparent;
+  }
+}
+

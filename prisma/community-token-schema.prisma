@@ -1,0 +1,230 @@
+// Community-Specific Token Launch Schema
+// Add these models to support per-community token launches
+
+/// Community token launch configuration
+model CommunityTokenLaunch {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  communityId       String    @db.Uuid
+  tokenName         String
+  tokenSymbol       String
+  chain             String?   // "base", "solana", "ethereum", etc.
+  contractAddress   String?   // On-chain contract address
+  bondingCurveAddress String? // Bonding curve contract address
+  status            String    @default("pending") // "pending", "milestone_tracking", "active", "dex_transitioned", "paused"
+  launchDate        DateTime? @db.Timestamptz(6)
+  dexTransitionDate DateTime? @db.Timestamptz(6)
+  metadata          Json?     // Token metadata (logo, description, etc.)
+  created_at        DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime  @default(now()) @db.Timestamptz(6)
+
+  Community         MetaCommunity @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  Milestones        CommunityTokenMilestone[]
+  Transactions      CommunityTokenTransaction[]
+
+  @@unique([communityId])
+  @@index([status])
+  @@index([chain])
+}
+
+/// Community-specific milestone tracking
+model CommunityTokenMilestone {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tokenLaunchId     String    @db.Uuid
+  milestoneKey      String    // e.g., "community_engagement", "governance_readiness"
+  name              String
+  description       String?   @db.Text
+  category          String
+  targetValue       String?   // JSON string
+  currentValue      String?   // JSON string
+  isComplete        Boolean   @default(false)
+  evidenceUrl       String?
+  evidenceHash      String?
+  verifiedBy        String?   @db.Uuid
+  verifiedAt        DateTime? @db.Timestamptz(6)
+  created_at        DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime  @default(now()) @db.Timestamptz(6)
+
+  TokenLaunch       CommunityTokenLaunch @relation(fields: [tokenLaunchId], references: [id], onDelete: Cascade)
+  AppUser           AppUser?            @relation(fields: [verifiedBy], references: [id])
+
+  @@unique([tokenLaunchId, milestoneKey])
+  @@index([tokenLaunchId])
+  @@index([isComplete])
+}
+
+/// Community token transactions (bonding curve activity)
+model CommunityTokenTransaction {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tokenLaunchId     String    @db.Uuid
+  userId            String    @db.Uuid
+  transactionType   String    // "mint", "burn", "transfer"
+  amount            Float     @db.Decimal(20, 8)
+  price             Float?    @db.Decimal(20, 8) // Price at transaction time
+  onChainHash       String?   // On-chain transaction hash
+  status            String    @default("pending") // "pending", "confirmed", "failed"
+  created_at        DateTime  @default(now()) @db.Timestamptz(6)
+  confirmed_at      DateTime? @db.Timestamptz(6)
+
+  TokenLaunch       CommunityTokenLaunch @relation(fields: [tokenLaunchId], references: [id], onDelete: Cascade)
+  AppUser           AppUser              @relation(fields: [userId], references: [id])
+
+  @@index([tokenLaunchId])
+  @@index([userId])
+  @@index([transactionType])
+  @@index([status])
+  @@index([created_at(sort: Desc)])
+}
+
+/// Community waitlist with batch access
+model CommunityWaitlistEntry {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  communityId       String    @db.Uuid
+  userId            String?   @db.Uuid // null if not yet registered
+  email             String?   // For users without accounts
+  authMethod        String?   // "wallet", "oauth2", "sso", "dweb", "generated"
+  authProvider      String?   // "google", "x", "discord", "facebook", "mastodon", "nostr", etc.
+  generatedKeys     Json?     // Generated keys for users without auth methods
+  batchNumber       Int?      // Batch they're assigned to
+  batchMission      String?   @db.Text // Mission for their batch
+  accessGranted     Boolean   @default(false)
+  accessGrantedAt    DateTime? @db.Timestamptz(6)
+  proofOfHumanity   String?   // Fractal ID or other PoH identifier
+  proofOfHumanityVerifiedAt DateTime? @db.Timestamptz(6)
+  isPioneer         Boolean   @default(false) // First batch gets pioneer badge
+  created_at        DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime  @default(now()) @db.Timestamptz(6)
+
+  Community         MetaCommunity @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  AppUser           AppUser?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([communityId, userId])
+  @@unique([communityId, email])
+  @@index([communityId])
+  @@index([batchNumber])
+  @@index([accessGranted])
+  @@index([isPioneer])
+}
+
+/// Batch configuration for community access
+model CommunityBatch {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  communityId       String    @db.Uuid
+  batchNumber       Int
+  name              String
+  mission           String    @db.Text
+  maxSize           Int
+  startDate         DateTime? @db.Timestamptz(6)
+  endDate           DateTime? @db.Timestamptz(6)
+  isActive          Boolean   @default(false)
+  created_at        DateTime  @default(now()) @db.Timestamptz(6)
+
+  Community         MetaCommunity @relation(fields: [communityId], references: [id], onDelete: Cascade)
+
+  @@unique([communityId, batchNumber])
+  @@index([communityId])
+  @@index([isActive])
+}
+
+/// User badges and achievements
+model UserBadge {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId            String    @db.Uuid
+  badgeType         String    // "pioneer", "early_adopter", "contributor", "governance", etc.
+  badgeName         String
+  description       String?   @db.Text
+  communityId       String?   @db.Uuid // null for global badges
+  metadata          Json?     // Badge-specific data
+  awardedAt         DateTime  @default(now()) @db.Timestamptz(6)
+
+  AppUser           AppUser       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  Community         MetaCommunity? @relation(fields: [communityId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([badgeType])
+  @@index([communityId])
+  @@index([awardedAt(sort: Desc)])
+}
+
+/// Auth provider configuration
+model AuthProvider {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  providerType      String    // "oauth2", "wallet", "sso", "dweb"
+  providerName      String    // "google", "x", "discord", "facebook", "mastodon", "nostr", "universal_id"
+  isEnabled         Boolean   @default(true)
+  config            Json?     // Provider-specific configuration
+  selfRegistration  Boolean   @default(false) // For SSO - companies can self-register
+  created_at        DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime  @default(now()) @db.Timestamptz(6)
+
+  @@unique([providerType, providerName])
+  @@index([isEnabled])
+}
+
+/// User auth methods (multiple auth methods per user)
+model UserAuthMethod {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId            String    @db.Uuid
+  authProviderId    String    @db.Uuid
+  externalId        String    // External provider user ID
+  credentials       Json?     // Encrypted credentials or tokens
+  isPrimary         Boolean   @default(false)
+  verifiedAt        DateTime? @db.Timestamptz(6)
+  created_at        DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime  @default(now()) @db.Timestamptz(6)
+
+  AppUser           AppUser      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  AuthProvider      AuthProvider @relation(fields: [authProviderId], references: [id], onDelete: Cascade)
+
+  @@unique([authProviderId, externalId])
+  @@index([userId])
+  @@index([isPrimary])
+}
+
+/// Activity rewards (for PoH-verified users)
+model ActivityReward {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId            String    @db.Uuid
+  communityId       String?   @db.Uuid
+  activityType      String    // "message", "governance", "contribution", "participation"
+  activityId        String?   // ID of the activity (message ID, proposal ID, etc.)
+  rewardAmount      Float     @db.Decimal(20, 8)
+  rewardCurrency    String    @default("tokens") // "tokens", "points", etc.
+  requiresPoH       Boolean   @default(true)
+  metadata          Json?     // Activity-specific data
+  created_at        DateTime  @default(now()) @db.Timestamptz(6)
+
+  AppUser           AppUser       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  Community         MetaCommunity? @relation(fields: [communityId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([communityId])
+  @@index([activityType])
+  @@index([created_at(sort: Desc)])
+}
+
+/// Extension logging to JAUmemory
+model ExtensionLog {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId            String?   @db.Uuid
+  logType           String    // "milestone", "error", "warning", "info", "debug"
+  category          String?   // "token_launch", "governance", "treasury", "auth", etc.
+  message           String    @db.Text
+  data              Json?     // Structured log data
+  jauMemoryId       String?   // JAUmemory memory ID if successfully stored
+  jauMemoryStored   Boolean   @default(false)
+  jauMemoryStoredAt  DateTime? @db.Timestamptz(6)
+  created_at        DateTime  @default(now()) @db.Timestamptz(6)
+
+  AppUser           AppUser?  @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([logType])
+  @@index([category])
+  @@index([jauMemoryStored])
+  @@index([created_at(sort: Desc)])
+  @@index([userId])
+}
+
+
+
+
+

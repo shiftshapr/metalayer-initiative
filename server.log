@@ -1,58 +1,18 @@
 function
-✅ Supabase client initialized in PresenceService
-🚀 Metalayer Initiative API running on http://0.0.0.0:3002
-📡 Environment: development
-getChatHistory called with: { communityId: 'comm-001', threadId: undefined, uri: 'google.com/' }
-🔍 URL_NORMALIZE_BACKEND: Starting normalization for: google.com/
-🔍 URL_NORMALIZE_BACKEND: Getting normalization rules, cache size: 0
-🔍 URL_NORMALIZE_BACKEND: Fetching fresh rules from database...
-🔍 URL_NORMALIZE_BACKEND: Fetched 5 rules from database
-✅ URL_NORMALIZE_BACKEND: Rules cached successfully
-🔍 URL_NORMALIZE_BACKEND: Found 5 normalization rules
-🔍 URL_NORMALIZE_BACKEND: No specific rule matched, applying default normalization
-🔍 URL_NORMALIZE_BACKEND: Default normalization result: google_com_
-🔍 URL_NORMALIZE_BACKEND: Generated pageId: google_com_
-✅ URL_NORMALIZE_BACKEND: Final result: { normalizedUrl: 'google_com_', pageId: 'google_com_' }
-🔍 CHAT_FILTER: Filtering conversations by pageId: google_com_ for URI: google.com/
-🔍 CHAT_FILTER: Normalized URI: google_com_
-🔍 CHAT_DIAGNOSTIC: Total conversations in community comm-001: 4
-🔍 CHAT_DIAGNOSTIC: All conversations: [
-  {
-    "id": "conv-comm-001-google.com/",
-    "pageId": "google_com_",
-    "page": {
-      "url": "google.com/",
-      "canonicalUrl": "google_com_"
-    }
-  },
-  {
-    "id": "conv-comm-001-bbc.com/",
-    "pageId": "bbc_com_",
-    "page": {
-      "url": "bbc.com/",
-      "canonicalUrl": "bbc.com/"
-    }
-  },
-  {
-    "id": "conv-comm-001-chrome://extensions/?errors=dbdjamnflfecdnioehkdmlhnmajffijl",
-    "pageId": "chrome_extensions_errors_dbdjamnflfecdnioehkdmlhnmajffijl",
-    "page": {
-      "url": "chrome://extensions/?errors=dbdjamnflfecdnioehkdmlhnmajffijl",
-      "canonicalUrl": "chrome://extensions/?errors=dbdjamnflfecdnioehkdmlhnmajffijl"
-    }
-  },
-  {
-    "id": "conv-comm-001-chrome://extensions/",
-    "pageId": "chrome_extensions_",
-    "page": {
-      "url": "chrome://extensions/",
-      "canonicalUrl": "chrome://extensions/"
-    }
-  }
-]
-🔍 CHAT: Found 1 conversations for community comm-001 (after filtering)
-🔍 CHAT: Conversation IDs: [ 'conv-comm-001-google.com/' ]
-❌ CHAT: Error fetching messages: Error: supabaseKey is required.
-    at new SupabaseClient (/home/ubuntu/metalayer-initiative/node_modules/@supabase/supabase-js/dist/main/SupabaseClient.js:45:19)
-    at createClient (/home/ubuntu/metalayer-initiative/node_modules/@supabase/supabase-js/dist/main/index.js:38:12)
-    at exports.getChatHistory (/home/ubuntu/metalayer-initiative/controllers/chatController.js:164:22)
+/home/ubuntu/metalayer-initiative/presence/utils/UserNameExtractor.js:10
+export function extractUserName(user) {
+^^^^^^
+
+SyntaxError: Unexpected token 'export'
+    at wrapSafe (node:internal/modules/cjs/loader:1378:20)
+    at Module._compile (node:internal/modules/cjs/loader:1428:41)
+    at Module._extensions..js (node:internal/modules/cjs/loader:1548:10)
+    at Module.load (node:internal/modules/cjs/loader:1288:32)
+    at Module._load (node:internal/modules/cjs/loader:1104:12)
+    at Module.require (node:internal/modules/cjs/loader:1311:19)
+    at require (node:internal/modules/helpers:179:18)
+    at Object.<anonymous> (/home/ubuntu/metalayer-initiative/services/presenceService.js:3:27)
+    at Module._compile (node:internal/modules/cjs/loader:1469:14)
+    at Module._extensions..js (node:internal/modules/cjs/loader:1548:10)
+
+Node.js v20.18.2

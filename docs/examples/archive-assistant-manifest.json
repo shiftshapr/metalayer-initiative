@@ -1,0 +1,305 @@
+{
+  "$schema": "../schemas/canopi-tab-manifest-v1.schema.json",
+  "manifestVersion": "1.0.0",
+  
+  "id": "com.canopi.archive-assistant",
+  "name": "Archive Assistant",
+  "version": "1.0.0",
+  "description": "Archive web pages to multiple archive services including Wayback Machine, IPFS, and Bitcoin Ordinals",
+  "author": {
+    "name": "Canopi Team",
+    "email": "dev@canopi.org"
+  },
+  
+  "store": {
+    "packageName": "archive-assistant",
+    "category": "archive",
+    "tags": ["archive", "wayback", "ipfs", "ordinals", "preservation"],
+    "icon": {
+      "16": "icons/icon-16.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    },
+    "screenshots": [
+      "https://canopi.store/screenshots/archive-assistant-1.png"
+    ],
+    "homepage": "https://canopi.org/extensions/archive-assistant",
+    "repository": "https://github.com/canopi/archive-assistant",
+    "license": "MIT"
+  },
+  
+  "sdk": {
+    "minimumVersion": "1.0.0",
+    "targetVersion": "1.0.0"
+  },
+  
+  "host": {
+    "minimumVersion": "0.1.0",
+    "requiredFeatures": ["sidebar-tabs", "archive-services"]
+  },
+  
+  "tab": {
+    "id": "archive",
+    "title": "Archive",
+    "icon": "archive-icon",
+    "order": 10,
+    "badge": {
+      "enabled": true,
+      "type": "count"
+    },
+    "defaultOpen": false,
+    "persistent": false
+  },
+  
+  "entry": {
+    "main": "dist/index.js",
+    "styles": ["dist/styles.css"],
+    "assets": ["icons/**/*", "images/**/*"]
+  },
+  
+  "permissions": {
+    "required": [
+      "archive:wayback",
+      "archive:ipfs",
+      "page:url",
+      "page:content",
+      "network:fetch"
+    ],
+    "optional": [
+      "archive:ordinals",
+      "storage:local",
+      "user:preferences"
+    ]
+  },
+  
+  "permissionScopes": {
+    "archive:wayback": {
+      "description": "Archive pages to Internet Archive Wayback Machine",
+      "required": true,
+      "userPrompt": "Allow Archive Assistant to save pages to Wayback Machine?"
+    },
+    "archive:ipfs": {
+      "description": "Archive pages to IPFS (InterPlanetary File System)",
+      "required": true,
+      "userPrompt": "Allow Archive Assistant to save pages to IPFS?"
+    },
+    "archive:ordinals": {
+      "description": "Archive pages to Bitcoin Ordinals (future feature)",
+      "required": false,
+      "userPrompt": "Allow Archive Assistant to save pages to Bitcoin Ordinals?"
+    },
+    "network:fetch": {
+      "description": "Make network requests to archive services",
+      "required": true,
+      "userPrompt": "Allow Archive Assistant to make network requests?"
+    },
+    "page:url": {
+      "description": "Access current page URL for archiving",
+      "required": true
+    },
+    "page:content": {
+      "description": "Access current page content for archiving",
+      "required": true
+    },
+    "storage:local": {
+      "description": "Store archive preferences and history locally",
+      "required": false
+    },
+    "user:preferences": {
+      "description": "Read and write user preferences for archive settings",
+      "required": false
+    }
+  },
+  
+  "config": {
+    "settings": {
+      "defaultArchiveServices": {
+        "type": "multiselect",
+        "label": "Default Archive Services",
+        "description": "Services to use by default when archiving",
+        "default": ["wayback", "ipfs"],
+        "options": [
+          { "value": "wayback", "label": "Wayback Machine" },
+          { "value": "ipfs", "label": "IPFS" },
+          { "value": "ordinals", "label": "Bitcoin Ordinals" }
+        ]
+      },
+      "autoArchive": {
+        "type": "boolean",
+        "label": "Auto-archive on page load",
+        "description": "Automatically archive pages when they load",
+        "default": false
+      },
+      "archiveDelay": {
+        "type": "number",
+        "label": "Archive Delay (seconds)",
+        "description": "Delay before archiving (to allow page to fully load)",
+        "default": 5,
+        "validation": {
+          "min": 0,
+          "max": 60
+        }
+      },
+      "waybackApiKey": {
+        "type": "string",
+        "label": "Wayback Machine API Key",
+        "description": "Optional API key for Wayback Machine (for authenticated saves)",
+        "required": false
+      },
+      "ipfsGateway": {
+        "type": "select",
+        "label": "IPFS Gateway",
+        "description": "IPFS gateway to use for content retrieval",
+        "default": "ipfs.io",
+        "options": [
+          { "value": "ipfs.io", "label": "ipfs.io" },
+          { "value": "cloudflare-ipfs.com", "label": "Cloudflare IPFS" },
+          { "value": "gateway.pinata.cloud", "label": "Pinata Gateway" }
+        ]
+      }
+    }
+  },
+  
+  "lifecycle": {
+    "onInit": "initialize",
+    "onActivate": "onTabActivated",
+    "onDeactivate": "onTabDeactivated",
+    "onDestroy": "cleanup"
+  },
+  
+  "apis": {
+    "bridge": {
+      "events": {
+        "archive:request": {
+          "type": "request",
+          "direction": "tab->host",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "url": { "type": "string", "format": "uri" },
+              "services": {
+                "type": "array",
+                "items": { "type": "string", "enum": ["wayback", "ipfs", "ordinals"] }
+              },
+              "options": {
+                "type": "object",
+                "properties": {
+                  "captureScreenshot": { "type": "boolean" },
+                  "captureResources": { "type": "boolean" },
+                  "waitForLoad": { "type": "boolean" }
+                }
+              }
+            },
+            "required": ["url", "services"]
+          }
+        },
+        "archive:response": {
+          "type": "response",
+          "direction": "host->tab",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "requestId": { "type": "string" },
+              "status": { "type": "string", "enum": ["success", "error", "pending"] },
+              "results": {
+                "type": "object",
+                "properties": {
+                  "wayback": {
+                    "type": "object",
+                    "properties": {
+                      "url": { "type": "string" },
+                      "timestamp": { "type": "string", "format": "date-time" }
+                    }
+                  },
+                  "ipfs": {
+                    "type": "object",
+                    "properties": {
+                      "cid": { "type": "string" },
+                      "gatewayUrl": { "type": "string" }
+                    }
+                  },
+                  "ordinals": {
+                    "type": "object",
+                    "properties": {
+                      "inscriptionId": { "type": "string" },
+                      "status": { "type": "string" }
+                    }
+                  }
+                }
+              },
+              "error": { "type": "string" }
+            }
+          }
+        },
+        "archive:status": {
+          "type": "notification",
+          "direction": "host->tab",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "requestId": { "type": "string" },
+              "progress": { "type": "number", "minimum": 0, "maximum": 100 },
+              "status": { "type": "string" },
+              "service": { "type": "string" }
+            }
+          }
+        }
+      }
+    }
+  },
+  
+  "dependencies": {
+    "modules": [],
+    "external": {}
+  },
+  
+  "security": {
+    "contentSecurityPolicy": {
+      "scriptSrc": ["'self'"],
+      "connectSrc": [
+        "'self'",
+        "https://web.archive.org",
+        "https://*.ipfs.io",
+        "https://*.ipfs.dweb.link",
+        "https://api.pinata.cloud"
+      ],
+      "styleSrc": ["'self'", "'unsafe-inline'"],
+      "imgSrc": ["'self'", "data:", "https://web.archive.org", "https://*.ipfs.io"]
+    }
+  },
+  
+  "telemetry": {
+    "enabled": true,
+    "events": [
+      "archive:requested",
+      "archive:completed",
+      "archive:failed",
+      "settings:changed"
+    ],
+    "diagnostics": {
+      "enabled": true,
+      "level": "info"
+    }
+  },
+  
+  "localization": {
+    "defaultLocale": "en",
+    "supportedLocales": ["en", "es", "fr", "de"]
+  },
+  
+  "build": {
+    "target": "es2017",
+    "minify": true,
+    "sourceMap": false
+  },
+  
+  "updates": {
+    "autoUpdate": true,
+    "rollbackOnError": true
+  }
+}
+
+
+
+
+

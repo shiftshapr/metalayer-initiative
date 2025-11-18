@@ -1,0 +1,775 @@
+/**
+ * VISIBILITY SETTINGS MANAGER
+ * Handles all visibility-related settings: Visible, Status, Aura, Headline, Display Name
+ */
+
+class VisibilitySettingsManager {
+  constructor() {
+    this.isInitialized = false;
+    this.originalValues = {};
+  }
+
+  /**
+   * Initialize visibility settings manager
+   */
+  async initialize() {
+    if (this.isInitialized) {
+      console.log('⚠️ VISIBILITY_SETTINGS: Already initialized, re-attaching event listeners...');
+      // Re-attach event listeners in case they were lost
+      await this.ensureEventListeners();
+      return;
+    }
+
+    console.log('🔧 VISIBILITY_SETTINGS: Initializing visibility settings manager...');
+
+    try {
+      // Get DOM elements
+      this.visibilityToggle = document.getElementById('visibility-toggle');
+      this.visibilityStatusText = document.getElementById('visibility-status-text');
+      this.statusSelect = document.getElementById('status-select');
+      this.auraColorPicker = document.getElementById('aura-color-picker');
+      this.auraColorHex = document.getElementById('aura-color-hex');
+      this.auraIntensitySlider = document.getElementById('aura-intensity-slider');
+      this.auraIntensityValue = document.getElementById('aura-intensity-value');
+      this.displayNameInput = document.getElementById('display-name-input');
+      this.displayNameSaveBtn = document.getElementById('display-name-save-btn');
+      this.displayNameResetBtn = document.getElementById('display-name-reset-btn');
+      this.themeToggle = document.getElementById('theme-toggle');
+      // FIX: theme-status-text element removed - only Dark label on right now
+
+      if (!this.visibilityToggle || !this.statusSelect || !this.auraColorPicker) {
+        console.warn('⚠️ VISIBILITY_SETTINGS: Required DOM elements not found');
+        return;
+      }
+
+      // Load current settings
+      await this.loadSettings();
+
+      // Set up event listeners
+      this.setupEventListeners();
+
+      this.isInitialized = true;
+      console.log('✅ VISIBILITY_SETTINGS: Visibility settings manager initialized');
+    } catch (error) {
+      console.error('❌ VISIBILITY_SETTINGS: Failed to initialize:', error);
+    }
+  }
+
+  /**
+   * CRITICAL FIX: Ensure event listeners are attached (call when settings tab opens)
+   */
+  async ensureEventListeners() {
+    console.log('🔧 VISIBILITY_SETTINGS: Ensuring event listeners are attached...');
+    
+    // Re-get DOM elements in case they were recreated
+    this.themeToggle = document.getElementById('theme-toggle');
+    
+    if (this.themeToggle) {
+      // Check if handler is already attached
+      const handlerAttached = this.themeToggle.getAttribute('data-handler-attached') === 'true';
+      
+      if (!handlerAttached) {
+        console.log('⚠️ VISIBILITY_SETTINGS: Theme toggle handler not attached, re-attaching...');
+        // Re-attach event listener
+        this.setupEventListeners();
+      } else {
+        console.log('✅ VISIBILITY_SETTINGS: Theme toggle handler already attached');
+      }
+    } else {
+      console.warn('⚠️ VISIBILITY_SETTINGS: Theme toggle element not found when ensuring listeners');
+    }
+  }
+
+  /**
+   * Set up event listeners
+   */
+  setupEventListeners() {
+    // Visibility toggle - CRITICAL FIX: Show modal if user is not visible and trying to enable
+    if (this.visibilityToggle) {
+      this.visibilityToggle.addEventListener('change', async () => {
+        console.log('🔍 DIAGNOSTIC: Visibility toggle changed');
+        const isVisible = this.visibilityToggle.checked;
+        console.log('🔍 DIAGNOSTIC: Visibility toggle checked:', isVisible);
+        
+        // FIX: Don't show modal when toggling to Yes - just save directly
+        // The modal should only appear when user explicitly clicks "Go Visible" button elsewhere
+        // When toggling in settings, assume user wants to enable visibility immediately
+        
+        this.updateVisibilityStatus();
+        await this.saveVisibility();
+        console.log('🔍 DIAGNOSTIC: Visibility saved:', this.visibilityToggle.checked);
+      });
+      this.visibilityToggle.setAttribute('data-handler-attached', 'true');
+    }
+
+    // Status select
+    if (this.statusSelect) {
+      this.statusSelect.addEventListener('change', () => {
+        this.saveStatus();
+      });
+    }
+
+    // Aura color picker - update hex field (without #)
+    if (this.auraColorPicker) {
+      this.auraColorPicker.addEventListener('input', (e) => {
+        const hex = e.target.value.substring(1).toUpperCase(); // Remove # prefix
+        this.auraColorHex.value = hex;
+        this.saveAura();
+      });
+    }
+
+    // Aura color hex input - format is 6 chars without # (prefix shown separately)
+    if (this.auraColorHex) {
+      this.auraColorHex.addEventListener('input', (e) => {
+        let hex = e.target.value.toUpperCase();
+        // Remove any non-hex characters
+        hex = hex.replace(/[^0-9A-F]/g, '');
+        // Limit to 6 hex digits
+        hex = hex.substring(0, 6);
+        e.target.value = hex;
+        if (/^[0-9A-F]{6}$/i.test(hex)) {
+          this.auraColorPicker.value = '#' + hex;
+          this.saveAura();
+        }
+      });
+    }
+
+    // Aura intensity slider
+    if (this.auraIntensitySlider) {
+      this.auraIntensitySlider.addEventListener('input', (e) => {
+        this.auraIntensityValue.textContent = e.target.value;
+        this.saveAura();
+      });
+    }
+
+    // Display name save
+    if (this.displayNameSaveBtn) {
+      this.displayNameSaveBtn.addEventListener('click', () => {
+        this.saveDisplayName();
+      });
+    }
+
+    // Display name reset
+    if (this.displayNameResetBtn) {
+      this.displayNameResetBtn.addEventListener('click', () => {
+        this.resetDisplayName();
+      });
+    }
+
+    // Theme toggle - CRITICAL FIX: Remove existing listener first, then attach new one
+    if (this.themeToggle) {
+      // Remove any existing event listeners by cloning the element
+      const newToggle = this.themeToggle.cloneNode(true);
+      this.themeToggle.parentNode.replaceChild(newToggle, this.themeToggle);
+      this.themeToggle = newToggle;
+      
+      // Attach fresh event listener
+      this.themeToggle.addEventListener('change', async (e) => {
+        e.stopPropagation();
+        console.log('🔍 DIAGNOSTIC: Settings tab theme toggle changed');
+        console.log('🔍 DIAGNOSTIC: Event object:', e);
+        console.log('🔍 DIAGNOSTIC: Toggle element:', this.themeToggle);
+        console.log('🔍 DIAGNOSTIC: Toggle checked:', this.themeToggle.checked);
+        const beforeTheme = document.body.getAttribute('data-theme') || document.documentElement.getAttribute('data-theme') || 'light';
+        console.log('🔍 DIAGNOSTIC: Theme before change:', beforeTheme);
+        
+        // CRITICAL FIX: Save theme first, then update status
+        await this.saveTheme();
+        this.updateThemeStatus();
+        
+        const afterTheme = document.body.getAttribute('data-theme') || document.documentElement.getAttribute('data-theme') || 'light';
+        console.log('🔍 DIAGNOSTIC: Theme after change:', afterTheme);
+        console.log('🔍 DIAGNOSTIC: Theme changed:', beforeTheme !== afterTheme ? 'YES ✅' : 'NO ❌');
+      });
+      this.themeToggle.setAttribute('data-handler-attached', 'true');
+      console.log('✅ VISIBILITY_SETTINGS: Theme toggle event listener attached');
+    } else {
+      console.warn('⚠️ VISIBILITY_SETTINGS: Theme toggle element not found when setting up event listeners');
+    }
+
+    console.log('✅ VISIBILITY_SETTINGS: Event listeners attached');
+  }
+
+  /**
+   * Load current settings from storage/API
+   */
+  async loadSettings() {
+    try {
+      console.log('📖 VISIBILITY_SETTINGS: Loading settings...');
+
+      const currentUser = window.currentUser;
+      if (!currentUser || !currentUser.id) {
+        console.warn('⚠️ VISIBILITY_SETTINGS: No current user found');
+        return;
+      }
+
+      // Load from Chrome storage first
+      const storageData = await chrome.storage.local.get([
+        'visibilityEnabled',
+        'availability',
+        'auraColor',
+        'auraIntensity',
+        'displayName'
+      ]);
+
+      // Load preferences using UserPreferencesManager (unified system)
+      let isVisible = true;
+      let status = 'AVAILABLE';
+      
+      if (window.userPreferencesManager && window.userPreferencesManager.isInitialized) {
+        // Use UserPreferencesManager (preferred)
+        isVisible = await window.userPreferencesManager.getPreference('isVisible');
+        status = await window.userPreferencesManager.getPreference('globalAvailability');
+        console.log('✅ VISIBILITY_SETTINGS: Loaded preferences from UserPreferencesManager');
+      } else {
+        // Fallback to old system during transition
+        console.log('⚠️ VISIBILITY_SETTINGS: UserPreferencesManager not available, using fallback loading');
+        
+        // Load visibility
+        if (window.unifiedSettingsStorage && typeof window.unifiedSettingsStorage.getSetting === 'function') {
+          const dbValue = await window.unifiedSettingsStorage.getSetting('visibilityEnabled', null, { apiKey: 'isVisible', forceDatabase: true });
+          if (dbValue !== null && dbValue !== undefined) {
+            isVisible = dbValue === true;
+          } else {
+            const storageData = await chrome.storage.local.get(['visibilityEnabled']);
+            if (storageData.visibilityEnabled !== undefined) {
+              isVisible = storageData.visibilityEnabled === true;
+            } else if (window.currentUser) {
+              isVisible = window.currentUser.isVisible === true || window.currentUser.visibilityEnabled === true;
+            }
+          }
+        } else {
+          const visibilityStorage = await chrome.storage.local.get(['visibilityEnabled']);
+          if (visibilityStorage.visibilityEnabled !== undefined) {
+            isVisible = visibilityStorage.visibilityEnabled === true;
+          } else if (window.currentUser) {
+            isVisible = window.currentUser.isVisible === true || window.currentUser.visibilityEnabled === true;
+          }
+        }
+        
+        // Load status
+        status = await (window.getSetting || this.getSettingFallback)('status', 'AVAILABLE', { apiKey: 'status' });
+      }
+      
+      // Set visibility toggle
+      if (this.visibilityToggle) {
+        this.visibilityToggle.checked = isVisible;
+        console.log('✅ VISIBILITY_SETTINGS: Visibility toggle set to:', isVisible ? 'Yes (checked)' : 'No (unchecked)');
+        this.updateVisibilityStatus();
+      }
+      this.originalValues.visibility = isVisible;
+      if (this.statusSelect) {
+        this.statusSelect.value = status;
+      }
+      this.originalValues.status = status;
+
+      // Aura color - normalize to #XXXXXX format, then extract hex without #
+      let auraColor = storageData.auraColor || currentUser.auraColor || currentUser.aura_color || '#98d416';
+      // Normalize to #XXXXXX format
+      if (!auraColor.startsWith('#')) {
+        auraColor = '#' + auraColor.replace(/#/g, '');
+      }
+      auraColor = auraColor.substring(0, 7).toUpperCase();
+      if (auraColor.length < 7) {
+        const digits = auraColor.substring(1) || '98D416';
+        auraColor = '#' + digits.padEnd(6, '0').substring(0, 6);
+      }
+      if (this.auraColorPicker) {
+        this.auraColorPicker.value = auraColor;
+      }
+      if (this.auraColorHex) {
+        this.auraColorHex.value = auraColor.substring(1); // Store without # prefix
+      }
+      this.originalValues.auraColor = auraColor;
+
+      // Aura intensity (already loaded above if UserPreferencesManager available)
+      if (!window.userPreferencesManager || !window.userPreferencesManager.isInitialized) {
+        auraIntensity = storageData.auraIntensity || currentUser.auraIntensity || 0.5;
+      }
+      if (this.auraIntensitySlider) {
+        this.auraIntensitySlider.value = auraIntensity;
+      }
+      if (this.auraIntensityValue) {
+        this.auraIntensityValue.textContent = auraIntensity;
+      }
+      this.originalValues.auraIntensity = auraIntensity;
+
+      // Display name
+      // FIX: Don't use currentUser.name as fallback - only use displayName
+      const displayName = storageData.displayName || currentUser.displayName || '';
+      if (this.displayNameInput) {
+        this.displayNameInput.value = displayName;
+      }
+      this.originalValues.displayName = displayName;
+
+      // Theme - FIX: Load from database first, then sync to Chrome storage and DOM
+      // ROOT CAUSE FIX: Ensure we get the actual theme value, not defaulting incorrectly
+      let theme = 'dark'; // default
+      
+      // Step 1: Check database first (source of truth) - CRITICAL FIX: forceDatabase=true
+      if (window.unifiedSettingsStorage && typeof window.unifiedSettingsStorage.getSetting === 'function') {
+        const dbTheme = await window.unifiedSettingsStorage.getSetting('theme', null, { skipApi: false, forceDatabase: true });
+        // CRITICAL FIX: Only use database value if it's explicitly set (not null/undefined)
+        if (dbTheme === 'dark' || dbTheme === 'light') {
+          theme = dbTheme;
+          console.log('✅ VISIBILITY_SETTINGS: Theme loaded from database:', theme);
+        } else {
+          // If database has no value, check other sources
+          const themeStorage = await chrome.storage.local.get(['theme']);
+          if (themeStorage.theme === 'dark' || themeStorage.theme === 'light') {
+            theme = themeStorage.theme;
+            console.log('✅ VISIBILITY_SETTINGS: Theme loaded from Chrome storage:', theme);
+          } else {
+            const domTheme = document.documentElement.getAttribute('data-theme') || 
+                             document.body.getAttribute('data-theme');
+            if (domTheme === 'dark' || domTheme === 'light') {
+              theme = domTheme;
+              console.log('✅ VISIBILITY_SETTINGS: Theme loaded from DOM:', theme);
+            }
+          }
+        }
+      } else if (window.getSetting) {
+        const settingTheme = await window.getSetting('theme', null, { forceDatabase: true });
+        if (settingTheme === 'dark' || settingTheme === 'light') {
+          theme = settingTheme;
+        }
+      } else {
+        // Step 2: Check Chrome storage as fallback
+        const themeStorage = await chrome.storage.local.get(['theme']);
+        if (themeStorage.theme === 'dark' || themeStorage.theme === 'light') {
+          theme = themeStorage.theme;
+          console.log('✅ VISIBILITY_SETTINGS: Theme loaded from Chrome storage:', theme);
+        } else {
+          // Step 3: Check DOM as last resort
+          const domTheme = document.documentElement.getAttribute('data-theme') || 
+                           document.body.getAttribute('data-theme');
+          if (domTheme === 'dark' || domTheme === 'light') {
+            theme = domTheme;
+            console.log('✅ VISIBILITY_SETTINGS: Theme loaded from DOM:', theme);
+          }
+        }
+      }
+      
+      // FIX: Always sync Chrome storage and DOM with database value BEFORE setting toggle
+      await chrome.storage.local.set({ theme: theme });
+      document.documentElement.setAttribute('data-theme', theme);
+      document.body.setAttribute('data-theme', theme);
+      
+      // CRITICAL FIX: Set toggle state BEFORE updateThemeStatus to ensure correct initial state
+      if (this.themeToggle) {
+        // Set toggle state based on database value (checked = dark)
+        this.themeToggle.checked = theme === 'dark';
+        console.log('✅ VISIBILITY_SETTINGS: Theme toggle set to:', theme === 'dark' ? 'dark (checked)' : 'light (unchecked)');
+        // Update slider position immediately to reflect database value
+        this.updateThemeStatus();
+      }
+      
+      this.originalValues.theme = theme;
+
+      console.log('✅ VISIBILITY_SETTINGS: Settings loaded');
+    } catch (error) {
+      console.error('❌ VISIBILITY_SETTINGS: Failed to load settings:', error);
+    }
+  }
+
+  /**
+   * Update visibility status text and toggle slider
+   */
+  updateVisibilityStatus() {
+    if (this.visibilityToggle) {
+      const isChecked = this.visibilityToggle.checked;
+      const slider = document.getElementById('visibility-toggle-slider');
+      
+      // Update text labels
+      const labels = document.querySelectorAll('#visibility-toggle-slider').length > 0 
+        ? document.querySelectorAll('label[for="visibility-toggle"] ~ span, #visibility-status-text')
+        : [];
+      
+      // Update toggle slider background
+      if (slider) {
+        slider.style.backgroundColor = isChecked ? '#007bff' : '#ccc';
+        const sliderCircle = slider.querySelector('span');
+        if (sliderCircle) {
+          sliderCircle.style.transform = isChecked ? 'translateX(24px)' : 'translateX(0)';
+        }
+      }
+      
+      // Update Yes/No text
+      const noLabel = this.visibilityToggle.parentElement?.previousElementSibling;
+      const yesLabel = this.visibilityToggle.parentElement?.nextElementSibling;
+      if (noLabel) noLabel.style.color = isChecked ? '#666' : '#007bff';
+      if (yesLabel) yesLabel.style.color = isChecked ? '#007bff' : '#666';
+    }
+  }
+
+  /**
+   * Save visibility setting (ROOT CAUSE FIX: Use unified storage and update window.currentUser)
+   */
+  async saveVisibility() {
+    try {
+      const isVisible = this.visibilityToggle.checked;
+      
+      // Use UserPreferencesManager (unified preference system)
+      if (window.userPreferencesManager && window.userPreferencesManager.isInitialized) {
+        console.log('✅ VISIBILITY_SETTINGS: Using UserPreferencesManager to save visibility');
+        await window.userPreferencesManager.savePreference('isVisible', isVisible);
+      } else if (window.saveSetting) {
+        // Fallback to old system during transition
+        console.log('⚠️ VISIBILITY_SETTINGS: UserPreferencesManager not available, using saveSetting fallback');
+        await window.saveSetting('visibilityEnabled', isVisible, { apiKey: 'isVisible' });
+      } else {
+        // Fallback to direct storage
+        await chrome.storage.local.set({ visibilityEnabled: isVisible });
+      }
+      
+      // CRITICAL FIX: Update window.currentUser immediately for other components
+      if (window.currentUser) {
+        window.currentUser.isVisible = isVisible;
+        window.currentUser.visibilityEnabled = isVisible;
+      }
+      
+      // CRITICAL FIX: Refresh visibility avatars to reflect the change
+      if (window.visibilityManager && typeof window.visibilityManager.refreshVisibilityAvatars === 'function') {
+        const currentPageId = window.currentUrlData?.pageId || window.currentPageId;
+        if (currentPageId) {
+          console.log('🔧 VISIBILITY_SETTINGS: Refreshing visibility avatars after visibility change');
+          await window.visibilityManager.refreshVisibilityAvatars(currentPageId);
+        }
+      }
+      
+      // CRITICAL FIX: Dispatch event to notify other components
+      window.dispatchEvent(new CustomEvent('visibilityChanged', { 
+        detail: { isVisible, visibilityEnabled: isVisible } 
+      }));
+      
+      console.log('✅ VISIBILITY_SETTINGS: Visibility saved:', isVisible);
+    } catch (error) {
+      console.error('❌ VISIBILITY_SETTINGS: Failed to save visibility:', error);
+    }
+  }
+
+  /**
+   * Save status setting (ROOT CAUSE FIX: Use unified storage)
+   */
+  async saveStatus() {
+    try {
+      const status = this.statusSelect.value;
+      
+      // Use UserPreferencesManager (unified preference system)
+      if (window.userPreferencesManager && window.userPreferencesManager.isInitialized) {
+        console.log('✅ VISIBILITY_SETTINGS: Using UserPreferencesManager to save availability');
+        await window.userPreferencesManager.savePreference('globalAvailability', status);
+      } else if (window.saveSetting) {
+        // Fallback to old system during transition
+        console.log('⚠️ VISIBILITY_SETTINGS: UserPreferencesManager not available, using saveSetting fallback');
+        await window.saveSetting('status', status);
+        await window.saveSetting('availability', status, { skipApi: true });
+      } else {
+        // Fallback to direct storage
+        await chrome.storage.local.set({ availability: status, status: status });
+      }
+      
+      // Update window.currentUser
+      if (window.currentUser) {
+        window.currentUser.availability = status;
+        window.currentUser.status = status;
+      }
+      
+      // Update via ProfileManager if available
+      if (window.profileManager && typeof window.profileManager.updateAvailabilityEverywhere === 'function') {
+        await window.profileManager.updateAvailabilityEverywhere(status);
+      }
+      
+      // FIX: Refresh avatars to update status dots
+      if (window.visibilityManager && typeof window.visibilityManager.refreshVisibilityAvatars === 'function') {
+        const currentPageId = window.currentUrlData || window.currentPageId;
+        if (currentPageId) {
+          await window.visibilityManager.refreshVisibilityAvatars(currentPageId);
+        }
+      }
+      
+      // FIX: Immediately refresh message avatars to update status dots
+      if (window.refreshAllMessageAvatars && typeof window.refreshAllMessageAvatars === 'function') {
+        console.log('🔧 VISIBILITY_SETTINGS: Immediately refreshing message avatars for status update');
+        await window.refreshAllMessageAvatars();
+      }
+      
+      // FIX: Dispatch event to trigger avatar updates
+      window.dispatchEvent(new CustomEvent('statusChanged', { 
+        detail: { status, availability: status } 
+      }));
+      
+      // FIX: Refresh profile avatar status dot
+      if (window.profileManager && typeof window.profileManager.updateUserAvatar === 'function') {
+        await window.profileManager.updateUserAvatar();
+      }
+      
+      console.log('✅ VISIBILITY_SETTINGS: Status saved:', status);
+    } catch (error) {
+      console.error('❌ VISIBILITY_SETTINGS: Failed to save status:', error);
+    }
+  }
+
+  /**
+   * Save aura settings (ROOT CAUSE FIX: Use unified storage)
+   */
+  async saveAura() {
+    try {
+      const auraColor = this.auraColorPicker.value;
+      const auraIntensity = parseFloat(this.auraIntensitySlider.value);
+      
+      // Use UserPreferencesManager (unified preference system)
+      if (window.userPreferencesManager && window.userPreferencesManager.isInitialized) {
+        console.log('✅ VISIBILITY_SETTINGS: Using UserPreferencesManager to save aura');
+        await window.userPreferencesManager.savePreference('auraColor', auraColor);
+        await window.userPreferencesManager.savePreference('auraIntensity', auraIntensity);
+      } else if (window.saveSettings) {
+        // Fallback to old system during transition
+        console.log('⚠️ VISIBILITY_SETTINGS: UserPreferencesManager not available, using saveSettings fallback');
+        await window.saveSettings({ 
+          auraColor: auraColor, 
+          auraIntensity: auraIntensity 
+        });
+      } else {
+        // Fallback to direct storage
+        await chrome.storage.local.set({
+          auraColor: auraColor,
+          auraIntensity: auraIntensity
+        });
+      }
+      
+      // Update window.currentUser
+      if (window.currentUser) {
+        window.currentUser.auraColor = auraColor;
+        window.currentUser.auraIntensity = auraIntensity;
+      }
+      
+      // Update via ProfileManager if available
+      if (window.profileManager && typeof window.profileManager.updateAuraColor === 'function') {
+        await window.profileManager.updateAuraColor(auraColor);
+      }
+      
+      console.log('✅ VISIBILITY_SETTINGS: Aura saved:', { auraColor, auraIntensity });
+    } catch (error) {
+      console.error('❌ VISIBILITY_SETTINGS: Failed to save aura:', error);
+    }
+  }
+
+  /**
+   * Save display name
+   */
+  async saveDisplayName() {
+    try {
+      const displayName = this.displayNameInput.value.trim();
+      
+      // ROOT CAUSE FIX: Min 4, max 16 chars, null is ok (updated from 20)
+      if (displayName.length > 0) {
+        if (displayName.length < 4) {
+          alert('Display name must be at least 4 characters');
+          return;
+        }
+        if (displayName.length > 16) {
+          alert('Display name must be 16 characters or less');
+          return;
+        }
+      }
+      
+      await chrome.storage.local.set({ displayName: displayName });
+      
+      // Update window.currentUser
+      if (window.currentUser) {
+        window.currentUser.name = displayName;
+        window.currentUser.displayName = displayName;
+      }
+      
+      // Update UI if ProfileManager available
+      if (window.profileManager && typeof window.profileManager.updateUserAvatar === 'function') {
+        await window.profileManager.updateUserAvatar();
+      }
+      
+      this.originalValues.displayName = displayName;
+      console.log('✅ VISIBILITY_SETTINGS: Display name saved:', displayName);
+    } catch (error) {
+      console.error('❌ VISIBILITY_SETTINGS: Failed to save display name:', error);
+    }
+  }
+
+  /**
+   * Reset display name to original
+   */
+  resetDisplayName() {
+    if (this.displayNameInput) {
+      this.displayNameInput.value = this.originalValues.displayName || '';
+      console.log('↩️ VISIBILITY_SETTINGS: Display name reset');
+    }
+  }
+
+  /**
+   * Update theme status text and toggle slider
+   */
+  updateThemeStatus() {
+    if (this.themeToggle) {
+      const isDark = this.themeToggle.checked;
+      const slider = document.getElementById('theme-toggle-slider');
+      
+      // Update toggle slider background
+      if (slider) {
+        slider.style.backgroundColor = isDark ? '#007bff' : '#ccc';
+        const sliderCircle = slider.querySelector('span');
+        if (sliderCircle) {
+          sliderCircle.style.transform = isDark ? 'translateX(24px)' : 'translateX(0)';
+        }
+      }
+      
+      // Update Dark label (FIX: Always show "Dark" label, active color when dark mode, inactive when light mode)
+      const darkLabel = document.getElementById('theme-dark-label');
+      if (darkLabel) {
+        // When theme is Light (toggle unchecked), Dark label should be inactive color
+        // When theme is Dark (toggle checked), Dark label should be active color
+        darkLabel.style.color = isDark ? '#007bff' : 'var(--text-secondary)';
+        darkLabel.textContent = 'Dark'; // Always show "Dark"
+        console.log('🔍 DIAGNOSTIC: Dark label updated - isDark:', isDark, 'color:', isDark ? '#007bff' : 'var(--text-secondary)');
+      } else {
+        console.warn('⚠️ VISIBILITY_SETTINGS: theme-dark-label element not found');
+      }
+    }
+  }
+
+  /**
+   * Save theme setting (ROOT CAUSE FIX: Use unified storage and apply theme immediately)
+   */
+  async saveTheme() {
+    try {
+      const theme = this.themeToggle.checked ? 'dark' : 'light';
+      
+      console.log('🔍 DIAGNOSTIC: saveTheme called with theme:', theme);
+      console.log('🔍 DIAGNOSTIC: UserPreferencesManager available:', !!window.userPreferencesManager);
+      console.log('🔍 DIAGNOSTIC: UserPreferencesManager initialized:', window.userPreferencesManager?.isInitialized);
+      
+      // CRITICAL FIX: Use UserPreferencesManager (unified preference system) - ensure it saves to both Chrome storage and database
+      if (window.userPreferencesManager && window.userPreferencesManager.isInitialized) {
+        console.log('✅ VISIBILITY_SETTINGS: Using UserPreferencesManager to save theme');
+        // FIX: Save immediately (not batched) to ensure database save happens right away
+        const saved = await window.userPreferencesManager.savePreference('theme', theme, { batch: false });
+        console.log('🔍 DIAGNOSTIC: UserPreferencesManager savePreference result:', saved);
+        
+        // Verify it was saved to Chrome storage
+        const chromeStorage = await chrome.storage.local.get(['theme']);
+        console.log('🔍 DIAGNOSTIC: Theme in Chrome storage after save:', chromeStorage.theme);
+      } else if (typeof window.updateThemeEverywhere === 'function') {
+        // Fallback to old system during transition
+        console.log('⚠️ VISIBILITY_SETTINGS: UserPreferencesManager not available, using updateThemeEverywhere fallback');
+        await window.updateThemeEverywhere(theme);
+      } else if (typeof window.setTheme === 'function') {
+        console.log('✅ VISIBILITY_SETTINGS: Using setTheme to save theme');
+        await window.setTheme(theme);
+      } else {
+        // Fallback: Apply theme to document FIRST (before saving) for immediate visual feedback
+        document.documentElement.setAttribute('data-theme', theme);
+        document.body.setAttribute('data-theme', theme);
+        
+        // Use unified storage function
+        if (window.saveSetting) {
+          await window.saveSetting('theme', theme);
+        } else {
+          // Fallback to direct storage
+          await chrome.storage.local.set({ theme: theme });
+          console.log('✅ VISIBILITY_SETTINGS: Saved theme to Chrome storage (fallback)');
+        }
+      }
+
+      // Update theme status text and slider
+      this.updateThemeStatus();
+      
+      // Update profile menu theme icon/text if available (both IDs)
+      const themeIcon = document.getElementById('theme-icon');
+      const themeText = document.getElementById('theme-text');
+      const themeIconMenu = document.getElementById('theme-icon-menu');
+      const themeTextMenu = document.getElementById('theme-text-menu');
+      if (themeIcon) {
+        themeIcon.textContent = theme === 'dark' ? '☀️' : '🌙';
+      }
+      if (themeText) {
+        themeText.textContent = theme === 'dark' ? 'Light mode' : 'Dark mode';
+      }
+      if (themeIconMenu) {
+        themeIconMenu.textContent = theme === 'dark' ? '☀️' : '🌙';
+      }
+      if (themeTextMenu) {
+        themeTextMenu.textContent = theme === 'dark' ? 'Light mode' : 'Dark mode';
+      }
+      
+      this.originalValues.theme = theme;
+      console.log('✅ VISIBILITY_SETTINGS: Theme saved and applied:', theme);
+    } catch (error) {
+      console.error('❌ VISIBILITY_SETTINGS: Failed to save theme:', error);
+    }
+  }
+
+  /**
+   * Get auth token for API calls
+   */
+  async getAuthToken() {
+    try {
+      const authData = await chrome.storage.local.get(['authToken', 'googleAccessToken']);
+      return authData.authToken || authData.googleAccessToken || '';
+    } catch (error) {
+      console.warn('⚠️ VISIBILITY_SETTINGS: Failed to get auth token:', error);
+      return '';
+    }
+  }
+
+  /**
+   * Fallback getSetting if unified storage not available
+   */
+  async getSettingFallback(key, defaultValue, options = {}) {
+    try {
+      const storageData = await chrome.storage.local.get([key]);
+      if (storageData[key] !== undefined) {
+        return storageData[key];
+      }
+      return defaultValue;
+    } catch (error) {
+      console.warn(`⚠️ VISIBILITY_SETTINGS: Fallback getSetting failed for ${key}:`, error);
+      return defaultValue;
+    }
+  }
+}
+
+// Initialize when DOM is ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => {
+    window.visibilitySettingsManager = new VisibilitySettingsManager();
+    window.visibilitySettingsManager.initialize();
+  });
+} else {
+  window.visibilitySettingsManager = new VisibilitySettingsManager();
+  window.visibilitySettingsManager.initialize();
+}
+
+// CRITICAL FIX: Listen for tab switches to re-attach event listeners
+window.addEventListener('tabSwitch', async (e) => {
+  if (e.detail && e.detail.tabId === 'settings-tab') {
+    console.log('🔧 VISIBILITY_SETTINGS: Settings tab opened, ensuring event listeners...');
+    if (window.visibilitySettingsManager && typeof window.visibilitySettingsManager.ensureEventListeners === 'function') {
+      await window.visibilitySettingsManager.ensureEventListeners();
+    }
+  }
+});
+
+// Also listen for clicks on settings tab button
+document.addEventListener('click', async (e) => {
+  const target = e.target.closest('[data-tab="settings-tab"], button[data-tab="settings-tab"], .main-nav-tab[data-tab="settings-tab"]');
+  if (target) {
+    console.log('🔧 VISIBILITY_SETTINGS: Settings tab button clicked, ensuring event listeners...');
+    setTimeout(async () => {
+      if (window.visibilitySettingsManager && typeof window.visibilitySettingsManager.ensureEventListeners === 'function') {
+        await window.visibilitySettingsManager.ensureEventListeners();
+      }
+    }, 100);
+  }
+}, true);
+
+// Export for global access
+window.VisibilitySettingsManager = VisibilitySettingsManager;
+

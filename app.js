@@ -59,6 +59,7 @@ app.use('/poh', require('./routes/poh'));
 app.use('/communities', require('./routes/communities'));
 app.use('/avatars', require('./routes/avatars'));
 app.use('/chat', require('./routes/chat'));
+app.use('/api/messages', require('./routes/messages')); // New messages API with keyset pagination
 app.use('/v1/presence', require('./routes/presence')); // CRITICAL FIX: Register presence routes
 app.use('/v1/users', require('./routes/users')); // CRITICAL FIX: Register users routes
 app.use('/v1/reactions', require('./routes/reactions')); // CRITICAL FIX: Register reactions routes

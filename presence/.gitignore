@@ -1,0 +1,53 @@
+# Distribution ignore - files that should NOT be in extension distribution
+# See .distributionignore for detailed list
+
+# Documentation
+*.md
+!README.md
+docs/
+
+# TypeScript source (should compile to dist/)
+src/
+*.ts
+!*.d.ts
+
+# Build artifacts
+build/
+*.map
+
+# Scripts (keep scripts/ directory but not in root)
+*.sh
+!scripts/*.sh
+
+# SQL migrations
+*.sql
+
+# Test files
+tests/
+*test*.js
+*test*.ts
+*TEST*.js
+*TEST*.ts
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+*.json.bak
+CLEANUP_LOG.json
+false
+
+# Development-only files
+DIAGNOSTIC_*.js
+*_DIAGNOSTIC.js
+*_DIAGNOSTIC.ts
+COMPREHENSIVE_*.js
+console_*.js
+debug_*.js
+test_*.js
+
+# Archive directories
+presence-archive-*/
+
+
+

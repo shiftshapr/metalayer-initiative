@@ -1,0 +1,242 @@
+// Token Launch Infrastructure - Database Schema Additions
+// Add these models to your main schema.prisma file
+
+/// Milestone tracking for token launch readiness
+model TokenLaunchMilestone {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  milestoneKey      String    @unique // e.g., "community_engagement", "governance_readiness"
+  name              String
+  description       String?   @db.Text
+  category          String    // "community", "governance", "technical", "compliance", "treasury"
+  targetValue       String?   // Target metric value (JSON string for flexibility)
+  currentValue      String?   // Current metric value (JSON string)
+  isComplete        Boolean   @default(false)
+  evidenceUrl       String?   // IPFS/Arweave link to signed evidence
+  evidenceHash      String?   // Cryptographic hash of evidence
+  verifiedBy        String?   @db.Uuid // User who verified
+  verifiedAt        DateTime? @db.Timestamptz(6)
+  created_at        DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime  @default(now()) @db.Timestamptz(6)
+
+  MilestoneAttestation MilestoneAttestation[]
+  AppUser            AppUser?  @relation(fields: [verifiedBy], references: [id])
+
+  @@index([category])
+  @@index([isComplete])
+  @@index([milestoneKey])
+}
+
+/// Cryptographic attestations for milestone verification
+model MilestoneAttestation {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  milestoneId       String    @db.Uuid
+  attestorId        String    @db.Uuid // User who signed
+  signature         String    // Cryptographic signature
+  publicKey         String?   // Public key used for verification
+  evidenceData      Json?     // Structured evidence data
+  evidenceUrl       String?   // IPFS/Arweave link
+  createdAt         DateTime  @default(now()) @db.Timestamptz(6)
+
+  Milestone         TokenLaunchMilestone @relation(fields: [milestoneId], references: [id], onDelete: Cascade)
+  AppUser           AppUser              @relation(fields: [attestorId], references: [id])
+
+  @@index([milestoneId])
+  @@index([attestorId])
+  @@index([createdAt])
+}
+
+/// Community engagement metrics for milestone tracking
+model CommunityMetrics {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  metricDate        DateTime  @default(now()) @db.Timestamptz(6)
+  totalMembers      Int       @default(0)
+  activeMembers     Int       @default(0) // Active in last 30 days
+  participationRate Float?    @db.Decimal(5, 4) // 0.0000 to 1.0000
+  messagesCount     Int       @default(0)
+  communitiesCount  Int       @default(0)
+  groupsCount       Int       @default(0)
+  metadata          Json?     // Additional metrics
+
+  @@index([metricDate(sort: Desc)])
+}
+
+/// Governance proposals and voting
+model GovernanceProposal {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  title             String
+  description       String    @db.Text
+  proposalType      String    // "treasury", "parameter", "upgrade", "general"
+  proposerId        String    @db.Uuid
+  status            String    @default("draft") // "draft", "active", "passed", "rejected", "executed"
+  votingStart       DateTime? @db.Timestamptz(6)
+  votingEnd         DateTime? @db.Timestamptz(6)
+  quorumThreshold   Float?    @db.Decimal(5, 4) // Required participation
+  approvalThreshold Float?    @db.Decimal(5, 4) // Required approval rate
+  snapshotBlock     BigInt?   // Snapshot block for voting
+  executionData     Json?     // Data needed for execution
+  executedAt        DateTime? @db.Timestamptz(6)
+  executedBy        String?   @db.Uuid
+  created_at        DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime  @default(now()) @db.Timestamptz(6)
+
+  Votes             GovernanceVote[]
+  AppUser           AppUser   @relation(fields: [proposerId], references: [id])
+  Executor          AppUser?  @relation("ProposalExecutor", fields: [executedBy], references: [id])
+
+  @@index([status])
+  @@index([proposalType])
+  @@index([votingStart])
+  @@index([proposerId])
+}
+
+/// Governance votes
+model GovernanceVote {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  proposalId        String    @db.Uuid
+  voterId           String    @db.Uuid
+  vote              String    // "yes", "no", "abstain"
+  votingPower       Float?    @db.Decimal(20, 8) // Token-weighted voting power
+  rationale         String?   @db.Text
+  created_at        DateTime  @default(now()) @db.Timestamptz(6)
+
+  Proposal          GovernanceProposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  AppUser           AppUser            @relation(fields: [voterId], references: [id])
+
+  @@unique([proposalId, voterId])
+  @@index([proposalId])
+  @@index([voterId])
+}
+
+/// Treasury management
+model TreasuryTransaction {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  transactionType   String    // "income", "expense", "transfer", "yield"
+  category          String    // "bonding_curve_fees", "governance", "operations", "grants"
+  amount            Float     @db.Decimal(20, 8)
+  currency          String    @default("USD") // USD, ETH, SOL, etc.
+  description       String?   @db.Text
+  proposalId        String?   @db.Uuid // If linked to governance proposal
+  approvedBy        String?   @db.Uuid
+  executedBy        String?   @db.Uuid
+  status            String    @default("pending") // "pending", "approved", "executed", "rejected"
+  executionHash     String?   // On-chain transaction hash
+  metadata          Json?     // Additional transaction data
+  created_at        DateTime  @default(now()) @db.Timestamptz(6)
+  executed_at       DateTime? @db.Timestamptz(6)
+
+  Proposal          GovernanceProposal? @relation(fields: [proposalId], references: [id])
+  Approver          AppUser?           @relation("TreasuryApprover", fields: [approvedBy], references: [id])
+  Executor          AppUser?           @relation("TreasuryExecutor", fields: [executedBy], references: [id])
+
+  @@index([transactionType])
+  @@index([category])
+  @@index([status])
+  @@index([created_at(sort: Desc)])
+}
+
+/// Treasury balances and allocations
+model TreasuryBalance {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  currency          String    // USD, ETH, SOL, etc.
+  balance           Float     @db.Decimal(20, 8)
+  allocated         Float     @default(0) @db.Decimal(20, 8) // Allocated but not spent
+  available         Float     @db.Decimal(20, 8) // Available for spending
+  category          String?   // Optional category allocation
+  updated_at        DateTime  @default(now()) @db.Timestamptz(6)
+
+  @@unique([currency, category])
+  @@index([currency])
+}
+
+/// Token utility integrations - tracks where tokens are used
+model TokenUtility {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  utilityType       String    // "access_gate", "reputation", "governance", "payment", "staking"
+  targetType        String    // "module", "community", "feature", "service"
+  targetId          String?   // ID of the target (module ID, community ID, etc.)
+  requiredAmount    Float?    @db.Decimal(20, 8) // Minimum tokens required
+  isActive          Boolean   @default(true)
+  metadata          Json?     // Additional configuration
+  created_at        DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime  @default(now()) @db.Timestamptz(6)
+
+  @@index([utilityType])
+  @@index([targetType, targetId])
+  @@index([isActive])
+}
+
+/// User token balances (off-chain tracking, on-chain is source of truth)
+model UserTokenBalance {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId            String    @db.Uuid
+  walletAddress     String?   // On-chain wallet address
+  balance           Float     @default(0) @db.Decimal(20, 8)
+  stakedBalance     Float     @default(0) @db.Decimal(20, 8)
+  lastSyncedAt      DateTime? @db.Timestamptz(6)
+  created_at        DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime  @default(now()) @db.Timestamptz(6)
+
+  AppUser           AppUser   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId])
+  @@index([walletAddress])
+}
+
+/// Security monitoring and alerts
+model SecurityAlert {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  alertType         String    // "anomaly", "threshold", "governance", "treasury"
+  severity          String    @default("medium") // "low", "medium", "high", "critical"
+  title             String
+  description       String    @db.Text
+  source            String?   // What triggered the alert
+  metadata          Json?     // Alert-specific data
+  acknowledgedBy    String?   @db.Uuid
+  acknowledgedAt    DateTime? @db.Timestamptz(6)
+  resolvedAt        DateTime? @db.Timestamptz(6)
+  created_at        DateTime  @default(now()) @db.Timestamptz(6)
+
+  Acknowledger      AppUser?  @relation("SecurityAlertAcknowledger", fields: [acknowledgedBy], references: [id])
+
+  @@index([alertType])
+  @@index([severity])
+  @@index([created_at(sort: Desc)])
+  @@index([acknowledgedAt])
+}
+
+/// Multisig signer management
+model MultisigSigner {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId            String    @db.Uuid
+  walletAddress     String    // On-chain wallet address
+  role              String    // "signer", "admin", "backup"
+  isActive          Boolean   @default(true)
+  addedAt           DateTime  @default(now()) @db.Timestamptz(6)
+  removedAt         DateTime? @db.Timestamptz(6)
+  notes             String?   @db.Text
+
+  AppUser           AppUser   @relation(fields: [userId], references: [id])
+
+  @@unique([walletAddress])
+  @@index([userId])
+  @@index([isActive])
+}
+
+/// Token launch configuration
+model TokenLaunchConfig {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  configKey         String    @unique
+  configValue       String    @db.Text // JSON string for complex values
+  description       String?   @db.Text
+  updatedBy         String?   @db.Uuid
+  updated_at        DateTime  @default(now()) @db.Timestamptz(6)
+
+  Updater           AppUser?  @relation(fields: [updatedBy], references: [id])
+
+  @@index([configKey])
+}
+
+
+
+
+

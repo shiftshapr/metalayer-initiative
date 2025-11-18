@@ -1,0 +1,82 @@
+# Files that should NEVER be in the extension distribution
+# These are development/source files only
+
+# Documentation
+*.md
+docs/
+
+# TypeScript source (should be outside presence/, compile directly to presence/ root)
+src/
+*.ts
+!*.d.ts
+dist/
+
+# Build artifacts and scripts
+build/
+compile*.sh
+cleanup*.sh
+*.sh
+
+# SQL migrations
+*.sql
+
+# Test files
+tests/
+*test*.js
+*test*.ts
+*TEST*.js
+*TEST*.ts
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+*.json.bak
+CLEANUP_LOG.json
+false
+
+# Development-only files
+scripts/
+DIAGNOSTIC_*.js
+*_DIAGNOSTIC.js
+*_DIAGNOSTIC.ts
+COMPREHENSIVE_*.js
+console_*.js
+debug_*.js
+test_*.js
+
+# Migration/status files
+MIGRATION_*.md
+MIGRATION_*.js
+*_MIGRATION*.md
+*_STATUS*.md
+*_PROGRESS*.md
+*_SESSION*.md
+*_MILESTONE*.md
+CURRENT_*.md
+FULL_*.md
+ES6_*.md
+TYPESCRIPT_*.md
+ORCHESTRATION_*.md
+ROOT_CAUSE_*.md
+FORMATTING_*.md
+CLEANUP_*.md
+FIXES_*.md
+MESSAGE_*.md
+RELAUNCH_*.md
+RED_LINE_*.md
+CANOPI_*.md
+CREATOR_*.md
+TOKEN_*.md
+SUBSCRIPTION_*.md
+NOTIFICATION_*.md
+SESSION_*.md
+STANDARDIZATION_*.md
+FINAL_*.md
+
+# TypeScript declaration maps (keep .d.ts, remove .map)
+*.d.ts.map
+
+# Source maps (optional - can keep for debugging, but usually not needed in distribution)
+*.js.map
+

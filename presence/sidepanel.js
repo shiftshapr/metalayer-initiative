@@ -92,6 +92,7 @@ async function initializeCompleteModernArchitecture() {
     // Initialize EventBus
     if (typeof EventBus !== 'undefined') {
       eventBus = new EventBus();
+      window.eventBus = eventBus;
       setupModernEventHandling();
     }
     
@@ -3376,6 +3377,7 @@ function initializeSidepanel() {
 }
 
 // Make key functions globally available (COMP METHOD)
+window.initializeCompleteModernArchitecture = initializeCompleteModernArchitecture;
 window.handlePendingContent = handlePendingContent;
 window.migrateFromChromeStorage = migrateFromChromeStorage;
 window.startPresenceTracking = startPresenceTracking;
@@ -3454,10 +3456,14 @@ if (typeof ProfileManager !== 'undefined') {
   console.log('⚠️ ProfileManager not available');
 }
 
-// Initialize when DOM is ready
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initializeSidepanel);
+// Initialize when DOM is ready (unless disabled by new TypeScript orchestrator)
+const shouldInitializeLegacySidepanel = !(typeof window !== 'undefined' && window.__DISABLE_LEGACY_SIDEPANEL__);
+if (shouldInitializeLegacySidepanel) {
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeSidepanel);
+  } else {
+    initializeSidepanel();
+  }
 } else {
-  // DOM is already loaded
-  initializeSidepanel();
+  console.log('⚪️ SIDEPANEL: Legacy initialization disabled (TypeScript orchestrator active)');
 }

@@ -1,164 +1,200 @@
 /**
  * COMMUNITIES MODULE - Community Management
+ * TypeScript + ES6 Module
  * Handles all community functionality
  */
-
+import { Logger } from '../utils/Logger.js';
+import { stateManagerInstance, setState } from '../core/StateManager.js';
+const legacyContext = globalThis;
+const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+const getCurrentUser = () => stateManagerInstance.getState('currentUser');
+const getCurrentUrlData = () => stateManagerInstance.getState('currentUrlData');
+const setCurrentUrlData = (urlData) => {
+    stateManagerInstance.setState('currentUrlData', urlData);
+    if (urlData) {
+        legacyContext.currentUrlData = {
+            ...legacyContext.currentUrlData,
+            ...urlData
+        };
+    }
+};
+const getActiveCommunitiesState = () => stateManagerInstance.getState('ui.activeCommunities') || [];
+const setActiveCommunitiesState = (communities) => {
+    setState('activeCommunities', communities);
+    setState('ui.activeCommunities', communities);
+    legacyContext.activeCommunities = communities;
+};
+const getCurrentVisibilityDataUnfiltered = () => stateManagerInstance.getState('currentVisibilityDataUnfiltered');
+const getLegacyNormalizeUrl = () => legacyContext.normalizeCurrentUrl;
+const resolveActiveCommunitiesWithRetry = async (initial) => {
+    if (initial && initial.length > 0) {
+        return initial;
+    }
+    for (let i = 0; i < 25; i++) {
+        const stored = getActiveCommunitiesState();
+        if (stored.length > 0) {
+            return stored;
+        }
+        if (legacyContext.activeCommunities?.length) {
+            return legacyContext.activeCommunities;
+        }
+        await delay(200);
+    }
+    return [];
+};
 class CommunitiesModule {
-  constructor() {
-    this.logLevel = 'INFO';
-    this.isInitialized = false;
-  }
-
-  /**
-   * Initialize CommunitiesModule
-   */
-  async initialize() {
-    if (this.isInitialized) {
-      this.log('WARN', 'CommunitiesModule already initialized');
-      return;
+    constructor() {
+        this.logLevel = 'INFO';
+        this.isInitialized = false;
+        this.logger = new Logger();
     }
-
-    this.log('INFO', 'Initializing CommunitiesModule...');
-    
-    try {
-      // Initialize community dropdown activation
-      this.initializeCommunityDropdown();
-      
-      this.isInitialized = true;
-      this.log('INFO', 'CommunitiesModule initialized successfully');
-    } catch (error) {
-      this.log('ERROR', 'Failed to initialize CommunitiesModule:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Initialize community dropdown activation
-   * Ensures community dropdown is properly activated in sidepanel
-   * SD3: Integrated from COMMUNITY_DROPDOWN_ACTIVATOR.js
-   */
-  initializeCommunityDropdown() {
-    this.log('INFO', 'Initializing community dropdown...');
-    
-    const activateDropdown = () => {
-      const trigger = document.querySelector('.community-dropdown-trigger');
-      const panel = document.getElementById('community-dropdown-panel');
-      
-      if (!trigger || !panel) {
-        this.log('WARN', 'Community dropdown trigger or panel not found, retrying...');
-        setTimeout(activateDropdown, 500);
-        return;
-      }
-
-      this.log('INFO', 'Found community dropdown trigger and panel elements');
-
-      // CRITICAL FIX: Clone trigger to remove any existing listeners
-      const newTrigger = trigger.cloneNode(true);
-      if (trigger.parentNode) {
-        trigger.parentNode.replaceChild(newTrigger, trigger);
-      }
-
-      // CRITICAL FIX: Add mousedown handler first (fires before click)
-      newTrigger.addEventListener('mousedown', (e) => {
-        this.log('DEBUG', 'Community dropdown trigger mousedown event');
-        e.stopPropagation();
-        // Don't prevent default - allow click to fire
-      });
-
-      // CRITICAL FIX: Add click handler
-      newTrigger.addEventListener('click', (e) => {
-        this.log('DEBUG', 'Community dropdown trigger clicked');
-        e.stopPropagation();
-        e.preventDefault();
-        
-        const isVisible = panel.style.display === 'block' || 
-                         (panel.style.display === '' && window.getComputedStyle(panel).display === 'block');
-        
-        if (isVisible) {
-          panel.style.display = 'none';
-          this.log('DEBUG', 'Community dropdown hidden');
-        } else {
-          panel.style.display = 'block';
-          this.log('DEBUG', 'Community dropdown shown');
+    /**
+     * Initialize CommunitiesModule
+     */
+    async initialize() {
+        if (this.isInitialized) {
+            this.log('WARN', 'CommunitiesModule already initialized');
+            return;
         }
-      });
-
-      // CRITICAL FIX: Ensure pointer events are enabled
-      newTrigger.style.pointerEvents = 'auto';
-      newTrigger.style.cursor = 'pointer';
-      newTrigger.style.userSelect = 'none';
-      
-      // Ensure all child elements also allow pointer events
-      const triggerChildren = newTrigger.querySelectorAll('*');
-      triggerChildren.forEach(child => {
-        child.style.pointerEvents = 'auto';
-        child.style.cursor = 'pointer';
-      });
-
-      this.log('INFO', 'Community dropdown event listeners attached');
-
-      // Setup close button
-      const closeBtn = document.getElementById('close-community-dropdown');
-      if (closeBtn) {
-        closeBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          panel.style.display = 'none';
-          this.log('DEBUG', 'Community dropdown closed via close button');
-        });
-      }
-
-      // Close dropdown when clicking outside
-      document.addEventListener('click', (e) => {
-        if (panel.style.display === 'block' || 
-            window.getComputedStyle(panel).display === 'block') {
-          if (!panel.contains(e.target) && !newTrigger.contains(e.target)) {
-            panel.style.display = 'none';
-            this.log('DEBUG', 'Community dropdown closed via outside click');
-          }
+        this.log('INFO', 'Initializing CommunitiesModule...');
+        try {
+            // Initialize community dropdown activation
+            this.initializeCommunityDropdown();
+            this.isInitialized = true;
+            this.log('INFO', 'CommunitiesModule initialized successfully');
         }
-      });
-
-      return true;
-    };
-
-    // Auto-activate on page load
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', () => {
-        setTimeout(activateDropdown, 1000);
-      });
-    } else {
-      setTimeout(activateDropdown, 1000);
+        catch (error) {
+            this.log('ERROR', 'Failed to initialize CommunitiesModule:', error);
+            throw error;
+        }
     }
-
-    // Export for manual invocation
-    window.activateCommunityDropdown = activateDropdown;
-  }
-
-  /**
-   * Logging utility
-   */
-  log(level, message, ...args) {
-    if (this.logLevel === 'SILENT') return;
-    
-    const levels = { ERROR: 0, WARN: 1, INFO: 2, DEBUG: 3 };
-    if (levels[level] <= levels[this.logLevel]) {
-      console.log(`[CommunitiesModule] [${level}] ${message}`, ...args);
+    /**
+     * Initialize community dropdown activation
+     * Ensures community dropdown is properly activated in sidepanel
+     * SD3: Integrated from COMMUNITY_DROPDOWN_ACTIVATOR.js
+     */
+    initializeCommunityDropdown() {
+        this.log('INFO', 'Initializing community dropdown...');
+        const activateDropdown = () => {
+            const trigger = document.querySelector('.community-dropdown-trigger');
+            const panel = document.getElementById('community-dropdown-panel');
+            if (!trigger || !panel) {
+                this.log('WARN', 'Community dropdown trigger or panel not found, retrying...');
+                setTimeout(activateDropdown, 500);
+                return;
+            }
+            this.log('INFO', 'Found community dropdown trigger and panel elements');
+            // CRITICAL FIX: Clone trigger to remove any existing listeners
+            const newTrigger = trigger.cloneNode(true);
+            if (trigger.parentNode) {
+                trigger.parentNode.replaceChild(newTrigger, trigger);
+            }
+            // CRITICAL FIX: Add mousedown handler first (fires before click)
+            newTrigger.addEventListener('mousedown', (e) => {
+                this.log('DEBUG', 'Community dropdown trigger mousedown event');
+                e.stopPropagation();
+                // Don't prevent default - allow click to fire
+            });
+            // CRITICAL FIX: Add click handler
+            newTrigger.addEventListener('click', (e) => {
+                this.log('DEBUG', 'Community dropdown trigger clicked');
+                e.stopPropagation();
+                e.preventDefault();
+                const isVisible = panel.style.display === 'block' ||
+                    (panel.style.display === '' && getComputedStyle(panel).display === 'block');
+                if (isVisible) {
+                    panel.style.display = 'none';
+                    this.log('DEBUG', 'Community dropdown hidden');
+                }
+                else {
+                    panel.style.display = 'block';
+                    this.log('DEBUG', 'Community dropdown shown');
+                }
+            });
+            // CRITICAL FIX: Ensure pointer events are enabled
+            newTrigger.style.pointerEvents = 'auto';
+            newTrigger.style.cursor = 'pointer';
+            newTrigger.style.userSelect = 'none';
+            // Ensure all child elements also allow pointer events
+            const triggerChildren = newTrigger.querySelectorAll('*');
+            triggerChildren.forEach(child => {
+                const childEl = child;
+                childEl.style.pointerEvents = 'auto';
+                childEl.style.cursor = 'pointer';
+            });
+            this.log('INFO', 'Community dropdown event listeners attached');
+            // Setup close button
+            const closeBtn = document.getElementById('close-community-dropdown');
+            if (closeBtn) {
+                closeBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    panel.style.display = 'none';
+                    this.log('DEBUG', 'Community dropdown closed via close button');
+                });
+            }
+            // Close dropdown when clicking outside
+            document.addEventListener('click', (e) => {
+                const panelEl = panel;
+                const panelStyle = panelEl.style;
+                if (panelStyle.display === 'block' ||
+                    getComputedStyle(panelEl).display === 'block') {
+                    if (!panelEl.contains(e.target) && !newTrigger.contains(e.target)) {
+                        panelStyle.display = 'none';
+                        this.log('DEBUG', 'Community dropdown closed via outside click');
+                    }
+                }
+            });
+            return true;
+        };
+        // Auto-activate on page load
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => {
+                setTimeout(activateDropdown, 1000);
+            });
+        }
+        else {
+            setTimeout(activateDropdown, 1000);
+        }
+        // Note: No window export - use ES6 module exports instead
     }
-  }
+    /**
+     * Logging utility
+     */
+    log(level, message, ...args) {
+        if (this.logLevel === 'SILENT')
+            return;
+        const levels = { ERROR: 0, WARN: 1, INFO: 2, DEBUG: 3, SILENT: 4 };
+        if (levels[level] <= levels[this.logLevel]) {
+            console.log(`[CommunitiesModule] [${level}] ${message}`, ...args);
+        }
+    }
 }
-
-// ===== COMMUNITY FUNCTIONS (Move from sidepanel.js) =====
-// TODO: Move these functions from sidepanel.js:
-
+// Export CommunitiesModule as ES6 module
+export { CommunitiesModule };
+export default CommunitiesModule;
+// Note: Community functions (loadCommunities, updateCommunityDropdown, etc.) 
+// have been moved to CommunityHelpers.ts and CommunityLoaders.ts
+// Import them from there instead of using standalone functions here.
+// Legacy standalone functions removed - use ES6 imports:
+// import { loadCommunities, loadCombinedAvatars } from './CommunityLoaders.js';
+// import { updateCommunityDropdown, updatePlaceholderText } from './CommunityHelpers.js';
+// Removed functions (now in separate modules):
+// - loadCommunities() → CommunityLoaders.ts
+// - updateCommunityDropdown() → CommunityHelpers.ts
+// - loadCombinedAvatars() → CommunityLoaders.ts
+// - updatePlaceholderText() → CommunityHelpers.ts
+// - getPrimaryCommunityName() → CommunityHelpers.ts
+/*
 // --- Community Management Functions ---
+// MOVED TO CommunityLoaders.ts
 async function loadCommunities() {
     try {
       console.log('🔍 USER_IDENTITY: === COMMUNITIES USER IDENTITY TRACE ===');
       console.log('🔍 USER_IDENTITY: Current user context before loading communities:');
-      console.log('🔍 USER_IDENTITY: window.currentUser:', window.currentUser);
-      console.log('🔍 USER_IDENTITY: window.currentUser?.id:', window.currentUser?.id);
-      console.log('🔍 USER_IDENTITY: window.currentUser?.name:', window.currentUser?.name);
-      console.log('🔍 USER_IDENTITY: window.currentUser?.id:', window.currentUser?.id);
+      console.log('🔍 USER_IDENTITY: currentUser:', getCurrentUser());
+      console.log('🔍 USER_IDENTITY: currentUser?.id:', getCurrentUser()?.id);
+      console.log('🔍 USER_IDENTITY: currentUser?.name:', getCurrentUser()?.name);
+      console.log('🔍 USER_IDENTITY: currentUser?.id:', getCurrentUser()?.id);
       
       console.log('Loading communities...');
       const response = await api.getCommunities();
@@ -243,18 +279,21 @@ async function loadCommunities() {
         const primaryCommunity = communities[0].id; // First community is primary
         
         // Store active communities and primary community
-        if (typeof window.setState === 'function') {
-          window.setState('activeCommunities', activeCommunities);
-          window.setState('primaryCommunity', primaryCommunity);
-          window.setState('currentCommunity', primaryCommunity); // For backward compatibility
-          window.setState('communities', communities); // Store communities for name lookup
-        }
+        // FIX: Store under both keys for compatibility
+        setState('activeCommunities', activeCommunities);
+        setState('ui.activeCommunities', activeCommunities); // FIX: Also store under ui.activeCommunities
+        setState('primaryCommunity', primaryCommunity);
+        setState('currentCommunity', primaryCommunity); // For backward compatibility
+        setState('communities', communities); // Store communities for name lookup
         
         // Normalize the current URL ONCE at startup
-        const initialUrlData = await normalizeCurrentUrl();
-        window.currentUrlData = initialUrlData; // CRITICAL: Set global state
+        const normalizer = getLegacyNormalizeUrl();
+        const initialUrlData = normalizer ? await normalizer() : undefined;
+        if (initialUrlData) {
+          setCurrentUrlData(initialUrlData);
+        }
         console.log('🔄 STARTUP: URL normalized for initial load');
-        console.log('🔄 STARTUP: window.currentUrlData set to:', initialUrlData.pageId);
+        console.log('🔄 STARTUP: currentUrlData set to:', initialUrlData?.pageId);
         
         // Wait for authentication before loading avatars
         console.log('🔍 INIT: Waiting for authentication before loading avatars...');
@@ -283,21 +322,26 @@ async function loadCommunities() {
           console.log('🔍 INIT: Skipping avatar loading until user signs in');
           // Don't retry - wait for user to authenticate
         }
+        // FIX: Load chat history with activeCommunities array (not just primaryCommunity)
+        // Wait for StateManager to store the data - verify it's actually stored
+        let storedCommunities = null;
+        for (let i = 0; i < 10; i++) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+          storedCommunities = getState('ui.activeCommunities');
+          if (storedCommunities && storedCommunities.length > 0) {
+            console.log('✅ INIT: Active communities confirmed in StateManager:', storedCommunities);
+            break;
+          }
+        }
+        
         // Load chat history using CanopiModule
-        if (typeof window.loadChatHistory === 'function') {
-          console.log('🔍 INIT: loadChatHistory available, loading chat history...');
-          await window.loadChatHistory(primaryCommunity);
-        } else {
-          console.log('🔍 INIT: loadChatHistory not available, waiting for CanopiModule...');
-          // Wait a bit for CanopiModule to load
-          setTimeout(async () => {
-            if (typeof window.loadChatHistory === 'function') {
-              console.log('🔍 INIT: loadChatHistory now available, loading chat history...');
-              await window.loadChatHistory(primaryCommunity);
-            } else {
-              console.log('❌ INIT: loadChatHistory still not available after retry');
-            }
-          }, 1000);
+        // Use ES6 import instead of window global
+        console.log('🔍 INIT: Loading chat history using ES6 import...');
+        try {
+          await loadChatHistory(null, activeCommunities);
+          console.log('✅ INIT: Chat history loaded successfully');
+        } catch (error) {
+          console.error('❌ INIT: Error loading chat history:', error);
         }
         
         // Update placeholder text with primary community name
@@ -315,31 +359,15 @@ async function loadCommunities() {
       // CRITICAL FIX: Load chat history even when communities fail to load
       // Use default community (comm-001) as fallback
       console.log('🔍 INIT: Attempting to load chat history with default community (comm-001)');
-      if (typeof window.loadChatHistory === 'function') {
-        console.log('🔍 INIT: loadChatHistory available, loading chat history with default community...');
+      const loadFallbackHistory = async () => {
         try {
-          await window.loadChatHistory('comm-001');
+          await loadChatHistory('comm-001');
           console.log('✅ INIT: Chat history loaded successfully with default community');
         } catch (chatError) {
           console.error('❌ INIT: Failed to load chat history:', chatError);
         }
-      } else {
-        console.log('🔍 INIT: loadChatHistory not available, waiting for CanopiModule...');
-        // Wait a bit for CanopiModule to load
-        setTimeout(async () => {
-          if (typeof window.loadChatHistory === 'function') {
-            console.log('🔍 INIT: loadChatHistory now available, loading chat history with default community...');
-            try {
-              await window.loadChatHistory('comm-001');
-              console.log('✅ INIT: Chat history loaded successfully with default community');
-            } catch (chatError) {
-              console.error('❌ INIT: Failed to load chat history:', chatError);
-            }
-          } else {
-            console.log('❌ INIT: loadChatHistory still not available after retry');
-          }
-        }, 1000);
-      }
+      };
+      await loadFallbackHistory();
     }
   }
   
@@ -348,22 +376,8 @@ async function loadCommunities() {
     const communityList = document.querySelector('.community-list');
     if (!communityList) return;
     
-    // Helper functions for state management
-    const getState = window.getState || (window.StateManager && typeof window.StateManager.get === 'function' 
-      ? window.StateManager.get.bind(window.StateManager)
-      : async (key) => {
-          if (window.StateManager && typeof window.StateManager.get === 'function') {
-            return await window.StateManager.get(key);
-          }
-          return null;
-        });
-    const setState = window.setState || (window.StateManager && typeof window.StateManager.set === 'function'
-      ? window.StateManager.set.bind(window.StateManager)
-      : async (key, value) => {
-          if (window.StateManager && typeof window.StateManager.set === 'function') {
-            return await window.StateManager.set(key, value);
-          }
-        });
+    // Use ES6 import instead of window global
+    // getState and setState are already imported at the top
     
     // Get current active communities and primary community
     const activeCommunities = await getState('activeCommunities') || [];
@@ -435,17 +449,13 @@ async function loadCommunities() {
           }
         }
         
-        await setState('activeCommunities', activeCommunities);
+        setActiveCommunitiesState(activeCommunities);
         console.log('✅ Community active status updated:', communityId, e.target.checked);
         
         // Reload visibility and messages for all active communities
-        if (typeof window.refreshVisibilityAvatars === 'function') {
-          window.refreshVisibilityAvatars();
-        }
-        if (typeof window.loadChatHistory === 'function') {
-          const primary = await getState('primaryCommunity');
-          await window.loadChatHistory(primary);
-        }
+        legacyContext.refreshVisibilityAvatars?.();
+        const primary = await getState('primaryCommunity');
+        await loadChatHistory(primary);
       });
       
       // Three-dot menu handler (only for non-primary communities)
@@ -493,8 +503,8 @@ async function loadCommunities() {
           
           try {
             // Get current user
-            const user = await window.authManager.getCurrentUser();
-            const userId = user?.id || user?.user_id;
+            const user = await authManagerInstance.getCurrentUser();
+            const userId = user?.id;
             
             if (!userId) {
               console.error('❌ Cannot select community: User not authenticated');
@@ -504,23 +514,23 @@ async function loadCommunities() {
 
             // Get Chrome tab ID
             let tabId = null;
-            if (window.tabIdManager) {
-              tabId = await window.tabIdManager.getCurrentTabId();
+            if (legacyContext.tabIdManager?.getCurrentTabId) {
+              tabId = await legacyContext.tabIdManager.getCurrentTabId();
             }
 
             // Call API to select community (sets as primary and active)
-            if (window.api && typeof window.api.selectCommunity === 'function') {
-              await window.api.selectCommunity(userId, communityId, tabId);
+            if (typeof api.selectCommunity === 'function') {
+              await api.selectCommunity(userId, communityId, tabId);
               console.log('✅ Community selected via API:', community.name, 'tabId:', tabId);
             } else {
               // Fallback to local state if API not available
               console.warn('⚠️ API not available, using local state fallback');
               await setState('primaryCommunity', communityId);
               
-              let activeCommunities = await getState('activeCommunities') || [];
+              let activeCommunities = getActiveCommunitiesState();
               if (!activeCommunities.includes(communityId)) {
                 activeCommunities.push(communityId);
-                await setState('activeCommunities', activeCommunities);
+                setActiveCommunitiesState(activeCommunities);
               }
             }
             
@@ -528,10 +538,10 @@ async function loadCommunities() {
             await setState('primaryCommunity', communityId);
             
             // Ensure it's active
-            let activeCommunities = await getState('activeCommunities') || [];
+            let activeCommunities = getActiveCommunitiesState();
             if (!activeCommunities.includes(communityId)) {
               activeCommunities.push(communityId);
-              await setState('activeCommunities', activeCommunities);
+              setActiveCommunitiesState(activeCommunities);
             }
             
             // Close menu and refresh dropdown
@@ -545,9 +555,7 @@ async function loadCommunities() {
             }
             
             // Reload chat for new primary community
-            if (typeof window.loadChatHistory === 'function') {
-              await window.loadChatHistory(communityId);
-            }
+            await loadChatHistory(communityId);
             
             console.log('✅ Primary community changed to:', community.name);
           } catch (error) {
@@ -595,7 +603,7 @@ async function loadCommunities() {
       // Store updated primary community
       // Modernized: Use StateManager instead of Chrome Storage
       getState('communities').then((communities) => {
-        setState('communities', { 
+        setState('communities', {
           primaryCommunity: community.id,
           currentCommunity: community.id, // For backward compatibility
           communities: result.communities // Keep existing communities
@@ -603,10 +611,10 @@ async function loadCommunities() {
       });
       
       // Load chat history for the new primary community
-      if (typeof window.loadChatHistory === 'function') {
-        window.loadChatHistory(community.id);
-      } else {
-        console.log('🔍 COMMUNITIES: loadChatHistory not available for community switch');
+      try {
+        await loadChatHistory(community.id);
+      } catch (error) {
+        console.log('🔍 COMMUNITIES: loadChatHistory failed during community switch', error);
       }
       
       // Note: We don't reload avatars here because we want to show people from ALL active communities
@@ -648,7 +656,10 @@ async function loadCombinedAvatars(communityIds) {
       console.log('');
       console.log('📊 LOAD_VISIBILITY: Step 1 - Normalizing URL');
       console.log('───────────────────────────────────────────────────────────');
-      const urlData = await normalizeCurrentUrl();
+      const normalizer = getLegacyNormalizeUrl();
+      const urlData = normalizer
+        ? await normalizer()
+        : { normalizedUrl: location.href, rawUrl: location.href, pageId: location.href };
       const currentUri = urlData.normalizedUrl; // Use normalized URL for consistency
       console.log('✅ LOAD_VISIBILITY: Normalized URL:', currentUri);
       console.log('✅ LOAD_VISIBILITY: Raw URL:', urlData.rawUrl);
@@ -662,17 +673,18 @@ async function loadCombinedAvatars(communityIds) {
         console.log('───────────────────────────────────────────────────────────');
         
         // COMP METHOD: Ensure presence tracking is active before querying
-        if (!window.presenceTrackingActive) {
+        if (!legacyContext.presenceTrackingActive) {
           console.log('🔧 LOAD_VISIBILITY: Presence tracking not active, initializing...');
-          if (typeof window.initializePresenceTracking === 'function') {
-            await window.initializePresenceTracking();
+          legacyContext.presenceTrackingActive = true;
+          if (legacyContext.initializePresenceTracking) {
+            await legacyContext.initializePresenceTracking();
             // Wait a moment for presence to be processed
-            await new Promise(resolve => setTimeout(resolve, 2000));
+            await delay(2000);
           }
         }
         
         // COMP METHOD: Use the Supabase realtime client directly like COMP does
-        const client = window.supabaseRealtimeClient || supabaseRealtimeClient;
+        const client = legacyContext.supabaseRealtimeClient;
         if (!client) {
           throw new Error('Supabase realtime client not available');
         }
@@ -680,7 +692,7 @@ async function loadCombinedAvatars(communityIds) {
         console.log('🌐 LOAD_VISIBILITY: Using client.getPageUsers() like COMP');
         const users = await client.getPageUsers(urlData.pageId);
         console.log('👁️ LOAD_VISIBILITY: Enhanced query returned users:', users.length);
-        console.log('👁️ LOAD_VISIBILITY: Users:', users.map(u => `${u.user_email} (${u.is_active ? 'ACTIVE' : 'INACTIVE'})`));
+        console.log('👁️ LOAD_VISIBILITY: Users:', users.map(u => `${u.email || u.id} (${u.isActive ? 'ACTIVE' : 'INACTIVE'})`));
         
         if (users && users.length > 0) {
           console.log('');
@@ -690,11 +702,12 @@ async function loadCombinedAvatars(communityIds) {
           // COMP METHOD: Before processing users, cache current aura colors from visibility data
           // This ensures we preserve aura color updates that haven't been saved to DB yet
           const auraColorCache = {};
-          if (window.currentVisibilityDataUnfiltered?.active) {
-            window.currentVisibilityDataUnfiltered.active.forEach(user => {
-              const userId = user.id || user.userId || user.user_id;
-              const auraColor = user.aura_color; // COMP METHOD: Use aura_color (snake_case)
-              if (userId && auraColor && auraColor !== window.AVATAR_FALLBACK_COLOR && 
+          const unfilteredVisibility = getCurrentVisibilityDataUnfiltered();
+          if (unfilteredVisibility?.active?.length) {
+            unfilteredVisibility.active.forEach(user => {
+              const userId = user.id;
+              const auraColor = user.auraColor; // Use standardized camelCase
+              if (userId && auraColor && auraColor !== AVATAR_FALLBACK_COLOR &&
                   auraColor !== '#ffffff' && auraColor !== 'ffffff') {
                 auraColorCache[userId] = auraColor;
                 console.log(`🔍 COMP METHOD: CommunitiesModule cached aura color for ${userId}: ${auraColor}`);
@@ -703,63 +716,57 @@ async function loadCombinedAvatars(communityIds) {
           }
           
           // Helper to safely derive a display name
-          const safeNameFrom = (u) => {
-            const email = u?.user_email;
-            if (typeof email === 'string' && email.includes('@')) {
-              return email.split('@')[0];
-            }
-            return u?.name || u?.handle || 'Unknown';
-          };
+          const safeNameFrom = (u) =>
+            formatUserDisplayName({ name: u?.name, email: u?.email, handle: u?.handle });
 
           // COMP METHOD: Process users exactly like COMP does, with guards
           const usersWithAvatars = await Promise.all(users.map(async (user) => {
             let avatarUrl = null;
             let userName = safeNameFrom(user);
-            let userHandle = userName;
+            let userHandle = formatUserHandle(user);
             let avatarSource = 'none';
             
-            console.log(`🔍 COMP AVATAR: Processing user ${user.user_email} using AvatarUtils`);
+            console.log(`🔍 COMP AVATAR: Processing user ${user.email || user.id} using AvatarUtils`);
             
             try {
               // COMP METHOD: Use AvatarUtils directly (same as COMP)
-              // Check both global and window.AvatarUtils
-              const avatarUtils = window.AvatarUtils || AvatarUtils;
+              // Check both legacy global AvatarUtils and module import
+              const avatarUtils = legacyContext.AvatarUtils || AvatarUtils;
               if (typeof avatarUtils === 'undefined' || !avatarUtils.getAvatarUrl) {
-                console.warn(`⚠️ COMP AVATAR: AvatarUtils not available, using fallback for ${user.user_email}`);
+                console.warn(`⚠️ COMP AVATAR: AvatarUtils not available, using fallback for ${user.email || user.id}`);
                 throw new Error('AvatarUtils not available');
               }
               
               // Handle async AvatarUtils
               const avatarData = await avatarUtils.getAvatarUrl({
-                id: user.user_id || user.userId || user.id,
-                user_id: user.user_id || user.userId,
-                email: user.user_email,
+                id: user.id,
+                email: user.email,
                 name: user.name || userName,
-                avatar_url: user.avatar_url
+                avatarUrl: user.avatarUrl
               }, 'visibility');
               avatarUrl = avatarData.avatarUrl;
               userName = avatarData.userName;
               avatarSource = avatarData.source;
               
-              console.log(`✅ COMP AVATAR RESULT: ${user.user_email} - avatarUrl: ${avatarUrl}, source: ${avatarSource}, name: ${userName}`);
+              console.log(`✅ COMP AVATAR RESULT: ${user.email || user.id} - avatarUrl: ${avatarUrl}, source: ${avatarSource}, name: ${userName}`);
             } catch (error) {
-              console.error(`❌ COMP AVATAR: Exception processing ${user.user_email}:`, error);
+              console.error(`❌ COMP AVATAR: Exception processing ${user.email || user.id}:`, error);
               
               // Fallback if AvatarUtils fails
               avatarUrl = `https://lh3.googleusercontent.com/a/default-user=s96-c`;
               avatarSource = 'fallback';
-              console.warn(`COMP FALLBACK: Using generic avatar for ${user.user_email}: ${avatarUrl}`);
+              console.warn(`COMP FALLBACK: Using generic avatar for ${user.email || user.id}: ${avatarUrl}`);
             }
             
             // COMP METHOD: Get user ID for aura color cache lookup
-            const userId = user.user_id || user.userId || user.id || user.user_email;
+            const userId = getUserIdentity(user);
             
             // COMP METHOD: Prioritize cached aura color (from real-time updates) over DB value
             // This preserves real-time aura color changes that haven't been saved to DB yet
             // COMP uses aura_color from DB (snake_case)
             const cachedAuraColor = auraColorCache[userId];
-            const dbAuraColor = user.aura_color;
-            const finalAuraColor = cachedAuraColor || dbAuraColor || window.AVATAR_FALLBACK_COLOR;
+            const dbAuraColor = user.auraColor;
+            const finalAuraColor = cachedAuraColor || dbAuraColor || AVATAR_FALLBACK_COLOR;
             
             if (cachedAuraColor && cachedAuraColor !== dbAuraColor) {
               console.log(`🔍 COMP METHOD: CommunitiesModule using cached aura color for ${userId}: ${cachedAuraColor} (DB had: ${dbAuraColor})`);
@@ -768,19 +775,19 @@ async function loadCombinedAvatars(communityIds) {
             return {
               id: userId,
               userId: userId,
-              email: user.user_email,
+              email: user.email,
               name: userName,
               handle: userHandle,
               avatarUrl: avatarUrl,
-              aura_color: finalAuraColor,
+              auraColor: finalAuraColor,
               communityId: 'comm-001',
               communityName: 'Community comm-001',
-              lastSeen: user.last_seen,
+              lastSeen: user.lastSeen,
               availability: null,
               customLabel: null,
-              enterTime: user.enter_time,
-              isActive: user.is_active,
-              status: user.is_active ? 'online' : 'offline',
+              enterTime: user.enterTime,
+              isActive: user.isActive,
+              status: user.isActive ? 'online' : 'offline',
               avatarSource: avatarSource
             };
           }));
@@ -817,43 +824,44 @@ async function loadCombinedAvatars(communityIds) {
                   console.log('🔍 VISIBILITY: Retry successful - found', retryResponse.length, 'active users');
                   
                   // COMP METHOD: Cache aura colors before processing retry response
-                  const retryAuraColorCache = {};
-                  if (window.currentVisibilityDataUnfiltered?.active) {
-                    window.currentVisibilityDataUnfiltered.active.forEach(user => {
-                      const userId = user.id || user.userId || user.user_id;
-                      const auraColor = user.aura_color; // COMP METHOD: Use aura_color (snake_case)
-                      if (userId && auraColor && auraColor !== window.AVATAR_FALLBACK_COLOR && 
-                          auraColor !== '#ffffff' && auraColor !== 'ffffff') {
-                        retryAuraColorCache[userId] = auraColor;
-                      }
-                    });
-                  }
+                const retryAuraColorCache: Record<string, string> = {};
+                const retryVisibility = getCurrentVisibilityDataUnfiltered();
+                if (retryVisibility?.active?.length) {
+                  retryVisibility.active.forEach(user => {
+                    const userId = user.id;
+                    const auraColor = user.auraColor; // Use standardized camelCase
+                    if (userId && auraColor && auraColor !== AVATAR_FALLBACK_COLOR &&
+                        auraColor !== '#ffffff' && auraColor !== 'ffffff') {
+                      retryAuraColorCache[userId] = auraColor;
+                    }
+                  });
+                }
                   
                   // Convert to expected format
                   const formattedResponse = {
                     active: retryResponse.map(user => {
-                      const userId = user.user_email || user.user_id;
+                      const userId = user.id || user.email;
                       // COMP METHOD: Prioritize cached aura color over DB value
                       // COMP uses aura_color from DB (snake_case)
                       const cachedAuraColor = retryAuraColorCache[userId];
-                      const dbAuraColor = user.aura_color;
-                      const finalAuraColor = cachedAuraColor || dbAuraColor || window.AVATAR_FALLBACK_COLOR;
+                      const dbAuraColor = user.auraColor;
+                      const finalAuraColor = cachedAuraColor || dbAuraColor || AVATAR_FALLBACK_COLOR;
                       
                       return {
                         id: userId,
                         userId: userId,
-                        email: user.user_email,
-                        name: user.user_email.split('@')[0],
-                        handle: user.user_email.split('@')[0],
-                        avatarUrl: user.avatar_url,
-                        aura_color: finalAuraColor,
+                        email: user.email,
+                        name: user.email?.split('@')[0] || user.name,
+                        handle: user.email?.split('@')[0] || user.handle,
+                        avatarUrl: user.avatarUrl,
+                        auraColor: finalAuraColor,
                         communityId: 'comm-001',
                         communityName: 'Community comm-001',
-                        lastSeen: user.last_seen,
+                        lastSeen: user.lastSeen,
                         availability: null,
                         customLabel: null,
-                        enterTime: user.enter_time,
-                        isActive: user.is_active,
+                        enterTime: user.enterTime,
+                        isActive: user.isActive,
                         status: 'online'
                       };
                     }),
@@ -922,7 +930,7 @@ async function loadCombinedAvatars(communityIds) {
         
         // Add community info to each avatar and deduplicate
         avatars.forEach((avatar, avatarIndex) => {
-          const userKey = `${avatar.userId || avatar.id}`;
+          const userKey = `${avatar.id}`;
           if (!seenUsers.has(userKey)) {
             seenUsers.add(userKey);
             allAvatars.push({
@@ -930,9 +938,9 @@ async function loadCombinedAvatars(communityIds) {
               communityId: communityId,
               communityName: avatar.communityName || `Community ${communityId}`
             });
-            console.log(`VISIBILITY: Added unique avatar: ${avatar.name || avatar.handle || 'Unknown'} (${userKey}) from ${communityId}`, null, 'general');
+            console.log(`VISIBILITY: Added unique avatar: ${formatUserDisplayName(avatar)} (${userKey}) from ${communityId}`, null, 'general');
           } else {
-            console.log(`⏭️ VISIBILITY: Skipped duplicate avatar: ${avatar.name || avatar.handle || 'Unknown'} (${userKey}) from ${communityId}`, null, 'general');
+            console.log(`⏭️ VISIBILITY: Skipped duplicate avatar: ${formatUserDisplayName(avatar)} (${userKey}) from ${communityId}`, null, 'general');
           }
         });
       });
@@ -949,11 +957,12 @@ async function loadCombinedAvatars(communityIds) {
       await updateVisibleTab(allAvatars);
       
       // CRITICAL FIX: Update profile avatar AFTER visibility data is loaded
-      // This ensures the profile avatar can access the real avatar URL from window.currentVisibilityDataUnfiltered
+      // This ensures the profile avatar can access the real avatar URL from cached visibility data
       console.log('🔍 PROFILE_AVATAR_REFRESH: Refreshing profile avatar with real data from visibility...');
-      if (window.currentUser) {
+      const currentUser = getCurrentUser();
+      if (currentUser) {
         console.log('🔍 PROFILE_AVATAR_REFRESH: Current user exists, calling updateUI()...');
-        await updateUI(window.currentUser);
+        await updateUI(currentUser);
         console.log('✅ PROFILE_AVATAR_REFRESH: Profile avatar refreshed with real avatar data');
       } else {
         console.log('⚠️ PROFILE_AVATAR_REFRESH: No current user to refresh');
@@ -1001,7 +1010,8 @@ async function loadCombinedAvatars(communityIds) {
 async function loadMessageReplies(messageId, conversationId, communityId = null) {
   try {
     // Get the community ID from parameter or use the first active community
-    const resolvedCommunityId = communityId || (window.activeCommunities && window.activeCommunities[0]) || 'comm-001';
+    const activeCommunities = getActiveCommunitiesState();
+    const resolvedCommunityId = communityId || activeCommunities[0] || 'comm-001';
     
     // Get the full conversation to find replies to this specific message
     // Use Supabase real-time instead of API polling
@@ -1025,10 +1035,10 @@ async function loadMessageReplies(messageId, conversationId, communityId = null)
         // Check if this reply has its own replies (nested replies)
         const nestedReplies = response.posts.filter(post => post.parentId === reply.id);
         
-        const replyMsg = { 
-          ...reply, 
-          conversationId, 
-          isReply: true, 
+        const replyMsg = {
+          ...reply,
+          conversationId,
+          isReply: true,
           hasReplies: nestedReplies.length > 0 // Show thread toggle if it has nested replies
         };
         await addMessageToChat(replyMsg);
@@ -1042,8 +1052,6 @@ async function loadMessageReplies(messageId, conversationId, communityId = null)
 
 // Note: loadChatHistory is in CanopiModule.js, not CommunitiesModule.js
 
-// Export for global access
-window.CommunitiesModule = CommunitiesModule;
-window.loadCommunities = loadCommunities;
-window.loadCombinedAvatars = loadCombinedAvatars;
-window.getPrimaryCommunityName = getPrimaryCommunityName;
+*/
+// Note: Window exports will be added in compiled JS for backward compatibility
+// TypeScript source uses pure ES6 exports only

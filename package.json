@@ -7,8 +7,14 @@
     "start": "node app.js",
     "dev": "nodemon app.js",
     "test": "node test.js",
+    "build:presence": "cd presence && tsc -p tsconfig.json",
+    "build:extension": "cd presence && bash scripts/build-distribution.sh",
+    "clean:presence": "cd presence && bash scripts/cleanup-distribution.sh",
+    "test:diagnostics": "vitest run --config vitest.config.ts",
+    "ci:presence": "npm run build:presence && npm run test:diagnostics",
     "sync": "./sync-extension.sh",
-    "watch": "./watch-sync.sh"
+    "watch": "./watch-sync.sh",
+    "lint:fallbacks": "node presence/scripts/enforce-fallback-policy.js"
   },
   "keywords": [
     "metaweb",
@@ -36,7 +42,13 @@
     "ws": "^8.18.3"
   },
   "devDependencies": {
-    "nodemon": "^3.0.1"
+    "@types/chrome": "^0.1.29",
+    "@types/node": "^24.10.1",
+    "happy-dom": "^20.0.10",
+    "nodemon": "^3.0.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.6.3",
+    "vitest": "^4.0.10"
   },
   "engines": {
     "node": ">=16.0.0"
