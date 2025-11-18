@@ -3,6 +3,28 @@
 ## Overview
 This manifest defines the standard agent collaboration workflow for all orchestrated tasks. All agents must follow this workflow and enforce blind-spot and red-line audits.
 
+## Workflow Guardrails
+
+1. **TypeScript ES Modules**: All new/updated code must use ES6 module syntax with TypeScript (no CommonJS, no implicit globals).
+2. **Modular Architecture**: Prefer small, composable modules over monolithic files; refactors should extract shared utilities instead of duplicating logic.
+3. **No Pre-Launch Backward Compatibility Paths**: Remove legacy fallbacks/duplicated fields during implementation. Exceptions require PM + BLUE sign-off and must be logged in JAUmemory.
+4. **Duplication Checks**: Before writing new utilities/components, search for existing equivalents and extend them. Document the check in JAUmemory.
+5. **Plan → Scaffold → Build**: Each task must capture planning notes, scaffolding artifacts, and the final build steps inside JAUmemory before coding progresses.
+6. **Avoid Fallbacks**: Do not rely on `value || fallback` patterns that hide data issues. Fix the upstream source and document diagnostic evidence.
+7. **Commit on Resolution**: After BLUE approval, produce a final commit referencing the JAUmemory problem ID and summarize verification steps.
+8. **Unify Repeated Logic**: Look for opportunities to extract shared helpers/modules whenever similar code appears; log the reuse decision in JAUmemory.
+9. **JAUmemory Logging**: Every phase update (problem, diagnostics, solution, verification, blind-spots, red-line status) must be logged with context, files, and owners.
+
+## Parallel Orchestration Protocol
+
+For time-consuming yet partitionable tasks (e.g., medium refactors, cleanup passes, diagnostic conversions):
+- PM must evaluate whether work can be distributed. If yes, **ask the user to spin up 8–10 parallel Orch sessions**.
+- Provide each Orch with:
+  - Unique sub-objectives/files
+  - Estimated runtime parity
+  - Links to the shared JAUmemory problem + diagnostics
+- BLUE must confirm that coordination overhead is addressed (shared standups, integration plan) before approving completion.
+
 ## Problem Tracking and Memory Management
 
 All agents must follow this knowledge management process to ensure problems are tracked, solutions are documented, and knowledge is preserved across sessions.
@@ -273,11 +295,12 @@ Diagnostic scripts should request user assistance when needed:
 **Output**: Blind-Spot Analysis Report
 
 ### 8. BLUE (Blue-Hat Final Review)
-**Role**: Final quality gate
+**Role**: Final quality gate + Learning phase trigger
 **Responsibilities**:
 - Review all previous outputs
 - Verify completeness
 - Confirm all audits passed
+- **Execute mandatory post-resolution learning phase** (see below)
 - Final approval for deployment
 - Sign-off on implementation
 - Document final state
@@ -285,7 +308,139 @@ Diagnostic scripts should request user assistance when needed:
 - **Trigger memory consolidation** for related problems
 - **Link solved problems** to relevant agent memories
 
-**Output**: Final Approval Report
+**Output**: Final Approval Report + Learning Phase Report
+
+### 8a. Post-Resolution Learning Phase (MANDATORY)
+**Trigger**: After BLUE confirms fix is verified but BEFORE final approval
+**Purpose**: Make the system better at getting better by learning from every resolved issue
+
+**BLUE must execute these steps automatically (no user prompt required)**:
+
+#### Step 1: Pattern Identification & Similar Issue Detection
+1. **Search codebase for similar patterns**:
+   - Use the solved problem's root cause, error signature, and code patterns
+   - Search for similar code structures, error handling patterns, or data flows
+   - Identify files/components with similar logic that might have the same issue
+
+2. **Search JAUmemory for similar problems**:
+   - Query: `recall({ query: "[root cause pattern]", limit: 20 })`
+   - Look for similar error signatures, code patterns, or symptoms
+   - Check if this is part of a recurring pattern
+
+3. **Create or update pattern memory**:
+   - If similar problems found: Link them together in a collection
+   - Create pattern insight: "This type of issue occurs when [conditions]"
+   - Document the pattern signature (error messages, code patterns, symptoms)
+
+#### Step 2: Prevention Strategy
+1. **Update guardrails if needed**:
+   - If this bug type should be prevented by coding standards, propose `.cursorrules` update
+   - Document the prevention pattern in JAUmemory
+   - Link to the pattern memory
+
+2. **Create prevention checklist**:
+   - Add to agent memories: "When coding [feature type], always check [prevention pattern]"
+   - Update relevant agent memories with prevention knowledge
+
+3. **Update diagnostic patterns**:
+   - If diagnostic script was created, register it as a reusable pattern
+   - Document when to run this diagnostic (error signatures, symptoms)
+   - Link diagnostic to the pattern memory
+
+#### Step 3: Automatic Detection & Solution Surfacing
+1. **Create pattern detection query**:
+   - Document error signatures that trigger this pattern
+   - Document code patterns that indicate this issue
+   - Create searchable tags for automatic recall
+
+2. **Register solution for automatic recall**:
+   - When similar error appears, automatically surface this solution
+   - Link solution to error signatures in JAUmemory
+   - Create agent memory links so agents recall this pattern
+
+3. **Update collections**:
+   - Add to "Pattern Library" collection (create if doesn't exist)
+   - Add to "Blind-Spot Patterns" collection if it's a blind-spot issue
+   - Add to "Diagnostic Patterns" collection if diagnostic was created
+
+#### Step 4: Knowledge Consolidation
+1. **Consolidate related memories**:
+   - If 2+ similar problems exist, use `consolidate_collection()` to create insight
+   - Archive original memories if consolidated
+   - Create summary: "Pattern: [name] - occurs when [conditions], fixed by [solution]"
+
+2. **Update agent learning**:
+   - Link pattern to relevant agents (SD, TEST, BLINDSPOT, etc.)
+   - Create agent reflection: "We learned to [prevention action] when [conditions]"
+   - Update agent memories with pattern recognition
+
+**Output**: Learning Phase Report including:
+- Similar issues found (in codebase and JAUmemory)
+- Pattern created/updated
+- Prevention strategies documented
+- Diagnostic patterns registered
+- Guardrail updates proposed (if any)
+- Collections updated
+- Agent memories updated
+
+### 8b. META (Meta-Learning Agent) - Learning Process Oversight
+**Role**: Oversees and improves the learning process itself
+**Trigger**: 
+- **Automatic**: After every learning phase (BLUE's post-resolution learning)
+- **On-demand**: When learning seems ineffective or patterns aren't being captured
+- **Periodic**: Weekly/monthly review of learning effectiveness
+
+**Responsibilities**:
+1. **Evaluate Learning Phase Effectiveness**:
+   - Review the learning phase report from BLUE
+   - Assess whether patterns were properly identified
+   - Check if similar issues were found comprehensively
+   - Verify that prevention strategies are actionable
+   - Confirm diagnostic patterns are registered correctly
+
+2. **Identify Learning Gaps**:
+   - Find cases where similar issues exist but weren't detected
+   - Identify patterns that should have been created but weren't
+   - Spot prevention strategies that are missing
+   - Notice when agent memories aren't being updated effectively
+
+3. **Propose Learning System Improvements**:
+   - Suggest enhancements to JAUmemory structure/organization
+   - Propose better pattern detection queries
+   - Recommend improvements to agent memory linking
+   - Suggest new collections or consolidation strategies
+   - Propose workflow changes to capture more learning
+
+4. **Monitor Process for Learning Opportunities**:
+   - Watch for recurring issues that should become patterns
+   - Identify blind spots in the learning process itself
+   - Notice when diagnostic scripts should be created but aren't
+   - Spot opportunities to improve pattern matching
+
+5. **Intervene When Learning is Ineffective**:
+   - When patterns aren't being created: suggest better pattern identification
+   - When similar issues aren't found: improve search queries
+   - When prevention strategies are weak: propose stronger guardrails
+   - When agent memories aren't updated: remind agents to link memories
+
+6. **Create Meta-Learning Insights**:
+   - Document what makes learning phases effective
+   - Identify characteristics of good pattern memories
+   - Track which prevention strategies work best
+   - Learn from learning failures
+
+**Output**: Meta-Learning Report including:
+- Learning phase effectiveness assessment
+- Learning gaps identified
+- Proposed improvements to learning system
+- Interventions made (if any)
+- Meta-learning insights
+
+**When to Invoke META**:
+- **Automatic**: After every learning phase (built into workflow)
+- **Manual**: "META, review the learning phase for problem [memoryId]"
+- **On-demand**: "META, we keep missing similar issues - how can we improve pattern detection?"
+- **Periodic**: "META, review our learning effectiveness over the past week"
 
 ### 9. DEVOPS (DevOps Engineer)
 **Role**: Deployment and operations
@@ -314,8 +469,12 @@ Diagnostic scripts should request user assistance when needed:
 ## Workflow Execution Order
 
 ```
-PM → SD → TEST → RED → WHITE → PURPLE → BLINDSPOT → BLUE → DEVOPS → ETHICS
+PM → SD → TEST → RED → WHITE → PURPLE → BLINDSPOT → BLUE → [LEARN] → [META] → DEVOPS → ETHICS
 ```
+
+**Note**: 
+- The `[LEARN]` phase is automatically executed by BLUE as part of the final review process. It is not a separate agent but a mandatory learning phase that BLUE must complete before final approval.
+- The `[META]` phase is automatically executed by META agent after the learning phase. META evaluates learning effectiveness and proposes improvements. META can also be invoked on-demand or periodically to review learning system effectiveness.
 
 ## Blind-Spot Audit Checklist
 - [ ] Are all edge cases covered?
@@ -353,7 +512,21 @@ Each agent must produce:
 5. **Memory Updates**: Any problems identified must be recorded in JAUmemory with appropriate status updates
 6. **Diagnostic Scripts**: Diagnostic scripts created and executed (if applicable)
 7. **Diagnostic Results**: Summary of diagnostic findings and root cause analysis
+8. **Learning Phase Report** (BLUE): Pattern identification, prevention strategies, automatic detection setup, knowledge consolidation
+9. **Meta-Learning Report** (META): Learning effectiveness assessment, gaps identified, improvements proposed
 
 ## Final Approval
 All agents must PASS before BLUE can approve. Any FAILED agent requires fixes and re-audit.
+
+**BLUE must complete the Post-Resolution Learning Phase before final approval**. The learning phase is mandatory and automatic - no user prompt required. BLUE must:
+1. Execute all 4 learning steps (Pattern Identification, Prevention Strategy, Automatic Detection, Knowledge Consolidation)
+2. Document findings in Learning Phase Report
+3. Only then provide final approval
+
+**META must evaluate the Learning Phase after BLUE completes it**. META's evaluation is automatic and mandatory - no user prompt required. META must:
+1. Review the Learning Phase Report for effectiveness
+2. Identify any learning gaps or missed opportunities
+3. Propose improvements to the learning system if needed
+4. Document findings in Meta-Learning Report
+5. Intervene if learning was ineffective (suggest improvements, re-run searches, etc.)
 
