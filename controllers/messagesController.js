@@ -1,4 +1,5 @@
 const { PrismaClient } = require('../generated/prisma');
+const { Prisma } = require('@prisma/client');
 const prisma = new PrismaClient();
 
 /**
@@ -25,6 +26,29 @@ function generateCursor(message) {
 }
 
 /**
+ * Build status filter clause for message queries
+ */
+function buildStatusFilter(messageStatus, userId, alias = 'm') {
+  const column = Prisma.raw(alias);
+
+  switch (messageStatus) {
+    case 'draft': {
+      if (!userId) {
+        throw new Error('userId is required when fetching drafts');
+      }
+      return Prisma.sql`AND ${column}.status = 'draft' AND ${column}.user_id::UUID = ${userId}::UUID`;
+    }
+    case 'deleted':
+      return Prisma.sql`AND ${column}.status = 'deleted'`;
+    case 'all':
+      return Prisma.sql``;
+    case 'published':
+    default:
+      return Prisma.sql`AND (${column}.status IS NULL OR ${column}.status = 'published')`;
+  }
+}
+
+/**
  * GET /api/messages
  * 
  * Query params:
@@ -43,7 +67,9 @@ exports.getMessages = async (req, res) => {
       limit = 10,
       cursor,
       includeTopReply,
-      focusContextId
+      focusContextId,
+      status, // Filter by status (draft, published, deleted)
+      userId // For filtering drafts by user
     } = req.query;
 
     // Validation
@@ -52,7 +78,7 @@ exports.getMessages = async (req, res) => {
     }
 
     const limitNum = Math.min(parseInt(limit) || 10, 100);
-    const shouldIncludeTopReply = includeTopReply !== 'false' && parentId === null || parentId === 'null';
+    const shouldIncludeTopReply = (includeTopReply !== 'false') && (parentId === null || parentId === 'null');
     const parsedCursor = parseCursor(cursor);
 
     console.log('📊 GET_MESSAGES:', {
@@ -65,6 +91,15 @@ exports.getMessages = async (req, res) => {
 
     // Build query with conditional WHERE clauses
     const communityId = req.query.communityId || 'comm-001';
+    const messageStatus = status || 'published';
+    
+    let statusFilter;
+    try {
+      statusFilter = buildStatusFilter(messageStatus, userId);
+    } catch (error) {
+      console.error('❌ STATUS_FILTER:', error);
+      return res.status(400).json({ error: error.message });
+    }
     
     let messages;
     if (parentId && parentId !== 'null') {
@@ -79,6 +114,7 @@ exports.getMessages = async (req, res) => {
             m.parent_id,
             m.community_id,
             m.user_id,
+            m.status,
             u.name as author_name,
             u.handle as author_handle,
             u."avatarUrl" as author_avatar_url,
@@ -88,6 +124,7 @@ exports.getMessages = async (req, res) => {
           WHERE m.page_id = ${pageId}
             AND m.parent_id::UUID = ${parentId}::UUID
             AND m.community_id = ${communityId}
+            ${statusFilter}
             AND NOT EXISTS (
               SELECT 1 FROM message_deletions md 
               WHERE md.message_id::UUID = m.id
@@ -109,6 +146,7 @@ exports.getMessages = async (req, res) => {
             m.parent_id,
             m.community_id,
             m.user_id,
+            m.status,
             u.name as author_name,
             u.handle as author_handle,
             u."avatarUrl" as author_avatar_url,
@@ -118,6 +156,7 @@ exports.getMessages = async (req, res) => {
           WHERE m.page_id = ${pageId}
             AND m.parent_id::UUID = ${parentId}::UUID
             AND m.community_id = ${communityId}
+            ${statusFilter}
             AND NOT EXISTS (
               SELECT 1 FROM message_deletions md 
               WHERE md.message_id::UUID = m.id
@@ -138,6 +177,7 @@ exports.getMessages = async (req, res) => {
             m.parent_id,
             m.community_id,
             m.user_id,
+            m.status,
             u.name as author_name,
             u.handle as author_handle,
             u."avatarUrl" as author_avatar_url,
@@ -147,6 +187,7 @@ exports.getMessages = async (req, res) => {
           WHERE m.page_id = ${pageId}
             AND (m.parent_id IS NULL OR m.parent_id = '')
             AND m.community_id = ${communityId}
+            ${statusFilter}
             AND NOT EXISTS (
               SELECT 1 FROM message_deletions md 
               WHERE md.message_id::UUID = m.id
@@ -168,6 +209,7 @@ exports.getMessages = async (req, res) => {
             m.parent_id,
             m.community_id,
             m.user_id,
+            m.status,
             u.name as author_name,
             u.handle as author_handle,
             u."avatarUrl" as author_avatar_url,
@@ -177,6 +219,7 @@ exports.getMessages = async (req, res) => {
           WHERE m.page_id = ${pageId}
             AND (m.parent_id IS NULL OR m.parent_id = '')
             AND m.community_id = ${communityId}
+            ${statusFilter}
             AND NOT EXISTS (
               SELECT 1 FROM message_deletions md 
               WHERE md.message_id::UUID = m.id
@@ -422,7 +465,8 @@ exports.createMessage = async (req, res) => {
       messageKind = 'TEXT',
       attachments = [],
       emojiMetadata = null,
-      focusContext = null
+      focusContext = null,
+      status = 'published' // draft, published, deleted
     } = req.body;
 
     // Validation
@@ -448,6 +492,7 @@ exports.createMessage = async (req, res) => {
         parent_id,
         quote_id,
         community_id,
+        status,
         created_at,
         updated_at
       )
@@ -458,6 +503,7 @@ exports.createMessage = async (req, res) => {
         ${parentId ? `${parentId}::UUID` : null}::UUID,
         ${quoteId ? `${quoteId}::UUID` : null}::UUID,
         ${communityId},
+        ${status},
         NOW(),
         NOW()
       )
@@ -469,7 +515,8 @@ exports.createMessage = async (req, res) => {
         parent_id,
         quote_id,
         community_id,
-        user_id
+        user_id,
+        status
     `;
 
     const message = messageResult[0];
@@ -506,8 +553,8 @@ exports.createMessage = async (req, res) => {
       },
       createdAt: message.created_at,
       updatedAt: message.updated_at,
-      parentId: message.parent_id,
-      focusContext: focusContext || { mode: 'default' }
+      focusContext: focusContext || { mode: 'default' },
+      status: message.status
     };
 
     console.log(`✅ CREATE_MESSAGE: Created message ${message.id}`);

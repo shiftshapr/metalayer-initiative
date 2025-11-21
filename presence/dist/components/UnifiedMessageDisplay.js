@@ -6,6 +6,9 @@
  * - Parent in focus (emphasizes parent, collapses children)
  * - Child in focus (highlights child, shows parent as header)
  */
+import { stateManagerInstance } from '../core/StateManager.js';
+import { UnifiedMessageRenderer } from '../utils/UnifiedMessageRenderer.js';
+const PUBLIC_SQUARE_COMMUNITY_ID = 'abe5ec85-4ba6-456f-adaf-03d7d51cecf4';
 export class UnifiedMessageDisplay {
     constructor() {
         this.container = null;
@@ -23,22 +26,17 @@ export class UnifiedMessageDisplay {
     async render(messages, container, options = {}) {
         this.container = container;
         const { focusContext = 'default', parentMessage = null, highlightMessageId = null, onMessageClick, onReplyClick, onFocusClick } = options;
-        // ROOT CAUSE FIX: Clear container completely before rendering
-        // This prevents duplicates from previous renders
-        // BUT: Only clear if we're rendering a different focus context or if container is empty
+        // ROOT CAUSE FIX: ALWAYS clear container completely before rendering to prevent duplicates
+        // The previous logic was keeping messages when focus context was the same, causing duplicates
+        // Now we always clear to ensure a clean state
         const existingMessageCount = container.querySelectorAll('[data-message-id]').length;
         const existingFocusContext = container.className.match(/focus-mode-(\w+)/)?.[1];
-        const shouldClear = existingMessageCount === 0 || existingFocusContext !== focusContext;
-        if (shouldClear) {
-            while (container.firstChild) {
-                container.removeChild(container.firstChild);
-            }
-            container.innerHTML = '';
-            console.log(`🔍 UnifiedMessageDisplay: Cleared container (${existingMessageCount} existing messages, context: ${existingFocusContext} -> ${focusContext})`);
+        // Always clear - duplicates are caused by not clearing properly
+        while (container.firstChild) {
+            container.removeChild(container.firstChild);
         }
-        else {
-            console.log(`🔍 UnifiedMessageDisplay: Keeping existing messages (${existingMessageCount} messages, same context: ${focusContext})`);
-        }
+        container.innerHTML = '';
+        console.log(`🔍 UnifiedMessageDisplay: Cleared container (${existingMessageCount} existing messages, context: ${existingFocusContext} -> ${focusContext})`);
         console.log(`🔍 UnifiedMessageDisplay: Rendering ${messages.length} messages to container:`, container.id || container.className);
         // Apply focus mode class
         container.classList.remove('focus-mode-parent', 'focus-mode-child', 'focus-mode-default');
@@ -78,14 +76,23 @@ export class UnifiedMessageDisplay {
      * ROOT CAUSE FIX: Check for duplicates before appending
      */
     async renderDefault(messages, container, options) {
-        // ROOT CAUSE FIX: Track existing message IDs to prevent duplicates
-        const existingIds = new Set(Array.from(container.querySelectorAll('[data-message-id]')).map(el => el.getAttribute('data-message-id')));
-        for (const message of messages) {
-            // Skip if message already exists in DOM
-            if (existingIds.has(message.id)) {
-                console.log(`⚠️ UnifiedMessageDisplay: Skipping duplicate message ${message.id}`);
-                continue;
-            }
+        // ROOT CAUSE FIX: Container is already cleared in render(), but check for any remaining messages
+        // Also check ALL containers with class chat-messages to prevent duplicates across multiple containers
+        const allChatContainers = document.querySelectorAll('.chat-messages');
+        const allExistingIds = new Set();
+        allChatContainers.forEach(cont => {
+            Array.from(cont.querySelectorAll('[data-message-id]')).forEach(el => {
+                const id = el.getAttribute('data-message-id');
+                if (id)
+                    allExistingIds.add(id);
+            });
+        });
+        // Filter out messages that already exist in ANY container
+        const newMessages = messages.filter(msg => !allExistingIds.has(msg.id));
+        if (newMessages.length !== messages.length) {
+            console.warn(`⚠️ UnifiedMessageDisplay: Filtered out ${messages.length - newMessages.length} duplicate messages already in DOM`);
+        }
+        for (const message of newMessages) {
             const messageEl = await this.createMessageElement(message, {
                 isHighlighted: message.id === options.highlightMessageId,
                 onMessageClick: options.onMessageClick,
@@ -99,7 +106,7 @@ export class UnifiedMessageDisplay {
             // ROOT CAUSE FIX: Ensure message is actually appended to DOM
             try {
                 container.appendChild(messageEl);
-                existingIds.add(message.id); // Track added message
+                allExistingIds.add(message.id); // Track added message
                 console.log(`✅ UnifiedMessageDisplay: Appended message ${message.id} to DOM`);
             }
             catch (error) {
@@ -108,9 +115,9 @@ export class UnifiedMessageDisplay {
         }
         // ROOT CAUSE FIX: Verify messages are in DOM after rendering
         const finalCount = container.querySelectorAll('[data-message-id]').length;
-        console.log(`🔍 UnifiedMessageDisplay: Rendered ${messages.length} messages, ${finalCount} found in DOM`);
-        if (finalCount !== messages.length) {
-            console.warn(`⚠️ UnifiedMessageDisplay: Message count mismatch! Expected ${messages.length}, found ${finalCount} in DOM`);
+        console.log(`🔍 UnifiedMessageDisplay: Rendered ${newMessages.length} new messages, ${finalCount} total in container`);
+        if (finalCount > newMessages.length) {
+            console.warn(`⚠️ UnifiedMessageDisplay: Container has more messages than expected! Expected ${newMessages.length} new, found ${finalCount} total`);
         }
     }
     /**
@@ -186,89 +193,141 @@ export class UnifiedMessageDisplay {
      * Create message element using full rendering pipeline
      */
     async createMessageElement(message, options) {
-        // ROOT CAUSE FIX: Use renderMessageElement from CanopiModule for full UI (icons, action menu, etc.)
-        if (typeof window !== 'undefined') {
-            const win = window;
-            if (win.renderMessageElement && typeof win.renderMessageElement === 'function') {
-                // ROOT CAUSE FIX: Get the actual container from the render context
-                // UnifiedMessageDisplay.render() passes container, but we need to get it here
-                const container = this.getCurrentContainer();
-                const messageEl = await win.renderMessageElement(message, container);
-                // Apply focus context classes
-                if (options.isParent) {
-                    messageEl.classList.add('parent-in-focus');
-                }
-                if (options.isFocused) {
-                    messageEl.classList.add('child-in-focus');
-                }
-                if (options.isHighlighted) {
-                    messageEl.classList.add('highlighted');
-                }
-                if (options.isCollapsed) {
-                    messageEl.classList.add('collapsed');
-                }
-                // ROOT CAUSE FIX: Ensure message element has data-message-id for reaction updates
-                if (!messageEl.dataset.messageId) {
-                    messageEl.dataset.messageId = message.id;
-                }
-                // ROOT CAUSE FIX: Attach click handler for focus mode
-                if (options.onMessageClick || options.onFocusClick) {
-                    const clickHandler = (e) => {
-                        // Don't trigger if clicking on action buttons or links
-                        const target = e.target;
-                        if (target.closest('.action-dots-btn, .action-dropdown, .reaction-btn, .reply-btn, .bookmark-btn, .share-btn, a')) {
-                            return;
-                        }
-                        if (options.onFocusClick) {
-                            options.onFocusClick(message);
-                        }
-                        else if (options.onMessageClick) {
-                            options.onMessageClick(message);
-                        }
-                    };
-                    messageEl.addEventListener('click', clickHandler);
-                    messageEl.style.cursor = 'pointer';
-                }
-                // Attach action listeners (icons, action menu, etc.)
-                if (win.addMessageActionListeners) {
-                    win.addMessageActionListeners(messageEl, message);
-                }
-                // Load reactions
-                if (win.loadMessageReactions && typeof win.loadMessageReactions === 'function') {
-                    // Use setTimeout to ensure message is appended to DOM first
-                    setTimeout(async () => {
-                        try {
-                            if (typeof win.loadMessageReactions === 'function') {
-                                await win.loadMessageReactions(message.id);
-                            }
-                        }
-                        catch (error) {
-                            console.warn('⚠️ UnifiedMessageDisplay: Failed to load reactions:', error);
-                        }
-                    }, 100);
-                }
-                return messageEl;
+        const container = this.getCurrentContainer();
+        const messageEl = await this.renderWithUnifiedRenderer(message, container);
+        this.applyFocusClasses(messageEl, options);
+        this.ensureDataAttributes(messageEl, message);
+        this.attachFocusHandler(messageEl, message, options);
+        const win = typeof window !== 'undefined'
+            ? window
+            : undefined;
+        if (win?.addMessageActionListeners) {
+            try {
+                win.addMessageActionListeners(messageEl, message);
+            }
+            catch (error) {
+                console.warn('⚠️ UnifiedMessageDisplay: Failed to attach action listeners', error);
             }
         }
-        // Fallback: Create basic message structure (should not happen if CanopiModule is loaded)
-        const messageDiv = document.createElement('div');
-        messageDiv.className = 'message';
-        messageDiv.dataset.messageId = message.id;
-        const author = message.author || { name: 'Unknown', handle: 'unknown', avatarUrl: '' };
-        messageDiv.innerHTML = `
-      <div class="message-header">
-        <div class="message-avatar">
-          <img src="${author.avatarUrl || ''}" alt="${author.name}" />
-        </div>
-        <div class="message-author">
-          <span class="author-name">${author.name}</span>
-          <span class="author-handle">@${author.handle}</span>
-        </div>
-        <div class="message-time">${this.formatTime(message.createdAt)}</div>
-      </div>
-      <div class="message-content">${this.escapeHtml(message.content || '')}</div>
-    `;
-        return messageDiv;
+        if (win?.loadMessageReactions && typeof win.loadMessageReactions === 'function') {
+            const loadMessageReactions = win.loadMessageReactions;
+            setTimeout(async () => {
+                try {
+                    await loadMessageReactions(message.id);
+                }
+                catch (error) {
+                    console.warn('⚠️ UnifiedMessageDisplay: Failed to load reactions:', error);
+                }
+            }, 100);
+        }
+        return messageEl;
+    }
+    applyFocusClasses(messageEl, options) {
+        if (options.isParent) {
+            messageEl.classList.add('parent-in-focus');
+        }
+        if (options.isFocused) {
+            messageEl.classList.add('child-in-focus');
+        }
+        if (options.isHighlighted) {
+            messageEl.classList.add('highlighted');
+        }
+        if (options.isCollapsed) {
+            messageEl.classList.add('collapsed');
+        }
+    }
+    ensureDataAttributes(messageEl, message) {
+        if (!messageEl.dataset.messageId) {
+            messageEl.dataset.messageId = message.id;
+        }
+        if (message.parentId && !messageEl.dataset.parentId) {
+            messageEl.dataset.parentId = message.parentId;
+        }
+    }
+    attachFocusHandler(messageEl, message, options) {
+        if (!options.onMessageClick && !options.onFocusClick) {
+            return;
+        }
+        const clickHandler = (e) => {
+            const target = e.target;
+            if (target.closest('.action-dots-btn, .action-dropdown, .reaction-btn, .reply-btn, .bookmark-btn, .share-btn, a')) {
+                return;
+            }
+            if (options.onFocusClick) {
+                options.onFocusClick(message);
+            }
+            else if (options.onMessageClick) {
+                options.onMessageClick(message);
+            }
+        };
+        messageEl.addEventListener('click', clickHandler);
+        messageEl.style.cursor = 'pointer';
+    }
+    async renderWithUnifiedRenderer(message, container) {
+        const typed = message;
+        const reactionCount = typeof typed.reactionCount === 'number'
+            ? typed.reactionCount
+            : Array.isArray(typed.reactions)
+                ? typed.reactions.length
+                : 0;
+        const replyCount = typeof typed.replyCount === 'number'
+            ? typed.replyCount
+            : typed.hasReplies
+                ? 1
+                : 0;
+        const bookmarkCount = typeof typed.bookmarkCount === 'number' ? typed.bookmarkCount : 0;
+        const communityName = typed.communityName || (await this.resolveCommunityName(typed.communityId));
+        return UnifiedMessageRenderer.renderMessage(message, {
+            isReply: !!message.parentId,
+            isFocusMode: this.isFocusModeContainer(container),
+            author: message.author,
+            communityName,
+            reactionCount,
+            replyCount,
+            bookmarkCount,
+            isBookmarked: Boolean(typed.isBookmarked),
+            hasUserReplied: Boolean(typed.hasUserReplied),
+            hasUserReposted: Boolean(typed.hasUserReposted),
+            hasUserShared: Boolean(typed.hasUserShared),
+            canEdit: Boolean(typed.canEdit),
+            canDelete: Boolean(typed.canDelete)
+        });
+    }
+    isFocusModeContainer(container) {
+        if (!container)
+            return false;
+        return container.classList.contains('focus-mode-child') || container.classList.contains('focus-mode-parent');
+    }
+    async resolveCommunityName(communityId) {
+        if (!communityId) {
+            return '';
+        }
+        if (typeof window !== 'undefined') {
+            const win = window;
+            const module = win.CommunitiesModule;
+            if (module?.getCommunityName) {
+                const result = module.getCommunityName(communityId);
+                if (typeof result === 'string') {
+                    return result;
+                }
+                if (result && typeof result.then === 'function') {
+                    try {
+                        return await result;
+                    }
+                    catch {
+                        // Ignore and fall back to state
+                    }
+                }
+            }
+        }
+        const communities = stateManagerInstance.getState('communities');
+        if (communities && communities[communityId]?.name) {
+            return communities[communityId].name;
+        }
+        if (communityId === PUBLIC_SQUARE_COMMUNITY_ID) {
+            return 'Public Square';
+        }
+        return '';
     }
     /**
      * Create parent header (compact view for child-in-focus)

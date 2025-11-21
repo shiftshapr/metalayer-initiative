@@ -2,7 +2,7 @@
  * ANCHOR HIGHLIGHTER - Visual Highlighting for Content Anchors
  * Applies visual highlights to elements when navigating from notifications
  */
-import { Logger } from '../utils/Logger';
+import { Logger } from '../utils/Logger.js';
 /**
  * AnchorHighlighter class
  * Manages visual highlighting of anchored elements

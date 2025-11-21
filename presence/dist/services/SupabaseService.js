@@ -148,10 +148,20 @@ class SupabaseService {
         }
         try {
             console.log('🔍 SUPABASE: Querying users for pageId:', pageId);
-            // Query presence table for users on this page
-            const { data, error } = await this.client.from('presence')
-                .select('user_id, page_id, last_seen, is_active, user_email')
-                .eq('page_id', pageId);
+            // Query user_presence table for users on this page (ROOT CAUSE FIX: table name was wrong)
+            // ROOT CAUSE FIX: Filter by is_active = true to only get active users (not time-filtered)
+            if (!this.client) {
+                throw new Error('Supabase client not available');
+            }
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const queryBuilder = this.client
+                .from('user_presence')
+                .select('user_id, page_id, last_seen, is_active, AppUser(email, name, handle, avatar_url, aura_color)')
+                .eq('page_id', pageId)
+                .eq('is_active', true); // ROOT CAUSE FIX: Only get active users
+            // Type-safe order call - Supabase query builder always has order method after eq()
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const { data, error } = await queryBuilder.order('last_seen', { ascending: false });
             if (error) {
                 console.error('❌ SUPABASE: Error querying page users:', error);
                 return [];
@@ -161,10 +171,14 @@ class SupabaseService {
                 return [];
             }
             console.log('✅ SUPABASE: Found', data.length, 'users for pageId:', pageId);
-            // Transform data to match VisibilityUser interface
+            // Transform data to match VisibilityUser interface (ROOT CAUSE FIX: use AppUser relation data)
             return data.map((record) => ({
                 id: record.user_id || '',
-                email: record.user_email || '',
+                email: record.AppUser?.email || '',
+                name: record.AppUser?.name,
+                handle: record.AppUser?.handle,
+                avatarUrl: record.AppUser?.avatar_url,
+                auraColor: record.AppUser?.aura_color,
                 page_id: record.page_id || pageId,
                 lastSeen: record.last_seen || undefined,
                 isActive: record.is_active || false
@@ -221,7 +235,7 @@ class SupabaseService {
         }
         // Set up Supabase realtime subscription for presence table
         const channel = this.client.channel('presence-changes');
-        channel.on('postgres_changes', { event: '*', schema: 'public', table: 'presence' }, (payload) => {
+        channel.on('postgres_changes', { event: '*', schema: 'public', table: 'user_presence' }, (payload) => {
             handler(payload.eventType, payload.new || {}, payload.old || {});
         });
         channel.subscribe();

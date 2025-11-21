@@ -79,11 +79,11 @@
   <script type="module" src="utils/ReplyLoader.js"></script>
   <!-- Message Visibility Manager - handles CSS class management and visibility (TypeScript build output) -->
   <script type="module" src="utils/MessageVisibilityManager.js"></script>
-  <!-- Load build info first (injected at build time) -->
-  <script src=".build-info.js"></script>
-  <!-- Load BuildTracker to report and log build number -->
+  <!-- BuildTracker loads build metadata dynamically -->
   <script type="module" src="core/BuildTracker.js"></script>
   
+  <!-- Load X Icon Library BEFORE UnifiedMessageModal -->
+  <script type="module" src="utils/XIconLibrary.js"></script>
   <!-- Load UnifiedMessageModal BEFORE CanopiModule -->
   <script type="module" src="components/UnifiedMessageModal.js"></script>
   <!-- Load CanopiModule (ES6 Module) - CRITICAL: Must export to window immediately -->
@@ -92,10 +92,28 @@
   <script type="module" src="features/CursorVisibilityModule.js"></script>
   <!-- Load Cursor Visibility UI Handler (TypeScript build output) -->
   <script type="module" src="utils/ui/CursorVisibilityUI.js"></script>
+  <!-- Diagnostic Script: Visibility, Action Menu, Message Display, PageId Issues -->
+  <script type="module" src="scripts/diagnose-visibility-action-menu-issues.js"></script>
+  <!-- Diagnostic Script: Message Loading Issue -->
+  <script type="module" src="scripts/diagnose-message-loading-issue.js"></script>
+  <!-- Diagnostic Script: All Recurring Issues (Toggles, Duplicates, etc.) -->
+  <script type="module" src="scripts/diagnose-all-recurring-issues.js"></script>
   <!-- CRITICAL FIX: Patch loading overlay for persistent indicator -->
   <script type="module" src="utils/patches/ChatLoadingOverlayPatch.js"></script>
   <!-- CRITICAL FIX: Verify CanopiModule loaded after script tag (TypeScript build output) -->
   <script type="module" src="utils/patches/LoadChatHistoryVerifier.js"></script>
+  <!-- Cursor Park Manager -->
+  <script type="module" src="core/CursorParkManager.js"></script>
+  <!-- Cursor Visual Settings Manager -->
+  <script type="module" src="features/CursorVisualSettingsManager.js"></script>
+  <!-- Go Visible Modal -->
+  <script type="module" src="components/GoVisibleModal.js"></script>
+  <!-- Unified Context Menu System -->
+  <script type="module" src="core/UnifiedContextMenu.js"></script>
+  <!-- Root Cause Diagnostic Script -->
+  <script type="module" src="scripts/diagnose-root-causes-comprehensive.js"></script>
+  <!-- Comprehensive Persistent Issues Diagnostic -->
+  <script type="module" src="scripts/diagnose-all-persistent-issues.js"></script>
   <!-- Diagnostics (TypeScript build output) -->
   <script type="module" src="utils/diagnostics/registerDiagnostics.js"></script>
   <!-- Auth Diagnostic Script -->

@@ -11,6 +11,7 @@ import { Logger } from '../utils/Logger.js';
 import { ensureMessageContent, formatAuthorName, formatUserHandle } from '../utils/Fallbacks.js';
 import { initializeMessageSystemIntegration } from './MessageSystemIntegration.js';
 import { UnifiedMessageDisplay } from '../components/UnifiedMessageDisplay.js';
+import { UnifiedMessageRenderer } from '../utils/UnifiedMessageRenderer.js';
 // ROOT CAUSE FIX: Removed LegacyIntegrationContext - all references must use proper TypeScript imports or window functions
 // Helper to get window functions (set by other modules)
 const getWindowFunction = (name) => {
@@ -200,11 +201,13 @@ const normalizeMessagePayload = (rawMessage) => {
             getStringValue(rawMessage.community_id) ||
             fallbackCommunities[0] ||
             'comm-001'),
-        conversationId: rawMessage.conversationId ??
-            getStringValue(rawMessage.conversation_id) ??
-            rawMessage.threadId ??
-            getStringValue(rawMessage.thread_id) ??
-            undefined,
+        conversationId: (() => {
+            const convId = rawMessage.conversationId ?? getStringValue(rawMessage.conversation_id);
+            if (typeof convId === 'string')
+                return convId;
+            const threadId = rawMessage.threadId ?? getStringValue(rawMessage.thread_id);
+            return typeof threadId === 'string' ? threadId : undefined;
+        })(),
         pageId: rawMessage.pageId ?? getStringValue(rawMessage.page_id) ?? urlData?.pageId,
         rawUrl: rawMessage.rawUrl ?? urlData?.rawUrl ?? null,
         normalizedUrl: rawMessage.normalizedUrl ?? urlData?.normalizedUrl ?? null,
@@ -221,8 +224,8 @@ const normalizeMessagePayload = (rawMessage) => {
         uri: rawMessage.uri ?? getStringValue(rawMessage.url) ?? getStringValue(rawMessage.messageUrl) ?? null,
         threadId: rawMessage.threadId ?? getStringValue(rawMessage.thread_id) ?? undefined,
         deletedAt: rawMessage.deletedAt ? getStringOrDate(rawMessage.deletedAt) : (getStringValue(rawMessage.deleted_at) ? getStringOrDate(rawMessage.deleted_at) : null),
-        isBookmarked: rawMessage.isBookmarked,
-        bookmarkCount: rawMessage.bookmarkCount,
+        isBookmarked: typeof rawMessage.isBookmarked === 'boolean' ? rawMessage.isBookmarked : undefined,
+        bookmarkCount: typeof rawMessage.bookmarkCount === 'number' ? rawMessage.bookmarkCount : undefined,
         shareCount: rawMessage.shareCount,
         isShared: rawMessage.isShared
     };
@@ -256,9 +259,8 @@ const renderMessageElement = async (message, chatContainer = getChatMessagesCont
     if (typeof formattedTime !== 'string') {
         console.error('❌ renderMessageElement: formattedTime is not a string! Type:', typeof formattedTime, 'Value:', formattedTime);
     }
-    // ROOT CAUSE FIX: Get UnifiedMessageRenderer from window (set by UnifiedMessageDisplay module)
-    const renderer = getWindowFunction('UnifiedMessageRenderer');
-    if (renderer && typeof renderer.generateMessageHTML === 'function') {
+    // Use UnifiedMessageRenderer directly (imported, no window dependency)
+    if (UnifiedMessageRenderer && typeof UnifiedMessageRenderer.generateMessageHTML === 'function') {
         // ROOT CAUSE FIX: Ensure getMessageActionsMenu is available for UnifiedMessageRenderer
         // Note: UnifiedMessageRenderer will await the Promise, so we can return the Promise directly
         const win = window;
@@ -288,7 +290,7 @@ const renderMessageElement = async (message, chatContainer = getChatMessagesCont
                 communityName = 'Public Square';
             }
         }
-        const html = await renderer.generateMessageHTML(message, {
+        const html = await UnifiedMessageRenderer.generateMessageHTML(message, {
             isReply,
             isFocusMode,
             author: message.author,
@@ -296,8 +298,8 @@ const renderMessageElement = async (message, chatContainer = getChatMessagesCont
             formattedTime: safeFormattedTime,
             reactionCount: (Array.isArray(message.reactions) ? message.reactions.length : 0),
             replyCount: 0,
-            bookmarkCount: message.bookmarkCount ?? 0,
-            isBookmarked: message.isBookmarked ?? false,
+            bookmarkCount: typeof message.bookmarkCount === 'number' ? message.bookmarkCount : 0,
+            isBookmarked: typeof message.isBookmarked === 'boolean' ? message.isBookmarked : false,
             hasUserReplied: false,
             hasUserReposted: false,
             hasUserShared: false,
@@ -342,7 +344,7 @@ const renderMessageElement = async (message, chatContainer = getChatMessagesCont
                 }
             }
         }
-        // Reply visibility logic matches legacy implementation
+        // Reply visibility logic
         if (isReply) {
             const conversationId = message.conversationId || '';
             const threadToggle = document.querySelector(`[data-thread-id="${conversationId}"]`);
@@ -704,8 +706,7 @@ function canUserEditMessage(message) {
  * Uses UnifiedMessageRenderer for consistent rendering
  */
 async function createUnifiedMessageElement(message) {
-    // ROOT CAUSE FIX: Get UnifiedMessageRenderer from window (set by UnifiedMessageDisplay module)
-    const UnifiedMessageRenderer = getWindowFunction('UnifiedMessageRenderer');
+    // Use UnifiedMessageRenderer directly (imported, no window dependency)
     if (UnifiedMessageRenderer && typeof UnifiedMessageRenderer.renderMessage === 'function') {
         // ROOT CAUSE FIX: Get community name (same logic as renderMessageElement)
         let communityName = '';
@@ -1280,6 +1281,10 @@ async function loadChatHistory(communityIdOrRawUrl, activeCommunitiesOrUndefined
         const win = window;
         win.isInitialMessageLoad = true;
         win.initialMessageLoadComplete = false;
+        // ROOT CAUSE FIX: Use actual pageId from currentUrlData (not normalizedUrl)
+        // pageId is the normalized identifier (e.g., "google_com_"), normalizedUrl is human-readable (e.g., "google.com/")
+        // Messages are stored with pageId, so we must use pageId for queries
+        console.log('📜 loadChatHistory: Using pageId:', pageId, 'normalizedUrl:', normalizedUrlData?.normalizedUrl);
         const messages = await messageSystemIntegration.loadDefaultView(pageId, {
             limit: 10,
             communityId
@@ -1351,10 +1356,10 @@ async function loadChatHistory(communityIdOrRawUrl, activeCommunitiesOrUndefined
         // ROOT CAUSE FIX: Mark initial load as complete after rendering
         const win2 = window;
         win2.isInitialMessageLoad = false;
-        // ROOT CAUSE FIX: Store messages in cache (convert to legacy format for compatibility with existing code)
+        // Store messages in cache
         // Remove duplicates before storing
         const seenIds = new Set();
-        const legacyMessages = messages
+        const cachedMessages = messages
             .filter((msg) => {
             if (!msg.author || !msg.author.id)
                 return false;
@@ -1375,8 +1380,8 @@ async function loadChatHistory(communityIdOrRawUrl, activeCommunitiesOrUndefined
             createdAt: msg.createdAt,
             updatedAt: msg.updatedAt
         }));
-        setCurrentChatData(legacyMessages);
-        console.log(`✅ loadChatHistory: Successfully loaded ${legacyMessages.length} unique messages`);
+        setCurrentChatData(cachedMessages);
+        console.log(`✅ loadChatHistory: Successfully loaded ${cachedMessages.length} unique messages`);
     }
     catch (error) {
         console.error('❌ loadChatHistory: Error:', error);
@@ -1463,12 +1468,27 @@ async function getMessageActionMenu(message) {
     const canEdit = isOwner && diffHours < 1; // Can edit within 1 hour
     const canDelete = isOwner; // User can only delete their own messages
     const silentEdit = diffMinutes <= 5; // Silent edit within 5 minutes
+    // Get current theme for background color
+    const currentTheme = document.body.getAttribute('data-theme') ||
+        document.documentElement.getAttribute('data-theme') ||
+        'light';
+    const dropdownBg = currentTheme === 'dark'
+        ? 'var(--surface-primary, #1f1f1f)'
+        : 'var(--surface-primary, #ffffff)';
+    const dropdownColor = currentTheme === 'dark'
+        ? 'var(--text-primary, #ffffff)'
+        : 'var(--text-primary, #000000)';
+    // ROOT CAUSE FIX: Ensure background is never transparent - use explicit color values
+    // dropdownBg is already set to var(--surface-primary) with fallback, so it should never be transparent
+    // But add explicit fallback just in case
+    const safeDropdownBg = currentTheme === 'dark' ? '#1f1f1f' : '#ffffff';
+    const safeDropdownColor = currentTheme === 'dark' ? '#ffffff' : '#000000';
     return `
-    <div class="message-actions-menu" style="opacity: 1 !important; display: inline-block !important; visibility: visible !important; position: relative !important;">
+    <div class="message-actions-menu" style="opacity: 1 !important; display: inline-block !important; visibility: visible !important; position: relative !important; background: var(--surface-primary);">
       <button class="action-dots-btn" data-message-id="${message.id}" title="Message actions" style="opacity: 1 !important; display: block !important; visibility: visible !important; background: none !important; border: none !important; padding: 0 !important; margin: 0 !important;">
-        <span class="action-dots" style="opacity: 1 !important; display: inline-block !important; visibility: visible !important; font-size: 16px !important; color: var(--text-secondary) !important; background: none !important;">⋯</span>
+        ${typeof window !== 'undefined' && window.XIcons ? window.XIcons.more({ width: 20, height: 20 }) : '<span class="action-dots" style="opacity: 1 !important; display: inline-block !important; visibility: visible !important; font-size: 16px !important; color: var(--text-secondary) !important; background: none !important;">⋯</span>'}
       </button>
-      <div class="action-dropdown" style="display: none;">
+      <div class="action-dropdown" style="display: none; background: ${safeDropdownBg} !important; color: ${safeDropdownColor} !important; border: 1px solid var(--border-color, ${currentTheme === 'dark' ? '#333' : '#ddd'}) !important; border-radius: 8px !important; box-shadow: 0 2px 8px rgba(0,0,0,0.15) !important;">
         ${canEdit ? `<button class="action-item edit-btn" data-message-id="${message.id}">✏️ Edit</button>` : ''}
         ${canDelete ? `<button class="action-item delete-btn" data-message-id="${message.id}">🗑️ Delete</button>` : ''}
         <button class="action-item flag-btn" data-message-id="${message.id}" disabled>🚩 Flag</button>
@@ -1525,35 +1545,19 @@ async function handleDeleteMessage(message) {
         return;
     }
     try {
-        // Check if this is a UUID (Supabase) or legacy post ID (backend API)
+        // All message IDs should be UUIDs
         const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(message.id);
-        // ROOT CAUSE FIX: Get delete functions from window (set by respective modules)
-        if (isUUID) {
-            // Try robustIntegration first
-            const robustIntegration = getWindowFunction('robustIntegration');
-            if (robustIntegration?.isInitialized && robustIntegration.deleteMessage) {
-                await robustIntegration.deleteMessage(message.id);
-            }
-            else {
-                // Fallback to supabaseRealtimeClient
-                const supabaseRealtimeClient = getWindowFunction('supabaseRealtimeClient');
-                if (supabaseRealtimeClient?.deleteMessage) {
-                    await supabaseRealtimeClient.deleteMessage(message.id);
-                }
-            }
+        if (!isUUID) {
+            console.error('❌ handleDeleteMessage: Invalid message ID format (expected UUID):', message.id);
+            return;
+        }
+        // Use robustIntegration for deletion
+        const robustIntegration = getWindowFunction('robustIntegration');
+        if (robustIntegration?.isInitialized && robustIntegration.deleteMessage) {
+            await robustIntegration.deleteMessage(message.id);
         }
         else {
-            // Use API for legacy post IDs - check if deleteMessage method exists
-            const api = getApi();
-            if (api) {
-                // API service doesn't have deleteMessage method directly, use request instead
-                try {
-                    await api.request(`/v1/messages/${message.id}`, { method: 'DELETE' });
-                }
-                catch (error) {
-                    console.error('❌ handleDeleteMessage: API delete failed:', error);
-                }
-            }
+            throw new Error('Robust integration not available for message deletion');
         }
         // Remove the message from the UI
         const messageDiv = document.querySelector(`[data-message-id="${message.id}"]`);
@@ -1625,17 +1629,13 @@ async function handleEditMessage(message) {
         const newContent = chatTextarea.value.trim();
         if (newContent && newContent !== message.content) {
             try {
-                // Use robust integration if available, fallback to legacy
+                // Use robust integration
                 const robustIntegration = window.robustIntegration;
-                if (typeof window !== 'undefined' && robustIntegration && robustIntegration.isInitialized) {
+                if (typeof window !== 'undefined' && robustIntegration && robustIntegration.isInitialized && robustIntegration.editMessage) {
                     await robustIntegration.editMessage(message.id, newContent);
                 }
                 else {
-                    // Fallback to legacy system
-                    const client = typeof window !== 'undefined' ? (window.supabaseRealtimeClient) : null;
-                    if (client && typeof client.editMessage === 'function') {
-                        await client.editMessage(message.id, newContent);
-                    }
+                    throw new Error('Robust integration not available for message editing');
                 }
                 // Update the message in the UI
                 const messageDiv = document.querySelector(`[data-message-id="${message.id}"]`);
@@ -1722,25 +1722,9 @@ async function sendMessageViaSupabase(content, parentId = null, conversationId =
             return null;
         }
     }
-    // Fallback to legacy system
-    console.log('📡 SUPABASE_MESSAGE: Using legacy system...');
-    const client = typeof window !== 'undefined' ? (window.supabaseRealtimeClient) : null;
-    if (client && typeof client.sendMessage === 'function') {
-        console.log('✅ SUPABASE_MESSAGE: Client is available');
-        try {
-            const messageData = await client.sendMessage(content, parentId, conversationId);
-            console.log('💬 SUPABASE: ✅ Message sent via real-time');
-            return messageData;
-        }
-        catch (error) {
-            console.log('💬 SUPABASE: ❌ Error sending via Supabase real-time:', error);
-            return null;
-        }
-    }
-    else {
-        console.log('❌ SUPABASE_MESSAGE: Client is NOT available');
-        return null;
-    }
+    // No fallback - robust integration is required
+    console.error('❌ SUPABASE_MESSAGE: Robust integration not available');
+    return null;
 }
 /**
  * Get sender avatar HTML
@@ -1953,26 +1937,40 @@ function setupMessageInputEventListeners() {
         return;
     }
     // ROOT CAUSE FIX: Click handler to open UnifiedMessageModal
-    chatTextarea.addEventListener('click', async (e) => {
-        e.preventDefault();
-        e.stopPropagation();
+    // Wait for openMessageModal to be available (retry mechanism)
+    const attachClickHandler = async () => {
         const win = window;
-        if (win.openMessageModal) {
+        // Try to get openMessageModal, with retry
+        let openModal = win.openMessageModal;
+        if (!openModal && win.unifiedMessageModal && typeof win.unifiedMessageModal.open === 'function') {
+            // Fallback: use unifiedMessageModal directly
+            openModal = (options) => win.unifiedMessageModal.open(options);
+        }
+        if (!openModal) {
+            // Retry after a short delay
+            console.log('💬 MESSAGE_INPUT: openMessageModal not yet available, retrying...');
+            setTimeout(attachClickHandler, 500);
+            return;
+        }
+        chatTextarea.addEventListener('click', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
             const currentUrlData = win.stateManagerInstance?.getState('currentUrlData');
             const activeCommunities = win.stateManagerInstance?.getState('ui.activeCommunities');
             const pageId = currentUrlData?.pageId || '';
             const communityId = activeCommunities?.[0];
             console.log('💬 MESSAGE_INPUT: Opening UnifiedMessageModal for new message');
-            await win.openMessageModal({
+            await openModal({
                 mode: 'new',
                 pageId,
                 communityId
             });
-        }
-        else {
-            console.warn('⚠️ MESSAGE_INPUT: openMessageModal not available');
-        }
-    });
+        }, { once: false });
+        chatTextarea.dataset.listenersAttached = 'true';
+        console.log('✅ MESSAGE_INPUT: Click handler attached to chat-textarea');
+    };
+    // Start attaching handler
+    attachClickHandler();
     // Remove auto-resize since it's now readonly and single row
     // Remove Enter key handler since it's readonly
     // Remove send button handler since input is readonly
@@ -2065,7 +2063,6 @@ const attachLegacyIntegrations = () => {
     const win = window;
     win.loadChatHistory = loadChatHistory;
     win.addMessageToChat = addMessageToChat;
-    win.renderMessageElement = renderMessageElement; // Export for UnifiedMessageDisplay
     win.loadMessageReactions = loadMessageReactions;
     win.updateReactionDisplay = updateReactionDisplay;
     win.handleMessageFocus = handleMessageFocus;

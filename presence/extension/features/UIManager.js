@@ -260,15 +260,32 @@ export class UIManager {
         if (!this.document)
             return;
         this.logger.debug?.(`Switching to tab: ${tabId}`);
-        const tabButtons = this.document.querySelectorAll('.tab-button');
+        // ROOT CAUSE FIX: Use class-based tab switching (harmonize with tabNavigation.ts)
+        const tabButtons = this.document.querySelectorAll('.tab-button, .main-nav-tab');
         tabButtons.forEach(button => {
             const el = button;
-            el.classList.toggle('active', el.dataset.tab === tabId);
+            el.classList.toggle('active', el.dataset.tab === tabId || el.getAttribute('data-tab') === tabId);
         });
-        const tabContents = this.document.querySelectorAll('.tab-content');
+        // ROOT CAUSE FIX: Use class-based content switching instead of inline styles
+        // Match tabNavigation.ts pattern: use 'active' class instead of display style
+        const tabContents = this.document.querySelectorAll('.tab-content, .main-tab-content, .sub-tab-content');
         tabContents.forEach(content => {
             const el = content;
-            el.style.display = el.id === `${tabId}-tab` ? 'block' : 'none';
+            const contentId = el.id;
+            // Check if this content matches the target tab (supports both 'discuss-tab' and 'discuss' formats)
+            const matchesTab = contentId === `${tabId}-tab` ||
+                contentId === tabId ||
+                (contentId.endsWith('-tab') && contentId.replace('-tab', '') === tabId);
+            if (matchesTab) {
+                el.classList.add('active');
+                // ROOT CAUSE FIX: Remove inline display style to let CSS handle it
+                el.style.display = '';
+            }
+            else {
+                el.classList.remove('active');
+                // ROOT CAUSE FIX: Remove inline display style to let CSS handle it
+                el.style.display = '';
+            }
         });
         this.uiState.activeTab = tabId;
         this.updateUIState();

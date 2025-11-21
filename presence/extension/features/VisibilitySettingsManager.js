@@ -21,6 +21,12 @@ class VisibilitySettingsManager {
         this.displayNameResetBtn = null;
         this.themeToggle = null;
     }
+    getVisibilityManagerInstance() {
+        if (typeof window === 'undefined') {
+            return null;
+        }
+        return window.visibilityManager || null;
+    }
     /**
      * Initialize visibility settings manager
      */
@@ -116,6 +122,43 @@ class VisibilitySettingsManager {
                 console.log('🔍 DIAGNOSTIC: Visibility saved:', toggle.checked);
             });
             toggle.setAttribute('data-handler-attached', 'true');
+        }
+        // ROOT CAUSE FIX: Add click handler to visibility label/section to show Go Visible Modal when toggle is "No"
+        const visibilityLabel = document.getElementById('visibility-label');
+        const visibilitySettingItem = document.getElementById('visibility-setting-item');
+        const visibilityClickTarget = visibilityLabel || visibilitySettingItem;
+        if (visibilityClickTarget && this.visibilityToggle) {
+            // Remove existing listener if any
+            const newTarget = visibilityClickTarget.cloneNode(true);
+            if (visibilityClickTarget.parentNode) {
+                visibilityClickTarget.parentNode.replaceChild(newTarget, visibilityClickTarget);
+            }
+            const toggleRef = this.visibilityToggle; // Store reference for closure
+            newTarget.addEventListener('click', (e) => {
+                // Only show modal if clicking on label/section (not the toggle itself)
+                if (toggleRef && e.target !== toggleRef && !toggleRef.contains(e.target)) {
+                    const isVisible = toggleRef.checked;
+                    if (!isVisible) {
+                        // Show Go Visible Modal
+                        const win = window;
+                        if (win.showGoVisibleModal) {
+                            win.showGoVisibleModal();
+                        }
+                        else if (win.openGoVisibleModal) {
+                            win.openGoVisibleModal();
+                        }
+                        else {
+                            // Fallback: Toggle visibility directly
+                            if (toggleRef) {
+                                toggleRef.checked = true;
+                                this.updateVisibilityStatus();
+                                this.saveVisibility();
+                            }
+                        }
+                    }
+                }
+            });
+            console.log('✅ VISIBILITY_SETTINGS: Visibility label click handler attached');
         }
         // Status select
         if (this.statusSelect) {
@@ -344,10 +387,17 @@ class VisibilitySettingsManager {
             }
             this.originalValues.displayName = displayName;
             // Theme - FIX: Load from database first, then sync to Chrome storage and DOM
-            // ROOT CAUSE FIX: Ensure we get the actual theme value, not defaulting incorrectly
-            let theme = 'dark'; // default
-            // Step 1: Check database first (source of truth) - CRITICAL FIX: forceDatabase=true
-            if (unifiedSettingsStorage && typeof unifiedSettingsStorage.getSetting === 'function') {
+            // ROOT CAUSE FIX: Get current theme from DOM first (user may have changed it), then check database
+            let theme = 'light'; // default
+            // Step 0: Check current DOM theme first (most recent user action)
+            const currentDOMTheme = document.body.getAttribute('data-theme') ||
+                document.documentElement.getAttribute('data-theme');
+            if (currentDOMTheme && (currentDOMTheme === 'dark' || currentDOMTheme === 'light')) {
+                theme = currentDOMTheme;
+                console.log('✅ VISIBILITY_SETTINGS: Using current DOM theme:', theme);
+            }
+            // Step 1: Check database (source of truth) - CRITICAL FIX: forceDatabase=true
+            else if (unifiedSettingsStorage && typeof unifiedSettingsStorage.getSetting === 'function') {
                 const dbTheme = await unifiedSettingsStorage.getSetting('theme', null, { skipApi: false, forceDatabase: true });
                 // CRITICAL FIX: Only use database value if it's explicitly set (not null/undefined)
                 if (dbTheme === 'dark' || dbTheme === 'light') {
@@ -399,11 +449,16 @@ class VisibilitySettingsManager {
             document.documentElement.setAttribute('data-theme', theme);
             document.body.setAttribute('data-theme', theme);
             // CRITICAL FIX: Set toggle state BEFORE updateThemeStatus to ensure correct initial state
+            // ROOT CAUSE FIX: Coordinate toggle with current theme - sync toggle state with actual theme
             if (this.themeToggle) {
-                // Set toggle state based on database value (checked = dark)
-                this.themeToggle.checked = theme === 'dark';
-                console.log('✅ VISIBILITY_SETTINGS: Theme toggle set to:', theme === 'dark' ? 'dark (checked)' : 'light (unchecked)');
-                // Update slider position immediately to reflect database value
+                // Get actual current theme from DOM (may differ from loaded theme if user changed it)
+                const actualTheme = document.body.getAttribute('data-theme') ||
+                    document.documentElement.getAttribute('data-theme') ||
+                    theme;
+                const shouldBeDark = actualTheme === 'dark';
+                this.themeToggle.checked = shouldBeDark;
+                console.log('🔧 VISIBILITY_SETTINGS: Theme toggle coordinated with current theme:', actualTheme, 'toggle checked:', shouldBeDark);
+                // Update slider position immediately to reflect actual theme
                 this.updateThemeStatus();
             }
             this.originalValues.theme = theme;
@@ -456,13 +511,14 @@ class VisibilitySettingsManager {
                 console.log('✅ VISIBILITY_SETTINGS: Using UserPreferencesManager to save visibility');
                 await userPreferencesManager.savePreference('isVisible', isVisible);
             }
-            else if (saveSetting) {
+            else if (typeof saveSetting === 'function') {
                 // Fallback to old system during transition
                 console.log('⚠️ VISIBILITY_SETTINGS: UserPreferencesManager not available, using saveSetting fallback');
                 await saveSetting('visibilityEnabled', isVisible, { apiKey: 'isVisible' });
             }
             else {
                 // Fallback to direct storage
+                console.log('⚠️ VISIBILITY_SETTINGS: Using Chrome storage fallback for visibility');
                 await chrome.storage.local.set({ visibilityEnabled: isVisible });
             }
             // CRITICAL FIX: Update currentUser in StateManager immediately for other components
@@ -473,12 +529,13 @@ class VisibilitySettingsManager {
                 stateManagerInstance.setState('currentUser', currentUser);
             }
             // CRITICAL FIX: Refresh visibility avatars to reflect the change
-            if (visibilityManager && typeof visibilityManager.refreshVisibilityAvatars === 'function') {
+            const visibilityManagerInstance = this.getVisibilityManagerInstance();
+            if (visibilityManagerInstance && typeof visibilityManagerInstance.refreshVisibilityAvatars === 'function') {
                 const currentUrlData = stateManagerInstance.getState('currentUrlData');
                 const currentPageId = currentUrlData?.pageId;
                 if (currentPageId) {
                     console.log('🔧 VISIBILITY_SETTINGS: Refreshing visibility avatars after visibility change');
-                    await visibilityManager.refreshVisibilityAvatars(currentPageId);
+                    await visibilityManagerInstance.refreshVisibilityAvatars(currentPageId);
                 }
             }
             // CRITICAL FIX: Dispatch event to notify other components
@@ -529,11 +586,12 @@ class VisibilitySettingsManager {
                 await profileManager.updateAvailabilityEverywhere(status);
             }
             // FIX: Refresh avatars to update status dots
-            if (visibilityManager && typeof visibilityManager.refreshVisibilityAvatars === 'function') {
+            const visibilityManagerInstance = this.getVisibilityManagerInstance();
+            if (visibilityManagerInstance && typeof visibilityManagerInstance.refreshVisibilityAvatars === 'function') {
                 const currentUrlData = stateManagerInstance.getState('currentUrlData');
                 const currentPageId = currentUrlData?.pageId || stateManagerInstance.getState('currentPageId');
                 if (currentPageId && typeof currentPageId === 'string') {
-                    await visibilityManager.refreshVisibilityAvatars(currentPageId);
+                    await visibilityManagerInstance.refreshVisibilityAvatars(currentPageId);
                 }
             }
             // FIX: Immediately refresh message avatars to update status dots
@@ -808,6 +866,43 @@ if (typeof window !== 'undefined') {
     };
     win.visibilitySettingsManager = visibilitySettingsManagerInstance;
     console.log('✅ VISIBILITY_SETTINGS: setVisibilityStatus exported to window');
+    // ROOT CAUSE FIX: Listen for tab switches and re-initialize toggles when settings/visibility tab becomes visible
+    // Use MutationObserver to watch for tab visibility changes
+    const observeTabSwitches = () => {
+        const settingsTab = document.getElementById('settings-tab');
+        const visibilityTab = document.getElementById('visibility-tab');
+        const checkAndReinitialize = () => {
+            const settingsVisible = settingsTab && settingsTab.offsetParent !== null;
+            const visibilityVisible = visibilityTab && visibilityTab.offsetParent !== null;
+            if (settingsVisible || visibilityVisible) {
+                console.log('🔧 VISIBILITY_SETTINGS: Settings/Visibility tab visible, ensuring event listeners...');
+                visibilitySettingsManagerInstance.ensureEventListeners();
+            }
+        };
+        // Watch for tab visibility changes
+        if (settingsTab) {
+            const observer = new MutationObserver(checkAndReinitialize);
+            observer.observe(settingsTab, { attributes: true, attributeFilter: ['style', 'class'] });
+            observer.observe(document.body, { childList: true, subtree: true });
+        }
+        // Also listen for click events on tab buttons
+        document.addEventListener('click', (e) => {
+            const target = e.target;
+            if (target && (target.id === 'settings-tab' || target.closest('#settings-tab') ||
+                target.id === 'visibility-tab' || target.closest('#visibility-tab') ||
+                target.dataset.tab === 'settings-tab' || target.dataset.tab === 'visibility-tab')) {
+                setTimeout(checkAndReinitialize, 100); // Small delay to ensure DOM is updated
+            }
+        });
+        console.log('✅ VISIBILITY_SETTINGS: Tab switch observer attached');
+    };
+    // Initialize observer when DOM is ready
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', observeTabSwitches);
+    }
+    else {
+        observeTabSwitches();
+    }
 }
 // Export as ES6 module (pure - no window exports needed for re-launch)
 export { VisibilitySettingsManager, visibilitySettingsManagerInstance };

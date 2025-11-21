@@ -171,8 +171,7 @@ Logger.logHistory = [];
 Logger.maxHistorySize = 1000;
 export { Logger };
 export default Logger;
-// CRITICAL FIX: Export Logger to window for legacy code compatibility
-// ROOT CAUSE FIX: Ensure Logger is available immediately after module loads
+// Export Logger to window for module access
 if (typeof window !== 'undefined') {
     window.Logger = Logger;
     // Also set as a property that can be checked immediately

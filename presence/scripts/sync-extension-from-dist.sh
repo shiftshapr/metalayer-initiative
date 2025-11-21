@@ -51,6 +51,22 @@ find "$DIST_DIR" -type f -name "*.js" | while read -r file; do
   echo "   • $rel_path"
 done
 
+# ROOT CAUSE FIX: Copy CSS and HTML files from source to extension/
+echo "🔄 Copying asset files (CSS, HTML) to $EXT_DIR/ ..."
+ASSET_FILES=(
+  "sidepanel.css"
+  "sidepanel.html"
+)
+
+for file in "${ASSET_FILES[@]}"; do
+  if [ -f "$file" ]; then
+    cp "$file" "$EXT_DIR/$file"
+    echo "   • $file"
+  else
+    echo "   ⚠️  Warning: $file not found in source directory"
+  fi
+done
+
 # Copy hand-authored JavaScript files that aren't compiled from TypeScript
 HAND_AUTHED_FILES=(
   "real-google-auth.js"
@@ -80,6 +96,18 @@ window.__BUILD_INFO__ = {
   gitBranch: "$GIT_BRANCH",
   buildTime: "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 };
+EOF
+
+# Also emit JSON version for runtime fetching
+BUILD_INFO_JSON_FILE="extension/.build-info.json"
+cat > "$BUILD_INFO_JSON_FILE" << EOF
+{
+  "buildNumber": $BUILD_NUMBER,
+  "timestamp": "$BUILD_TIMESTAMP",
+  "gitCommit": "$GIT_COMMIT",
+  "gitBranch": "$GIT_BRANCH",
+  "buildTime": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+}
 EOF
 
 echo "✅ Extension synced with latest compiled files."

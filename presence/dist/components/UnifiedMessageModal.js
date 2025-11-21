@@ -11,6 +11,7 @@
  * - Camera capture
  * - Focus context support
  */
+import { getXIcon } from '../utils/XPatternSystem.js';
 export class UnifiedMessageModal {
     constructor() {
         this.modal = null;
@@ -96,59 +97,123 @@ export class UnifiedMessageModal {
     }
     /**
      * Get modal HTML based on mode
+     * X (Twitter) Design Pattern:
+     * - Top bar: X (close) on left, "Drafts" on right
+     * - User profile picture on left
+     * - Audience selector ("Everyone" dropdown) next to profile
+     * - Large text input with "What's happening?" placeholder
+     * - Reply settings below ("Everyone can reply" with globe icon)
+     * - Bottom toolbar with icons (media, GIF, poll, list, emoji, calendar, location, bold, italic)
+     * - Post button (gray when disabled, blue when active)
      */
     getModalHTML() {
         if (!this.options)
             return '';
         const { mode, editMessage, parentId, quoteId } = this.options;
-        const title = this.getModalTitle();
         const content = editMessage?.content || '';
         const showParentContext = mode === 'reply' && parentId;
         const showQuoteContext = mode === 'quote' && quoteId;
+        // Get current user for profile picture
+        const currentUser = this.getCurrentUser();
+        const userAvatar = currentUser?.avatarUrl || currentUser?.picture || '';
+        const userName = currentUser?.name || currentUser?.displayName || 'You';
+        // Get current community for audience selector
+        const win = window;
+        const activeCommunities = win.stateManagerInstance?.getState('ui.activeCommunities');
+        const communityId = activeCommunities?.[0] || this.options.communityId;
+        const audienceLabel = communityId ? 'Community' : 'Everyone';
         return `
       <div class="unified-message-modal-overlay"></div>
-      <div class="unified-message-modal-content">
-        <div class="unified-message-modal-header">
-          <h2>${title}</h2>
-          <button class="unified-message-modal-close" aria-label="Close">×</button>
+      <div class="unified-message-modal-content x-design-pattern${this.options.premiumText ? ' premium-text' : ''}"${this.options.premiumText ? ' data-premium="true"' : ''}>
+        <!-- Top Bar: X (close) on left, Drafts on right -->
+        <div class="unified-message-modal-top-bar">
+          <button class="unified-message-modal-close x-close-btn" aria-label="Close">
+            ${getXIcon('close', { width: 20, height: 20 })}
+          </button>
+          <button class="unified-message-drafts-btn" id="drafts-btn">Drafts</button>
         </div>
         
-        <div class="unified-message-modal-body">
+        <!-- User Profile and Audience Selection -->
+        <div class="unified-message-user-section">
+          <div class="unified-message-user-avatar x-avatar-container">
+            ${userAvatar ? `<img src="${this.escapeHtml(userAvatar)}" alt="${this.escapeHtml(userName)}" class="x-avatar" />` :
+            `<div class="x-avatar x-avatar-fallback">${userName.charAt(0).toUpperCase()}</div>`}
+          </div>
+          <div class="unified-message-audience-selector">
+            <button class="audience-select-btn x-audience-selector" id="audience-select-btn">
+              <span class="audience-label">${audienceLabel}</span>
+              ${getXIcon('chevronDown', { width: 16, height: 16 })}
+            </button>
+          </div>
+        </div>
+        
+        <!-- Message Context (reply/quote) -->
+        <div class="unified-message-context" id="message-context">
           ${showParentContext ? this.getParentContextHTML() : ''}
           ${showQuoteContext ? this.getQuoteContextHTML() : ''}
+        </div>
+        
+        <!-- Main Text Input Area -->
+        <div class="unified-message-input-container">
+          <textarea 
+            id="message-content" 
+            class="unified-message-textarea x-input"
+            placeholder="What's happening?"
+            rows="1"
+          >${content}</textarea>
           
-          <div class="unified-message-input-container">
-            <textarea 
-              id="message-content" 
-              class="unified-message-textarea"
-              placeholder="Type your message..."
-              rows="4"
-            >${content}</textarea>
-            
-            <div class="unified-message-attachments-preview" id="attachments-preview"></div>
+          <div class="unified-message-attachments-preview" id="attachments-preview"></div>
+        </div>
+        
+        <!-- Reply Settings -->
+        <div class="unified-message-reply-settings">
+          ${getXIcon('globe', { width: 16, height: 16, className: 'globe-icon' })}
+          <span class="reply-settings-text">Everyone can reply</span>
+        </div>
+        
+        <!-- Bottom Toolbar -->
+        <div class="unified-message-toolbar x-toolbar">
+          <div class="unified-message-toolbar-left">
+            <button class="unified-message-toolbar-btn x-toolbar-icon" id="attach-media-btn" title="Media">
+              ${getXIcon('media', { width: 20, height: 20 })}
+            </button>
+            <button class="unified-message-toolbar-btn x-toolbar-icon" id="gif-btn" title="GIF">
+              <span class="gif-label">GIF</span>
+            </button>
+            <button class="unified-message-toolbar-btn x-toolbar-icon" id="poll-btn" title="Poll">
+              ${getXIcon('poll', { width: 20, height: 20 })}
+            </button>
+            <button class="unified-message-toolbar-btn x-toolbar-icon" id="list-btn" title="List">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+                <path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/>
+              </svg>
+            </button>
+            <button class="unified-message-toolbar-btn x-toolbar-icon" id="emoji-btn" title="Emoji">
+              ${getXIcon('emoji', { width: 20, height: 20 })}
+            </button>
+            <button class="unified-message-toolbar-btn x-toolbar-icon" id="calendar-btn" title="Schedule">
+              ${getXIcon('schedule', { width: 20, height: 20 })}
+            </button>
+            <button class="unified-message-toolbar-btn x-toolbar-icon" id="location-btn" title="Location">
+              ${getXIcon('location', { width: 20, height: 20 })}
+            </button>
+            <button class="unified-message-toolbar-btn x-toolbar-icon" id="bold-btn" title="Bold">
+              ${getXIcon('bold', { width: 20, height: 20 })}
+            </button>
+            <button class="unified-message-toolbar-btn x-toolbar-icon" id="italic-btn" title="Italic">
+              ${getXIcon('italic', { width: 20, height: 20 })}
+            </button>
           </div>
-          
-          <div class="unified-message-toolbar">
-            <div class="unified-message-toolbar-left">
-              <button class="unified-message-toolbar-btn" id="attach-media-btn" title="Attach media">
-                📎
-              </button>
-              <button class="unified-message-toolbar-btn" id="emoji-btn" title="Add emoji">
-                😀
-              </button>
-              <button class="unified-message-toolbar-btn" id="camera-btn" title="Take photo">
-                📷
-              </button>
-            </div>
-            <div class="unified-message-toolbar-right">
-              <button class="unified-message-btn unified-message-btn-secondary" id="cancel-btn">
-                Cancel
-              </button>
-              <button class="unified-message-btn unified-message-btn-primary" id="send-btn">
-                ${mode === 'edit' ? 'Update' : 'Send'}
-              </button>
-            </div>
-          </div>
+        </div>
+        
+        <!-- Action Buttons -->
+        <div class="unified-message-actions">
+          <button class="unified-message-btn unified-message-btn-secondary x-save-draft-btn" id="save-draft-btn">
+            Save draft
+          </button>
+          <button class="unified-message-btn unified-message-btn-primary x-post-button" id="send-btn" disabled>
+            ${mode === 'edit' ? 'Update' : 'Post'}
+          </button>
         </div>
       </div>
       
@@ -227,6 +292,26 @@ export class UnifiedMessageModal {
     `;
     }
     /**
+     * Re-render context sections (reply/quote)
+     */
+    renderContextSection() {
+        if (!this.modal || !this.options)
+            return;
+        const container = this.modal.querySelector('#message-context');
+        if (!container)
+            return;
+        const showParent = this.options.mode === 'reply' && this.options.parentId;
+        const showQuote = this.options.mode === 'quote' && this.options.quoteId;
+        let html = '';
+        if (showParent) {
+            html += this.getParentContextHTML();
+        }
+        if (showQuote) {
+            html += this.getQuoteContextHTML();
+        }
+        container.innerHTML = html;
+    }
+    /**
      * Load parent message data
      */
     async loadParentMessage(parentId) {
@@ -237,13 +322,7 @@ export class UnifiedMessageModal {
                 throw new Error(`Failed to load parent message: ${response.statusText}`);
             }
             this.parentMessage = await response.json();
-            // Update the modal if it's already rendered
-            if (this.modal && this.options?.mode === 'reply') {
-                const parentContext = this.modal.querySelector('.unified-message-parent-context');
-                if (parentContext) {
-                    parentContext.outerHTML = this.getParentContextHTML();
-                }
-            }
+            this.renderContextSection();
         }
         catch (error) {
             console.error('Error loading parent message:', error);
@@ -261,13 +340,7 @@ export class UnifiedMessageModal {
                 throw new Error(`Failed to load quoted message: ${response.statusText}`);
             }
             this.quotedMessage = await response.json();
-            // Update the modal if it's already rendered
-            if (this.modal && this.options?.mode === 'quote') {
-                const quoteContext = this.modal.querySelector('.unified-message-quote-context');
-                if (quoteContext) {
-                    quoteContext.outerHTML = this.getQuoteContextHTML();
-                }
-            }
+            this.renderContextSection();
         }
         catch (error) {
             console.error('Error loading quoted message:', error);
@@ -288,35 +361,232 @@ export class UnifiedMessageModal {
     setupModalHandlers() {
         if (!this.modal)
             return;
-        // Close button
-        const closeBtn = this.modal.querySelector('.unified-message-modal-close');
+        // Close button (X)
+        const closeBtn = this.modal.querySelector('.unified-message-modal-close, .x-close-btn');
         closeBtn?.addEventListener('click', () => this.close());
         // Overlay click
         const overlay = this.modal.querySelector('.unified-message-modal-overlay');
         overlay?.addEventListener('click', () => this.close());
-        // Cancel button
-        const cancelBtn = this.modal.querySelector('#cancel-btn');
-        cancelBtn?.addEventListener('click', () => this.close());
-        // Send button
+        // Drafts button
+        const draftsBtn = this.modal.querySelector('#drafts-btn');
+        draftsBtn?.addEventListener('click', () => this.handleDrafts());
+        // Audience selector
+        const audienceBtn = this.modal.querySelector('#audience-select-btn');
+        audienceBtn?.addEventListener('click', () => this.handleAudienceSelect());
+        // Send/Post button
+        const saveDraftBtn = this.modal.querySelector('#save-draft-btn');
         const sendBtn = this.modal.querySelector('#send-btn');
+        saveDraftBtn?.addEventListener('click', () => this.handleSaveDraft());
         sendBtn?.addEventListener('click', () => this.handleSend());
+        // Textarea auto-resize and character count
+        const textarea = this.modal.querySelector('#message-content');
+        if (textarea) {
+            textarea.addEventListener('input', () => {
+                this.updatePostButtonState();
+                this.autoResizeTextarea(textarea);
+            });
+        }
         // Media attachment button
         const attachMediaBtn = this.modal.querySelector('#attach-media-btn');
         attachMediaBtn?.addEventListener('click', () => this.handleAttachMedia());
+        // GIF button
+        const gifBtn = this.modal.querySelector('#gif-btn');
+        gifBtn?.addEventListener('click', () => this.handleGIF());
+        // Poll button
+        const pollBtn = this.modal.querySelector('#poll-btn');
+        pollBtn?.addEventListener('click', () => this.handlePoll());
+        // List button
+        const listBtn = this.modal.querySelector('#list-btn');
+        listBtn?.addEventListener('click', () => this.handleList());
         // Emoji button
         const emojiBtn = this.modal.querySelector('#emoji-btn');
         emojiBtn?.addEventListener('click', () => this.handleEmojiPicker());
-        // Camera button
-        const cameraBtn = this.modal.querySelector('#camera-btn');
-        cameraBtn?.addEventListener('click', () => this.handleCamera());
+        // Calendar button
+        const calendarBtn = this.modal.querySelector('#calendar-btn');
+        calendarBtn?.addEventListener('click', () => this.handleSchedule());
+        // Location button
+        const locationBtn = this.modal.querySelector('#location-btn');
+        locationBtn?.addEventListener('click', () => this.handleLocation());
+        // Bold button
+        const boldBtn = this.modal.querySelector('#bold-btn');
+        boldBtn?.addEventListener('click', () => this.handleBold());
+        // Italic button
+        const italicBtn = this.modal.querySelector('#italic-btn');
+        italicBtn?.addEventListener('click', () => this.handleItalic());
         // File input change
         const fileInput = this.modal.querySelector('#media-file-input');
         fileInput?.addEventListener('change', (e) => this.handleFileSelect(e));
+        // Initial button state
+        this.updatePostButtonState();
     }
     /**
-     * Handle sending the message
+     * Update Post button state (disabled when empty, enabled when has content)
+     */
+    updatePostButtonState() {
+        const sendBtn = this.modal?.querySelector('#send-btn');
+        const textarea = this.modal?.querySelector('#message-content');
+        if (sendBtn && textarea) {
+            const hasContent = textarea.value.trim().length > 0 || this.attachments.length > 0;
+            sendBtn.disabled = !hasContent;
+        }
+    }
+    /**
+     * Auto-resize textarea
+     */
+    autoResizeTextarea(textarea) {
+        textarea.style.height = 'auto';
+        textarea.style.height = `${Math.min(textarea.scrollHeight, 400)}px`;
+    }
+    /**
+     * Handle drafts
+     */
+    async handleDrafts() {
+        console.log('📝 DRAFTS: Opening drafts');
+        // Import and open draft selection modal
+        const { draftSelectionModal } = await import('./DraftSelectionModal.js');
+        const currentUser = this.getCurrentUser();
+        const userId = currentUser?.id || '';
+        if (!this.options)
+            return;
+        if (!userId) {
+            alert('Sign in to access drafts');
+            return;
+        }
+        await draftSelectionModal.open({
+            pageId: this.options.pageId,
+            userId,
+            onSelect: async (draft) => {
+                // Load draft into modal
+                await this.loadDraft(draft);
+            },
+            onDelete: () => {
+                console.log('📝 DRAFT: Draft deleted');
+            },
+            onCancel: () => {
+                console.log('📝 DRAFT: Draft selection cancelled');
+            }
+        });
+    }
+    /**
+     * Load a draft into the modal
+     */
+    async loadDraft(draft) {
+        if (!this.modal)
+            return;
+        // Set content
+        const textarea = this.modal.querySelector('#message-content');
+        if (textarea) {
+            textarea.value = draft.content;
+            // Trigger input event to update character count and send button state
+            textarea.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+        // Update options/context for parent or quote
+        if (this.options) {
+            this.options.parentId = draft.parentId || null;
+            this.options.quoteId = draft.quoteId || null;
+        }
+        if (draft.parentId) {
+            if (this.options) {
+                this.options.mode = 'reply';
+            }
+            await this.loadParentMessage(draft.parentId);
+        }
+        else {
+            this.parentMessage = null;
+        }
+        if (draft.quoteId) {
+            if (this.options) {
+                this.options.mode = 'quote';
+            }
+            await this.loadQuotedMessage(draft.quoteId);
+        }
+        else {
+            this.quotedMessage = null;
+        }
+        if (!draft.parentId && !draft.quoteId && this.options && this.options.mode !== 'edit') {
+            this.options.mode = 'new';
+        }
+        this.renderContextSection();
+        // Load attachments if any
+        if (draft.attachments && draft.attachments.length > 0) {
+            // TODO: Load attachments
+            console.log('📝 DRAFT: Loading attachments', draft.attachments);
+        }
+        // Focus textarea
+        textarea?.focus();
+    }
+    /**
+     * Handle audience selection
+     */
+    handleAudienceSelect() {
+        console.log('👥 AUDIENCE: Opening audience selector');
+        // TODO: Implement audience selector dropdown
+    }
+    /**
+     * Handle GIF picker
+     */
+    handleGIF() {
+        console.log('🎬 GIF: Opening GIF picker');
+        // TODO: Implement GIF picker
+    }
+    /**
+     * Handle poll creation
+     */
+    handlePoll() {
+        console.log('📊 POLL: Opening poll creator');
+        // TODO: Implement poll creation
+    }
+    /**
+     * Handle list creation
+     */
+    handleList() {
+        console.log('📋 LIST: Opening list creator');
+        // TODO: Implement list creation
+    }
+    /**
+     * Handle schedule
+     */
+    handleSchedule() {
+        console.log('📅 SCHEDULE: Opening schedule picker');
+        // TODO: Implement schedule functionality
+    }
+    /**
+     * Handle location
+     */
+    handleLocation() {
+        console.log('📍 LOCATION: Opening location picker');
+        // TODO: Implement location picker
+    }
+    /**
+     * Handle bold formatting
+     */
+    handleBold() {
+        console.log('** BOLD: Applying bold formatting');
+        // TODO: Implement text formatting
+    }
+    /**
+     * Handle italic formatting
+     */
+    handleItalic() {
+        console.log('* ITALIC: Applying italic formatting');
+        // TODO: Implement text formatting
+    }
+    /**
+     * Handle sending the message (publish)
      */
     async handleSend() {
+        await this.submitMessage('published');
+    }
+    /**
+     * Handle saving as draft
+     */
+    async handleSaveDraft() {
+        await this.submitMessage('draft');
+    }
+    /**
+     * Submit message (draft or published)
+     */
+    async submitMessage(status) {
         if (!this.options || !this.modal)
             return;
         const textarea = this.modal.querySelector('#message-content');
@@ -325,14 +595,12 @@ export class UnifiedMessageModal {
             alert('Please enter a message or attach media');
             return;
         }
-        // Determine message kind
         const messageKind = this.determineMessageKind();
-        // Prepare message data
         const messageData = {
             content,
             pageId: this.options.pageId,
             parentId: this.options.parentId || null,
-            quoteId: this.options.quoteId || null, // Include quoteId for quote mode
+            quoteId: this.options.quoteId || null,
             communityId: this.options.communityId || 'comm-001',
             messageKind,
             attachments: this.attachments.map(att => ({
@@ -345,28 +613,23 @@ export class UnifiedMessageModal {
                 mimeType: att.mimeType
             })),
             emojiMetadata: this.emojiMetadata,
-            focusContext: this.options.focusContext || null
+            focusContext: this.options.focusContext || null,
+            status
         };
         try {
-            // Upload attachments first if needed
             if (this.attachments.some(att => att.blob)) {
-                // TODO: Upload attachments to storage/CDN
-                // For now, we'll use data URLs (not ideal for production)
                 for (const att of this.attachments) {
                     if (att.blob && !att.url) {
                         att.url = await this.blobToDataURL(att.blob);
                     }
                 }
             }
-            // Resolve API base URL
             const apiBaseUrl = this.resolveApiBaseUrl();
             const endpoint = `${apiBaseUrl}/api/messages`;
-            // Get current user ID from state
             const currentUser = this.getCurrentUser();
             if (!currentUser?.id) {
                 throw new Error('User not authenticated');
             }
-            // Send message via API
             const response = await fetch(endpoint, {
                 method: 'POST',
                 headers: {
@@ -378,17 +641,21 @@ export class UnifiedMessageModal {
                 })
             });
             if (!response.ok) {
-                throw new Error(`Failed to send message: ${response.statusText}`);
+                throw new Error(`Failed to ${status === 'draft' ? 'save draft' : 'publish message'}: ${response.statusText}`);
             }
             const message = await response.json();
-            // Call success callback
-            this.options.onSuccess?.(message);
-            // Close modal
+            if (status === 'draft') {
+                this.options.onDraftSaved?.(message);
+                console.log('📝 Draft saved', message.id);
+            }
+            else {
+                this.options.onSuccess?.(message);
+            }
             this.close();
         }
         catch (error) {
-            console.error('Error sending message:', error);
-            alert(`Failed to send message: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            console.error(`Error ${status === 'draft' ? 'saving draft' : 'sending message'}:`, error);
+            alert(`Failed to ${status === 'draft' ? 'save draft' : 'send message'}: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
     }
     /**

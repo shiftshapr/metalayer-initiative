@@ -173,8 +173,7 @@ class AvatarUtils {
 }
 export { AvatarUtils };
 export default AvatarUtils;
-// CRITICAL FIX: Export AvatarUtils to window and globalThis for legacy code compatibility
-// ROOT CAUSE FIX: ProfileManager checks legacyContext.AvatarUtils (which is globalThis), so we must export it immediately
+// Export AvatarUtils to window and globalThis for module access
 if (typeof window !== 'undefined') {
     window.AvatarUtils = AvatarUtils;
     // Also set on globalThis for legacyContext compatibility (legacyContext = globalThis)

@@ -2,7 +2,7 @@
  * SUBSCRIPTION MANAGER - Notification Subscription Management
  * Manages user subscriptions to rooms, users, communities, timelines, etc.
  */
-import { Logger } from '../utils/Logger';
+import { Logger } from '../utils/Logger.js';
 /**
  * SubscriptionManager class
  * Manages notification subscriptions for various targets

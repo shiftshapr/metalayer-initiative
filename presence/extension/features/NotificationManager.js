@@ -2,7 +2,7 @@
  * NOTIFICATION MANAGER - Complete TypeScript Implementation
  * Handles all notification functionality with priority, offline queue, and content anchoring
  */
-import { Logger } from '../utils/Logger';
+import { Logger } from '../utils/Logger.js';
 /**
  * NotificationManager class
  * Manages notifications, permissions, settings, and content anchoring

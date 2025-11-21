@@ -305,7 +305,7 @@ export default StateManager;
 // Export convenience functions that use the singleton
 export const getState = (key) => stateManagerInstance.getState(key);
 export const setState = (key, value, persist = false) => stateManagerInstance.setState(key, value, persist);
-// ROOT CAUSE FIX: Export stateManagerInstance to window for diagnostic scripts and legacy compatibility
+// Export stateManagerInstance to window for diagnostic scripts and module access
 if (typeof window !== 'undefined') {
     window.stateManagerInstance = stateManagerInstance;
     Object.defineProperty(window, 'stateManagerInstance', {

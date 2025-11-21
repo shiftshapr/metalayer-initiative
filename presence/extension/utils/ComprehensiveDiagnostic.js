@@ -168,9 +168,9 @@ class ComprehensiveDiagnostic {
             // Check updateVisibleTab function
             section.updateVisibleTabAvailable = typeof window.updateVisibleTab === 'function';
             console.log('🔍 DIAGNOSTIC: updateVisibleTab available:', section.updateVisibleTabAvailable);
-            // Check VisibilityManager registration via legacy update hook
+            // Check VisibilityManager registration via update hook
             section.visibilityManagerAvailable = section.updateVisibleTabAvailable;
-            console.log('🔍 DIAGNOSTIC: VisibilityManager legacy hook available:', section.visibilityManagerAvailable);
+            console.log('🔍 DIAGNOSTIC: VisibilityManager hook available:', section.visibilityManagerAvailable);
             // Check visibility data
             section.currentVisibilityData = window.currentVisibilityData;
             section.currentVisibilityDataUnfiltered = window.currentVisibilityDataUnfiltered;

@@ -450,19 +450,26 @@ async function updateVisibleTab(avatars) {
     if (goInvisibleBtn) {
         goInvisibleBtn.addEventListener('click', async () => {
             console.log('🔍 VISIBILITY: Go invisible clicked');
-            const setVisibilityStatus = (typeof window !== 'undefined' && window.setVisibilityStatus);
-            if (typeof setVisibilityStatus === 'function') {
-                await setVisibilityStatus(false);
-                // CRITICAL FIX: Navigate to Discuss tab after going invisible
-                const win = window;
-                if (win.switchTab) {
-                    try {
-                        win.switchTab('discuss-tab');
-                        console.log('✅ VISIBILITY: Switched to Discuss tab after going invisible');
-                    }
-                    catch (error) {
-                        console.warn('⚠️ VISIBILITY: Failed to switch to Discuss tab:', error);
-                    }
+            const win = window;
+            // ROOT CAUSE FIX: Set visibility to false, update UI, save to storage/database, then navigate
+            if (typeof win.setVisibilityStatus === 'function') {
+                await win.setVisibilityStatus(false);
+            }
+            else if (win.visibilitySettingsManager && win.visibilitySettingsManager.visibilityToggle) {
+                // Fallback: directly update toggle and save
+                win.visibilitySettingsManager.visibilityToggle.checked = false;
+                if (win.visibilitySettingsManager.saveVisibility) {
+                    await win.visibilitySettingsManager.saveVisibility();
+                }
+            }
+            // CRITICAL FIX: Navigate to Discuss tab after going invisible
+            if (win.switchTab) {
+                try {
+                    win.switchTab('discuss-tab');
+                    console.log('✅ VISIBILITY: Switched to Discuss tab after going invisible');
+                }
+                catch (error) {
+                    console.warn('⚠️ VISIBILITY: Failed to switch to Discuss tab:', error);
                 }
             }
         });
@@ -507,11 +514,11 @@ async function updateVisibleTab(avatars) {
         }, 30000); // Every 30 seconds
     }
 }
-// Provide legacy update hook without exporting the entire class
+// Provide update hook without exporting the entire class
 if (typeof window !== 'undefined') {
     const win = window;
     win.updateVisibleTab = updateVisibleTab;
-    console.log('✅ VisibilityManager legacy updateVisibleTab registered');
+    console.log('✅ VisibilityManager updateVisibleTab registered');
 }
 export { VisibilityManager, updateVisibleTab };
 export default VisibilityManager;

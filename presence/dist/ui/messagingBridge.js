@@ -1,5 +1,5 @@
 /**
- * Messaging bridge for legacy compatibility
+ * Messaging bridge for module communication
  */
 const getMessagingWindow = () => {
     if (typeof window === 'undefined') {

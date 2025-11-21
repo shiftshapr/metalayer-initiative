@@ -624,44 +624,12 @@ export class UserPreferencesManager {
         if (this.preferences.theme) {
             const currentDomTheme = document.body.getAttribute('data-theme') || document.documentElement.getAttribute('data-theme');
             const isDefaultTheme = this.preferences.theme === this.schema.theme.defaultValue;
-            // CRITICAL FIX: If DOM already has a theme set, only override if:
-            // 1. The preference is NOT the default value (user explicitly set it), AND
-            // 2. The preference is different from the current DOM theme (user changed it)
-            // Otherwise, preserve the existing DOM theme (which was set by ProfileManager on startup)
-            if (currentDomTheme) {
-                // DOM theme exists - only override if preference is explicit (not default) and different
-                if (!isDefaultTheme && this.preferences.theme !== currentDomTheme) {
-                    console.log(`🔍 USER_PREFERENCES_MANAGER: Applying explicit theme preference '${this.preferences.theme}' (overriding DOM theme '${currentDomTheme}')`);
-                    document.documentElement.setAttribute('data-theme', this.preferences.theme);
-                    document.body.setAttribute('data-theme', this.preferences.theme);
-                    // Update theme toggle in settings tab if exists
-                    const themeToggle = document.getElementById('theme-toggle');
-                    if (themeToggle) {
-                        themeToggle.checked = this.preferences.theme === 'dark';
-                        if (window.visibilitySettingsManager && typeof window.visibilitySettingsManager.updateThemeStatus === 'function') {
-                            window.visibilitySettingsManager.updateThemeStatus();
-                        }
-                    }
-                    // Update profile menu theme icon/text
-                    const themeIconMenu = document.getElementById('theme-icon-menu');
-                    const themeTextMenu = document.getElementById('theme-text-menu');
-                    if (themeIconMenu) {
-                        themeIconMenu.textContent = this.preferences.theme === 'dark' ? '☀️' : '🌙';
-                    }
-                    if (themeTextMenu) {
-                        themeTextMenu.textContent = this.preferences.theme === 'dark' ? 'Light mode' : 'Dark mode';
-                    }
-                }
-                else {
-                    console.log(`🔍 USER_PREFERENCES_MANAGER: Preserving existing DOM theme '${currentDomTheme}' (preference '${this.preferences.theme}' is ${isDefaultTheme ? 'default' : 'same'})`);
-                    // Sync preference to match DOM (in case DOM was set by ProfileManager)
-                    if (this.preferences.theme !== currentDomTheme) {
-                        this.preferences.theme = currentDomTheme;
-                    }
-                }
-            }
-            else {
-                // No DOM theme set - apply preference
+            // CRITICAL FIX: If DOM already has a theme set, NEVER override it during preference loading
+            // This prevents theme from resetting to light when messages load
+            // Only apply theme if DOM has no theme set (first load)
+            if (!currentDomTheme) {
+                // No DOM theme - safe to apply preference
+                console.log(`🔍 USER_PREFERENCES_MANAGER: Applying theme preference '${this.preferences.theme}' (no existing DOM theme)`);
                 document.documentElement.setAttribute('data-theme', this.preferences.theme);
                 document.body.setAttribute('data-theme', this.preferences.theme);
                 // Update theme toggle in settings tab if exists
@@ -680,6 +648,14 @@ export class UserPreferencesManager {
                 }
                 if (themeTextMenu) {
                     themeTextMenu.textContent = this.preferences.theme === 'dark' ? 'Light mode' : 'Dark mode';
+                }
+            }
+            else {
+                // DOM theme exists - preserve it, don't override
+                console.log(`🔍 USER_PREFERENCES_MANAGER: Preserving existing DOM theme '${currentDomTheme}' (preference '${this.preferences.theme}' will not override)`);
+                // Sync preference to match DOM (in case DOM was set by ProfileManager)
+                if (this.preferences.theme !== currentDomTheme) {
+                    this.preferences.theme = currentDomTheme;
                 }
             }
         }

@@ -40,6 +40,7 @@ model messages {
   parent_id               String?
   quote_id                String?   @db.Uuid
   reposted_to_communities String[]
+  status                  String    @default("published") // draft, published, deleted
 
   AppUser   AppUser     @relation(fields: [user_id], references: [id], onDelete: Cascade)
   reactions reactions[]
@@ -51,6 +52,8 @@ model messages {
   @@index([parent_id], map: "idx_messages_parent_id")
   @@index([user_id], map: "idx_messages_user_id")
   @@index([quote_id], map: "idx_messages_quote_id")
+  @@index([status], map: "idx_messages_status")
+  @@index([user_id, status], map: "idx_messages_user_drafts")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.

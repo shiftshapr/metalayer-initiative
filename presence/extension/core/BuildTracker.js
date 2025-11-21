@@ -27,15 +27,59 @@ class BuildTracker {
      * 3. Fallback to timestamp-based number
      */
     loadBuildInfo() {
-        // Try to get injected build info first (set by build process)
+        if (this.tryLoadInjectedBuildInfo()) {
+            return;
+        }
+        this.tryLoadBuildInfoFromFile()
+            .then((found) => {
+            if (found) {
+                return;
+            }
+            this.loadBuildInfoFromChromeStorage();
+        })
+            .catch(() => {
+            this.loadBuildInfoFromChromeStorage();
+        });
+    }
+    tryLoadInjectedBuildInfo() {
         const win = typeof window !== 'undefined' ? window : undefined;
         if (win?.__BUILD_INFO__) {
             this.buildInfo = win.__BUILD_INFO__;
             this.buildInfoLoaded = true;
             this.logBuildInfo();
-            return;
+            return true;
         }
-        // Try Chrome storage
+        return false;
+    }
+    async tryLoadBuildInfoFromFile() {
+        try {
+            const url = this.getBuildInfoUrl();
+            const response = await fetch(url, { cache: 'no-cache' });
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            const info = await response.json();
+            this.buildInfo = {
+                buildNumber: Number(info.buildNumber ?? info.build_number ?? info.build ?? 0),
+                timestamp: info.timestamp ?? info.lastBuild ?? new Date().toISOString(),
+                gitCommit: info.gitCommit ?? info.git_commit ?? info.commit ?? 'unknown',
+                gitBranch: info.gitBranch ?? info.git_branch ?? info.branch ?? 'unknown',
+                version: info.version
+            };
+            if (typeof window !== 'undefined') {
+                window.__BUILD_INFO__ = this.buildInfo;
+            }
+            this.persistBuildInfo();
+            this.buildInfoLoaded = true;
+            this.logBuildInfo();
+            return true;
+        }
+        catch (error) {
+            console.warn('⚠️ BUILD_TRACKER: Build info file not available yet. Run npm run build:presence to inject build metadata.', error);
+            return false;
+        }
+    }
+    loadBuildInfoFromChromeStorage() {
         try {
             chrome.storage.local.get(['buildNumber', 'buildTimestamp', 'buildGitCommit', 'buildGitBranch'], (result) => {
                 if (result.buildNumber) {
@@ -70,6 +114,32 @@ class BuildTracker {
             };
             this.buildInfoLoaded = true;
             this.logBuildInfo();
+        }
+    }
+    getBuildInfoUrl() {
+        try {
+            if (typeof chrome !== 'undefined' && chrome.runtime?.getURL) {
+                return chrome.runtime.getURL('.build-info.json');
+            }
+        }
+        catch (error) {
+            console.warn('⚠️ BUILD_TRACKER: Unable to resolve build info URL from chrome.runtime:', error);
+        }
+        return '.build-info.json';
+    }
+    persistBuildInfo() {
+        if (!this.buildInfo)
+            return;
+        try {
+            chrome.storage.local.set({
+                buildNumber: this.buildInfo.buildNumber,
+                buildTimestamp: this.buildInfo.timestamp,
+                buildGitCommit: this.buildInfo.gitCommit,
+                buildGitBranch: this.buildInfo.gitBranch
+            });
+        }
+        catch {
+            // Storage might not be available yet; ignore
         }
     }
     /**

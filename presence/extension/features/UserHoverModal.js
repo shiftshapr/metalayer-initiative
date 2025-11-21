@@ -782,6 +782,25 @@ class UserHoverModal {
 }
 // Create singleton instance
 const userHoverModalInstance = new UserHoverModal();
-// Export as ES6 module (pure - no window exports needed for re-launch)
+// Initialize on load
+if (typeof window !== 'undefined') {
+    // Wait for DOM to be ready
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+            userHoverModalInstance.initialize().catch(err => {
+                console.error('❌ USER_HOVER_MODAL: Failed to initialize:', err);
+            });
+        });
+    }
+    else {
+        userHoverModalInstance.initialize().catch(err => {
+            console.error('❌ USER_HOVER_MODAL: Failed to initialize:', err);
+        });
+    }
+    // Export to window for global access
+    window.userHoverModal = userHoverModalInstance;
+    console.log('✅ USER_HOVER_MODAL: Exported to window');
+}
+// Export as ES6 module
 export { UserHoverModal, userHoverModalInstance };
 export default UserHoverModal;
