@@ -75,12 +75,15 @@ class SupabaseRealtimeClient {
     console.log('👤 Current user set:', userEmail);
     console.log('👤 Community ID set:', communityId);
     
-    // SD1 FIX: Set global user context for RLS
-    window.currentUser = {
+    // ROOT CAUSE FIX: Update stateManager (TypeScript migration - no window.currentUser)
+    const userData = {
       email: userEmail,
       id: userId,
       communityId: communityId
     };
+    if (window.stateManagerInstance?.setState) {
+      window.stateManagerInstance.setState('currentUser', userData);
+    }
   }
 
   async joinPage(pageId, pageUrl) {

@@ -5,6 +5,7 @@
 class SettingsHeadlineManager {
     constructor() {
         this.maxLength = 1000;
+        this.minLength = 20;
         this.currentHeadline = null;
         this.originalHeadline = null;
         this.isInitialized = false;
@@ -14,6 +15,8 @@ class SettingsHeadlineManager {
         this.cancelBtn = null;
         this.deleteBtn = null;
         this.statusDiv = null;
+        this.headlineActions = null;
+        this.headlineMenuContainer = null;
     }
     /**
      * Initialize headline manager
@@ -32,6 +35,12 @@ class SettingsHeadlineManager {
             this.cancelBtn = document.getElementById('headline-cancel-btn');
             this.deleteBtn = document.getElementById('headline-delete-btn');
             this.statusDiv = document.getElementById('headline-status');
+            this.headlineActions = document.getElementById('headline-actions');
+            this.headlineMenuContainer = document.getElementById('headline-menu-container');
+            this.headlineCharMax = document.getElementById('headline-char-max');
+            if (this.headlineCharMax) {
+                this.headlineCharMax.textContent = String(this.maxLength);
+            }
             if (!this.headlineInput || !this.charCount || !this.saveBtn || !this.cancelBtn || !this.deleteBtn) {
                 console.warn('⚠️ SETTINGS_HEADLINE: Required DOM elements not found');
                 return;
@@ -56,6 +65,7 @@ class SettingsHeadlineManager {
         // Character count update
         this.headlineInput.addEventListener('input', () => {
             this.updateCharCount();
+            this.updateActionButtons();
         });
         // Save button
         if (this.saveBtn) {
@@ -99,8 +109,26 @@ class SettingsHeadlineManager {
         else if (currentLength > this.maxLength * 0.75) {
             this.charCount.style.color = '#ffc107'; // Yellow
         }
+        else if (currentLength < this.minLength) {
+            this.charCount.style.color = '#dc3545'; // Red if below minimum
+        }
         else {
             this.charCount.style.color = '#666'; // Gray
+        }
+        this.updateActionButtons();
+    }
+
+    updateActionButtons() {
+        if (!this.headlineInput || !this.headlineActions)
+            return;
+        const currentValue = this.headlineInput.value.trim();
+        const currentLength = currentValue.length;
+        const hasChanged = currentValue !== (this.originalHeadline ?? '');
+        const meetsMinLength = currentLength >= this.minLength;
+        const shouldShow = hasChanged && meetsMinLength;
+        this.headlineActions.style.display = shouldShow ? 'flex' : 'none';
+        if (this.headlineMenuContainer) {
+            this.headlineMenuContainer.style.display = shouldShow ? 'none' : '';
         }
     }
     /**
@@ -159,6 +187,7 @@ class SettingsHeadlineManager {
                 this.headlineInput.value = '';
             }
             this.updateCharCount();
+            this.updateActionButtons();
             console.log('ℹ️ SETTINGS_HEADLINE: No headline found, starting fresh');
         }
         catch (error) {
@@ -175,6 +204,10 @@ class SettingsHeadlineManager {
                 return;
             const newHeadline = this.headlineInput.value.trim();
             // Validate length
+            if (newHeadline.length < this.minLength) {
+                this.showStatus(`Headline must be at least ${this.minLength} characters`, 'error');
+                return;
+            }
             if (newHeadline.length > this.maxLength) {
                 this.showStatus(`Headline exceeds maximum length of ${this.maxLength} characters`, 'error');
                 return;
@@ -212,6 +245,7 @@ class SettingsHeadlineManager {
                 }
             }
             this.showStatus('Headline saved successfully', 'success');
+            this.updateActionButtons();
             console.log('✅ SETTINGS_HEADLINE: Headline saved');
         }
         catch (error) {
@@ -279,6 +313,7 @@ class SettingsHeadlineManager {
             this.headlineInput.value = this.originalHeadline || '';
         }
         this.updateCharCount();
+        this.updateActionButtons();
         this.showStatus('Changes cancelled', 'info');
         console.log('❌ SETTINGS_HEADLINE: Edit cancelled');
     }

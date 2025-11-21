@@ -1,6 +1,11 @@
 const { PrismaClient } = require('../generated/prisma');
 const { createClient } = require('@supabase/supabase-js');
-const UserNameExtractor = require('../presence/utils/UserNameExtractor');
+// ROOT CAUSE FIX: UserNameExtractor is ES6 module, create simple fallback for CommonJS
+// TODO: Convert UserNameExtractor to CommonJS or use dynamic import
+const extractUserName = (user) => {
+  if (!user) return 'User';
+  return user.name || user.displayName || user.email?.split('@')[0] || 'User';
+};
 
 class PresenceService {
   constructor(prisma) {

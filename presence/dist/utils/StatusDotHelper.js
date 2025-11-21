@@ -49,7 +49,7 @@ export class StatusDotHelper {
      * Uses CSS variable if available, falls back to hex
      */
     static getAvailableColor() {
-        if (typeof window !== 'undefined' && window.getComputedStyle) {
+        if (typeof window !== 'undefined' && typeof document !== 'undefined') {
             const root = document.documentElement;
             const color = getComputedStyle(root).getPropertyValue('--status-available').trim();
             if (color)
@@ -61,7 +61,7 @@ export class StatusDotHelper {
      * Get busy color (yellow)
      */
     static getBusyColor() {
-        if (typeof window !== 'undefined' && window.getComputedStyle) {
+        if (typeof window !== 'undefined' && typeof document !== 'undefined') {
             const root = document.documentElement;
             const color = getComputedStyle(root).getPropertyValue('--status-busy').trim();
             if (color)
@@ -73,7 +73,7 @@ export class StatusDotHelper {
      * Get away color (red)
      */
     static getAwayColor() {
-        if (typeof window !== 'undefined' && window.getComputedStyle) {
+        if (typeof window !== 'undefined' && typeof document !== 'undefined') {
             const root = document.documentElement;
             const color = getComputedStyle(root).getPropertyValue('--status-away').trim();
             if (color)
@@ -85,7 +85,7 @@ export class StatusDotHelper {
      * Get offline color (gray)
      */
     static getOfflineColor() {
-        if (typeof window !== 'undefined' && window.getComputedStyle) {
+        if (typeof window !== 'undefined' && typeof document !== 'undefined') {
             const root = document.documentElement;
             const color = getComputedStyle(root).getPropertyValue('--status-offline').trim();
             if (color)
@@ -125,7 +125,7 @@ export class StatusDotHelper {
 }
 // Export for use in other modules
 if (typeof window !== 'undefined') {
-    window.StatusDotHelper = StatusDotHelper;
+    // Use Object.assign to avoid strict type checking issues
+    Object.assign(window, { StatusDotHelper });
 }
 export default StatusDotHelper;
-//# sourceMappingURL=StatusDotHelper.js.map

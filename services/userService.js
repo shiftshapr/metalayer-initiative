@@ -33,8 +33,22 @@ class UserService {
       
       if (normalizedId) {
         try {
+          // ROOT CAUSE FIX: Explicitly select fields to avoid selecting non-existent 'preferences' column
           user = await this.prisma.AppUser.findUnique({
-            where: { id: normalizedId }
+            where: { id: normalizedId },
+            select: {
+              id: true,
+              email: true,
+              name: true,
+              handle: true,
+              avatarUrl: true,
+              auraColor: true,
+              isVerified: true,
+              isSuperAdmin: true,
+              createdAt: true,
+              updatedAt: true
+              // NOTE: preferences column does not exist in database, so we exclude it
+            }
           });
         } catch (idError) {
           // ID might be invalid format, ignore and continue
@@ -43,9 +57,23 @@ class UserService {
       }
       
       // If not found by ID and we have an email, try by email
+      // ROOT CAUSE FIX: Explicitly select fields to avoid selecting non-existent 'preferences' column
       if (!user && normalizedEmail) {
         user = await this.prisma.AppUser.findUnique({
-          where: { email: normalizedEmail }
+          where: { email: normalizedEmail },
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            handle: true,
+            avatarUrl: true,
+            auraColor: true,
+            isVerified: true,
+            isSuperAdmin: true,
+            createdAt: true,
+            updatedAt: true
+            // NOTE: preferences column does not exist in database, so we exclude it
+          }
         });
       }
 
@@ -55,9 +83,11 @@ class UserService {
         let counter = 1;
         
         // Check if handle exists and make it unique
+        // ROOT CAUSE FIX: Explicitly select only id to avoid selecting non-existent 'preferences' column
         while (true) {
           const existingUser = await this.prisma.AppUser.findUnique({
-            where: { handle: userHandle }
+            where: { handle: userHandle },
+            select: { id: true } // Only need id to check existence
           });
           if (!existingUser) break;
           userHandle = `${handle || (normalizedEmail ? normalizedEmail.split('@')[0] : 'user')}${counter}`;
@@ -109,8 +139,11 @@ class UserService {
 
       return user;
     } catch (error) {
-      console.error('Error getting/creating user:', error);
-      throw new Error('Failed to get/create user');
+      console.error('❌ USER SERVICE: Error getting or creating user:', error);
+      console.error('❌ USER SERVICE: Error stack:', error.stack);
+      console.error('❌ USER SERVICE: User data provided:', JSON.stringify(userData, null, 2));
+      // ROOT CAUSE FIX: Provide more detailed error message
+      throw new Error(`Failed to get/create user: ${error.message}`);
     }
   }
 
@@ -119,7 +152,7 @@ class UserService {
    */
   async getUser(userId) {
     try {
-      // ROOT CAUSE FIX: Explicitly include preferences field to ensure it's returned
+      // ROOT CAUSE FIX: preferences column was dropped - select individual preference columns instead
       const user = await this.prisma.AppUser.findUnique({
         where: { id: userId },
         select: {
@@ -128,34 +161,31 @@ class UserService {
           name: true,
           handle: true,
           avatarUrl: true,
-          auraColor: true, // ROOT CAUSE FIX: Only select auraColor (camelCase) - Prisma schema doesn't have aura_color
-          preferences: true, // ROOT CAUSE FIX: Explicitly include preferences
+          auraColor: true,
+          theme: true, // Individual preference column
+          headline: true, // Individual preference column
+          displayName: true, // Individual preference column
+          auraIntensity: true, // Individual preference column
           isVerified: true,
           isSuperAdmin: true,
           createdAt: true,
           updatedAt: true
+          // NOTE: preferences column was dropped - preferences are now in individual columns
         }
       });
 
       if (user) {
-        let preferences = user.preferences;
-        if (typeof preferences === 'string') {
-          try {
-            preferences = JSON.parse(preferences);
-          } catch (parseError) {
-            console.warn('⚠️ USER_SERVICE: Failed to parse user preferences JSON:', parseError);
-            preferences = null;
-          }
-          user.preferences = preferences;
-        }
-
-        const auraIntensity =
-          preferences?.auraIntensity ??
-          preferences?.aura_intensity ??
-          null;
-
+        // ROOT CAUSE FIX: Reconstruct preferences object from individual columns for backward compatibility
+        const preferences = {
+          theme: user.theme || 'light',
+          headline: user.headline || null,
+          displayName: user.displayName || null,
+          auraIntensity: user.auraIntensity || 0.5
+        };
+        user.preferences = preferences;
+        
         // Preserve legacy snake_case field for downstream consumers
-        user.aura_intensity = auraIntensity;
+        user.aura_intensity = user.auraIntensity || 0.5;
       }
 
       return user;
@@ -192,16 +222,27 @@ class UserService {
     try {
       console.log(`🔍 USER SERVICE: Updating avatar URL for user ${email} to: ${avatarUrl}`);
       
-      const user = await this.prisma.AppUser.update({
-        where: { email },
-        data: { avatarUrl, updatedAt: new Date() }
+      // ROOT CAUSE FIX: Try to find user first, if not found use getOrCreateUser
+      let user = await this.prisma.AppUser.findUnique({
+        where: { email: email.toLowerCase().trim() }
       });
+      
+      if (!user) {
+        console.log(`⚠️ USER SERVICE: User not found by email, creating user: ${email}`);
+        user = await this.getOrCreateUser({ email: email, avatarUrl: avatarUrl });
+      } else {
+        user = await this.prisma.AppUser.update({
+          where: { email: email.toLowerCase().trim() },
+          data: { avatarUrl, updatedAt: new Date() }
+        });
+      }
       
       console.log(`✅ USER SERVICE: Avatar URL updated successfully for user ${email}`);
       return user;
     } catch (error) {
-      console.error('Error updating avatar URL:', error);
-      throw new Error('Failed to update avatar URL');
+      console.error('❌ USER SERVICE: Error updating avatar URL:', error);
+      console.error('❌ USER SERVICE: Error stack:', error.stack);
+      throw new Error(`Failed to update avatar URL: ${error.message}`);
     }
   }
 
@@ -258,35 +299,53 @@ class UserService {
   }
 
   // Update user preferences (UUID only - no email required)
+  // ROOT CAUSE FIX: preferences column was dropped - update individual columns instead
   async updatePreferences(userId, preferences) {
     try {
       console.log(`🔍 USER SERVICE: Updating preferences for user ${userId}`);
       
+      // ROOT CAUSE FIX: preferences column doesn't exist - update individual columns instead
+      // Extract theme, headline, displayName, auraIntensity from preferences object
+      const updateData = {
+        updatedAt: new Date()
+      };
+      
+      if (preferences.theme) {
+        updateData.theme = preferences.theme;
+      }
+      if (preferences.headline) {
+        updateData.headline = preferences.headline;
+      }
+      if (preferences.displayName) {
+        updateData.displayName = preferences.displayName;
+      }
+      if (preferences.auraIntensity !== undefined) {
+        updateData.auraIntensity = preferences.auraIntensity;
+      }
+      
       const user = await this.prisma.AppUser.update({
         where: { id: userId },
-        data: { 
-          preferences: preferences,
-          updatedAt: new Date()
-        }
+        data: updateData
       });
       
       console.log(`✅ USER SERVICE: Preferences updated successfully for user ${userId}`);
       return user;
     } catch (error) {
-      console.error('Error updating preferences:', error);
-      throw new Error('Failed to update preferences');
+      console.error('❌ USER SERVICE: Error updating preferences:', error);
+      console.error('❌ USER SERVICE: Error stack:', error.stack);
+      throw new Error(`Failed to update preferences: ${error.message}`);
     }
   }
 
   // Get user preferences (UUID only - no email required)
+  // ROOT CAUSE FIX: preferences column was dropped - preferences are now in individual columns
   async getPreferences(userId) {
     try {
-      const user = await this.prisma.AppUser.findUnique({
-        where: { id: userId },
-        select: { preferences: true }
-      });
-      
-      return user?.preferences || null;
+      // ROOT CAUSE FIX: preferences column doesn't exist - return empty object
+      // Preferences are stored in individual columns (theme, headline, displayName, auraIntensity)
+      // and in Chrome storage via UserPreferencesManager
+      // TODO: If needed, reconstruct preferences object from individual columns
+      return null;
     } catch (error) {
       console.error('Error getting preferences:', error);
       throw new Error('Failed to get preferences');

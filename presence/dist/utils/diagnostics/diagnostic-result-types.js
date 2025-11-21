@@ -1,0 +1,4 @@
+/**
+ * Diagnostic result types
+ */
+export {};

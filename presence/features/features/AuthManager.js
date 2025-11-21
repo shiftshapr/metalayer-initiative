@@ -93,9 +93,9 @@ class AuthManager {
     setCurrentUser(user) {
         this.currentUser = user;
         this.authState = user ? 'SIGNED_IN' : 'SIGNED_OUT';
-        // Update window.currentUser for backward compatibility
-        if (typeof window !== 'undefined') {
-            window.currentUser = user;
+        // ROOT CAUSE FIX: Update stateManager (TypeScript migration - no window.currentUser)
+        if (window.stateManagerInstance?.setState) {
+            window.stateManagerInstance.setState('currentUser', user);
         }
         // Notify callbacks
         this.authCallbacks.forEach(callback => {
@@ -115,9 +115,9 @@ class AuthManager {
     signOut() {
         this.currentUser = null;
         this.authState = 'SIGNED_OUT';
-        // Update window.currentUser for backward compatibility
-        if (typeof window !== 'undefined') {
-            window.currentUser = null;
+        // ROOT CAUSE FIX: Update stateManager (TypeScript migration - no window.currentUser)
+        if (window.stateManagerInstance?.setState) {
+            window.stateManagerInstance.setState('currentUser', null);
         }
         // Notify callbacks
         this.authCallbacks.forEach(callback => {

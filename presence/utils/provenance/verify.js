@@ -100,8 +100,10 @@ class ProvenanceVerifier {
 }
 // Export for browser use
 if (typeof window !== 'undefined') {
-    window.provenanceVerifier = new ProvenanceVerifier();
+    // Use Object.assign to avoid strict type checking issues
+    Object.assign(window, { provenanceVerifier: new ProvenanceVerifier() });
     console.log('[Provenance] Verifier available at window.provenanceVerifier');
 }
 export default ProvenanceVerifier;
+
 

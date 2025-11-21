@@ -158,14 +158,15 @@ export class UnifiedMessageDisplay {
             }
         }
         // Fallback: Create basic message structure
+        const author = message.author || { name: 'Unknown', handle: 'unknown', avatarUrl: '' };
         messageDiv.innerHTML = `
       <div class="message-header">
         <div class="message-avatar">
-          <img src="${message.author.avatarUrl}" alt="${message.author.name}" />
+          <img src="${author.avatarUrl}" alt="${author.name}" />
         </div>
         <div class="message-author">
-          <span class="author-name">${message.author.name}</span>
-          <span class="author-handle">@${message.author.handle}</span>
+          <span class="author-name">${author.name}</span>
+          <span class="author-handle">@${author.handle}</span>
         </div>
         <div class="message-time">${this.formatTime(message.createdAt)}</div>
       </div>
@@ -202,9 +203,10 @@ export class UnifiedMessageDisplay {
     async createParentHeader(parent, options) {
         const header = document.createElement('div');
         header.className = 'parent-header-compact';
+        const parentAuthor = parent.author || { name: 'Unknown' };
         header.innerHTML = `
       <div class="parent-header-content">
-        <span class="parent-author">${this.escapeHtml(parent.author.name)}</span>
+        <span class="parent-author">${this.escapeHtml(parentAuthor.name)}</span>
         <span class="parent-content-preview">${this.escapeHtml(parent.content.substring(0, 100))}${parent.content.length > 100 ? '...' : ''}</span>
       </div>
       ${options.onFocusClick ? `<button class="focus-parent-btn" data-message-id="${parent.id}">Focus on parent</button>` : ''}

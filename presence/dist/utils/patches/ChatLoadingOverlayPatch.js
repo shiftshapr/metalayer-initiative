@@ -176,20 +176,21 @@ const wrapAddMessageToChat = (domWindow, doc) => {
         return;
     const originalAddMessageToChat = domWindow.addMessageToChat;
     domWindow.addMessageToChat = async function patchedAddMessageToChat(message) {
-        const result = await originalAddMessageToChat.apply(this, arguments);
+        const result = await originalAddMessageToChat.apply(this, [message]);
         ensureReplyVisible(doc, message);
         return result;
     };
     console.log('✅ CHAT_PATCH: Wrapped addMessageToChat with reply visibility check');
 };
 const ensureReplyVisible = (doc, message) => {
-    if (!message || !message.isReply)
+    const messageWithMeta = message;
+    if (!messageWithMeta || !messageWithMeta.isReply)
         return;
     const chatMessages = getChatMessagesContainer(doc);
     if (!chatMessages || chatMessages.dataset.focusMode !== 'true') {
         return;
     }
-    const messageId = message.id || message.messageId;
+    const messageId = messageWithMeta.id || messageWithMeta.messageId;
     if (!messageId)
         return;
     const existing = chatMessages.querySelector(`[data-message-id="${CSS.escape(messageId)}"]`);
@@ -217,6 +218,7 @@ export const applyChatLoadingOverlayPatch = (domWindow = window) => {
     if (typeof domWindow === 'undefined') {
         return;
     }
+    // Check patch flag using proper typing (no (window as any) - red-line compliance)
     if (domWindow[PATCH_FLAG]) {
         return;
     }
@@ -238,4 +240,3 @@ export const applyChatLoadingOverlayPatch = (domWindow = window) => {
 if (typeof window !== 'undefined') {
     applyChatLoadingOverlayPatch(window);
 }
-//# sourceMappingURL=ChatLoadingOverlayPatch.js.map

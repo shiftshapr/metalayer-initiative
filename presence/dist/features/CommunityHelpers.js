@@ -12,7 +12,10 @@ export async function updateCommunityDropdown(communities) {
     if (!communityList)
         return;
     // Get current active communities and primary community
-    const activeCommunities = (await getState('activeCommunities')) || [];
+    const activeCommunitiesRaw = await getState('activeCommunities');
+    const activeCommunities = Array.isArray(activeCommunitiesRaw)
+        ? activeCommunitiesRaw.filter((item) => typeof item === 'string')
+        : [];
     const primaryCommunityId = (await getState('primaryCommunity')) || (communities[0]?.id);
     // Clear existing communities
     communityList.innerHTML = '';
@@ -55,7 +58,10 @@ export async function updateCommunityDropdown(communities) {
                 const target = e.target;
                 e.stopPropagation();
                 const communityId = target.dataset.communityId;
-                let activeCommunities = (await getState('activeCommunities')) || [];
+                const activeCommunitiesRaw = await getState('activeCommunities');
+                let activeCommunities = Array.isArray(activeCommunitiesRaw)
+                    ? activeCommunitiesRaw.filter((item) => typeof item === 'string')
+                    : [];
                 const isChecked = target.checked;
                 if (isChecked && communityId) {
                     activeCommunities.push(communityId);
@@ -145,7 +151,10 @@ export function updatePlaceholderText(communityName) {
  */
 export async function getPrimaryCommunityName() {
     const primaryCommunityId = await getState('primaryCommunity');
-    const communities = (await getState('communities')) || [];
+    const communitiesRaw = await getState('communities');
+    const communities = Array.isArray(communitiesRaw)
+        ? communitiesRaw.filter((item) => typeof item === 'object' && item !== null && 'id' in item && 'name' in item)
+        : [];
     const primaryCommunity = communities.find((c) => c.id === primaryCommunityId);
     return primaryCommunity?.name || 'Community';
 }
@@ -155,4 +164,3 @@ export default {
     updatePlaceholderText,
     getPrimaryCommunityName
 };
-//# sourceMappingURL=CommunityHelpers.js.map

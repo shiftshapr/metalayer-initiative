@@ -52,6 +52,7 @@ async function authenticateWithSupabase(user) {
             return;
         }
         // Check if user is already authenticated
+        // Type assertion needed because getSession may not be in the type definition
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
         if (session && session.user && session.user.email === user.email) {
             console.log('✅ SUPABASE AUTH: User already authenticated with Supabase');
@@ -138,9 +139,9 @@ async function authenticateWithSupabase(user) {
                                 }
                                 else {
                                     console.log('ℹ️ AUTH: No auraColor in complete user data (user may not have set one yet)');
-                                    // Set to null so APIModule.js knows to fetch it
+                                    // Set to undefined so APIModule.js knows to fetch it
                                     if (window.currentUser) {
-                                        window.currentUser.auraColor = null;
+                                        window.currentUser.auraColor = undefined;
                                     }
                                 }
                                 // Also update avatarUrl if it differs from Google OAuth avatar
@@ -163,9 +164,9 @@ async function authenticateWithSupabase(user) {
                         }
                         catch (error) {
                             console.warn('⚠️ AUTH: Could not fetch complete user data for auraColor:', error);
-                            // Set to null so APIModule.js knows to fetch it
+                            // Set to undefined so APIModule.js knows to fetch it
                             if (window.currentUser) {
-                                window.currentUser.auraColor = null;
+                                window.currentUser.auraColor = undefined;
                             }
                         }
                     }
@@ -305,7 +306,7 @@ function initializeRealGoogleAuth() {
         console.log('🚀 REAL_GOOGLE_AUTH: Initializing for actual Google profile pictures...');
         // Initialize real Google auth
         const RealGoogleAuth = window.RealGoogleAuth;
-        if (typeof RealGoogleAuth !== 'undefined') {
+        if (typeof RealGoogleAuth !== 'undefined' && typeof RealGoogleAuth === 'function') {
             const realGoogleAuth = new RealGoogleAuth();
             realGoogleAuth.initialize().then((success) => {
                 if (success) {
@@ -362,7 +363,7 @@ async function signInWithGoogle() {
         const realGoogleAuth = window.realGoogleAuth;
         const authManager = window.authManager;
         // Use real Google auth for actual profile pictures
-        if (realGoogleAuth) {
+        if (realGoogleAuth && realGoogleAuth.signInWithGoogle) {
             const result = await realGoogleAuth.signInWithGoogle();
             console.log('Real Google sign-in successful:', result);
             // Update UI with the authenticated user
@@ -377,7 +378,7 @@ async function signInWithGoogle() {
                 console.log('🔍 REAL_GOOGLE_AUTH: Real avatar URL:', result.user.user_metadata?.avatar_url);
             }
         }
-        else if (authManager) {
+        else if (authManager && authManager.signIn) {
             // Fallback to AuthManager
             const result = await authManager.signIn('google');
             console.log('Google sign-in successful (fallback):', result);
@@ -426,7 +427,7 @@ async function sendMagicLink() {
         }
         console.log(`Attempting magic link sign-in for: ${email}`);
         const authManager = window.authManager;
-        if (!authManager) {
+        if (!authManager || !authManager.signIn) {
             throw new Error('AuthManager not available');
         }
         const result = await authManager.signIn('magic_link', email);
@@ -492,10 +493,12 @@ async function completeOTPForRealtime(otpCode) {
             return false;
         }
         const result = await completeOTPVerification(supabase, otpCode);
-        if (result.success) {
+        if (result.success && result.user) {
             console.log('✅ OTP VERIFICATION: OTP verified successfully');
             console.log('✅ OTP VERIFICATION: User authenticated:', result.user.email);
-            console.log('✅ OTP VERIFICATION: Session expires at:', new Date(result.session.expires_at * 1000));
+            if (result.session && typeof result.session === 'object' && 'expires_at' in result.session && typeof result.session.expires_at === 'number') {
+                console.log('✅ OTP VERIFICATION: Session expires at:', new Date(result.session.expires_at * 1000));
+            }
             // Now test real-time with authenticated user
             const testResult = await testRealtimeAfterAuth('00000000-0000-0000-0000-000000000001');
             if (testResult) {
@@ -592,8 +595,9 @@ function getCurrentUserAvatarColor() {
         const getState = window.getState;
         if (getState) {
             getState('customAvatarColor').then((result) => {
-                if (result && result.customAvatarColor) {
-                    resolve(result.customAvatarColor);
+                const colorResult = result;
+                if (colorResult && colorResult.customAvatarColor) {
+                    resolve(colorResult.customAvatarColor);
                 }
                 else {
                     // Use the same color system as message avatars

@@ -175,3 +175,4 @@ grep -ri "user_id\|aura_color" presence/src/features/ProfileManager.ts  # Should
 - Test compilation after each file
 
 
+

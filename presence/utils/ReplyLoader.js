@@ -105,11 +105,12 @@ export class ReplyLoader {
                 });
                 if (resp) {
                     // Normalize to camelCase (boundary normalization)
+                    const respData = resp;
                     return {
-                        id: resp.id || userId,
-                        name: resp.name || 'Unknown',
-                        avatarUrl: resp.avatarUrl || null,
-                        auraColor: resp.auraColor || null
+                        id: (typeof respData?.id === 'string' ? respData.id : null) || userId,
+                        name: (typeof respData?.name === 'string' ? respData.name : null) || 'Unknown',
+                        avatarUrl: (typeof respData?.avatarUrl === 'string' ? respData.avatarUrl : null) || null,
+                        auraColor: (typeof respData?.auraColor === 'string' ? respData.auraColor : null) || null
                     };
                 }
             }
@@ -129,7 +130,7 @@ export class ReplyLoader {
         if (!replyAuthor && replyUserId) {
             replyAuthor = await this.fetchReplyAuthor(replyUserId);
         }
-        if (!replyAuthor) {
+        if (!replyAuthor && replyUserId) {
             replyAuthor = { id: replyUserId, name: 'Unknown' };
         }
         // Check for nested replies

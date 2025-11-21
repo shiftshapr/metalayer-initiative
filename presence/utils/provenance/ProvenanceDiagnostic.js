@@ -14,7 +14,8 @@ class ProvenanceDiagnostic {
      * Initialize diagnostic overlay
      */
     async initialize() {
-        if (!window.provenanceService) {
+        const windowWithService = window;
+        if (!windowWithService.provenanceService) {
             console.warn('[ProvenanceDiagnostic] ProvenanceService not available');
             return;
         }
@@ -22,7 +23,7 @@ class ProvenanceDiagnostic {
         this.createOverlay();
         // Add to window for console access
         if (typeof window !== 'undefined') {
-            window.provenanceDiagnostic = this;
+            Object.assign(window, { provenanceDiagnostic: this });
             console.log('[ProvenanceDiagnostic] Available at window.provenanceDiagnostic');
         }
     }
@@ -128,7 +129,8 @@ class ProvenanceDiagnostic {
      * Display provenance for a message
      */
     async displayMessageProvenance(messageId) {
-        const service = window.provenanceService;
+        const windowWithService = window;
+        const service = windowWithService.provenanceService;
         if (!service) {
             console.warn('[ProvenanceDiagnostic] Service not available');
             return;
@@ -155,7 +157,8 @@ class ProvenanceDiagnostic {
             }
             // Verify artifacts
             let verificationResults = [];
-            const verifier = window.provenanceVerifier;
+            const windowWithVerifier = window;
+            const verifier = windowWithVerifier.provenanceVerifier;
             if (verifier) {
                 verificationResults = await verifier.verifyArtifactChain(artifacts);
             }
@@ -279,8 +282,9 @@ class ProvenanceDiagnostic {
 }
 // Export for browser use
 if (typeof window !== 'undefined') {
-    window.provenanceDiagnostic = new ProvenanceDiagnostic();
+    Object.assign(window, { provenanceDiagnostic: new ProvenanceDiagnostic() });
     console.log('[ProvenanceDiagnostic] Available at window.provenanceDiagnostic');
 }
 export default ProvenanceDiagnostic;
+
 

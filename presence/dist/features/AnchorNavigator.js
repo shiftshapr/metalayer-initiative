@@ -18,7 +18,7 @@ export class AnchorNavigator {
      */
     async navigateToUrl(url, anchor, openInNewTab = false) {
         try {
-            this.logger.info('Navigating to URL:', url);
+            this.logger.info('Navigating to URL', url);
             // Check if URL is already open in a tab
             const existingTabs = await chrome.tabs.query({ url });
             if (existingTabs.length > 0 && existingTabs[0].id && !openInNewTab) {
@@ -49,7 +49,7 @@ export class AnchorNavigator {
             }
         }
         catch (error) {
-            this.logger.error('Error navigating to URL:', error);
+            this.logger.error('Error navigating to URL', error);
             return null;
         }
     }
@@ -75,7 +75,7 @@ export class AnchorNavigator {
                     setTimeout(checkStatus, 100);
                 }
                 catch (error) {
-                    this.logger.error('Error checking tab status:', error);
+                    this.logger.error('Error checking tab status', error);
                     resolve(false);
                 }
             };
@@ -91,12 +91,12 @@ export class AnchorNavigator {
             const checkElement = () => {
                 const element = document.querySelector(selector);
                 if (element) {
-                    this.logger.info('Element found:', selector);
+                    this.logger.info('Element found', selector);
                     resolve(element);
                     return;
                 }
                 if (Date.now() - startTime > timeout) {
-                    this.logger.warn('Element not found (timeout):', selector);
+                    this.logger.warn('Element not found (timeout)', selector);
                     resolve(null);
                     return;
                 }
@@ -157,7 +157,7 @@ export class AnchorNavigator {
             return null;
         }
         catch (error) {
-            this.logger.error('Error finding element:', error);
+            this.logger.error('Error finding element', error);
             return null;
         }
     }
@@ -189,7 +189,7 @@ export class AnchorNavigator {
             await this.delay(behavior === 'smooth' ? 500 : 100);
         }
         catch (error) {
-            this.logger.error('Error scrolling to element:', error);
+            this.logger.error('Error scrolling to element', error);
         }
     }
     /**
@@ -218,7 +218,7 @@ export class AnchorNavigator {
             return 100;
         }
         catch (error) {
-            this.logger.debug('Error calculating scroll offset:', error);
+            this.logger.debug('Error calculating scroll offset', error);
             return 100;
         }
     }
@@ -253,4 +253,3 @@ export class AnchorNavigator {
 }
 // Export singleton instance
 export const anchorNavigator = new AnchorNavigator();
-//# sourceMappingURL=AnchorNavigator.js.map

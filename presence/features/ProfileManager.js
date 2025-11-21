@@ -1,4 +1,39 @@
 const legacyContext = globalThis;
+// Helper functions for type-safe access to legacyContext properties
+const getApi = () => {
+    const api = legacyContext.api;
+    if (api && typeof api.request === 'function') {
+        return api;
+    }
+    return null;
+};
+const ensureApi = (context) => {
+    const api = getApi();
+    if (!api) {
+        console.warn(`⚠️ PROFILE_MANAGER: API not available (${context})`);
+        return null;
+    }
+    return api;
+};
+const getVisibilityDataUnfiltered = () => {
+    const candidate = legacyContext.currentVisibilityDataUnfiltered;
+    if (candidate && Array.isArray(candidate.active)) {
+        return { active: candidate.active };
+    }
+    return null;
+};
+const getVisibilityDataFiltered = () => {
+    const candidate = legacyContext.currentVisibilityData;
+    if (candidate && Array.isArray(candidate.active)) {
+        return { active: candidate.active };
+    }
+    return null;
+};
+const getVisibilityData = () => getVisibilityDataUnfiltered() ?? getVisibilityDataFiltered();
+const getUserPreferencesManager = () => {
+    const manager = legacyContext.userPreferencesManager;
+    return manager ?? null;
+};
 const getChromeStorage = (keys) => {
     return new Promise((resolve) => {
         chrome.storage.local.get(keys, (result) => {
@@ -319,16 +354,19 @@ class ProfileManager {
                 console.log('⚠️ PROFILE_MANAGER: State storage not available');
             }
             // Last resort: Try to fetch aura color directly from API
-            if (legacyContext.currentUser?.id && legacyContext.api && !this.profileData?.auraColor) {
+            const api = getApi();
+            if (legacyContext.currentUser?.id && api && !this.profileData?.auraColor) {
                 console.log('🔍 PROFILE_MANAGER: Last resort - fetching aura color directly from API...');
                 try {
-                    const userResponse = await legacyContext.api.request(`/v1/users/${legacyContext.currentUser.id}`, {
+                    const userResponse = await api.request(`/v1/users/${legacyContext.currentUser.id}`, {
                         method: 'GET'
                     });
-                    if (userResponse && userResponse.auraColor) {
-                        const apiAuraColor = userResponse.auraColor;
+                    const apiAuraColor = typeof userResponse?.auraColor === 'string' ? userResponse.auraColor : null;
+                    if (apiAuraColor) {
                         console.log('🎨 PROFILE_MANAGER: Retrieved aura color from API (fallback):', apiAuraColor);
-                        legacyContext.currentUser.auraColor = apiAuraColor;
+                        if (legacyContext.currentUser) {
+                            legacyContext.currentUser.auraColor = apiAuraColor;
+                        }
                         // Update profile data if it exists
                         if (this.profileData) {
                             this.profileData.auraColor = apiAuraColor;
@@ -485,11 +523,14 @@ class ProfileManager {
                         if (legacyContext.currentUser && (legacyContext.currentUser.availability || legacyContext.currentUser.globalAvailability)) {
                             userDataForAvatar.availability = legacyContext.currentUser.availability || legacyContext.currentUser.globalAvailability;
                         }
-                        else if (legacyContext.currentVisibilityDataUnfiltered?.active) {
+                        else {
                             // Try to get from visibility data
-                            const currentUserInVisibility = legacyContext.currentVisibilityDataUnfiltered.active.find((u) => String(u.id || u.userId) === String(legacyContext.currentUser?.id));
-                            if (currentUserInVisibility && currentUserInVisibility.availability) {
-                                userDataForAvatar.availability = currentUserInVisibility.availability;
+                            const visibilityData = getVisibilityData();
+                            if (visibilityData) {
+                                const currentUserInVisibility = visibilityData.active.find((u) => String(u.id || u.userId) === String(legacyContext.currentUser?.id));
+                                if (currentUserInVisibility && currentUserInVisibility.availability) {
+                                    userDataForAvatar.availability = currentUserInVisibility.availability;
+                                }
                             }
                         }
                         // Default to AVAILABLE if active, OFFLINE if not
@@ -694,15 +735,18 @@ class ProfileManager {
         // CRITICAL FIX: Initialize theme icon/text based on current theme
         this.updateProfileMenuTheme();
         // FIX: Listen for preference changes to update display name and theme
-        if (legacyContext.EventBus) {
-            legacyContext.EventBus.on('preference:changed', (data) => {
-                if (data.key === 'displayName' || data.key === 'theme') {
-                    this.updateUserMenu();
-                    if (data.key === 'theme') {
-                        this.updateProfileMenuTheme();
+        if (legacyContext.EventBus && typeof legacyContext.EventBus === 'object') {
+            const eventBus = legacyContext.EventBus;
+            if (typeof eventBus.on === 'function') {
+                eventBus.on('preference:changed', (data) => {
+                    if (data.key === 'displayName' || data.key === 'theme') {
+                        this.updateUserMenu();
+                        if (data.key === 'theme') {
+                            this.updateProfileMenuTheme();
+                        }
                     }
-                }
-            });
+                });
+            }
         }
         // Also listen for native custom events
         document.addEventListener('preferenceChanged', (event) => {
@@ -808,8 +852,9 @@ class ProfileManager {
                 }
                 // CRITICAL FIX: Ensure event listeners are attached when settings tab opens
                 setTimeout(async () => {
-                    if (legacyContext.visibilitySettingsManager && typeof legacyContext.visibilitySettingsManager.ensureEventListeners === 'function') {
-                        await legacyContext.visibilitySettingsManager.ensureEventListeners();
+                    const visibilitySettingsManager = legacyContext.visibilitySettingsManager;
+                    if (visibilitySettingsManager && typeof visibilitySettingsManager.ensureEventListeners === 'function') {
+                        await visibilitySettingsManager.ensureEventListeners();
                         console.log('✅ PROFILE MANAGER: Ensured visibility settings event listeners after tab switch');
                     }
                 }, 100);
@@ -948,7 +993,7 @@ class ProfileManager {
     `;
         // COMP METHOD: Get current user's aura color (Chrome storage first, then database)
         const currentAuraColor = await getCurrentUserAuraColor();
-        const currentColorHex = currentAuraColor.replace('#', '');
+        const currentColorHex = currentAuraColor ? currentAuraColor.replace('#', '') : '';
         const displayColor = currentAuraColor || legacyContext.AVATAR_FALLBACK_COLOR;
         console.log('🔧 AURA_MODAL: Current database aura color:', currentAuraColor);
         console.log('🔧 AURA_MODAL: Using color for modal:', displayColor);
@@ -1010,6 +1055,8 @@ class ProfileManager {
         if (resetBtn && colorInput && previewCircle && previewText) {
             resetBtn.onclick = async () => {
                 const currentColor = await getCurrentUserAuraColor();
+                if (!currentColor)
+                    return;
                 const currentHex = currentColor.replace('#', '');
                 colorInput.value = currentHex;
                 previewCircle.style.background = currentColor;
@@ -1047,18 +1094,22 @@ class ProfileManager {
     async toggleTheme() {
         console.log('🔧 PROFILE MANAGER: COMP METHOD - Toggling theme');
         // Get current theme from DOM or storage
+        const currentThemeGetter = typeof legacyContext.getCurrentUserTheme === 'function'
+            ? legacyContext.getCurrentUserTheme
+            : undefined;
         const currentTheme = document.body.getAttribute('data-theme') ||
             document.documentElement.getAttribute('data-theme') ||
-            await (legacyContext.getCurrentUserTheme ? legacyContext.getCurrentUserTheme() : Promise.resolve('light'));
+            (currentThemeGetter ? await currentThemeGetter() : 'light');
         const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
         console.log('🔧 PROFILE MANAGER: Current theme:', currentTheme, 'New theme:', newTheme);
-        console.log('🔍 DIAGNOSTIC: UserPreferencesManager available:', !!legacyContext.userPreferencesManager);
-        console.log('🔍 DIAGNOSTIC: UserPreferencesManager initialized:', legacyContext.userPreferencesManager?.isInitialized);
+        const userPreferencesManager = getUserPreferencesManager();
+        console.log('🔍 DIAGNOSTIC: UserPreferencesManager available:', !!userPreferencesManager);
+        console.log('🔍 DIAGNOSTIC: UserPreferencesManager initialized:', userPreferencesManager?.isInitialized);
         // CRITICAL FIX: Use UserPreferencesManager (unified preference system) - ensure it saves to both Chrome storage and database
-        if (legacyContext.userPreferencesManager && legacyContext.userPreferencesManager.isInitialized) {
+        if (userPreferencesManager && userPreferencesManager.isInitialized && typeof userPreferencesManager.savePreference === 'function') {
             console.log('✅ PROFILE MANAGER: Using UserPreferencesManager to toggle theme');
             // FIX: Save immediately (not batched) to ensure database save happens right away
-            const saved = await legacyContext.userPreferencesManager.savePreference('theme', newTheme, { batch: false });
+            const saved = await userPreferencesManager.savePreference('theme', newTheme, { batch: false });
             console.log('🔍 DIAGNOSTIC: UserPreferencesManager savePreference result:', saved);
             // Verify it was saved to Chrome storage
             const chromeStorage = await getChromeStorage(['theme']);
@@ -1114,9 +1165,10 @@ class ProfileManager {
             // Update localStorage (for compatibility)
             localStorage.setItem('theme', newTheme);
             // Update database
-            if (legacyContext.currentUser && legacyContext.currentUser.id && legacyContext.api && typeof legacyContext.api.request === 'function') {
+            const apiForTheme = getApi();
+            if (legacyContext.currentUser && legacyContext.currentUser.id && apiForTheme) {
                 try {
-                    await legacyContext.api.request(`/v1/users/${legacyContext.currentUser.id}`, {
+                    await apiForTheme.request(`/v1/users/${legacyContext.currentUser.id}`, {
                         method: 'PATCH',
                         body: JSON.stringify({
                             theme: newTheme
@@ -1189,27 +1241,32 @@ class ProfileManager {
             }
         }
         // Third priority: fetch from API if user ID is available
-        else if (this.profileData && this.profileData.id && legacyContext.api) {
-            console.log('🔍 PROFILE_MANAGER: Fetching auraColor from API for user:', this.profileData.id);
-            try {
-                const userResponse = await legacyContext.api.request(`/v1/users/${this.profileData.id}`, {
-                    method: 'GET'
-                });
-                if (userResponse && userResponse.auraColor) {
-                    const auraColor = userResponse.auraColor;
-                    this.profileData.auraColor = auraColor;
-                    // Also update legacyContext.currentUser for consistency
-                    if (legacyContext.currentUser) {
-                        legacyContext.currentUser.auraColor = auraColor;
+        else if (this.profileData && this.profileData.id) {
+            const api = ensureApi('fetch auraColor for profileData');
+            if (api) {
+                console.log('🔍 PROFILE_MANAGER: Fetching auraColor from API for user:', this.profileData.id);
+                try {
+                    const userResponse = await api.request(`/v1/users/${this.profileData.id}`, {
+                        method: 'GET'
+                    });
+                    if (userResponse && typeof userResponse === 'object' && 'auraColor' in userResponse) {
+                        const auraColor = typeof userResponse.auraColor === 'string' ? userResponse.auraColor : undefined;
+                        if (auraColor && this.profileData) {
+                            this.profileData.auraColor = auraColor;
+                            // Also update legacyContext.currentUser for consistency
+                            if (legacyContext.currentUser) {
+                                legacyContext.currentUser.auraColor = auraColor;
+                            }
+                            console.log('✅ PROFILE_MANAGER: Fetched auraColor from API:', auraColor);
+                        }
+                        else {
+                            console.log('ℹ️ PROFILE_MANAGER: No auraColor found in API response');
+                        }
                     }
-                    console.log('✅ PROFILE_MANAGER: Fetched auraColor from API:', auraColor);
                 }
-                else {
-                    console.log('ℹ️ PROFILE_MANAGER: No auraColor found in API response');
+                catch (error) {
+                    console.warn('⚠️ PROFILE_MANAGER: Failed to fetch auraColor from API:', error);
                 }
-            }
-            catch (error) {
-                console.warn('⚠️ PROFILE_MANAGER: Failed to fetch auraColor from API:', error);
             }
         }
         else {
@@ -1242,7 +1299,8 @@ class ProfileManager {
      */
     async handleAuraColorUpdate(auraData) {
         console.log('🔧 PROFILE_MANAGER: Handling aura color update:', auraData);
-        const { color, user } = auraData;
+        const color = auraData.color || auraData.auraColor;
+        const user = auraData.user;
         // Update profile data if it's the current user
         if (this.profileData && user && (this.profileData.id === user.id || this.profileData.id === user.userId)) {
             this.profileData.auraColor = color;
@@ -1277,27 +1335,32 @@ class ProfileManager {
                 console.log('✅ PROFILE_MANAGER: Using auraColor from legacyContext.currentUser:', legacyContext.currentUser.auraColor);
             }
             // Third priority: fetch from API if user ID is available
-            else if (this.profileData && this.profileData.id && legacyContext.api) {
-                console.log('🔍 PROFILE_MANAGER: Fetching auraColor from API for user:', this.profileData.id);
-                try {
-                    const userResponse = await legacyContext.api.request(`/v1/users/${this.profileData.id}`, {
-                        method: 'GET'
-                    });
-                    if (userResponse && userResponse.auraColor && this.profileData) {
-                        const auraColor = userResponse.auraColor;
-                        this.profileData.auraColor = auraColor;
-                        // Also update legacyContext.currentUser for consistency
-                        if (legacyContext.currentUser) {
-                            legacyContext.currentUser.auraColor = auraColor;
+            else if (this.profileData && this.profileData.id) {
+                const api = ensureApi('fetch auraColor after auth');
+                if (api) {
+                    console.log('🔍 PROFILE_MANAGER: Fetching auraColor from API for user:', this.profileData.id);
+                    try {
+                        const userResponse = await api.request(`/v1/users/${this.profileData.id}`, {
+                            method: 'GET'
+                        });
+                        if (userResponse && typeof userResponse === 'object' && 'auraColor' in userResponse && this.profileData) {
+                            const auraColor = typeof userResponse.auraColor === 'string' ? userResponse.auraColor : undefined;
+                            if (auraColor) {
+                                this.profileData.auraColor = auraColor;
+                                // Also update legacyContext.currentUser for consistency
+                                if (legacyContext.currentUser) {
+                                    legacyContext.currentUser.auraColor = auraColor;
+                                }
+                                console.log('✅ PROFILE_MANAGER: Fetched auraColor from API:', auraColor);
+                            }
+                            else {
+                                console.log('ℹ️ PROFILE_MANAGER: No auraColor found in API response');
+                            }
                         }
-                        console.log('✅ PROFILE_MANAGER: Fetched auraColor from API:', auraColor);
                     }
-                    else {
-                        console.log('ℹ️ PROFILE_MANAGER: No auraColor found in API response');
+                    catch (error) {
+                        console.warn('⚠️ PROFILE_MANAGER: Failed to fetch auraColor from API:', error);
                     }
-                }
-                catch (error) {
-                    console.warn('⚠️ PROFILE_MANAGER: Failed to fetch auraColor from API:', error);
                 }
             }
             else {
@@ -1441,41 +1504,46 @@ class ProfileManager {
             auraColorValue = null;
         }
         // CRITICAL FIX: Fetch from API if still missing
-        if (!auraColorValue && this.profileData && this.profileData.id && legacyContext.api) {
-            console.log('🔍 PROFILE_MANAGER: Fetching auraColor from API for profile avatar...');
-            try {
-                const userResponse = await legacyContext.api.request(`/v1/users/${this.profileData.id}`, {
-                    method: 'GET'
-                });
-                if (userResponse && userResponse.auraColor) {
-                    const apiAuraColor = userResponse.auraColor;
-                    // Validate API response - treat #ffffff as missing
-                    if (apiAuraColor !== '#ffffff' && apiAuraColor !== 'white' && apiAuraColor !== '#fff' && this.profileData) {
-                        auraColorValue = apiAuraColor;
-                        this.profileData.auraColor = apiAuraColor;
-                        // Update legacyContext.currentUser for consistency
-                        if (legacyContext.currentUser) {
-                            legacyContext.currentUser.auraColor = apiAuraColor;
-                        }
-                        // CRITICAL FIX: Cache API value in Chrome storage for instant display next time
-                        if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-                            try {
-                                await setChromeStorage({ userAuraColor: apiAuraColor, auraColor: apiAuraColor });
-                                console.log('💾 PROFILE_MANAGER: Cached API aura color in Chrome storage:', apiAuraColor);
+        if (!auraColorValue && this.profileData && this.profileData.id) {
+            const api = ensureApi('fetch auraColor for profile avatar');
+            if (api) {
+                console.log('🔍 PROFILE_MANAGER: Fetching auraColor from API for profile avatar...');
+                try {
+                    const userResponse = await api.request(`/v1/users/${this.profileData.id}`, {
+                        method: 'GET'
+                    });
+                    if (userResponse && typeof userResponse === 'object' && 'auraColor' in userResponse) {
+                        const apiAuraColor = typeof userResponse.auraColor === 'string' ? userResponse.auraColor : undefined;
+                        if (apiAuraColor) {
+                            // Validate API response - treat #ffffff as missing
+                            if (apiAuraColor !== '#ffffff' && apiAuraColor !== 'white' && apiAuraColor !== '#fff' && this.profileData) {
+                                auraColorValue = apiAuraColor;
+                                this.profileData.auraColor = apiAuraColor;
+                                // Update legacyContext.currentUser for consistency
+                                if (legacyContext.currentUser) {
+                                    legacyContext.currentUser.auraColor = apiAuraColor;
+                                }
+                                // CRITICAL FIX: Cache API value in Chrome storage for instant display next time
+                                if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+                                    try {
+                                        await setChromeStorage({ userAuraColor: apiAuraColor, auraColor: apiAuraColor });
+                                        console.log('💾 PROFILE_MANAGER: Cached API aura color in Chrome storage:', apiAuraColor);
+                                    }
+                                    catch (error) {
+                                        console.warn('⚠️ PROFILE_MANAGER: Could not cache API value to Chrome storage:', error);
+                                    }
+                                }
+                                console.log('✅ PROFILE_MANAGER: Fetched auraColor from API for profile avatar:', apiAuraColor);
                             }
-                            catch (error) {
-                                console.warn('⚠️ PROFILE_MANAGER: Could not cache API value to Chrome storage:', error);
+                            else {
+                                console.log('⚠️ PROFILE_MANAGER: API returned fallback white, treating as missing');
                             }
                         }
-                        console.log('✅ PROFILE_MANAGER: Fetched auraColor from API for profile avatar:', apiAuraColor);
-                    }
-                    else {
-                        console.log('⚠️ PROFILE_MANAGER: API returned fallback white, treating as missing');
                     }
                 }
-            }
-            catch (error) {
-                console.warn('⚠️ PROFILE_MANAGER: Could not fetch auraColor from API for profile avatar:', error);
+                catch (error) {
+                    console.warn('⚠️ PROFILE_MANAGER: Could not fetch auraColor from API for profile avatar:', error);
+                }
             }
         }
         // Update profileData with resolved value
@@ -1512,11 +1580,14 @@ class ProfileManager {
                     if (legacyContext.currentUser && (legacyContext.currentUser.availability || legacyContext.currentUser.globalAvailability)) {
                         userForAvatar.availability = legacyContext.currentUser.availability || legacyContext.currentUser.globalAvailability;
                     }
-                    else if (legacyContext.currentVisibilityDataUnfiltered?.active) {
+                    else {
                         // Try to get from visibility data
-                        const currentUserInVisibility = legacyContext.currentVisibilityDataUnfiltered.active.find((u) => String(u.id || u.userId) === String(legacyContext.currentUser?.id));
-                        if (currentUserInVisibility && currentUserInVisibility.availability) {
-                            userForAvatar.availability = currentUserInVisibility.availability;
+                        const visibilityData = getVisibilityDataUnfiltered();
+                        if (visibilityData?.active) {
+                            const currentUserInVisibility = visibilityData.active.find((u) => String(u.id || u.userId) === String(legacyContext.currentUser?.id));
+                            if (currentUserInVisibility && currentUserInVisibility.availability) {
+                                userForAvatar.availability = currentUserInVisibility.availability;
+                            }
                         }
                     }
                     // Default to AVAILABLE if active, OFFLINE if not
@@ -1636,8 +1707,9 @@ class ProfileManager {
             return;
         }
         // Try to get latest avatar from visibility data
-        if (legacyContext.currentVisibilityDataUnfiltered && legacyContext.currentVisibilityDataUnfiltered.active && this.profileData) {
-            const userInVisibility = legacyContext.currentVisibilityDataUnfiltered.active.find((u) => u.email === this.profileData.email || u.userId === this.profileData.email);
+        const visibilityData = getVisibilityDataUnfiltered();
+        if (visibilityData?.active && this.profileData) {
+            const userInVisibility = visibilityData.active.find((u) => u.email === this.profileData.email || u.userId === this.profileData.email);
             if (userInVisibility && userInVisibility.avatarUrl) {
                 console.log('Found updated avatar in visibility data', {
                     oldAvatar: this.profileData.avatarUrl,
@@ -1681,8 +1753,10 @@ class ProfileManager {
      */
     getCachedAvatar(userId) {
         const cached = this.avatarCache.get(userId);
-        if (cached && Date.now() - cached.cachedAt < 300000) { // 5 minutes
-            return cached;
+        if (cached && typeof cached === 'object' && 'cachedAt' in cached && typeof cached.cachedAt === 'number') {
+            if (Date.now() - cached.cachedAt < 300000) { // 5 minutes
+                return cached;
+            }
         }
         return null;
     }
@@ -1727,24 +1801,27 @@ async function updateAuraColorEverywhere(color) {
             }
         }
         // Step 2: Update database via API
-        if (legacyContext.currentUser && legacyContext.currentUser.id && legacyContext.api && typeof legacyContext.api.request === 'function') {
-            try {
-                const result = await legacyContext.api.request(`/v1/users/${legacyContext.currentUser.id}/aura-color`, {
-                    method: 'PUT',
-                    body: JSON.stringify({
-                        auraColor: color
-                    })
-                });
-                if (result) {
-                    console.log('✅ AURA_UPDATE: Saved to database:', color);
+        if (legacyContext.currentUser && legacyContext.currentUser.id) {
+            const api = ensureApi('update aura color in database');
+            if (api) {
+                try {
+                    const result = await api.request(`/v1/users/${legacyContext.currentUser.id}/aura-color`, {
+                        method: 'PUT',
+                        body: JSON.stringify({
+                            auraColor: color
+                        })
+                    });
+                    if (result) {
+                        console.log('✅ AURA_UPDATE: Saved to database:', color);
+                    }
+                    else {
+                        console.error('❌ AURA_UPDATE: Database update returned no result');
+                    }
                 }
-                else {
-                    console.error('❌ AURA_UPDATE: Database update returned no result');
+                catch (error) {
+                    console.error('❌ AURA_UPDATE: Error saving to database:', error);
+                    // Don't throw - Chrome storage update succeeded
                 }
-            }
-            catch (error) {
-                console.error('❌ AURA_UPDATE: Error saving to database:', error);
-                // Don't throw - Chrome storage update succeeded
             }
         }
         else {
@@ -1756,21 +1833,23 @@ async function updateAuraColorEverywhere(color) {
             console.log('✅ AURA_UPDATE: Updated legacyContext.currentUser');
         }
         // Step 4: Update visibility cache immediately to prevent stale data
-        if (legacyContext.currentVisibilityDataUnfiltered?.active) {
-            const currentUserInVisibility = legacyContext.currentVisibilityDataUnfiltered.active.find((u) => String(u.id || u.userId) === String(legacyContext.currentUser?.id));
+        const visibilityData = getVisibilityDataUnfiltered();
+        if (visibilityData?.active) {
+            const currentUserInVisibility = visibilityData.active.find((u) => String(u.id || u.userId) === String(legacyContext.currentUser?.id));
             if (currentUserInVisibility) {
                 currentUserInVisibility.auraColor = color;
                 console.log('✅ AURA_UPDATE: Updated visibility cache');
             }
         }
-        if (legacyContext.currentVisibilityData?.active) {
-            const currentUserInVisibility = legacyContext.currentVisibilityData.active.find((u) => String(u.id || u.userId) === String(legacyContext.currentUser?.id));
+        const visibilityDataFiltered = getVisibilityDataFiltered();
+        if (visibilityDataFiltered?.active) {
+            const currentUserInVisibility = visibilityDataFiltered.active.find((u) => String(u.id || u.userId) === String(legacyContext.currentUser?.id));
             if (currentUserInVisibility) {
                 currentUserInVisibility.auraColor = color;
             }
         }
         // Step 5: Trigger real-time update and avatar refresh
-        if (legacyContext.handleAuraChange) {
+        if (legacyContext.handleAuraChange && typeof legacyContext.handleAuraChange === 'function') {
             legacyContext.handleAuraChange({
                 userId: legacyContext.currentUser?.id,
                 auraColor: color
@@ -1817,10 +1896,11 @@ async function getCurrentUserAuraColor() {
         return legacyContext.currentUser.auraColor;
     }
     // Fallback 2: Try to get from visibility data (database)
-    if (legacyContext.currentVisibilityData && legacyContext.currentVisibilityData.active) {
+    const visibilityDataFiltered = getVisibilityDataFiltered();
+    if (visibilityDataFiltered?.active) {
         const currentUserEmail = legacyContext.currentUser?.email;
         if (currentUserEmail) {
-            const userData = legacyContext.currentVisibilityData.active.find((u) => u.email === currentUserEmail);
+            const userData = visibilityDataFiltered.active.find((u) => u.email === currentUserEmail);
             if (userData && userData.auraColor && userData.auraColor !== legacyContext.AVATAR_FALLBACK_COLOR) {
                 console.log(`✅ AURA_MODAL: Found database auraColor in visibility data: ${userData.auraColor}`);
                 return userData.auraColor;
@@ -1828,10 +1908,11 @@ async function getCurrentUserAuraColor() {
         }
     }
     // Fallback 3: Try to get from unfiltered visibility data (database)
-    if (legacyContext.currentVisibilityDataUnfiltered && legacyContext.currentVisibilityDataUnfiltered.active) {
+    const visibilityData = getVisibilityDataUnfiltered();
+    if (visibilityData?.active) {
         const currentUserEmail = legacyContext.currentUser?.email;
         if (currentUserEmail) {
-            const userData = legacyContext.currentVisibilityDataUnfiltered.active.find((u) => u.email === currentUserEmail);
+            const userData = visibilityData.active.find((u) => u.email === currentUserEmail);
             if (userData && userData.auraColor && userData.auraColor !== legacyContext.AVATAR_FALLBACK_COLOR) {
                 console.log(`✅ AURA_MODAL: Found database auraColor in unfiltered visibility data: ${userData.auraColor}`);
                 return userData.auraColor;
@@ -1839,25 +1920,28 @@ async function getCurrentUserAuraColor() {
         }
     }
     // Fallback 4: Try to fetch from database via API
-    if (legacyContext.currentUser && legacyContext.currentUser.id && legacyContext.api && typeof legacyContext.api.request === 'function') {
-        try {
-            const userData = await legacyContext.api.request(`/v1/users/${legacyContext.currentUser.id}`, {
-                method: 'GET'
-            });
-            if (userData && userData.auraColor) {
-                const dbColor = userData.auraColor;
-                if (dbColor && dbColor !== legacyContext.AVATAR_FALLBACK_COLOR) {
-                    console.log(`✅ AURA_MODAL: Fetched aura color from database API: ${dbColor}`);
-                    // Cache it in Chrome storage for next time
-                    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-                        await setChromeStorage({ userAuraColor: dbColor, auraColor: dbColor });
+    if (legacyContext.currentUser && legacyContext.currentUser.id) {
+        const api = ensureApi('fetch aura color from database');
+        if (api) {
+            try {
+                const userData = await api.request(`/v1/users/${legacyContext.currentUser.id}`, {
+                    method: 'GET'
+                });
+                if (userData && typeof userData === 'object' && 'auraColor' in userData) {
+                    const dbColor = typeof userData.auraColor === 'string' ? userData.auraColor : undefined;
+                    if (dbColor && dbColor !== legacyContext.AVATAR_FALLBACK_COLOR) {
+                        console.log(`✅ AURA_MODAL: Fetched aura color from database API: ${dbColor}`);
+                        // Cache it in Chrome storage for next time
+                        if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+                            await setChromeStorage({ userAuraColor: dbColor, auraColor: dbColor });
+                        }
+                        return dbColor;
                     }
-                    return dbColor;
                 }
             }
-        }
-        catch (error) {
-            console.warn('⚠️ AURA_MODAL: Error fetching from database API:', error);
+            catch (error) {
+                console.error('❌ AURA_MODAL: Error fetching aura color from database:', error);
+            }
         }
     }
     // Final fallback to default
@@ -1873,10 +1957,11 @@ function getCurrentUserAvatarBgColor() {
         return legacyContext.currentUser.auraColor;
     }
     // Try to get from visibility data (database)
-    if (legacyContext.currentVisibilityData && legacyContext.currentVisibilityData.active) {
+    const visibilityDataFiltered2 = getVisibilityDataFiltered();
+    if (visibilityDataFiltered2?.active) {
         const currentUserEmail = legacyContext.currentUser?.email;
         if (currentUserEmail) {
-            const userData = legacyContext.currentVisibilityData.active.find((u) => u.email === currentUserEmail);
+            const userData = visibilityDataFiltered2.active.find((u) => u.email === currentUserEmail);
             if (userData && userData.auraColor && userData.auraColor !== legacyContext.AVATAR_FALLBACK_COLOR) {
                 console.log(`✅ AURA_FIX: Found database aura color in visibility data: ${userData.auraColor}`);
                 return userData.auraColor;
@@ -1910,7 +1995,7 @@ function setCustomAvatarColor(color) {
     if (legacyContext.currentUser) {
         legacyContext.currentUser.auraColor = color;
         // Update profile if ProfileManager instance exists
-        if (legacyContext.ProfileManager && legacyContext.ProfileManager.updateProfile) {
+        if (legacyContext.ProfileManager && typeof legacyContext.ProfileManager === 'object' && 'updateProfile' in legacyContext.ProfileManager && typeof legacyContext.ProfileManager.updateProfile === 'function') {
             legacyContext.ProfileManager.updateProfile(legacyContext.currentUser);
         }
     }
@@ -1919,7 +2004,7 @@ function resetCustomAvatarColor() {
     if (legacyContext.currentUser) {
         legacyContext.currentUser.auraColor = legacyContext.AVATAR_FALLBACK_COLOR; // Default white
         // Update profile if ProfileManager instance exists
-        if (legacyContext.ProfileManager && legacyContext.ProfileManager.updateProfile) {
+        if (legacyContext.ProfileManager && typeof legacyContext.ProfileManager === 'object' && 'updateProfile' in legacyContext.ProfileManager && typeof legacyContext.ProfileManager.updateProfile === 'function') {
             legacyContext.ProfileManager.updateProfile(legacyContext.currentUser);
         }
     }
@@ -2028,7 +2113,9 @@ function addLogoutButtonClickHandler() {
                         console.error('❌ LOGOUT: Error during logout:', error);
                     }
                 };
-                legacyContext.performLogout();
+                if (legacyContext.performLogout && typeof legacyContext.performLogout === 'function') {
+                    legacyContext.performLogout();
+                }
             }
         });
         console.log('✅ COMP METHOD: Logout button click handler added');
@@ -2042,7 +2129,7 @@ function addAllProfileMenuHandlers() {
     addAuraButtonClickHandler();
     addLogoutButtonClickHandler();
     // ROOT CAUSE FIX: Ensure visibility settings button handler is added
-    const profileManager = legacyContext.profileManager || (legacyContext.ProfileManager && legacyContext.ProfileManager.instance);
+    const profileManager = legacyContext.profileManager || (legacyContext.ProfileManager && typeof legacyContext.ProfileManager === 'object' && 'instance' in legacyContext.ProfileManager ? legacyContext.ProfileManager.instance : undefined);
     if (profileManager) {
         const visibilityBtn = document.getElementById('visibility-settings-btn');
         if (visibilityBtn) {
@@ -2051,62 +2138,68 @@ function addAllProfileMenuHandlers() {
                 console.log('🔧 PROFILE_MENU: Visibility button found but handler not attached, attaching now...');
                 // Remove any existing handlers first
                 visibilityBtn.onclick = null;
-                if (profileManager.visibilitySettingsHandler) {
+                if (profileManager && typeof profileManager === 'object' && 'visibilitySettingsHandler' in profileManager && profileManager.visibilitySettingsHandler) {
                     visibilityBtn.removeEventListener('click', profileManager.visibilitySettingsHandler);
                 }
                 // Create handler function if it doesn't exist
-                if (!profileManager.visibilitySettingsHandler) {
-                    profileManager.visibilitySettingsHandler = (e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        console.log('🔧 PROFILE MANAGER: COMP METHOD - Visibility settings button clicked');
-                        profileManager.hideUserMenu();
-                        // ROOT CAUSE FIX: Switch to settings tab (not visibility tab)
-                        let switched = false;
-                        const selectors = [
-                            'button[data-tab="settings-tab"]',
-                            '.main-nav-tab[data-tab="settings-tab"]',
-                            'button[aria-controls="settings-tab"]',
-                            '[data-tab="settings-tab"]',
-                            '.nav-tab[data-tab="settings-tab"]'
-                        ];
-                        for (const selector of selectors) {
-                            const button = document.querySelector(selector);
-                            if (button) {
-                                button.click();
-                                console.log(`✅ PROFILE MANAGER: Switched to settings tab via selector: ${selector}`);
-                                switched = true;
-                                break;
+                if (!profileManager || typeof profileManager !== 'object' || !('visibilitySettingsHandler' in profileManager) || !profileManager.visibilitySettingsHandler) {
+                    if (profileManager && typeof profileManager === 'object') {
+                        profileManager.visibilitySettingsHandler = (e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            console.log('🔧 PROFILE MANAGER: COMP METHOD - Visibility settings button clicked');
+                            if (profileManager && typeof profileManager === 'object' && 'hideUserMenu' in profileManager && typeof profileManager.hideUserMenu === 'function') {
+                                profileManager.hideUserMenu();
                             }
-                        }
-                        // Method 2: Direct tab activation
-                        if (!switched) {
-                            const settingsTab = document.getElementById('settings-tab');
-                            const allTabs = document.querySelectorAll('.main-tab-content');
-                            const allTabButtons = document.querySelectorAll('.main-nav-tab, button[data-tab]');
-                            if (settingsTab) {
-                                allTabs.forEach(tab => tab.classList.remove('active'));
-                                settingsTab.classList.add('active');
-                                allTabButtons.forEach(btn => {
-                                    btn.classList.remove('active');
-                                    if (btn.getAttribute('data-tab') === 'settings-tab' || btn.getAttribute('aria-controls') === 'settings-tab') {
-                                        btn.classList.add('active');
-                                    }
-                                });
-                                console.log('✅ PROFILE MANAGER: Directly activated settings tab');
-                                switched = true;
+                            // ROOT CAUSE FIX: Switch to settings tab (not visibility tab)
+                            let switched = false;
+                            const selectors = [
+                                'button[data-tab="settings-tab"]',
+                                '.main-nav-tab[data-tab="settings-tab"]',
+                                'button[aria-controls="settings-tab"]',
+                                '[data-tab="settings-tab"]',
+                                '.nav-tab[data-tab="settings-tab"]'
+                            ];
+                            for (const selector of selectors) {
+                                const button = document.querySelector(selector);
+                                if (button) {
+                                    button.click();
+                                    console.log(`✅ PROFILE MANAGER: Switched to settings tab via selector: ${selector}`);
+                                    switched = true;
+                                    break;
+                                }
                             }
-                        }
-                        // Method 3: Dispatch custom event
-                        if (!switched) {
-                            const tabSwitchEvent = new CustomEvent('tabSwitch', { detail: { tabId: 'settings-tab' } });
-                            legacyContext.dispatchEvent(tabSwitchEvent);
-                            console.log('✅ PROFILE MANAGER: Dispatched tab switch event for settings tab');
-                        }
-                    };
+                            // Method 2: Direct tab activation
+                            if (!switched) {
+                                const settingsTab = document.getElementById('settings-tab');
+                                const allTabs = document.querySelectorAll('.main-tab-content');
+                                const allTabButtons = document.querySelectorAll('.main-nav-tab, button[data-tab]');
+                                if (settingsTab) {
+                                    allTabs.forEach(tab => tab.classList.remove('active'));
+                                    settingsTab.classList.add('active');
+                                    allTabButtons.forEach(btn => {
+                                        btn.classList.remove('active');
+                                        if (btn.getAttribute('data-tab') === 'settings-tab' || btn.getAttribute('aria-controls') === 'settings-tab') {
+                                            btn.classList.add('active');
+                                        }
+                                    });
+                                    console.log('✅ PROFILE MANAGER: Directly activated settings tab');
+                                    switched = true;
+                                }
+                            }
+                            // Method 3: Dispatch custom event
+                            if (!switched) {
+                                const tabSwitchEvent = new CustomEvent('tabSwitch', { detail: { tabId: 'settings-tab' } });
+                                legacyContext.dispatchEvent(tabSwitchEvent);
+                                console.log('✅ PROFILE MANAGER: Dispatched tab switch event for settings tab');
+                            }
+                        };
+                    }
                 }
                 // Attach handler
-                visibilityBtn.addEventListener('click', profileManager.visibilitySettingsHandler);
+                if (profileManager && typeof profileManager === 'object' && 'visibilitySettingsHandler' in profileManager && profileManager.visibilitySettingsHandler) {
+                    visibilityBtn.addEventListener('click', profileManager.visibilitySettingsHandler);
+                }
                 visibilityBtn.dataset.handlerAttached = 'true';
                 // Ensure button is active and clickable
                 visibilityBtn.style.pointerEvents = 'auto';
@@ -2200,7 +2293,8 @@ function showColorPickerModal() {
             let defaultColor = legacyContext.AVATAR_FALLBACK_COLOR; // Fallback
             const user = legacyContext.currentUser;
             if (user) {
-                const name = user.user_metadata?.full_name || user.name || user.email || 'User';
+                const userMetadata = user.user_metadata;
+                const name = userMetadata?.full_name || user.name || user.email || 'User';
                 defaultColor = getAvatarColor(name);
             }
             const defaultHex = (defaultColor || '#aaaaaa').replace('#', '');
@@ -2286,25 +2380,28 @@ async function updateAvailabilityEverywhere(availability) {
             }
         }
         // Step 2: Update database via API
-        if (legacyContext.currentUser && legacyContext.currentUser.id && legacyContext.api && typeof legacyContext.api.request === 'function') {
-            try {
-                const result = await legacyContext.api.request('/v1/presence/availability', {
-                    method: 'POST',
-                    body: JSON.stringify({
-                        availability: availability,
-                        isGlobal: true
-                    })
-                });
-                if (result && result.success) {
-                    console.log('✅ STATUS_UPDATE: Saved to database:', availability);
+        if (legacyContext.currentUser && legacyContext.currentUser.id) {
+            const api = ensureApi('update availability in database');
+            if (api) {
+                try {
+                    const result = await api.request('/v1/presence/availability', {
+                        method: 'POST',
+                        body: JSON.stringify({
+                            availability: availability,
+                            isGlobal: true
+                        })
+                    });
+                    if (result && typeof result === 'object' && 'success' in result && result.success) {
+                        console.log('✅ STATUS_UPDATE: Saved to database:', availability);
+                    }
+                    else {
+                        console.error('❌ STATUS_UPDATE: Database update returned no result');
+                    }
                 }
-                else {
-                    console.error('❌ STATUS_UPDATE: Database update returned no result');
+                catch (error) {
+                    console.error('❌ STATUS_UPDATE: Error saving to database:', error);
+                    // Don't throw - Chrome storage update succeeded
                 }
-            }
-            catch (error) {
-                console.error('❌ STATUS_UPDATE: Error saving to database:', error);
-                // Don't throw - Chrome storage update succeeded
             }
         }
         else {
@@ -2317,15 +2414,17 @@ async function updateAvailabilityEverywhere(availability) {
             console.log('✅ STATUS_UPDATE: Updated legacyContext.currentUser');
         }
         // Step 4: Update visibility cache immediately to prevent stale data
-        if (legacyContext.currentVisibilityDataUnfiltered?.active) {
-            const currentUserInVisibility = legacyContext.currentVisibilityDataUnfiltered.active.find((u) => String(u.id || u.userId) === String(legacyContext.currentUser?.id));
+        const visibilityData = getVisibilityDataUnfiltered();
+        if (visibilityData?.active) {
+            const currentUserInVisibility = visibilityData.active.find((u) => String(u.id || u.userId) === String(legacyContext.currentUser?.id));
             if (currentUserInVisibility) {
                 currentUserInVisibility.availability = availability;
                 console.log('✅ STATUS_UPDATE: Updated visibility cache');
             }
         }
-        if (legacyContext.currentVisibilityData?.active) {
-            const currentUserInVisibility = legacyContext.currentVisibilityData.active.find((u) => String(u.id || u.userId) === String(legacyContext.currentUser?.id));
+        const visibilityDataFiltered3 = getVisibilityDataFiltered();
+        if (visibilityDataFiltered3?.active) {
+            const currentUserInVisibility = visibilityDataFiltered3.active.find((u) => String(u.id || u.userId) === String(legacyContext.currentUser?.id));
             if (currentUserInVisibility) {
                 currentUserInVisibility.availability = availability;
             }
@@ -2384,24 +2483,27 @@ async function updateThemeEverywhere(theme) {
         document.documentElement.setAttribute('data-theme', theme);
         document.body.setAttribute('data-theme', theme);
         // Step 4: Update database via API
-        if (legacyContext.currentUser && legacyContext.currentUser.id && legacyContext.api && typeof legacyContext.api.request === 'function') {
-            try {
-                const result = await legacyContext.api.request(`/v1/users/${legacyContext.currentUser.id}`, {
-                    method: 'PATCH',
-                    body: JSON.stringify({
-                        theme: theme
-                    })
-                });
-                if (result) {
-                    console.log('✅ THEME_UPDATE: Saved to database:', theme);
+        if (legacyContext.currentUser && legacyContext.currentUser.id) {
+            const api = ensureApi('update theme in database');
+            if (api) {
+                try {
+                    const result = await api.request(`/v1/users/${legacyContext.currentUser.id}`, {
+                        method: 'PATCH',
+                        body: JSON.stringify({
+                            theme: theme
+                        })
+                    });
+                    if (result) {
+                        console.log('✅ THEME_UPDATE: Saved to database:', theme);
+                    }
+                    else {
+                        console.error('❌ THEME_UPDATE: Database update returned no result');
+                    }
                 }
-                else {
-                    console.error('❌ THEME_UPDATE: Database update returned no result');
+                catch (error) {
+                    console.error('❌ THEME_UPDATE: Error saving to database:', error);
+                    // Don't throw - Chrome storage update succeeded
                 }
-            }
-            catch (error) {
-                console.error('❌ THEME_UPDATE: Error saving to database:', error);
-                // Don't throw - Chrome storage update succeeded
             }
         }
         else {
@@ -2434,7 +2536,7 @@ async function updateThemeEverywhere(theme) {
         if (themeToggle) {
             themeToggle.checked = theme === 'dark';
             // Trigger updateThemeStatus to update slider position
-            if (legacyContext.visibilitySettingsManager && typeof legacyContext.visibilitySettingsManager.updateThemeStatus === 'function') {
+            if (legacyContext.visibilitySettingsManager && typeof legacyContext.visibilitySettingsManager === 'object' && 'updateThemeStatus' in legacyContext.visibilitySettingsManager && typeof legacyContext.visibilitySettingsManager.updateThemeStatus === 'function') {
                 legacyContext.visibilitySettingsManager.updateThemeStatus();
             }
             console.log('✅ THEME_UPDATE: Updated settings tab theme toggle');
@@ -2483,24 +2585,27 @@ async function getCurrentUserTheme() {
         }
     }
     // Fallback 3: Try to fetch from database via API
-    if (legacyContext.currentUser && legacyContext.currentUser.id && legacyContext.api && typeof legacyContext.api.request === 'function') {
-        try {
-            const userData = await legacyContext.api.request(`/v1/users/${legacyContext.currentUser.id}`, {
-                method: 'GET'
-            });
-            if (userData && userData.theme) {
-                console.log(`✅ THEME_GET: Fetched theme from database API: ${userData.theme}`);
-                // Cache it in Chrome storage for next time
-                if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-                    await setChromeStorage({ theme: userData.theme, userTheme: userData.theme });
+    if (legacyContext.currentUser && legacyContext.currentUser.id) {
+        const api = ensureApi('fetch theme from database');
+        if (api) {
+            try {
+                const userData = await api.request(`/v1/users/${legacyContext.currentUser.id}`, {
+                    method: 'GET'
+                });
+                if (userData && typeof userData === 'object' && 'theme' in userData && typeof userData.theme === 'string') {
+                    console.log(`✅ THEME_GET: Fetched theme from database API: ${userData.theme}`);
+                    // Cache it in Chrome storage for next time
+                    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+                        await setChromeStorage({ theme: userData.theme, userTheme: userData.theme });
+                    }
+                    // Also update localStorage for compatibility
+                    localStorage.setItem('theme', userData.theme);
+                    return userData.theme;
                 }
-                // Also update localStorage for compatibility
-                localStorage.setItem('theme', userData.theme);
-                return userData.theme;
             }
-        }
-        catch (error) {
-            console.warn('⚠️ THEME_GET: Error fetching from database API:', error);
+            catch (error) {
+                console.warn('⚠️ THEME_GET: Error fetching from database API:', error);
+            }
         }
     }
     // Fallback 4: Check DOM attribute
@@ -2539,34 +2644,38 @@ async function getCurrentUserAvailability() {
         }
     }
     // Fallback 2: Try to get from visibility data (database)
-    if (legacyContext.currentVisibilityDataUnfiltered?.active) {
-        const currentUserInVisibility = legacyContext.currentVisibilityDataUnfiltered.active.find((u) => String(u.id || u.userId) === String(legacyContext.currentUser?.id));
+    const visibilityData = getVisibilityDataUnfiltered();
+    if (visibilityData?.active) {
+        const currentUserInVisibility = visibilityData.active.find((u) => String(u.id || u.userId) === String(legacyContext.currentUser?.id));
         if (currentUserInVisibility && currentUserInVisibility.availability) {
             console.log(`✅ STATUS_GET: Found availability in visibility data: ${currentUserInVisibility.availability}`);
             return currentUserInVisibility.availability;
         }
     }
     // Fallback 3: Try to fetch from database via API
-    if (legacyContext.currentUser && legacyContext.currentUser.id && legacyContext.api && typeof legacyContext.api.request === 'function') {
-        try {
-            const statusData = await legacyContext.api.request('/v1/presence/availability', {
-                method: 'GET'
-            });
-            if (statusData && statusData.availability) {
-                console.log(`✅ STATUS_GET: Fetched availability from database API: ${statusData.availability}`);
-                // Cache it in Chrome storage for next time
-                if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-                    chrome.storage.local.set({
-                        userAvailability: statusData.availability,
-                        availability: statusData.availability,
-                        globalAvailability: statusData.availability
-                    });
+    if (legacyContext.currentUser && legacyContext.currentUser.id) {
+        const api = ensureApi('fetch availability from database');
+        if (api) {
+            try {
+                const statusData = await api.request('/v1/presence/availability', {
+                    method: 'GET'
+                });
+                if (statusData && typeof statusData === 'object' && 'availability' in statusData && typeof statusData.availability === 'string') {
+                    console.log(`✅ STATUS_GET: Fetched availability from database API: ${statusData.availability}`);
+                    // Cache it in Chrome storage for next time
+                    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+                        chrome.storage.local.set({
+                            userAvailability: statusData.availability,
+                            availability: statusData.availability,
+                            globalAvailability: statusData.availability
+                        });
+                    }
+                    return statusData.availability;
                 }
-                return statusData.availability;
             }
-        }
-        catch (error) {
-            console.warn('⚠️ STATUS_GET: Error fetching from database API:', error);
+            catch (error) {
+                console.warn('⚠️ STATUS_GET: Error fetching from database API:', error);
+            }
         }
     }
     // Final fallback to default

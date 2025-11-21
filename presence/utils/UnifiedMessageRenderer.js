@@ -56,10 +56,16 @@ export class UnifiedMessageRenderer {
         const reactionButton = `<button class="reaction-btn" data-message-id="${message.id}" title="Add reaction">${blankReactIcon}<span class="icon-count" style="display: none;"></span></button>`;
         const bookmarkButton = `<button class="${bookmarkButtonClass}" data-message-id="${message.id}" data-is-bookmarked="${isBookmarked}" title="Bookmark">${bookmarkIconToUse}${bookmarkCountDisplay}</button>`;
         const shareButton = `<button class="${shareButtonClass}" data-message-id="${message.id}" data-has-shared="${hasUserShared}" title="Share">${shareIcon}</button>`;
-        // Generate action menu
+        // Generate action menu - ROOT CAUSE FIX: Await Promise if getMessageActionsMenu returns one
         let messageActionButtons = '';
         if (window.getMessageActionsMenu && typeof window.getMessageActionsMenu === 'function') {
-            messageActionButtons = window.getMessageActionsMenu(message, canEdit, canDelete);
+            const actionMenuResult = window.getMessageActionsMenu(message, canEdit, canDelete);
+            // Handle both Promise and string return types
+            if (actionMenuResult instanceof Promise) {
+                messageActionButtons = await actionMenuResult;
+            } else {
+                messageActionButtons = actionMenuResult;
+            }
         }
         else {
             messageActionButtons = `
@@ -76,10 +82,12 @@ export class UnifiedMessageRenderer {
       `;
         }
         // Date formatting - in focus mode, replies show date in header (like default mode)
+        // ROOT CAUSE FIX: Ensure formattedTime is a string, not a Promise
+        const safeFormattedTime = typeof formattedTime === 'string' ? formattedTime : (formattedTime instanceof Promise ? '...' : String(formattedTime || ''));
         const isReplyMessage = isReply || !!message.parentId;
         const showHeaderDate = !isFocusMode || (isFocusMode && isReplyMessage);
-        const dateInHeader = showHeaderDate && formattedTime ? `<span class="message-time-new">${formattedTime}</span>` : '';
-        const dateInFooter = !showHeaderDate && formattedTime && isFocusMode ? `<div class="focus-date-row"><span class="message-time-new focus-date">${formattedTime}</span></div>` : '';
+        const dateInHeader = showHeaderDate && safeFormattedTime ? `<span class="message-time-new">${safeFormattedTime}</span>` : '';
+        const dateInFooter = !showHeaderDate && safeFormattedTime && isFocusMode ? `<div class="focus-date-row"><span class="message-time-new focus-date">${safeFormattedTime}</span></div>` : '';
         // CRITICAL: Always render full HTML structure - never hide content
         // CSS classes control visibility, not display:none
         return `

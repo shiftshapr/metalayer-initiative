@@ -2,6 +2,9 @@
  * API SERVICE - TypeScript Version
  * MetaLayer API client service
  */
+// Import stateManagerInstance (TypeScript migration - no longer using window.currentUser)
+import { stateManagerInstance } from '../core/StateManager.js';
+
 class MetaLayerAPI {
     constructor(baseURL) {
         this.baseURL = baseURL;
@@ -37,11 +40,13 @@ class MetaLayerAPI {
         let user = null;
         try {
             console.log('🔍 USER_IDENTITY: === API USER IDENTITY TRACE ===');
-            console.log('🔍 USER_IDENTITY: window.currentUser:', window.currentUser);
-            // First try to get from window.currentUser (set by authentication)
-            if (window.currentUser && window.currentUser.id) {
-                user = { ...window.currentUser }; // Create a copy to avoid modifying original
-                console.log('🔍 USER_IDENTITY: ✅ Using window.currentUser for authentication:', user.id);
+            // ROOT CAUSE FIX: Use stateManagerInstance (TypeScript migration - no longer using window.currentUser)
+            const currentUser = stateManagerInstance?.getState?.('currentUser');
+            console.log('🔍 USER_IDENTITY: currentUser (from stateManager/window):', currentUser);
+            // First try to get from currentUser (set by authentication)
+            if (currentUser && currentUser.id) {
+                user = { ...currentUser }; // Create a copy to avoid modifying original
+                console.log('🔍 USER_IDENTITY: ✅ Using currentUser for authentication:', user.id);
                 // CRITICAL FIX: Handle case where auraColor is a Promise (from reactive systems)
                 if (user.auraColor && typeof user.auraColor === 'object' && typeof user.auraColor.then === 'function') {
                     console.log('🔍 USER_IDENTITY: ⚠️ auraColor is a Promise, resolving...');
@@ -55,30 +60,55 @@ class MetaLayerAPI {
                         user.auraColor = undefined;
                     }
                 }
-                // CRITICAL FIX: If auraColor is missing, fetch it now to prevent delays
-                if (!user.auraColor && user.id && window.api) {
+                // CRITICAL FIX: Check currentUser.auraColor directly before API call
+                // This handles cases where auraColor is set after the copy
+                if (!user.auraColor && currentUser?.auraColor) {
+                    user.auraColor = currentUser.auraColor;
+                    console.log('🔍 USER_IDENTITY: ✅ Using auraColor from currentUser:', user.auraColor);
+                }
+                // CRITICAL FIX: If auraColor is still missing, fetch it now to prevent delays
+                // Use direct fetch() instead of window.api.request() to break recursion chain
+                // This solves the root cause: direct fetch() doesn't call request() again
+                if (!user.auraColor && user.id) {
                     console.log('🔍 USER_IDENTITY: 🎨 AuraColor missing, fetching immediately...');
                     try {
-                        const userResponse = await window.api.request(`/v1/users/${user.id}`, {
-                            method: 'GET'
+                        // ROOT CAUSE FIX: Use direct fetch() instead of window.api.request() 
+                        // This breaks the recursion chain - fetch() doesn't invoke request() again
+                        const fetchUrl = `http://216.238.91.120:3002/v1/users/${user.id}`;
+                        const response = await fetch(fetchUrl, {
+                            method: 'GET',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            }
                         });
-                        if (userResponse && userResponse.data) {
-                            const userData = userResponse.data;
-                            const auraColor = userData.auraColor;
-                            const avatarUrl = userData.avatarUrl;
+                        if (response.ok) {
+                            const userData = await response.json();
+                            const auraColor = userData.auraColor || userData.data?.auraColor;
+                            const avatarUrl = userData.avatarUrl || userData.data?.avatarUrl;
                             // Update the user object with fetched data
+                            if (auraColor) {
                             user.auraColor = auraColor;
+                                // Also update currentUser in stateManager/window to prevent future fetches
+                                if (currentUser) {
+                                    currentUser.auraColor = auraColor;
+                                    // Update stateManager (TypeScript migration)
+                                    if (stateManagerInstance?.setState) {
+                                        stateManagerInstance.setState('currentUser', currentUser);
+                                    }
+                                }
+                                console.log('🔍 USER_IDENTITY: ✅ AuraColor fetched immediately:', auraColor);
+                            }
                             if (avatarUrl && !user.avatarUrl) {
                                 user.avatarUrl = avatarUrl;
+                                if (currentUser && !currentUser.avatarUrl) {
+                                    currentUser.avatarUrl = avatarUrl;
+                                    if (stateManagerInstance?.setState) {
+                                        stateManagerInstance.setState('currentUser', currentUser);
                             }
-                            // Also update window.currentUser to prevent future fetches
-                            if (window.currentUser) {
-                                window.currentUser.auraColor = auraColor;
-                                if (avatarUrl && !window.currentUser.avatarUrl) {
-                                    window.currentUser.avatarUrl = avatarUrl;
                                 }
                             }
-                            console.log('🔍 USER_IDENTITY: ✅ AuraColor fetched immediately:', auraColor);
+                        } else {
+                            console.warn('🔍 USER_IDENTITY: ⚠️ Failed to fetch auraColor - HTTP', response.status);
                         }
                     }
                     catch (error) {
@@ -93,13 +123,6 @@ class MetaLayerAPI {
                 }
                 console.log('🔍 USER_IDENTITY: ✅ Using authManager for authentication:', user?.id);
             }
-            else if (typeof window.getCurrentUserEmail === 'function') {
-                const email = await window.getCurrentUserEmail();
-                if (email) {
-                    user = { id: email, email };
-                    console.log('🔍 USER_IDENTITY: ✅ Using getCurrentUserEmail for authentication:', email);
-                }
-            }
             else {
                 console.log('🔍 USER_IDENTITY: ❌ No user authentication available');
             }
@@ -110,10 +133,11 @@ class MetaLayerAPI {
         }
         // Derive identifiers early for consistent headers
         // User data should already be normalized via setCurrentUser, but handle raw Supabase data if needed
-        const derivedUserId = user?.id || window.currentUser?.id || null;
-        const derivedEmail = user?.email || window.currentUser?.email || null;
-        const derivedName = user?.name || window.currentUser?.name || undefined;
-        const derivedAvatar = user?.avatarUrl || window.currentUser?.avatarUrl || undefined;
+        const currentUserForHeaders = stateManagerInstance?.getState?.('currentUser');
+        const derivedUserId = user?.id || currentUserForHeaders?.id || null;
+        const derivedEmail = user?.email || currentUserForHeaders?.email || null;
+        const derivedName = user?.name || currentUserForHeaders?.name || undefined;
+        const derivedAvatar = user?.avatarUrl || currentUserForHeaders?.avatarUrl || undefined;
         const config = {
             method: options.method || 'GET',
             headers: {
@@ -130,14 +154,24 @@ class MetaLayerAPI {
             config.body = typeof options.body === 'string' ? options.body : JSON.stringify(options.body);
         }
         try {
-            const response = await fetch(finalUrl, config);
+            // ROOT CAUSE FIX: Add timeout and better error handling for connection refused
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+            
+            const response = await fetch(finalUrl, {
+                ...config,
+                signal: controller.signal
+            });
+            
+            clearTimeout(timeoutId);
+            
             // Handle 404 specifically if allow404 is set
             if (response.status === 404 && options.allow404) {
                 return { data: null, status: 404 };
             }
             if (!response.ok) {
                 const errorText = await response.text();
-                console.error(`❌ API Error: ${response.status} ${response.statusText}`, errorText);
+                console.warn(`⚠️ API Error: ${response.status} ${response.statusText}`, errorText);
                 return {
                     error: `API request failed: ${response.status} ${response.statusText}`,
                     status: response.status
@@ -147,7 +181,24 @@ class MetaLayerAPI {
             return { data, status: response.status };
         }
         catch (error) {
-            console.error('❌ API Request Error:', error);
+            // ROOT CAUSE FIX: Handle connection refused gracefully without crashing
+            if (error.name === 'AbortError') {
+                console.warn('⚠️ API Request Timeout:', finalUrl);
+                return {
+                    error: 'API request timeout - server may be unavailable',
+                    status: 0,
+                    timeout: true
+                };
+            } else if (error.message.includes('Failed to fetch') || error.message.includes('ERR_CONNECTION_REFUSED')) {
+                // Connection refused - server is down or unreachable
+                console.warn('⚠️ API Connection Refused:', finalUrl, '- Server may be down. Extension will continue with limited functionality.');
+                return {
+                    error: 'API server unavailable - connection refused',
+                    status: 0,
+                    connectionRefused: true
+                };
+            } else {
+                console.warn('⚠️ API Request Error:', error.message);
             return {
                 error: error instanceof Error ? error.message : 'Unknown error',
                 status: 0
@@ -155,9 +206,18 @@ class MetaLayerAPI {
         }
     }
 }
-// Maintain global api instance for legacy code without exporting MetaLayerAPI constructor
-if (typeof window !== 'undefined' && !window.api) {
-    window.api = new MetaLayerAPI('http://216.238.91.120:3002');
+}
+// Maintain global api instance and store in stateManager (TypeScript migration)
+if (typeof window !== 'undefined') {
+        const apiInstance = new MetaLayerAPI('http://216.238.91.120:3002');
+    // Store in stateManager (TypeScript migration)
+    if (stateManagerInstance?.setState) {
+        stateManagerInstance.setState('api', apiInstance);
+    }
+    // Also set on window for backward compatibility during migration
+    if (!window.api) {
+        window.api = apiInstance;
+    }
 }
 export { MetaLayerAPI };
 export default MetaLayerAPI;

@@ -41,8 +41,13 @@ class AgentModule {
 // ===== AGENT AND AI FUNCTIONS =====
 // Define AGENT_API_URL using config system or fallback
 const getAgentApiUrl = () => {
-    if (typeof window !== 'undefined' && window.configManager && typeof window.configManager.get === 'function') {
-        return `${window.configManager.get('apiUrl')}/api/agent`;
+    if (typeof window !== 'undefined') {
+        const configManager = window.configManager;
+        if (configManager && typeof configManager.get === 'function') {
+            const apiUrl = configManager.get('apiUrl');
+            if (apiUrl)
+                return `${apiUrl}/api/agent`;
+        }
     }
     if (typeof window !== 'undefined' && window.METALAYER_API_URL) {
         return `${window.METALAYER_API_URL}/api/agent`;

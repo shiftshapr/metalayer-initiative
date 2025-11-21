@@ -9,7 +9,7 @@ cd "$PRESENCE_DIR"
 
 echo "🔨 Building extension distribution..."
 
-# Step 1: Compile TypeScript from src/ to presence/ root
+# Step 1: Compile TypeScript from src/ to dist/
 echo "📦 Compiling TypeScript..."
 if [ -f "tsconfig.json" ]; then
   npx tsc --project tsconfig.json
@@ -58,12 +58,12 @@ else
   echo "✅ All essential files present"
 fi
 
-# Step 4: Check compiled files exist in root directories
-COMPILED_COUNT=$(find . -maxdepth 3 \( -path "./core/*.js" -o -path "./features/*.js" -o -path "./utils/*.js" -o -path "./services/*.js" \) 2>/dev/null | wc -l)
+# Step 4: Check compiled files exist in dist/
+COMPILED_COUNT=$(find dist -maxdepth 3 \( -path "dist/core/*.js" -o -path "dist/features/*.js" -o -path "dist/utils/*.js" -o -path "dist/services/*.js" \) 2>/dev/null | wc -l)
 if [ "$COMPILED_COUNT" -eq 0 ]; then
-  echo "⚠️  Warning: No compiled TypeScript files found in presence/ root directories!"
+  echo "⚠️  Warning: No compiled TypeScript files found in dist/ directory!"
 else
-  echo "✅ Found $COMPILED_COUNT compiled JavaScript files in root directories"
+  echo "✅ Found $COMPILED_COUNT compiled JavaScript files in dist/"
 fi
 
 echo ""
@@ -71,6 +71,6 @@ echo "✅ Build complete! Distribution is ready."
 echo ""
 echo "📋 Distribution contents:"
 echo "   - Runtime files: $(ls -1 *.js *.html *.css 2>/dev/null | wc -l) files"
-echo "   - Compiled code: core/, features/, utils/, services/ directories"
+echo "   - Compiled code: dist/ directory (core/, features/, utils/, services/)"
 echo "   - Assets: images/, lib/, auth/ directories"
 

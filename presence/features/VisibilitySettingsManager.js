@@ -10,11 +10,14 @@ let unifiedSettingsStorage;
 let saveSetting;
 let saveSettings;
 let getSetting;
-let visibilityManager;
+let visibilityManager = null;
 let profileManager;
 let refreshAllMessageAvatars;
 let updateThemeEverywhere;
 let setTheme;
+if (typeof window !== 'undefined' && !visibilityManager) {
+    visibilityManager = window.visibilityManager ?? null;
+}
 class VisibilitySettingsManager {
     constructor() {
         this.isInitialized = false;
@@ -756,6 +759,35 @@ class VisibilitySettingsManager {
 }
 // Create singleton instance
 const visibilitySettingsManagerInstance = new VisibilitySettingsManager();
+
+if (typeof window !== 'undefined') {
+    const visibilityWin = window;
+    visibilityWin.visibilitySettingsManager = visibilitySettingsManagerInstance;
+    const setVisibilityManagerRef = () => {
+        if (!visibilityManager) {
+            visibilityManager = visibilityWin.visibilityManager ?? null;
+        }
+    };
+    setVisibilityManagerRef();
+    visibilityWin.addEventListener?.('visibility-manager-ready', (event) => {
+        if (event?.detail?.manager) {
+            visibilityManager = event.detail.manager;
+        }
+        else {
+            setVisibilityManagerRef();
+        }
+    });
+    const initVisibilitySettings = () => visibilitySettingsManagerInstance.initialize().catch((error) => {
+        console.error('❌ VISIBILITY_SETTINGS: Auto-initialize failed:', error);
+    });
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initVisibilitySettings, { once: true });
+    }
+    else {
+        initVisibilitySettings();
+    }
+}
+
 // Export as ES6 module (pure - no window exports needed for re-launch)
 export { VisibilitySettingsManager, visibilitySettingsManagerInstance };
 export default VisibilitySettingsManager;

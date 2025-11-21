@@ -1,3 +1,4 @@
+"use strict";
 /**
  * PROVENANCE INITIALIZATION SCRIPT
  *
@@ -51,7 +52,6 @@
         });
         // Wait a bit for modules to initialize
         await new Promise(resolve => setTimeout(resolve, 500));
-        // Initialize service
         const service = window.provenanceService;
         if (service) {
             await service.initialize();
@@ -91,4 +91,3 @@
         // Fail silently - don't break the app
     }
 })();
-//# sourceMappingURL=init.js.map

@@ -194,8 +194,9 @@ class ProvenanceLinkInjector {
 }
 // Export for browser use
 if (typeof window !== 'undefined') {
-    window.provenanceLinkInjector = new ProvenanceLinkInjector();
+    Object.assign(window, { provenanceLinkInjector: new ProvenanceLinkInjector() });
     console.log('[ProvenanceLinkInjector] Available at window.provenanceLinkInjector');
 }
 export default ProvenanceLinkInjector;
+
 

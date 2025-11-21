@@ -33,7 +33,7 @@ export class SubscriptionManager {
             this.logger.info(`SubscriptionManager initialized with ${this.subscriptions.size} subscriptions`);
         }
         catch (error) {
-            this.logger.error('Failed to initialize SubscriptionManager:', error);
+            this.logger.error('Failed to initialize SubscriptionManager', error);
             throw error;
         }
     }
@@ -119,7 +119,7 @@ export class SubscriptionManager {
             return subscription;
         }
         catch (error) {
-            this.logger.error('Error updating subscription:', error);
+            this.logger.error('Error updating subscription', error);
             throw error;
         }
     }
@@ -390,7 +390,7 @@ export class SubscriptionManager {
             this.logger.info(`Loaded ${this.subscriptions.size} subscriptions`);
         }
         catch (error) {
-            this.logger.error('Error loading subscriptions:', error);
+            this.logger.error('Error loading subscriptions', error);
             this.subscriptions.clear();
         }
     }
@@ -403,7 +403,7 @@ export class SubscriptionManager {
             await chrome.storage.local.set({ [this.storageKey]: subscriptions });
         }
         catch (error) {
-            this.logger.error('Error saving subscriptions:', error);
+            this.logger.error('Error saving subscriptions', error);
         }
     }
     /**

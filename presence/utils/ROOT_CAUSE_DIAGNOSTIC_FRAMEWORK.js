@@ -64,7 +64,7 @@ class RootCauseDiagnosticFramework {
                 status: 'error',
                 result: null
             });
-            return { error: errorMessage };
+            return { timestamp: new Date().toISOString(), error: errorMessage };
         }
     }
     /**
@@ -150,8 +150,10 @@ diagnosticFramework.register('headline-displayname-persistence', async () => {
     }
     // Check 2: UserPreferencesManager
     if (window.userPreferencesManager) {
-        const headline = await window.userPreferencesManager.getPreference('headline');
-        const displayName = await window.userPreferencesManager.getPreference('displayName');
+        const headlineRaw = await window.userPreferencesManager.getPreference('headline');
+        const displayNameRaw = await window.userPreferencesManager.getPreference('displayName');
+        const headline = typeof headlineRaw === 'string' ? headlineRaw : null;
+        const displayName = typeof displayNameRaw === 'string' ? displayNameRaw : null;
         results.checks.userPreferencesManager = {
             headline: headline || null,
             displayName: displayName || null,
@@ -171,13 +173,14 @@ diagnosticFramework.register('headline-displayname-persistence', async () => {
     // Check 4: Database (API)
     if (window.currentUser?.id && window.api) {
         try {
-            const apiResponse = await window.api.request(`/v1/users/${window.currentUser.id}`, {
+            const apiResponseRaw = await window.api.request(`/v1/users/${window.currentUser.id}`, {
                 method: 'GET'
             });
+            const apiResponse = apiResponseRaw;
             results.checks.database = {
-                headline: apiResponse?.headline || null,
-                displayName: apiResponse?.displayName || null,
-                displayNameSnakeCase: apiResponse?.display_name || null, // Check snake_case fallback
+                headline: (typeof apiResponse?.headline === 'string' ? apiResponse.headline : null) || null,
+                displayName: (typeof apiResponse?.displayName === 'string' ? apiResponse.displayName : null) || null,
+                displayNameSnakeCase: (typeof apiResponse?.display_name === 'string' ? apiResponse.display_name : null) || null, // Check snake_case fallback
                 status: (apiResponse?.headline || apiResponse?.displayName) ? 'has_data' : 'null_in_db'
             };
         }
@@ -223,12 +226,13 @@ diagnosticFramework.register('headline-displayname-persistence', async () => {
             const headlineSaveResult = await window.userPreferencesManager.savePreference('headline', testHeadline, { batch: false });
             await new Promise(resolve => setTimeout(resolve, 1000)); // Wait for save
             // Verify headline was saved
-            const verifyHeadline = await window.api.request(`/v1/users/${window.currentUser.id}`, { method: 'GET' });
+            const verifyHeadlineRaw = await window.api.request(`/v1/users/${window.currentUser.id}`, { method: 'GET' });
+            const verifyHeadline = verifyHeadlineRaw;
             results.saveTest = {
                 headline: {
                     saveResult: headlineSaveResult,
-                    savedToDB: verifyHeadline?.headline === testHeadline,
-                    dbValue: verifyHeadline?.headline,
+                    savedToDB: (typeof verifyHeadline?.headline === 'string' ? verifyHeadline.headline : null) === testHeadline,
+                    dbValue: typeof verifyHeadline?.headline === 'string' ? verifyHeadline.headline : undefined,
                     expectedValue: testHeadline
                 }
             };
@@ -236,11 +240,14 @@ diagnosticFramework.register('headline-displayname-persistence', async () => {
             const displayNameSaveResult = await window.userPreferencesManager.savePreference('displayName', testDisplayName, { batch: false });
             await new Promise(resolve => setTimeout(resolve, 1000)); // Wait for save
             // Verify displayName was saved
-            const verifyDisplayName = await window.api.request(`/v1/users/${window.currentUser.id}`, { method: 'GET' });
+            const verifyDisplayNameRaw = await window.api.request(`/v1/users/${window.currentUser.id}`, { method: 'GET' });
+            const verifyDisplayName = verifyDisplayNameRaw;
+            if (!results.saveTest)
+                results.saveTest = {};
             results.saveTest.displayName = {
                 saveResult: displayNameSaveResult,
-                savedToDB: verifyDisplayName?.displayName === testDisplayName,
-                dbValue: verifyDisplayName?.displayName,
+                savedToDB: (typeof verifyDisplayName?.displayName === 'string' ? verifyDisplayName.displayName : null) === testDisplayName,
+                dbValue: typeof verifyDisplayName?.displayName === 'string' ? verifyDisplayName.displayName : undefined,
                 expectedValue: testDisplayName
             };
             // Restore original values if test values were saved
@@ -415,7 +422,8 @@ diagnosticFramework.register('theme-application', async () => {
     }
     // Check UserPreferencesManager
     if (window.userPreferencesManager) {
-        const managerTheme = await window.userPreferencesManager.getPreference('theme');
+        const managerThemeRaw = await window.userPreferencesManager.getPreference('theme');
+        const managerTheme = typeof managerThemeRaw === 'string' ? managerThemeRaw : null;
         results.theme.userPreferencesManager = managerTheme || null;
     }
     // Check window.currentUser
@@ -423,8 +431,9 @@ diagnosticFramework.register('theme-application', async () => {
     // Check database
     if (window.currentUser?.id && window.api) {
         try {
-            const apiResponse = await window.api.request(`/v1/users/${window.currentUser.id}`, { method: 'GET' });
-            results.theme.database = apiResponse?.theme || null;
+            const apiResponseRaw = await window.api.request(`/v1/users/${window.currentUser.id}`, { method: 'GET' });
+            const apiResponse = apiResponseRaw;
+            results.theme.database = (typeof apiResponse?.theme === 'string' ? apiResponse.theme : null) || null;
         }
         catch (error) {
             results.theme.database = { error: error instanceof Error ? error.message : String(error) };
@@ -455,15 +464,16 @@ diagnosticFramework.register('preferences-column-status', async () => {
     // Check if preferences column still exists (via API response)
     if (window.currentUser?.id && window.api) {
         try {
-            const apiResponse = await window.api.request(`/v1/users/${window.currentUser.id}`, { method: 'GET' });
+            const apiResponseRaw = await window.api.request(`/v1/users/${window.currentUser.id}`, { method: 'GET' });
+            const apiResponse = apiResponseRaw;
             results.migration = {
-                preferencesInResponse: 'preferences' in apiResponse,
+                preferencesInResponse: apiResponse ? 'preferences' in apiResponse : false,
                 preferencesValue: apiResponse?.preferences || null,
                 hasNewColumns: {
-                    theme: 'theme' in apiResponse,
-                    headline: 'headline' in apiResponse,
-                    displayName: 'displayName' in apiResponse || 'display_name' in apiResponse,
-                    auraIntensity: 'auraIntensity' in apiResponse || 'aura_intensity' in apiResponse
+                    theme: apiResponse ? 'theme' in apiResponse : false,
+                    headline: apiResponse ? 'headline' in apiResponse : false,
+                    displayName: apiResponse ? ('displayName' in apiResponse || 'display_name' in apiResponse) : false,
+                    auraIntensity: apiResponse ? ('auraIntensity' in apiResponse || 'aura_intensity' in apiResponse) : false
                 }
             };
         }
@@ -502,6 +512,8 @@ diagnosticFramework.register('api-request-response', async () => {
                 body: JSON.stringify(testRequest.body)
             });
             const duration = Date.now() - startTime;
+            if (!results.recentRequests)
+                results.recentRequests = [];
             results.recentRequests.push({
                 ...testRequest,
                 duration,
@@ -517,6 +529,8 @@ diagnosticFramework.register('api-request-response', async () => {
             }
         }
         catch (error) {
+            if (!results.errors)
+                results.errors = [];
             results.errors.push({
                 type: 'test_request',
                 error: error instanceof Error ? error.message : String(error),

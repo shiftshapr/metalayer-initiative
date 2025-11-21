@@ -19,7 +19,7 @@ export class AnchorHighlighter {
      */
     async applyHighlight(element, style = 'pulse', duration = 3000) {
         try {
-            this.logger.info('Applying highlight:', style, 'duration:', duration);
+            this.logger.info('Applying highlight', { style, duration });
             // Remove any existing highlight on this element
             this.removeHighlight(element);
             // Get highlight class
@@ -44,7 +44,7 @@ export class AnchorHighlighter {
             this.logger.info('Highlight applied');
         }
         catch (error) {
-            this.logger.error('Error applying highlight:', error);
+            this.logger.error('Error applying highlight', error);
         }
     }
     /**
@@ -72,7 +72,7 @@ export class AnchorHighlighter {
             }
         }
         catch (error) {
-            this.logger.error('Error removing highlight:', error);
+            this.logger.error('Error removing highlight', error);
         }
     }
     /**
@@ -271,7 +271,7 @@ export class AnchorHighlighter {
             this.logger.info('Highlight styles injected');
         }
         catch (error) {
-            this.logger.error('Error injecting styles:', error);
+            this.logger.error('Error injecting styles', error);
         }
     }
     /**
@@ -317,7 +317,7 @@ export class AnchorHighlighter {
             this.logger.info('Custom highlight applied');
         }
         catch (error) {
-            this.logger.error('Error creating custom highlight:', error);
+            this.logger.error('Error creating custom highlight', error);
         }
     }
     /**

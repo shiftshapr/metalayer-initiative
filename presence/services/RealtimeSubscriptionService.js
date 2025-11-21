@@ -41,23 +41,26 @@ export class RealtimeSubscriptionService {
         this.unsubscribeFromPage(pageId);
         try {
             const channelName = `messages:${pageId}`;
-            const channel = this.supabase
-                .channel(channelName)
+            const channelBase = this.supabase.channel(channelName);
+            const channelChain = channelBase
                 .on('postgres_changes', {
                 event: 'INSERT',
                 schema: 'public',
                 table: 'messages',
                 filter: `page_id=eq.${pageId}`
             }, (payload) => {
-                this.handleMessageInsert(payload.new);
-            })
+                const p = payload;
+                this.handleMessageInsert(p.new);
+            });
+            const channel = channelChain
                 .on('postgres_changes', {
                 event: 'UPDATE',
                 schema: 'public',
                 table: 'messages',
                 filter: `page_id=eq.${pageId}`
             }, (payload) => {
-                this.handleMessageUpdate(payload.new);
+                const p = payload;
+                this.handleMessageUpdate(p.new);
             })
                 .on('postgres_changes', {
                 event: 'DELETE',
@@ -65,9 +68,10 @@ export class RealtimeSubscriptionService {
                 table: 'messages',
                 filter: `page_id=eq.${pageId}`
             }, (payload) => {
-                this.handleMessageDelete(payload.old);
-            })
-                .subscribe((status, err) => {
+                const p = payload;
+                this.handleMessageDelete(p.old);
+            });
+            channel.subscribe((status, err) => {
                 if (err) {
                     console.error('RealtimeSubscriptionService: Subscription error:', err);
                     if (onError) {
@@ -79,7 +83,7 @@ export class RealtimeSubscriptionService {
                     console.log(`✅ RealtimeSubscriptionService: Subscribed to ${channelName}`);
                 }
             });
-            this.channels.set(pageId, channel);
+            this.channels.set(pageId, channelBase);
             return true;
         }
         catch (error) {
@@ -96,7 +100,8 @@ export class RealtimeSubscriptionService {
     unsubscribeFromPage(pageId) {
         const channel = this.channels.get(pageId);
         if (channel) {
-            this.supabase.removeChannel(channel);
+            const supabaseWithRemove = this.supabase;
+            supabaseWithRemove.removeChannel?.(channel);
             this.channels.delete(pageId);
             console.log(`✅ RealtimeSubscriptionService: Unsubscribed from ${pageId}`);
         }

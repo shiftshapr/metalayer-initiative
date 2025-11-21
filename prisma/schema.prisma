@@ -120,7 +120,12 @@ model AppUser {
   createdAt             DateTime           @default(now())
   updatedAt             DateTime
   auraColor             String?
-  preferences           Json? // User preferences (theme, etc.) - stored as JSON
+  // NOTE: preferences column was dropped - preferences are now stored in individual columns (theme, headline, displayName, auraIntensity)
+  // and in Chrome storage via UserPreferencesManager
+  theme                 String?  @db.VarChar(10) // User theme preference: light, dark, or auto
+  headline              String?  @db.Text // User headline (20-1000 characters)
+  displayName           String?  @db.VarChar(16) // User display name (4-16 characters)
+  auraIntensity         Decimal? @db.Decimal(3, 2) // Aura intensity (0.0 to 1.0)
   globalAvailability    Availability? // Global status (applies to all tabs by default)
   availabilityUpdatedAt DateTime? // When global status was last updated
   Conversation          Conversation[]

@@ -82,23 +82,27 @@ class RealtimeManager {
         this.log('INFO', `COMP METHOD: Initializing presence for page ${pageId}`);
         // Initialize presence tracking using COMP method
         const supabase = window.supabase;
-        if (supabase && supabase.from) {
+        if (supabase) {
             // Subscribe to presence changes
-            const presenceChannel = supabase
-                .channel(`presence:${pageId}`)
+            const presenceChannel = supabase.channel(`presence:${pageId}`);
+            const ch1 = presenceChannel
                 .on('presence', { event: 'sync' }, () => {
                 this.log('INFO', 'COMP METHOD: Presence sync event received');
                 this.updatePresenceDisplay();
-            })
-                .on('presence', { event: 'join' }, ({ key, newPresences }) => {
-                this.log('INFO', 'COMP METHOD: User joined presence:', key);
+            });
+            const ch2 = ch1
+                .on('presence', { event: 'join' }, (payload) => {
+                const p = payload;
+                this.log('INFO', 'COMP METHOD: User joined presence:', p?.key);
                 this.updatePresenceDisplay();
-            })
-                .on('presence', { event: 'leave' }, ({ key, leftPresences }) => {
-                this.log('INFO', 'COMP METHOD: User left presence:', key);
+            });
+            const ch3 = ch2
+                .on('presence', { event: 'leave' }, (payload) => {
+                const p = payload;
+                this.log('INFO', 'COMP METHOD: User left presence:', p?.key);
                 this.updatePresenceDisplay();
-            })
-                .subscribe();
+            });
+            ch3.subscribe(() => { });
             // Track current user's presence
             this.trackUserPresence(pageId);
         }
@@ -115,14 +119,17 @@ class RealtimeManager {
         const supabase = window.supabase;
         if (currentUser && supabase) {
             const presenceChannel = supabase.channel(`presence:${pageId}`);
-            presenceChannel
+            const channel = presenceChannel;
+            const ch = channel
                 .on('presence', { event: 'sync' }, () => {
-                const state = presenceChannel.presenceState();
-                this.log('INFO', 'COMP METHOD: Current presence state:', state);
-            })
-                .subscribe(async (status) => {
-                if (status === 'SUBSCRIBED') {
-                    await presenceChannel.track({
+                if (channel.presenceState) {
+                    const state = channel.presenceState();
+                    this.log('INFO', 'COMP METHOD: Current presence state:', state);
+                }
+            });
+            ch.subscribe(async (status) => {
+                if (status === 'SUBSCRIBED' && channel.track) {
+                    await channel.track({
                         userId: currentUser.id || currentUser.user_id,
                         userName: currentUser.name,
                         userAvatar: currentUser.avatar,
@@ -199,45 +206,50 @@ class RealtimeManager {
         try {
             // Subscribe to user_presence table changes (INSERT, UPDATE, DELETE)
             // FIX: Subscribe to each event type separately for reliability
-            const presenceChannel = supabase
-                .channel('user-presence-changes')
+            const presenceChannel = supabase.channel('user-presence-changes');
+            const pc1 = presenceChannel
                 .on('postgres_changes', {
                 event: 'INSERT',
                 schema: 'public',
                 table: 'user_presence'
             }, (payload) => {
-                this.log('INFO', '🔔 PRESENCE: user_presence INSERT detected:', payload);
+                const p = payload;
+                this.log('INFO', '🔔 PRESENCE: user_presence INSERT detected:', p);
                 handlePresenceChange({
                     eventType: 'INSERT',
-                    new: payload.new,
+                    new: p.new,
                     old: null
                 });
-            })
+            });
+            const pc2 = pc1
                 .on('postgres_changes', {
                 event: 'UPDATE',
                 schema: 'public',
                 table: 'user_presence'
             }, (payload) => {
-                this.log('INFO', '🔔 PRESENCE: user_presence UPDATE detected:', payload);
+                const p = payload;
+                this.log('INFO', '🔔 PRESENCE: user_presence UPDATE detected:', p);
                 handlePresenceChange({
                     eventType: 'UPDATE',
-                    new: payload.new,
-                    old: payload.old
+                    new: p.new,
+                    old: p.old
                 });
-            })
+            });
+            const pc3 = pc2
                 .on('postgres_changes', {
                 event: 'DELETE',
                 schema: 'public',
                 table: 'user_presence'
             }, (payload) => {
-                this.log('INFO', '🔔 PRESENCE: user_presence DELETE detected:', payload);
+                const p = payload;
+                this.log('INFO', '🔔 PRESENCE: user_presence DELETE detected:', p);
                 handlePresenceChange({
                     eventType: 'DELETE',
                     new: null,
-                    old: payload.old
+                    old: p.old
                 });
-            })
-                .subscribe((status) => {
+            });
+            pc3.subscribe((status) => {
                 if (status === 'SUBSCRIBED') {
                     this.log('INFO', '✅ PRESENCE: user_presence subscription active (all events)');
                 }
@@ -264,18 +276,19 @@ class RealtimeManager {
         }
         try {
             // Subscribe to PresenceEvent table changes for AVAILABILITY events
-            const availabilityChannel = supabase
-                .channel('availability-changes')
+            const availabilityChannel = supabase.channel('availability-changes');
+            const ac1 = availabilityChannel
                 .on('postgres_changes', {
                 event: 'INSERT',
                 schema: 'public',
                 table: 'PresenceEvent',
                 filter: 'kind=eq.AVAILABILITY'
             }, (payload) => {
-                this.log('INFO', '🎯 STATUS: Availability change detected:', payload);
-                this.handleAvailabilityChange(payload);
-            })
-                .subscribe((status) => {
+                const p = payload;
+                this.log('INFO', '🎯 STATUS: Availability change detected:', p);
+                this.handleAvailabilityChange(p);
+            });
+            ac1.subscribe((status) => {
                 if (status === 'SUBSCRIBED') {
                     this.log('INFO', '✅ STATUS: Availability subscription active');
                 }
@@ -430,15 +443,18 @@ async function initializeSupabaseRealtimeClient() {
             const winWithClient = window;
             if (typeof SupabaseRealtimeClient !== 'undefined') {
                 console.log('✅ SUPABASE_DEBUG: SupabaseRealtimeClient class found, creating instance...');
-                winWithClient.supabaseRealtimeClient = new SupabaseRealtimeClient();
+                const instance = new SupabaseRealtimeClient();
+                Object.assign(winWithClient, { supabaseRealtimeClient: instance });
                 console.log('✅ SUPABASE_DEBUG: Instance created:', !!winWithClient.supabaseRealtimeClient);
                 // Initialize with Supabase client
-                const success = await winWithClient.supabaseRealtimeClient.initialize(supabase);
-                console.log('✅ SUPABASE_DEBUG: Initialize result:', success);
+                if (winWithClient.supabaseRealtimeClient && typeof winWithClient.supabaseRealtimeClient.initialize === 'function') {
+                    const success = await winWithClient.supabaseRealtimeClient.initialize(supabase);
+                    console.log('✅ SUPABASE_DEBUG: Initialize result:', success);
+                }
             }
             else {
                 console.log('❌ SUPABASE_DEBUG: SupabaseRealtimeClient class not available, using fallback');
-                winWithClient.supabaseRealtimeClient = supabase;
+                Object.assign(winWithClient, { supabaseRealtimeClient: supabase });
             }
             console.log('✅ SUPABASE_DEBUG: Using SupabaseRealtimeClient instance');
             // COMP APPROACH: Real-time is already available through window.supabase
@@ -641,7 +657,10 @@ async function handlePresenceChange(payload) {
         // Use setTimeout to debounce rapid updates
         const timeoutKey = 'presenceChangeRefreshTimeout';
         const winWithTimeout = window;
-        clearTimeout(winWithTimeout[timeoutKey]);
+        const existingTimeout = winWithTimeout[timeoutKey];
+        if (existingTimeout !== undefined) {
+            clearTimeout(existingTimeout);
+        }
         winWithTimeout[timeoutKey] = setTimeout(async () => {
             await refreshVisibilityAvatars();
         }, 500); // 500ms debounce
@@ -656,6 +675,7 @@ function handleMessageChange(payload) {
             console.log('💬 MESSAGE: New message received:', newRecord);
             const addMessageToChat = window.addMessageToChat;
             if (addMessageToChat && newRecord) {
+                // Type assertion: newRecord from Supabase may need conversion to Message type
                 addMessageToChat(newRecord);
             }
             break;
@@ -663,6 +683,7 @@ function handleMessageChange(payload) {
             console.log('🔄 MESSAGE: Message updated:', newRecord);
             const updateMessageInChat = window.updateMessageInChat;
             if (updateMessageInChat && newRecord) {
+                // Type assertion: newRecord from Supabase may need conversion to Message type
                 updateMessageInChat(newRecord);
             }
             break;

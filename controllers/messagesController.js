@@ -417,6 +417,7 @@ exports.createMessage = async (req, res) => {
       content,
       pageId,
       parentId,
+      quoteId,
       communityId = 'comm-001',
       messageKind = 'TEXT',
       attachments = [],
@@ -445,6 +446,7 @@ exports.createMessage = async (req, res) => {
         user_id,
         content,
         parent_id,
+        quote_id,
         community_id,
         created_at,
         updated_at
@@ -454,6 +456,7 @@ exports.createMessage = async (req, res) => {
         ${userId}::UUID,
         ${content},
         ${parentId ? `${parentId}::UUID` : null}::UUID,
+        ${quoteId ? `${quoteId}::UUID` : null}::UUID,
         ${communityId},
         NOW(),
         NOW()
@@ -464,6 +467,7 @@ exports.createMessage = async (req, res) => {
         created_at,
         updated_at,
         parent_id,
+        quote_id,
         community_id,
         user_id
     `;
@@ -489,6 +493,8 @@ exports.createMessage = async (req, res) => {
       id: message.id,
       messageKind,
       content: message.content,
+      parentId: message.parent_id,
+      quoteId: message.quote_id,
       attachments,
       emojiMetadata,
       author: {

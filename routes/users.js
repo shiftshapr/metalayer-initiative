@@ -45,25 +45,57 @@ router.post('/update-preferences', async (req, res) => {
   }
 });
 
-// Get user preferences (UUID only - no email required)
+// Get user preferences (UUID or email via header)
 // MUST be before /:email route to avoid conflicts
 router.get('/preferences', async (req, res) => {
   try {
     const userId = req.headers['x-user-id'] || req.query.userId;
+    const userEmail = req.headers['x-user-email'] || req.query.email;
     
-    if (!userId) {
-      return res.status(400).json({ error: 'userId (UUID) is required in x-user-id header or query parameter' });
+    if (!userId && !userEmail) {
+      return res.status(400).json({ error: 'userId (UUID) or email is required in x-user-id/x-user-email header or query parameter' });
     }
     
-    // Validate UUID format
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (!uuidRegex.test(userId)) {
-      return res.status(400).json({ error: 'Invalid userId format. Must be a valid UUID' });
+    let targetUser = null;
+    
+    // ROOT CAUSE FIX: Handle Google IDs via email lookup
+    if (userId) {
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (uuidRegex.test(userId)) {
+        // Valid UUID - use directly
+        try {
+          targetUser = await userService.getUser(userId);
+        } catch (error) {
+          console.log(`⚠️ BACKEND: UUID lookup failed: ${error.message}`);
+        }
+      } else if (/^\d+$/.test(userId) && userEmail) {
+        // Google ID - lookup by email
+        console.log(`🔍 BACKEND: Google ID detected, looking up by email: ${userEmail}`);
+        try {
+          targetUser = await userService.getOrCreateUser({ email: userEmail });
+        } catch (error) {
+          console.log(`⚠️ BACKEND: Email lookup failed: ${error.message}`);
+        }
+      }
     }
     
-    console.log(`🔍 BACKEND: Getting preferences for user ${userId}`);
+    // If still no user and we have email, try email lookup
+    if (!targetUser && userEmail) {
+      console.log(`🔍 BACKEND: Looking up user by email: ${userEmail}`);
+      try {
+        targetUser = await userService.getOrCreateUser({ email: userEmail });
+      } catch (error) {
+        console.log(`⚠️ BACKEND: Email lookup failed: ${error.message}`);
+      }
+    }
     
-    const preferences = await userService.getPreferences(userId);
+    if (!targetUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    console.log(`🔍 BACKEND: Getting preferences for user ${targetUser.id} (${targetUser.email})`);
+    
+    const preferences = await userService.getPreferences(targetUser.id);
     
     res.json({ 
       success: true, 
@@ -90,7 +122,17 @@ router.post('/update-avatar', async (req, res) => {
     
     console.log(`🔍 BACKEND: Updating avatar URL for ${email} to ${avatarUrl}`);
     
-    const user = await userService.updateAvatarUrl(email, avatarUrl);
+    // ROOT CAUSE FIX: Use getOrCreateUser instead of updateAvatarUrl to handle first-time users
+    // This ensures user exists before updating avatar
+    let user = await userService.getOrCreateUser({ 
+      email: email,
+      avatarUrl: avatarUrl
+    });
+    
+    // If user already exists but avatarUrl is different, update it
+    if (user.avatarUrl !== avatarUrl) {
+      user = await userService.updateAvatarUrl(email, avatarUrl);
+    }
     
     res.json({ 
       success: true, 
@@ -102,7 +144,8 @@ router.post('/update-avatar', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error updating avatar URL:', error);
+    console.error('❌ BACKEND: Error updating avatar URL:', error);
+    console.error('❌ BACKEND: Error stack:', error.stack);
     res.status(500).json({ error: 'Failed to update avatar URL' });
   }
 });
@@ -256,32 +299,80 @@ router.get('/:userId', async (req, res) => {
       return res.status(400).json({ error: 'Valid userId is required' });
     }
     
-    // COMP METHOD: Try to find user by UUID first
-    let user = await userService.getUser(userId);
+    // ROOT CAUSE FIX: Handle multiple ID formats (UUID, email, Google numeric ID)
+    let user = null;
     
-    // If not found by UUID and it looks like an email, try by email (backward compatibility)
+    // Try UUID first (standard format)
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (uuidRegex.test(userId)) {
+      try {
+        user = await userService.getUser(userId);
+      } catch (error) {
+        console.log(`⚠️ BACKEND: UUID lookup failed, trying other methods: ${error.message}`);
+      }
+    }
+    
+    // If not found by UUID and it looks like an email, try by email
     if (!user && userId.includes('@')) {
       console.log(`🔍 BACKEND: Trying email lookup for: ${userId}`);
-      user = await userService.getOrCreateUser({ email: decodeURIComponent(userId) });
+      try {
+        user = await userService.getOrCreateUser({ email: decodeURIComponent(userId) });
+      } catch (error) {
+        console.log(`⚠️ BACKEND: Email lookup failed: ${error.message}`);
+      }
+    }
+    
+    // ROOT CAUSE FIX: If numeric ID (Google ID), try to find by email from currentUser context
+    // Google IDs are numeric strings like "116467399993975200419"
+    if (!user && /^\d+$/.test(userId)) {
+      console.log(`🔍 BACKEND: Numeric ID detected (likely Google ID): ${userId}, checking email from request context`);
+      // Try to get email from request headers or query
+      const requestEmail = req.headers['x-user-email'] || req.query.email;
+      if (requestEmail) {
+        console.log(`🔍 BACKEND: Found email in context: ${requestEmail}, creating/getting user`);
+        try {
+          // ROOT CAUSE FIX: Get additional user data from headers if available
+          const userName = req.headers['x-user-name'] || req.query.name || requestEmail.split('@')[0];
+          const userAvatarUrl = req.headers['x-user-avatar'] || req.query.avatarUrl;
+          const userAuraColor = req.headers['x-user-aura-color'] || req.query.auraColor;
+          
+          user = await userService.getOrCreateUser({ 
+            email: requestEmail,
+            name: userName,
+            avatarUrl: userAvatarUrl,
+            auraColor: userAuraColor
+          });
+          
+          if (user) {
+            console.log(`✅ BACKEND: User created/found via email: ${user.email}, UUID: ${user.id}`);
+          } else {
+            console.log(`⚠️ BACKEND: getOrCreateUser returned null for email: ${requestEmail}`);
+          }
+        } catch (error) {
+          console.error(`❌ BACKEND: Email lookup from context failed: ${error.message}`);
+          console.error(`❌ BACKEND: Error stack: ${error.stack}`);
+        }
+      } else {
+        // Last resort: try to find user by searching for this Google ID in metadata
+        // This is a fallback - ideally we should store Google ID in a separate field
+        console.log(`⚠️ BACKEND: No email context found for Google ID ${userId}, cannot lookup user`);
+      }
     }
     
     if (!user) {
-      console.error(`❌ BACKEND: User not found for userId: ${userId}`);
+      console.error(`❌ BACKEND: User not found for userId: ${userId} (tried UUID, email, and Google ID lookup)`);
       return res.status(404).json({ error: 'User not found' });
     }
     
     console.log(`✅ BACKEND: Found user: ${user.id}, avatarUrl: ${user.avatarUrl}`);
     
-    // ROOT CAUSE FIX: Parse preferences if it's a string (JSON stored as string in some DBs)
-    let preferences = user.preferences;
-    if (typeof preferences === 'string') {
-      try {
-        preferences = JSON.parse(preferences);
-      } catch (e) {
-        console.warn('⚠️ BACKEND: Failed to parse preferences JSON:', e);
-        preferences = {};
-      }
-    }
+    // ROOT CAUSE FIX: preferences column was dropped - reconstruct from individual columns
+    const preferences = {
+      theme: user.theme || 'light',
+      headline: user.headline || null,
+      displayName: user.displayName || null,
+      auraIntensity: user.auraIntensity || 0.5
+    };
     
     res.json({ 
       id: user.id,
@@ -291,9 +382,9 @@ router.get('/:userId', async (req, res) => {
       avatarUrl: user.avatarUrl,
       auraColor: user.auraColor,
       aura_color: user.auraColor, // Also include snake_case
-      theme: preferences?.theme || 'light', // ROOT CAUSE FIX: Include theme from preferences (with fallback)
-      aura_intensity: user.aura_intensity || 0.5, // ROOT CAUSE FIX: Include aura intensity
-      preferences: preferences || {} // ROOT CAUSE FIX: Include full preferences object
+      theme: preferences.theme, // From individual column
+      aura_intensity: user.auraIntensity || 0.5, // From individual column
+      preferences: preferences // Reconstructed from individual columns
     });
   } catch (error) {
     console.error('Error getting user by userId:', error);
@@ -442,26 +533,81 @@ router.patch('/:userId', async (req, res) => {
     const { userId } = req.params;
     const updates = req.body;
     const requestUserId = req.headers['x-user-id'];
+    const requestEmail = req.headers['x-user-email'];
     
-    if (!requestUserId) {
+    if (!requestUserId && !requestEmail) {
       return res.status(401).json({ error: 'Authentication required' });
-    }
-    
-    // Only allow users to update their own data
-    if (requestUserId !== userId) {
-      return res.status(403).json({ error: 'Forbidden: Cannot update other users' });
     }
     
     console.log(`🔍 BACKEND: PATCH /v1/users/${userId}`, updates);
     
-    // Validate UUID format
+    // ROOT CAUSE FIX: Initialize userService at the start (was being used before initialization)
+    const UserService = require('../services/userService');
+    const userService = new UserService(prisma);
+    
+    // ROOT CAUSE FIX: Handle multiple ID formats (UUID, email, Google numeric ID)
+    let targetUser = null;
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (!uuidRegex.test(userId)) {
-      return res.status(400).json({ error: 'Invalid userId format. Must be a valid UUID' });
+    
+    // Try UUID first
+    if (uuidRegex.test(userId)) {
+      try {
+        targetUser = await userService.getUser(userId);
+      } catch (error) {
+        console.log(`⚠️ BACKEND: UUID lookup failed: ${error.message}`);
+      }
     }
     
-    // Get user service
-    const userService = new (require('../services/userService'))(prisma);
+    // If not found by UUID and it looks like an email, try by email
+    if (!targetUser && userId.includes('@')) {
+      console.log(`🔍 BACKEND: Trying email lookup for: ${userId}`);
+      try {
+        targetUser = await userService.getOrCreateUser({ email: decodeURIComponent(userId) });
+      } catch (error) {
+        console.log(`⚠️ BACKEND: Email lookup failed: ${error.message}`);
+      }
+    }
+    
+    // ROOT CAUSE FIX: If numeric ID (Google ID), try to find by email from request context
+    if (!targetUser && /^\d+$/.test(userId)) {
+      console.log(`🔍 BACKEND: Numeric ID detected (likely Google ID): ${userId}`);
+      if (requestEmail) {
+        console.log(`🔍 BACKEND: Found email in context: ${requestEmail}, looking up user`);
+        try {
+          targetUser = await userService.getOrCreateUser({ email: requestEmail });
+        } catch (error) {
+          console.log(`⚠️ BACKEND: Email lookup from context failed: ${error.message}`);
+          console.error(`❌ BACKEND: Error stack: ${error.stack}`);
+        }
+      } else {
+        console.log(`⚠️ BACKEND: No email context found for Google ID ${userId}`);
+        return res.status(400).json({ error: 'Email required for Google ID lookup' });
+      }
+    }
+    
+    if (!targetUser) {
+      console.error(`❌ BACKEND: User not found for userId: ${userId} (tried UUID, email, and Google ID lookup)`);
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    // Only allow users to update their own data
+    // Compare by UUID (targetUser.id) with requestUserId
+    // ROOT CAUSE FIX: If requestUserId is Google ID, compare with resolved user's ID
+    if (requestUserId) {
+      const isRequestUserIdGoogleId = /^\d+$/.test(requestUserId);
+      const isRequestUserIdUUID = uuidRegex.test(requestUserId);
+      
+      if (isRequestUserIdUUID && requestUserId !== targetUser.id) {
+        return res.status(403).json({ error: 'Forbidden: Cannot update other users' });
+      }
+      // If requestUserId is Google ID, we've already resolved to targetUser, so allow it
+      if (isRequestUserIdGoogleId && requestUserId !== userId) {
+        return res.status(403).json({ error: 'Forbidden: Google ID in header does not match userId in path' });
+      }
+    }
+    
+    // Use targetUser.id (UUID) for all updates
+    const actualUserId = targetUser.id;
     
     // Build update object - only allow specific fields
     const allowedFields = ['aura_color', 'auraColor', 'aura_intensity', 'auraIntensity', 'theme'];
@@ -489,27 +635,31 @@ router.patch('/:userId', async (req, res) => {
       if (!['light', 'dark'].includes(updates.theme)) {
         return res.status(400).json({ error: 'Theme must be "light" or "dark"' });
       }
-      // Store theme in preferences
-      const user = await userService.getUser(userId);
-      if (user) {
-        const preferences = user.preferences || {};
-        preferences.theme = updates.theme;
-        await userService.updatePreferences(userId, preferences);
+      // ROOT CAUSE FIX: Store theme in individual column (preferences column was dropped)
+      if (targetUser) {
+        // Update theme directly in user record (theme is now an individual column)
+        await prisma.appUser.update({
+          where: { id: actualUserId },
+          data: { theme: updates.theme, updatedAt: new Date() }
+        });
       }
     }
     
     // Update user if there are any allowed fields
     if (Object.keys(updateData).length > 0) {
       const updatedUser = await prisma.appUser.update({
-        where: { id: userId },
+        where: { id: actualUserId },
         data: updateData,
         select: {
           id: true,
           email: true,
           name: true,
-          aura_color: true,
-          aura_intensity: true,
-          preferences: true
+          auraColor: true,
+          auraIntensity: true,
+          theme: true,
+          headline: true,
+          displayName: true
+          // NOTE: preferences column was dropped
         }
       });
       
@@ -522,7 +672,7 @@ router.patch('/:userId', async (req, res) => {
       res.json({
         success: true,
         message: 'No updates to apply',
-        user: await userService.getUser(userId)
+        user: await userService.getUser(actualUserId)
       });
     }
   } catch (error) {

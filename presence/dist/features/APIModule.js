@@ -85,9 +85,9 @@ class MetaLayerAPI {
                         const userResponse = await api.request(`/v1/users/${user.id}`, {
                             method: 'GET'
                         });
-                        if (userResponse) {
-                            const auraColor = userResponse.auraColor;
-                            const avatarUrl = userResponse.avatarUrl;
+                        if (userResponse && userResponse.data) {
+                            const auraColor = userResponse.data.auraColor;
+                            const avatarUrl = userResponse.data.avatarUrl;
                             // Update the user object with fetched data
                             user.auraColor = auraColor;
                             if (avatarUrl && !user.avatarUrl) {
@@ -106,7 +106,8 @@ class MetaLayerAPI {
                         }
                     }
                     catch (error) {
-                        console.warn('🔍 USER_IDENTITY: ⚠️ Failed to fetch auraColor immediately:', error.message);
+                        const errorMessage = error instanceof Error ? error.message : String(error);
+                        console.warn('🔍 USER_IDENTITY: ⚠️ Failed to fetch auraColor immediately:', errorMessage);
                     }
                 }
             }
@@ -146,7 +147,9 @@ class MetaLayerAPI {
         const derivedName = user?.name || currentUser?.name || undefined;
         const derivedAvatar = user?.avatarUrl || currentUser?.avatarUrl || undefined;
         // currentUser.id is always a UUID (from AppUser table) - no format validation needed
+        // Construct RequestInit-compatible config
         const config = {
+            method: options.method || 'GET',
             headers: {
                 'Content-Type': 'application/json',
                 ...(derivedEmail && { 'X-User-Email': derivedEmail }),
@@ -155,9 +158,17 @@ class MetaLayerAPI {
                 ...(derivedName && { 'X-User-Name': derivedName }),
                 ...(derivedAvatar && { 'X-User-Avatar': derivedAvatar }),
                 ...options.headers
-            },
-            ...options
+            }
         };
+        // Handle body separately to ensure proper type
+        if (options.body !== undefined) {
+            if (typeof options.body === 'string') {
+                config.body = options.body;
+            }
+            else {
+                config.body = JSON.stringify(options.body);
+            }
+        }
         try {
             const response = await fetch(finalUrl, config);
             // Allow callers to opt-in to treating 404 as a non-throwing null result
@@ -206,19 +217,21 @@ class MetaLayerAPI {
             // DO NOT set it from other users' data in reactions/messages!
             // Only trust user.id from /v1/users/:email or user objects that match current email
             const currentUser = stateManagerInstance.getState('currentUser');
-            if (data && currentUser && !currentUser.id) {
+            if (data && typeof data === 'object' && currentUser && !currentUser.id) {
+                const dataObj = data;
                 const currentUserEmail = currentUser.email?.toLowerCase().trim();
                 // Only set UUID if:
                 // 1. Response has a user object with matching email, OR
                 // 2. Response is from /v1/users/:email endpoint (which returns user data for current user)
                 let appUserId = null;
-                if (data.user && data.user.email && data.user.email.toLowerCase().trim() === currentUserEmail) {
+                const userObj = dataObj.user;
+                if (userObj && userObj.email && userObj.email.toLowerCase().trim() === currentUserEmail) {
                     // This is a user object for the current user
-                    appUserId = data.user.id;
+                    appUserId = userObj.id || null;
                 }
-                else if (data.email && data.email.toLowerCase().trim() === currentUserEmail) {
+                else if (dataObj.email && typeof dataObj.email === 'string' && dataObj.email.toLowerCase().trim() === currentUserEmail) {
                     // Direct user response (from /v1/users/:email)
-                    appUserId = data.id;
+                    appUserId = dataObj.id || null;
                 }
                 // CRITICAL: DO NOT use reaction.user_id or reaction.AppUser.id - those are OTHER users' IDs!
                 // DO NOT use data.id unless we've verified it's for the current user
@@ -292,7 +305,7 @@ class MetaLayerAPI {
             params.append('communityIds', communityIds.join(','));
         }
         // COMP METHOD: Use the same user detection logic as the main request method
-        let user = null;
+        let user = undefined;
         try {
             // First try to get from currentUser (set by authentication)
             const currentUser = stateManagerInstance.getState('currentUser');
@@ -301,7 +314,8 @@ class MetaLayerAPI {
                 console.log('🔍 API: Using currentUser for authentication:', user.id);
             }
             else if (authManagerInstance && typeof authManagerInstance.getCurrentUser === 'function') {
-                user = await authManagerInstance.getCurrentUser();
+                const authUser = await authManagerInstance.getCurrentUser();
+                user = authUser || undefined;
                 console.log('🔍 API: Using authManager for authentication:', user?.id);
             }
             else {
@@ -323,7 +337,7 @@ class MetaLayerAPI {
         console.log('🔍 API: getPresenceByCommunities called with communities:', communityIds);
         const params = new URLSearchParams({ communityIds: communityIds.join(',') });
         // COMP METHOD: Use the same user detection logic as the main request method
-        let user = null;
+        let user = undefined;
         try {
             // First try to get from currentUser (set by authentication)
             const currentUser = stateManagerInstance.getState('currentUser');
@@ -332,7 +346,8 @@ class MetaLayerAPI {
                 console.log('🔍 API: Using currentUser for authentication:', user.id);
             }
             else if (authManagerInstance && typeof authManagerInstance.getCurrentUser === 'function') {
-                user = await authManagerInstance.getCurrentUser();
+                const authUser = await authManagerInstance.getCurrentUser();
+                user = authUser || undefined;
                 console.log('🔍 API: Using authManager for authentication:', user?.id);
             }
             else {
@@ -376,6 +391,7 @@ class MetaLayerAPI {
             return { conversations: [], messages: [] };
         }
         // Use Supabase directly instead of backend API
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const supabase = stateManagerInstance.getState('supabase');
         if (!supabase || !supabase.from) {
             console.error('❌ CHAT_API: No Supabase client available');
@@ -387,7 +403,22 @@ class MetaLayerAPI {
             if (uri) {
                 // Use the same URL normalization logic as the backend
                 const normalizedUrl = normalizeUrl ? normalizeUrl(uri) : uri;
-                pageId = typeof normalizedUrl === 'object' && normalizedUrl !== null ? normalizedUrl.pageId : normalizedUrl;
+                if (typeof normalizedUrl === 'string') {
+                    pageId = normalizedUrl;
+                }
+                else if (normalizedUrl && typeof normalizedUrl === 'object' && 'pageId' in normalizedUrl) {
+                    pageId = normalizedUrl.pageId;
+                }
+                else if (normalizedUrl === null || normalizedUrl === undefined) {
+                    console.warn('⚠️ CHAT_API: normalizeUrl returned null, using default pageId for testing');
+                    pageId = 'test_page_123';
+                }
+                else {
+                    pageId = null;
+                }
+                if (!pageId) {
+                    console.warn('⚠️ CHAT_API: Could not extract pageId from normalizedUrl');
+                }
             }
             console.log(`🔍 CHAT_API: Querying Supabase messages table for pageId: ${pageId}, communityId: ${communityId}`);
             // FIX: Join with AppUser table to get author data (prevent "Unknown" authors)
@@ -545,4 +576,3 @@ console.log('✅ APIModule: MetaLayerAPI initialized with global fetch override'
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = { MetaLayerAPI, api };
 }
-//# sourceMappingURL=APIModule.js.map

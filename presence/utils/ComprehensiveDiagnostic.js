@@ -90,8 +90,10 @@ class ComprehensiveDiagnostic {
             section.loadChatHistoryAvailable = typeof window.loadChatHistory === 'function';
             console.log('🔍 DIAGNOSTIC: loadChatHistory available:', section.loadChatHistoryAvailable);
             // Check active communities
-            const communities = await window.stateManager?.get('communities') || [];
-            const activeCommunities = await window.stateManager?.get('ui.activeCommunities') || [];
+            const communitiesRaw = await window.stateManager?.get('communities');
+            const communities = Array.isArray(communitiesRaw) ? communitiesRaw : [];
+            const activeCommunitiesRaw = await window.stateManager?.get('ui.activeCommunities');
+            const activeCommunities = Array.isArray(activeCommunitiesRaw) ? activeCommunitiesRaw : [];
             section.communities = communities.length;
             section.activeCommunities = activeCommunities;
             section.activeCommunitiesCount = activeCommunities.length;
@@ -128,7 +130,7 @@ class ComprehensiveDiagnostic {
             }
             // Check Supabase client
             section.supabaseAvailable = typeof window.supabase !== 'undefined' && window.supabase !== null;
-            section.supabaseFromAvailable = section.supabaseAvailable && typeof window.supabase.from === 'function';
+            section.supabaseFromAvailable = section.supabaseAvailable && window.supabase && typeof window.supabase.from === 'function';
             console.log('🔍 DIAGNOSTIC: Supabase available:', section.supabaseAvailable);
             console.log('🔍 DIAGNOSTIC: Supabase.from available:', section.supabaseFromAvailable);
             // Check DOM elements
@@ -216,7 +218,7 @@ class ComprehensiveDiagnostic {
                     const users = await window.supabaseRealtimeClient.getPageUsers(pageId);
                     section.pageUsers = {
                         count: users?.length || 0,
-                        users: users,
+                        users: users ? users.map(u => ({ ...u })) : [],
                         working: true
                     };
                     console.log('✅ DIAGNOSTIC: getPageUsers working, found users:', users?.length || 0);
@@ -288,6 +290,8 @@ class ComprehensiveDiagnostic {
                     const urlData = await window.normalizeCurrentUrl?.() || {};
                     const pageId = urlData.pageId || 'google_com_';
                     console.log('🔍 DIAGNOSTIC: Testing messages query with pageId:', pageId);
+                    if (!window.supabase)
+                        return;
                     const messagesQuery = window.supabase
                         .from('messages')
                         .select('*')
@@ -315,6 +319,8 @@ class ComprehensiveDiagnostic {
                     const urlData = await window.normalizeCurrentUrl?.() || {};
                     const pageId = urlData.pageId || 'google_com_';
                     console.log('🔍 DIAGNOSTIC: Testing presence query with pageId:', pageId);
+                    if (!window.supabase)
+                        return;
                     const presenceQuery = window.supabase
                         .from('presence')
                         .select('*')

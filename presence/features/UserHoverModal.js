@@ -381,7 +381,11 @@ class UserHoverModal {
      */
     findUserByAvatarUrl(avatarUrl) {
         if (window.currentVisibilityDataUnfiltered && window.currentVisibilityDataUnfiltered.active) {
-            return window.currentVisibilityDataUnfiltered.active.find((u) => u.avatarUrl === avatarUrl || (u.avatarUrl && avatarUrl.includes(u.avatarUrl.split('/').pop())));
+            const found = window.currentVisibilityDataUnfiltered.active.find((u) => {
+                const uAvatarUrl = typeof u.avatarUrl === 'string' ? u.avatarUrl : undefined;
+                return uAvatarUrl === avatarUrl || (uAvatarUrl && typeof avatarUrl === 'string' && avatarUrl.includes(uAvatarUrl.split('/').pop() || ''));
+            });
+            return found ? { id: found.id } : null;
         }
         return null;
     }
@@ -480,14 +484,15 @@ class UserHoverModal {
         if (window.currentVisibilityDataUnfiltered && window.currentVisibilityDataUnfiltered.active) {
             const userInVisibility = window.currentVisibilityDataUnfiltered.active.find((u) => (u.id === userId || u.userId === userId || u.user_id === userId));
             if (userInVisibility) {
+                const legacyUser = userInVisibility;
                 userData = {
-                    id: userInVisibility.id || userInVisibility.userId || userInVisibility.user_id || '',
-                    name: userInVisibility.name || userInVisibility.handle || 'Unknown User',
-                    displayName: userInVisibility.displayName || userInVisibility.display_name || null,
+                    id: userInVisibility.id || legacyUser.userId || legacyUser.user_id || '',
+                    name: userInVisibility.name || legacyUser.handle || 'Unknown User',
+                    displayName: userInVisibility.displayName || legacyUser.display_name || null,
                     avatarUrl: userInVisibility.avatarUrl,
-                    auraColor: userInVisibility.auraColor || userInVisibility.aura_color,
-                    headline: userInVisibility.headline || null,
-                    communities: userInVisibility.communities
+                    auraColor: userInVisibility.auraColor || legacyUser.aura_color,
+                    headline: legacyUser.headline || null,
+                    communities: legacyUser.communities
                 };
             }
         }
@@ -499,13 +504,15 @@ class UserHoverModal {
                 });
                 if (response) {
                     // Merge API data with visibility data (API takes precedence)
+                    const responseData = response;
                     userData = {
-                        id: response.id || userId,
-                        name: response.name || userData?.name || 'Unknown User',
-                        displayName: response.displayName || response.display_name || userData?.displayName || null,
-                        avatarUrl: response.avatar_url || response.avatarUrl || userData?.avatarUrl,
-                        auraColor: response.aura_color || response.auraColor || userData?.auraColor,
-                        headline: response.headline || userData?.headline || null
+                        id: (typeof responseData.id === 'string' ? responseData.id : undefined) || userId,
+                        name: (typeof responseData.name === 'string' ? responseData.name : undefined) || userData?.name || 'Unknown User',
+                        displayName: (typeof responseData.displayName === 'string' ? responseData.displayName : undefined) || (typeof responseData.display_name === 'string' ? responseData.display_name : undefined) || userData?.displayName || null,
+                        avatarUrl: (typeof responseData.avatar_url === 'string' ? responseData.avatar_url : undefined) || (typeof responseData.avatarUrl === 'string' ? responseData.avatarUrl : undefined) || userData?.avatarUrl,
+                        auraColor: (typeof responseData.aura_color === 'string' ? responseData.aura_color : undefined) || (typeof responseData.auraColor === 'string' ? responseData.auraColor : undefined) || userData?.auraColor,
+                        headline: (typeof responseData.headline === 'string' ? responseData.headline : undefined) || userData?.headline || null,
+                        communities: (Array.isArray(responseData.communities) ? responseData.communities : undefined) || userData?.communities
                     };
                 }
             }
@@ -517,7 +524,7 @@ class UserHoverModal {
                 }
             }
         }
-        return userData;
+        return userData || null;
     }
     /**
      * Update modal content with user data
@@ -637,8 +644,9 @@ class UserHoverModal {
                 const response = await window.api.request(`/communities/mutual?userId1=${encodeURIComponent(this.currentUserId)}&userId2=${encodeURIComponent(userId)}`, {
                     method: 'GET'
                 });
-                if (response && response.communities && Array.isArray(response.communities)) {
-                    const mutualCommunities = response.communities;
+                const responseData = response;
+                if (responseData && Array.isArray(responseData.communities)) {
+                    const mutualCommunities = responseData.communities;
                     // Display mutual communities
                     if (mutualCommunities.length === 0) {
                         communitiesListEl.innerHTML = '<div class="user-hover-loading">No mutual communities</div>';
@@ -695,9 +703,10 @@ class UserHoverModal {
             // Try to get from visibility data first (if user is visible)
             if (window.currentVisibilityDataUnfiltered && window.currentVisibilityDataUnfiltered.active) {
                 const userInVisibility = window.currentVisibilityDataUnfiltered.active.find((u) => (u.id === userId || u.userId === userId || u.user_id === userId));
-                if (userInVisibility && userInVisibility.communities && Array.isArray(userInVisibility.communities)) {
-                    console.log('✅ USER_HOVER_MODAL: Got communities from visibility data:', userInVisibility.communities.length);
-                    return userInVisibility.communities;
+                const legacyUser = userInVisibility;
+                if (legacyUser && Array.isArray(legacyUser.communities)) {
+                    console.log('✅ USER_HOVER_MODAL: Got communities from visibility data:', legacyUser.communities.length);
+                    return legacyUser.communities;
                 }
             }
             // Try the communities endpoint
@@ -711,8 +720,9 @@ class UserHoverModal {
                     return response;
                 }
                 // If response is an object with communities array
-                if (response && response.communities && Array.isArray(response.communities) && response.communities.length > 0) {
-                    return response.communities;
+                const responseData2 = response;
+                if (responseData2 && Array.isArray(responseData2.communities) && responseData2.communities.length > 0) {
+                    return responseData2.communities;
                 }
             }
             // Fallback: Try to get from user data if available

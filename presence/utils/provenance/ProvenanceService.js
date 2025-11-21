@@ -173,9 +173,10 @@ class ProvenanceService {
      */
     attachListeners() {
         // Intercept window.sendMessageViaSupabase if it exists
-        if (typeof window.sendMessageViaSupabase === 'function') {
-            const original = window.sendMessageViaSupabase;
-            window.sendMessageViaSupabase = async (...args) => {
+        const sendMessageWindow = window;
+        if (typeof sendMessageWindow.sendMessageViaSupabase === 'function') {
+            const original = sendMessageWindow.sendMessageViaSupabase;
+            sendMessageWindow.sendMessageViaSupabase = (async (...args) => {
                 const result = await original.apply(this, args);
                 // Capture provenance after message is sent
                 if (result && result.id) {
@@ -184,37 +185,37 @@ class ProvenanceService {
                     });
                 }
                 return result;
-            };
+            });
             this.listeners.push({ type: 'intercept', target: 'sendMessageViaSupabase' });
         }
         // Intercept handleDeleteMessage if it exists
-        if (typeof window.handleDeleteMessage === 'function') {
-            const original = window.handleDeleteMessage;
-            window.handleDeleteMessage = async (...args) => {
-                const message = args[0];
-                const result = await original.apply(this, args);
+        const deleteMessageWindow = window;
+        if (typeof deleteMessageWindow.handleDeleteMessage === 'function') {
+            const original = deleteMessageWindow.handleDeleteMessage;
+            deleteMessageWindow.handleDeleteMessage = (async (message, ...args) => {
+                const result = await original.apply(this, [message, ...args]);
                 if (message && message.id) {
                     this.captureMessageProvenance('delete', message).catch(err => {
                         console.warn('[Provenance] Failed to capture delete provenance:', err);
                     });
                 }
                 return result;
-            };
+            });
             this.listeners.push({ type: 'intercept', target: 'handleDeleteMessage' });
         }
         // Listen for message updates via updateMessageInChat
-        if (typeof window.updateMessageInChat === 'function') {
-            const original = window.updateMessageInChat;
-            window.updateMessageInChat = (...args) => {
-                const message = args[0];
-                const result = original.apply(this, args);
+        const updateMessageWindow = window;
+        if (typeof updateMessageWindow.updateMessageInChat === 'function') {
+            const original = updateMessageWindow.updateMessageInChat;
+            updateMessageWindow.updateMessageInChat = ((message, ...args) => {
+                const result = original.apply(this, [message, ...args]);
                 if (message && message.id) {
                     this.captureMessageProvenance('update', message).catch(err => {
                         console.warn('[Provenance] Failed to capture update provenance:', err);
                     });
                 }
                 return result;
-            };
+            });
             this.listeners.push({ type: 'intercept', target: 'updateMessageInChat' });
         }
         console.log('[Provenance] Attached', this.listeners.length, 'listeners');
@@ -444,7 +445,7 @@ class ProvenanceService {
 }
 // Export singleton instance
 if (typeof window !== 'undefined') {
-    window.provenanceService = new ProvenanceService();
+    Object.assign(window, { provenanceService: new ProvenanceService() });
     console.log('[Provenance] Service available at window.provenanceService');
 }
 export default ProvenanceService;

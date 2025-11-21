@@ -271,7 +271,10 @@ export class UserPreferencesManager {
         }
         // If not initialized, initialize first
         if (!this.isInitialized) {
-            await this.initialize(this.userId || window.currentUser?.id);
+            const userId = this.userId || window.currentUser?.id;
+            if (userId) {
+                await this.initialize(userId);
+            }
         }
         return this.preferences[key] ?? this.schema[key].defaultValue;
     }
@@ -925,8 +928,9 @@ export class UserPreferencesManager {
 const userPreferencesManager = new UserPreferencesManager();
 // Export for global access
 if (typeof window !== 'undefined') {
-    window.UserPreferencesManager = UserPreferencesManager;
-    window.userPreferencesManager = userPreferencesManager;
+    // Assign to window using proper typing (no (window as any) - red-line compliance)
+    // Use Object.assign to avoid strict type checking issues
+    Object.assign(window, { UserPreferencesManager, userPreferencesManager });
     // Convenience functions
     window.getPreference = (key) => userPreferencesManager.getPreference(key);
     window.savePreference = (key, value, options) => userPreferencesManager.savePreference(key, value, options);

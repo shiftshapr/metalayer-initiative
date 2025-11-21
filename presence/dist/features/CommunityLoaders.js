@@ -87,7 +87,7 @@ export async function loadCommunities() {
             for (let i = 0; i < 10; i++) {
                 await new Promise(resolve => setTimeout(resolve, 100));
                 storedCommunities = getState('ui.activeCommunities');
-                if (storedCommunities && storedCommunities.length > 0) {
+                if (storedCommunities && Array.isArray(storedCommunities) && storedCommunities.length > 0) {
                     console.log('✅ INIT: Active communities confirmed in StateManager:', storedCommunities);
                     break;
                 }
@@ -158,4 +158,3 @@ export default {
     loadCommunities,
     loadCombinedAvatars
 };
-//# sourceMappingURL=CommunityLoaders.js.map

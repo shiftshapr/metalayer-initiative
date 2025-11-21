@@ -44,10 +44,11 @@ find . -maxdepth 1 -name "*.ts" -type f | while read file; do
   move_to_archive "$file"
 done
 
-# Remove dist/ directory (compiled files should be in presence/ root, not dist/)
-if [ -d "dist" ]; then
-  echo "📁 Archiving dist/ directory (compiled files should be in root)..."
-  move_to_archive "dist"
+# Keep dist/ directory (compiled files should be in dist/, not root)
+# Only remove if it's empty or contains old structure
+if [ -d "dist" ] && [ -d "dist/src" ]; then
+  echo "📁 Archiving old dist/src structure..."
+  move_to_archive "dist/src"
 fi
 
 # Remove build scripts

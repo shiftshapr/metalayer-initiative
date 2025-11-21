@@ -702,15 +702,17 @@ export const toggleTheme = () => uiManagerInstance.toggleTheme();
 export default uiManagerInstance;
 if (typeof window !== 'undefined') {
     const win = window;
-    win.UIManager = UIManager;
-    win.uiManager = uiManagerInstance;
-    win.updateVisualHierarchy = updateVisualHierarchy;
-    win.debugHierarchy = debugHierarchy;
-    win.forceRefreshCSS = forceRefreshCSS;
-    win.autoResize = (textarea) => autoResize(textarea);
-    win.setupTabNavigation = setupTabNavigation;
-    win.setupMessageInputEventListeners = setupMessageInputEventListeners;
-    win.initializeTheme = initializeTheme;
-    win.setTheme = setTheme;
-    win.toggleTheme = toggleTheme;
+    Object.assign(win, {
+        UIManager,
+        uiManager: uiManagerInstance,
+        updateVisualHierarchy,
+        debugHierarchy,
+        forceRefreshCSS,
+        autoResize: (textarea) => autoResize(textarea),
+        setupTabNavigation,
+        setupMessageInputEventListeners,
+        initializeTheme,
+        setTheme,
+        toggleTheme
+    });
 }

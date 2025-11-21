@@ -101,49 +101,63 @@ const resolveAuthorFromPayload = (rawMessage, authorId) => {
 const normalizeMessagePayload = (rawMessage) => {
     const urlData = getCurrentUrlData();
     const fallbackCommunities = getActiveCommunities();
+    // Type-safe access to AppUser property
+    const appUser = rawMessage.AppUser;
     const resolvedAuthorId = rawMessage.authorId ||
         rawMessage.author?.id ||
         rawMessage.userId ||
-        rawMessage.user_id ||
-        rawMessage.AppUser?.id ||
+        (typeof rawMessage.user_id === 'string' ? rawMessage.user_id : undefined) ||
+        appUser?.id ||
         getCurrentUser()?.id ||
         'unknown-user';
+    // Type-safe access to string properties
+    const getStringValue = (value) => {
+        return typeof value === 'string' ? value : undefined;
+    };
+    const getStringOrDate = (value) => {
+        if (value instanceof Date)
+            return value;
+        if (typeof value === 'string')
+            return value;
+        return new Date().toISOString();
+    };
     const normalized = {
         id: String(rawMessage.id ||
             rawMessage.messageId ||
-            rawMessage.uuid ||
+            getStringValue(rawMessage.uuid) ||
             globalThis.crypto?.randomUUID?.() ||
             `message-${Date.now()}`),
         content: ensureMessageContent({
-            content: rawMessage.content ?? rawMessage.body ?? rawMessage.message ?? ''
+            content: (rawMessage.content ?? rawMessage.body ?? getStringValue(rawMessage.message) ?? '')
         }),
-        parentId: rawMessage.parentId ?? rawMessage.parent_id ?? rawMessage.replyTo ?? null,
+        parentId: rawMessage.parentId ?? getStringValue(rawMessage.parent_id) ?? getStringValue(rawMessage.replyTo) ?? null,
         authorId: String(resolvedAuthorId),
         author: resolveAuthorFromPayload(rawMessage, String(resolvedAuthorId)),
         communityId: String(rawMessage.communityId ||
-            rawMessage.community_id ||
+            getStringValue(rawMessage.community_id) ||
             fallbackCommunities[0] ||
             'comm-001'),
         conversationId: rawMessage.conversationId ??
-            rawMessage.conversation_id ??
+            getStringValue(rawMessage.conversation_id) ??
             rawMessage.threadId ??
-            rawMessage.thread_id ??
+            getStringValue(rawMessage.thread_id) ??
             undefined,
-        pageId: rawMessage.pageId ?? rawMessage.page_id ?? urlData?.pageId,
+        pageId: rawMessage.pageId ?? getStringValue(rawMessage.page_id) ?? urlData?.pageId,
         rawUrl: rawMessage.rawUrl ?? urlData?.rawUrl ?? null,
         normalizedUrl: rawMessage.normalizedUrl ?? urlData?.normalizedUrl ?? null,
-        createdAt: rawMessage.createdAt ?? rawMessage.created_at ?? rawMessage.timestamp ?? new Date().toISOString(),
-        updatedAt: rawMessage.updatedAt ??
+        createdAt: getStringOrDate(rawMessage.createdAt ??
+            rawMessage.created_at ??
+            rawMessage.timestamp),
+        updatedAt: getStringOrDate(rawMessage.updatedAt ??
             rawMessage.updated_at ??
             rawMessage.modified_at ??
             rawMessage.createdAt ??
-            rawMessage.created_at ??
-            new Date().toISOString(),
+            rawMessage.created_at),
         reactions: Array.isArray(rawMessage.reactions) ? rawMessage.reactions : [],
-        optionalContent: rawMessage.optionalContent ?? rawMessage.optional_content ?? null,
-        uri: rawMessage.uri ?? rawMessage.url ?? rawMessage.messageUrl ?? null,
-        threadId: rawMessage.threadId ?? rawMessage.thread_id ?? undefined,
-        deletedAt: rawMessage.deletedAt ?? rawMessage.deleted_at ?? null,
+        optionalContent: getStringValue(rawMessage.optionalContent) ?? getStringValue(rawMessage.optional_content) ?? null,
+        uri: rawMessage.uri ?? getStringValue(rawMessage.url) ?? getStringValue(rawMessage.messageUrl) ?? null,
+        threadId: rawMessage.threadId ?? getStringValue(rawMessage.thread_id) ?? undefined,
+        deletedAt: rawMessage.deletedAt ? getStringOrDate(rawMessage.deletedAt) : (getStringValue(rawMessage.deleted_at) ? getStringOrDate(rawMessage.deleted_at) : null),
         isBookmarked: rawMessage.isBookmarked,
         bookmarkCount: rawMessage.bookmarkCount,
         shareCount: rawMessage.shareCount,
@@ -454,7 +468,11 @@ function getSenderName(userId) {
     }
     // Try to get from visibility data
     const visibilityData = stateManagerInstance.getState('currentVisibilityData');
-    const activeUsers = Array.isArray(visibilityData) ? visibilityData : visibilityData?.active || [];
+    const activeUsers = Array.isArray(visibilityData)
+        ? visibilityData
+        : (visibilityData && typeof visibilityData === 'object' && 'active' in visibilityData && Array.isArray(visibilityData.active))
+            ? (visibilityData.active)
+            : [];
     const user = activeUsers.find((u) => u.id === userId);
     if (user) {
         return user.name || user.email?.split('@')[0] || 'Unknown User';
@@ -609,17 +627,19 @@ async function loadMessageReactions(messageId, reactionBtn) {
         // First try to get reactions from stored reactions data if available
         let reactions = [];
         // Use API to fetch reactions
-        if (typeof window !== 'undefined' && window.api && typeof window.api?.getReactions === 'function') {
-            const api = window.api;
-            const response = await api.getReactions(messageId);
+        const windowApi = typeof window !== 'undefined' ? window.api : undefined;
+        if (windowApi && typeof windowApi.getReactions === 'function') {
+            const response = await windowApi.getReactions(messageId);
             if (response && response.data) {
                 reactions = Array.isArray(response.data) ? response.data : [];
             }
         }
-        else if (typeof window !== 'undefined' && window.supabase) {
+        else if (typeof window !== 'undefined') {
             // Fallback: query Supabase directly
-            const supabase = window.supabase;
-            const { data: supabaseReactions, error } = await supabase
+            const windowSupabase = window.supabase;
+            if (!windowSupabase)
+                return;
+            const { data: supabaseReactions, error } = await windowSupabase
                 .from('reactions')
                 .select('*')
                 .eq('message_id', messageId);
@@ -828,6 +848,8 @@ async function handleMessageFocus(messageOrId) {
             parentMessage: result.parent,
             highlightMessageId: message.id,
             onMessageClick: (msg) => {
+                if (!msg.author)
+                    return;
                 const legacyMessage = {
                     id: msg.id,
                     content: msg.content,
@@ -841,21 +863,23 @@ async function handleMessageFocus(messageOrId) {
                 handleMessageFocus(legacyMessage);
             },
             onReplyClick: (msg) => {
-                if (legacyContext.setReplyContext) {
-                    const legacyMessage = {
-                        id: msg.id,
-                        content: msg.content,
-                        authorId: msg.author.id,
-                        communityId: communityId,
-                        parentId: msg.parentId || null,
-                        author: msg.author,
-                        createdAt: msg.createdAt,
-                        updatedAt: msg.updatedAt
-                    };
-                    legacyContext.setReplyContext(msg.id, legacyMessage);
-                }
+                if (!msg.author || !legacyContext.setReplyContext)
+                    return;
+                const legacyMessage = {
+                    id: msg.id,
+                    content: msg.content,
+                    authorId: msg.author.id,
+                    communityId: communityId,
+                    parentId: msg.parentId || null,
+                    author: msg.author,
+                    createdAt: msg.createdAt,
+                    updatedAt: msg.updatedAt
+                };
+                legacyContext.setReplyContext(msg.id, legacyMessage);
             },
             onFocusClick: (msg) => {
+                if (!msg.author)
+                    return;
                 const legacyMessage = {
                     id: msg.id,
                     content: msg.content,
@@ -954,6 +978,8 @@ async function loadChatHistory(communityIdOrRawUrl, activeCommunitiesOrUndefined
         await unifiedMessageDisplay.render(messages, chatMessages, {
             focusContext: 'default',
             onMessageClick: (message) => {
+                if (!message.author)
+                    return;
                 // Convert MessageStoreMessage to Message for handleMessageFocus
                 const legacyMessage = {
                     id: message.id,
@@ -968,21 +994,23 @@ async function loadChatHistory(communityIdOrRawUrl, activeCommunitiesOrUndefined
                 handleMessageFocus(legacyMessage);
             },
             onReplyClick: (message) => {
-                if (legacyContext.setReplyContext) {
-                    const legacyMessage = {
-                        id: message.id,
-                        content: message.content,
-                        authorId: message.author.id,
-                        communityId: communityId,
-                        parentId: message.parentId || null,
-                        author: message.author,
-                        createdAt: message.createdAt,
-                        updatedAt: message.updatedAt
-                    };
-                    legacyContext.setReplyContext(message.id, legacyMessage);
-                }
+                if (!message.author || !legacyContext.setReplyContext)
+                    return;
+                const legacyMessage = {
+                    id: message.id,
+                    content: message.content,
+                    authorId: message.author.id,
+                    communityId: communityId,
+                    parentId: message.parentId || null,
+                    author: message.author,
+                    createdAt: message.createdAt,
+                    updatedAt: message.updatedAt
+                };
+                legacyContext.setReplyContext(message.id, legacyMessage);
             },
             onFocusClick: (message) => {
+                if (!message.author)
+                    return;
                 const legacyMessage = {
                     id: message.id,
                     content: message.content,
@@ -997,7 +1025,7 @@ async function loadChatHistory(communityIdOrRawUrl, activeCommunitiesOrUndefined
             }
         });
         // Store messages in cache (convert to legacy format for compatibility with existing code)
-        const legacyMessages = messages.map((msg) => ({
+        const legacyMessages = messages.filter((msg) => msg.author).map((msg) => ({
             id: msg.id,
             content: msg.content,
             authorId: msg.author.id,

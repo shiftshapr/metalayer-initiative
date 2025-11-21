@@ -231,10 +231,14 @@ function registerModernComponents() {
       this.initialized = false;
     },
     updateAuraColor(color) {
-      // Profile avatar now uses unified avatar system - just update window.currentUser and refresh
-      if (window.currentUser) {
-        window.currentUser.auraColor = color;
-        updateUI(window.currentUser);
+      // ROOT CAUSE FIX: Use stateManager (TypeScript migration - no window.currentUser)
+      const currentUser = window.stateManagerInstance?.getState?.('currentUser');
+      if (currentUser) {
+        const updatedUser = { ...currentUser, auraColor: color };
+        if (window.stateManagerInstance?.setState) {
+          window.stateManagerInstance.setState('currentUser', updatedUser);
+        }
+        updateUI(updatedUser);
       }
     }
   });
@@ -526,10 +530,14 @@ window.handleAuraChange = async function(auraChangeData) {
       }
     }
     
-    // COMP METHOD: Update window.currentUser if it's the current user
-    if (window.currentUser && (window.currentUser.id || window.currentUser.user_id) === String(userId)) {
-      window.currentUser.aura_color = auraColor;
-      console.log('✅ COMP METHOD: Updated window.currentUser.aura_color');
+    // ROOT CAUSE FIX: Update stateManager if it's the current user (TypeScript migration - no window.currentUser)
+    const currentUser = window.stateManagerInstance?.getState?.('currentUser');
+    if (currentUser && (currentUser.id || currentUser.user_id) === String(userId)) {
+      const updatedUser = { ...currentUser, aura_color: auraColor, auraColor: auraColor };
+      if (window.stateManagerInstance?.setState) {
+        window.stateManagerInstance.setState('currentUser', updatedUser);
+      }
+      console.log('✅ ROOT CAUSE FIX: Updated stateManager.currentUser.auraColor');
     }
     
     // COMP METHOD: Refresh all message avatars to propagate aura color
@@ -549,9 +557,10 @@ window.handleAuraChange = async function(auraChangeData) {
       await refreshVisibilityAvatars();
     }
     
-    // COMP METHOD: Refresh profile avatar if it's the current user
+    // ROOT CAUSE FIX: Refresh profile avatar if it's the current user (TypeScript migration - no window.currentUser)
     // COMP METHOD: Skip visibility refresh since we already called updateVisibleTab above
-    if (window.currentUser && (window.currentUser.id || window.currentUser.user_id) === String(userId)) {
+    const currentUserForProfile = window.stateManagerInstance?.getState?.('currentUser');
+    if (currentUserForProfile && (currentUserForProfile.id || currentUserForProfile.user_id) === String(userId)) {
       if (typeof window.updateUserAuraInUI === 'function') {
         console.log('🔄 COMP METHOD: Refreshing profile avatar for current user');
         await window.updateUserAuraInUI(userId, auraColor);
@@ -852,11 +861,12 @@ async function updateUI(user) {
       }
     }
     
-    // ROOT CAUSE FIX: Preserve existing UUID from window.currentUser (always a UUID from AppUser table)
+    // ROOT CAUSE FIX: Preserve existing UUID from stateManager (always a UUID from AppUser table)
     // user.id might be from Supabase auth (Google ID), so don't use it - AuthModule fetches AppUser UUID
-    const existingUuid = window.currentUser?.id;
+    const existingUser = window.stateManagerInstance?.getState?.('currentUser');
+    const existingUuid = existingUser?.id;
     
-    window.currentUser = {
+    const userData = {
       id: existingUuid || null, // Keep existing UUID if set, otherwise null (AuthModule will fetch it)
       user_id: existingUuid || null,
       email: user.email,
@@ -865,6 +875,11 @@ async function updateUI(user) {
       avatarUrl: avatarUrl,
       communityId: 'comm-001'
     };
+    
+    // ROOT CAUSE FIX: Update stateManager (TypeScript migration - no window.currentUser)
+    if (window.stateManagerInstance?.setState) {
+      window.stateManagerInstance.setState('currentUser', userData);
+    }
     
     // User is logged in - show user info
     console.log('[UPDATE_UI] Setting userInfoDiv display to flex');
@@ -1448,9 +1463,7 @@ function clearContext() {
   }
   
   if (chatInput) {
-    // COMP METHOD: Clear all context data - use replyingTo only
-    delete chatInput.dataset.replyingTo;
-    delete chatInput.dataset.replyToConversation;
+    // Clear edit mode context data (reply mode now uses UnifiedMessageModal)
     delete chatInput.dataset.editingMessageId;
     delete chatInput.dataset.contextMode;
     
@@ -2949,7 +2962,7 @@ window.api = window.api || null;
 window.supabaseRealtimeClient = window.supabaseRealtimeClient || null;
 
 // Global state variables
-window.currentUser = window.currentUser || null;
+// ROOT CAUSE FIX: Removed window.currentUser - use stateManager instead (TypeScript migration)
 window.currentUrlData = window.currentUrlData || null;
 window.currentVisibilityData = window.currentVisibilityData || null;
 window.currentVisibilityDataUnfiltered = window.currentVisibilityDataUnfiltered || null;
@@ -3255,7 +3268,7 @@ function initializeSidepanel() {
           
           // ROOT CAUSE FIX: Start with null - backend will return AppUser UUID after first API call
           // APIModule will validate UUID format before sending as header
-          window.currentUser = {
+          const userData = {
             id: null, // Will be set to real AppUser UUID after first API call returns it
             user_id: null,
             email: currentUserEmail,
@@ -3265,9 +3278,14 @@ function initializeSidepanel() {
             user_metadata: storedUser?.user_metadata || storedSession?.user?.user_metadata || null
           };
           
+          // ROOT CAUSE FIX: Update stateManager (TypeScript migration - no window.currentUser)
+          if (window.stateManagerInstance?.setState) {
+            window.stateManagerInstance.setState('currentUser', userData);
+          }
+          
           // COMPREHENSIVE USER IDENTITY LOGGING
-          console.log('🔍 USER_IDENTITY: === WINDOW.CURRENTUSER ASSIGNMENT TRACE ===');
-          console.log('🔍 USER_IDENTITY: window.currentUser assigned:');
+          console.log('🔍 USER_IDENTITY: === STATEMANAGER.CURRENTUSER ASSIGNMENT TRACE ===');
+          console.log('🔍 USER_IDENTITY: stateManager.currentUser assigned:');
           console.log('🔍 USER_IDENTITY: window.currentUser.email:', window.currentUser.email);
           console.log('🔍 USER_IDENTITY: window.currentUser.name:', window.currentUser.name);
           console.log('🔍 USER_IDENTITY: window.currentUser.id:', window.currentUser.id);

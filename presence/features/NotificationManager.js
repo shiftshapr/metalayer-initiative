@@ -51,7 +51,7 @@ export class NotificationManager {
             this.logger.info('NotificationManager initialized successfully');
         }
         catch (error) {
-            this.logger.error('Failed to initialize NotificationManager:', error);
+            this.logger.error('Failed to initialize NotificationManager', error);
             throw error;
         }
     }
@@ -169,7 +169,7 @@ export class NotificationManager {
             this.emitEvent('settings:changed', { settings: this.settings });
         }
         catch (error) {
-            this.logger.error('Error setting notification enabled state:', error);
+            this.logger.error('Error setting notification enabled state', error);
             throw error;
         }
     }
@@ -219,7 +219,7 @@ export class NotificationManager {
             return notification;
         }
         catch (error) {
-            this.logger.error('Error showing notification:', error);
+            this.logger.error('Error showing notification', error);
             throw error;
         }
     }
@@ -270,7 +270,7 @@ export class NotificationManager {
                 await this.delay(500); // Stagger notifications
             }
             catch (error) {
-                this.logger.error('Error processing queued notification:', error);
+                this.logger.error('Error processing queued notification', error);
             }
         }
         // Clear queue
@@ -348,7 +348,7 @@ export class NotificationManager {
             this.logger.info('Desktop notification shown:', notification.title);
         }
         catch (error) {
-            this.logger.error('Error showing desktop notification:', error);
+            this.logger.error('Error showing desktop notification', error);
         }
     }
     /**
@@ -369,7 +369,7 @@ export class NotificationManager {
             }
         }
         catch (error) {
-            this.logger.error('Error handling notification click:', error);
+            this.logger.error('Error handling notification click', error);
         }
     }
     /**
@@ -405,7 +405,7 @@ export class NotificationManager {
             this.emitEvent('anchor:navigated', { anchor });
         }
         catch (error) {
-            this.logger.error('Error navigating to anchor:', error);
+            this.logger.error('Error navigating to anchor', error);
         }
     }
     /**
@@ -431,7 +431,7 @@ export class NotificationManager {
             return false;
         }
         catch (error) {
-            this.logger.error('Error requesting notification permission:', error);
+            this.logger.error('Error requesting notification permission', error);
             return false;
         }
     }
@@ -467,7 +467,7 @@ export class NotificationManager {
             this.logger.info('Settings updated');
         }
         catch (error) {
-            this.logger.error('Error updating settings:', error);
+            this.logger.error('Error updating settings', error);
             throw error;
         }
     }
@@ -548,7 +548,7 @@ export class NotificationManager {
             }
         }
         catch (error) {
-            this.logger.error('Error marking notification as read:', error);
+            this.logger.error('Error marking notification as read', error);
         }
     }
     /**
@@ -564,7 +564,7 @@ export class NotificationManager {
             this.logger.info('All notifications marked as read');
         }
         catch (error) {
-            this.logger.error('Error marking all notifications as read:', error);
+            this.logger.error('Error marking all notifications as read', error);
         }
     }
     /**
@@ -578,7 +578,7 @@ export class NotificationManager {
             this.logger.info('All notifications cleared');
         }
         catch (error) {
-            this.logger.error('Error clearing notifications:', error);
+            this.logger.error('Error clearing notifications', error);
         }
     }
     /**
@@ -657,7 +657,7 @@ export class NotificationManager {
             });
         }
         catch (error) {
-            this.logger.debug('Could not play notification sound:', error);
+            this.logger.debug('Could not play notification sound', error);
         }
     }
     /**
@@ -673,7 +673,7 @@ export class NotificationManager {
             url: data.url,
             anchor: data.anchor,
             contentAnchor: data.contentAnchor,
-            priority: data.priority || typeConfig?.priority || 'medium',
+            priority: (data.priority || typeConfig?.priority || 'medium'),
             timestamp: data.timestamp || Date.now(),
             read: data.read || false,
             queued: data.queued || false,
@@ -726,11 +726,12 @@ export class NotificationManager {
     async loadSettings() {
         try {
             const result = await chrome.storage.local.get(this.storageKey);
-            this.settings = result[this.storageKey] || this.getDefaultSettings();
+            const storedSettings = result[this.storageKey];
+            this.settings = storedSettings || this.getDefaultSettings();
             this.logger.info('Settings loaded');
         }
         catch (error) {
-            this.logger.error('Error loading settings:', error);
+            this.logger.error('Error loading settings', error);
             this.settings = this.getDefaultSettings();
         }
     }
@@ -743,7 +744,7 @@ export class NotificationManager {
             this.logger.info('Settings saved');
         }
         catch (error) {
-            this.logger.error('Error saving settings:', error);
+            this.logger.error('Error saving settings', error);
         }
     }
     /**
@@ -761,7 +762,7 @@ export class NotificationManager {
             };
             return acc;
         }, {});
-        return {
+        const defaultSettings = {
             enabled: true,
             sound: true,
             desktop: true,
@@ -778,6 +779,7 @@ export class NotificationManager {
                 maxQueueSize: 50
             }
         };
+        return defaultSettings;
     }
     /**
      * Load history from storage
@@ -789,7 +791,7 @@ export class NotificationManager {
             this.logger.info(`Loaded ${this.history.length} notifications from history`);
         }
         catch (error) {
-            this.logger.error('Error loading history:', error);
+            this.logger.error('Error loading history', error);
             this.history = [];
         }
     }
@@ -801,7 +803,7 @@ export class NotificationManager {
             await chrome.storage.local.set({ [this.historyKey]: this.history });
         }
         catch (error) {
-            this.logger.error('Error saving history:', error);
+            this.logger.error('Error saving history', error);
         }
     }
     /**
@@ -814,7 +816,7 @@ export class NotificationManager {
             this.logger.info(`Loaded ${this.queue.length} queued notifications`);
         }
         catch (error) {
-            this.logger.error('Error loading queue:', error);
+            this.logger.error('Error loading queue', error);
             this.queue = [];
         }
     }
@@ -826,7 +828,7 @@ export class NotificationManager {
             await chrome.storage.local.set({ [this.queueKey]: this.queue });
         }
         catch (error) {
-            this.logger.error('Error saving queue:', error);
+            this.logger.error('Error saving queue', error);
         }
     }
     /**
@@ -882,7 +884,7 @@ export class NotificationManager {
                     callback(payload);
                 }
                 catch (error) {
-                    this.logger.error(`Error in event listener for ${event}:`, error);
+                    this.logger.error(`Error in event listener for ${event}`, error);
                 }
             });
         }
@@ -952,7 +954,7 @@ export class NotificationManager {
             return true;
         }
         catch (error) {
-            this.logger.error('Error checking subscription:', error);
+            this.logger.error('Error checking subscription', error);
             return true; // Allow notification on error
         }
     }

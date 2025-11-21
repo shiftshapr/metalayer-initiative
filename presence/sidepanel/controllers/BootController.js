@@ -90,7 +90,7 @@ export class BootController {
     }
     async handleUserChange(user) {
         this.currentUser = user ?? null;
-        window.currentUser = this.currentUser ?? undefined;
+        // ROOT CAUSE FIX: Use stateManager only (TypeScript migration - no window.currentUser)
         await this.graph.stateManager.setState('currentUser', user ?? null);
         if (!user) {
             return;
