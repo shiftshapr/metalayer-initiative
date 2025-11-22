@@ -630,12 +630,20 @@ async function addMessageToChat(rawMessage) {
             console.log(`⚠️ addMessageToChat: Message ${message.id} already exists in DOM, skipping duplicate`);
             return; // Don't add duplicate
         }
-        // Also check in stateManager to prevent adding to state
+        // CRITICAL FIX: Check state but allow updates for existing messages (replies/quotes might update parent)
         const currentChatData = getCurrentChatData();
-        const alreadyInState = currentChatData.some(m => m.id === message.id);
-        if (alreadyInState) {
-            console.log(`⚠️ addMessageToChat: Message ${message.id} already in state, skipping duplicate`);
-            return; // Don't add duplicate
+        const existingMessageIndex = currentChatData.findIndex(m => m.id === message.id);
+        if (existingMessageIndex >= 0) {
+            // Message exists in state - check if it's actually in DOM
+            const existingInDOM = existingMessages.some(el => el.getAttribute('data-message-id') === message.id);
+            if (existingInDOM) {
+                console.log(`⚠️ addMessageToChat: Message ${message.id} already exists in DOM and state, skipping duplicate`);
+                return; // Don't add duplicate
+            }
+            else {
+                console.log(`🔍 addMessageToChat: Message ${message.id} in state but not in DOM, will add to DOM`);
+                // Continue to add to DOM even though it's in state (might be a different container)
+            }
         }
         const messageElement = await renderMessageElement(message, chatMessages);
         console.log('✅ ADD_MESSAGE: Rendered message element for:', message.id);
