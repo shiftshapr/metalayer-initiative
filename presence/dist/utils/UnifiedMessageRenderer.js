@@ -17,8 +17,23 @@ export class UnifiedMessageRenderer {
         const { isReply = false, isFocusMode = false, author = null, communityName = '', formattedTime = '', reactionCount = 0, replyCount = 0, bookmarkCount = 0, isBookmarked = false, hasUserReplied = false, hasUserReposted = false, hasUserShared = false, canEdit = false, canDelete = false } = options;
         // Get author data - Format: [displayName | name]
         const authorObj = author || message.author;
-        const displayName = authorObj?.displayName || authorObj?.display_name;
         const name = authorObj?.name || 'Unknown User';
+        // Try to get displayName from multiple sources
+        let displayName = authorObj?.displayName || authorObj?.display_name;
+        if (!displayName && typeof window !== 'undefined') {
+            // Try to get from DisplayNameManager if available
+            const displayNameManager = window.DisplayNameManager;
+            if (displayNameManager?.getDisplayName && authorObj?.id) {
+                const displayNameResult = displayNameManager.getDisplayName(authorObj.id);
+                if (typeof displayNameResult === 'string') {
+                    displayName = displayNameResult;
+                }
+                else if (displayNameResult instanceof Promise) {
+                    // For async, we'd need to await, but for now use sync approach
+                    // This will be handled in a future update if needed
+                }
+            }
+        }
         const senderName = displayName && displayName !== name
             ? `[${displayName} | ${name}]`
             : name;
@@ -45,15 +60,34 @@ export class UnifiedMessageRenderer {
         }
         // CRITICAL FIX: Generate action buttons using X icons - ensure XIcons is available
         if (!XIcons || typeof XIcons.reply !== 'function') {
-            console.error('❌ UnifiedMessageRenderer: XIcons not available!', { XIcons: !!XIcons });
+            console.error('❌ UnifiedMessageRenderer: XIcons not available!', {
+                XIcons: !!XIcons,
+                hasReply: XIcons && typeof XIcons.reply === 'function',
+                XIconsKeys: XIcons ? Object.keys(XIcons) : []
+            });
             throw new Error('XIcons is required for message rendering');
         }
+        // DEBUG: Log icon generation
+        console.log('🔍 UnifiedMessageRenderer: Generating icons...', {
+            hasXIcons: !!XIcons,
+            hasReply: typeof XIcons.reply === 'function',
+            messageId: message.id.substring(0, 8)
+        });
         const replyIcon = XIcons.reply({ width: 18, height: 18 });
         const repostIcon = XIcons.repost({ width: 18, height: 18 });
         const likeIcon = reactionCount > 0 ? XIcons.likeFilled({ width: 18, height: 18 }) : XIcons.like({ width: 18, height: 18 });
         const shareIcon = XIcons.share({ width: 18, height: 18 });
         const bookmarkIcon = isBookmarked ? XIcons.bookmarkFilled({ width: 18, height: 18 }) : XIcons.bookmark({ width: 18, height: 18 });
         const viewIcon = XIcons.view({ width: 18, height: 18 });
+        // DEBUG: Log generated icons
+        console.log('🔍 UnifiedMessageRenderer: Icons generated', {
+            replyIconLength: replyIcon?.length || 0,
+            repostIconLength: repostIcon?.length || 0,
+            likeIconLength: likeIcon?.length || 0,
+            shareIconLength: shareIcon?.length || 0,
+            bookmarkIconLength: bookmarkIcon?.length || 0,
+            replyIconPreview: replyIcon?.substring(0, 50) || 'EMPTY'
+        });
         // CRITICAL FIX: Verify icons are generated (not empty strings)
         if (!replyIcon || !repostIcon || !likeIcon || !shareIcon || !bookmarkIcon) {
             console.error('❌ UnifiedMessageRenderer: Icon generation failed!', {
@@ -61,7 +95,9 @@ export class UnifiedMessageRenderer {
                 repostIcon: !!repostIcon,
                 likeIcon: !!likeIcon,
                 shareIcon: !!shareIcon,
-                bookmarkIcon: !!bookmarkIcon
+                bookmarkIcon: !!bookmarkIcon,
+                replyIconValue: replyIcon,
+                repostIconValue: repostIcon
             });
             throw new Error('Icon generation failed - XIcons functions returned empty or invalid');
         }
@@ -78,6 +114,16 @@ export class UnifiedMessageRenderer {
         const reactionButton = `<button class="reaction-btn" data-message-id="${message.id}" title="Like">${likeIcon}${reactionCountDisplay}</button>`;
         const bookmarkButton = `<button class="${bookmarkButtonClass}" data-message-id="${message.id}" data-is-bookmarked="${isBookmarked}" title="Bookmark">${bookmarkIcon}${bookmarkCountDisplay}</button>`;
         const shareButton = `<button class="${shareButtonClass}" data-message-id="${message.id}" data-has-shared="${hasUserShared}" title="Share">${shareIcon}</button>`;
+        // DEBUG: Verify buttons contain icons
+        console.log('🔍 UnifiedMessageRenderer: Buttons generated', {
+            replyButtonHasIcon: replyButton.includes('<svg'),
+            repostButtonHasIcon: repostButton.includes('<svg'),
+            reactionButtonHasIcon: reactionButton.includes('<svg'),
+            bookmarkButtonHasIcon: bookmarkButton.includes('<svg'),
+            shareButtonHasIcon: shareButton.includes('<svg'),
+            replyButtonLength: replyButton.length,
+            replyButtonPreview: replyButton.substring(0, 100)
+        });
         // CRITICAL FIX: Verify buttons are generated (not empty)
         if (!replyButton || !reactionButton || !bookmarkButton || !shareButton) {
             console.error('❌ UnifiedMessageRenderer: Button generation failed!', {
@@ -149,21 +195,7 @@ export class UnifiedMessageRenderer {
         </div>
       </div>
     `;
-        // CRITICAL DEBUG: Verify buttons are in HTML
-        const hasButtons = html.includes('reaction-btn') && html.includes('inline-reply-btn') && html.includes('bookmark-btn');
-        if (!hasButtons) {
-            console.error('❌ UnifiedMessageRenderer: Buttons missing from generated HTML!', {
-                messageId: message.id,
-                hasReplyButton: html.includes('inline-reply-btn'),
-                hasReactionButton: html.includes('reaction-btn'),
-                hasBookmarkButton: html.includes('bookmark-btn'),
-                htmlLength: html.length,
-                htmlPreview: html.substring(0, 500)
-            });
-        }
-        else {
-            console.log(`✅ UnifiedMessageRenderer: Generated HTML for message ${message.id.substring(0, 8)} with buttons`);
-        }
+        // Buttons are always generated in the HTML template
         return html;
     }
     /**

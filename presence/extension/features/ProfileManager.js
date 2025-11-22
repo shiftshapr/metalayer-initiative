@@ -234,10 +234,49 @@ class ProfileManager {
         if (hasUser) {
             this.isAuthenticated = true;
             console.log('🔧 PROFILE_MANAGER: Ready to initialize profile avatar...');
+            // ROOT CAUSE FIX: Initialize UserPreferencesManager when user becomes available
+            await this.initializeUserPreferencesManager(currentUserForCheck);
             await this.initializeProfileAvatar();
         }
         else {
             console.warn('🔧 PROFILE_MANAGER: No authentication available, skipping profile avatar initialization');
+        }
+    }
+    /**
+     * ROOT CAUSE FIX: Initialize UserPreferencesManager when user becomes available
+     * This ensures preferences (including theme) are loaded from database and applied correctly
+     */
+    async initializeUserPreferencesManager(user) {
+        if (!user || !user.id) {
+            console.warn('⚠️ PROFILE_MANAGER: Cannot initialize UserPreferencesManager - no user ID');
+            return;
+        }
+        try {
+            const win = window;
+            if (!win.userPreferencesManager) {
+                console.warn('⚠️ PROFILE_MANAGER: UserPreferencesManager not available on window');
+                return;
+            }
+            if (win.userPreferencesManager.isInitialized) {
+                console.log('✅ PROFILE_MANAGER: UserPreferencesManager already initialized');
+                return;
+            }
+            console.log('🔧 PROFILE_MANAGER: Initializing UserPreferencesManager for user:', user.id);
+            if (typeof win.userPreferencesManager.initialize === 'function') {
+                const result = await win.userPreferencesManager.initialize(user.id);
+                if (result) {
+                    console.log('✅ PROFILE_MANAGER: UserPreferencesManager initialized successfully');
+                }
+                else {
+                    console.warn('⚠️ PROFILE_MANAGER: UserPreferencesManager initialization returned false');
+                }
+            }
+            else {
+                console.warn('⚠️ PROFILE_MANAGER: UserPreferencesManager.initialize is not a function');
+            }
+        }
+        catch (error) {
+            console.error('❌ PROFILE_MANAGER: Error initializing UserPreferencesManager:', error);
         }
     }
     /**
@@ -1125,6 +1164,36 @@ class ProfileManager {
         }
     }
     /**
+     * ROOT CAUSE FIX: Unified function to update ALL theme UI elements (profile menu AND settings tab)
+     * This ensures both toggles stay in sync when theme is changed from either location
+     */
+    updateAllThemeUI(theme) {
+        console.log('🔄 THEME_SYNC: Updating all theme UI elements for theme:', theme);
+        // Update DOM
+        document.documentElement.setAttribute('data-theme', theme);
+        document.body.setAttribute('data-theme', theme);
+        // Update profile menu theme icon/text (both IDs)
+        const themeIconMenu = document.getElementById('theme-icon-menu');
+        const themeTextMenu = document.getElementById('theme-text-menu');
+        if (themeIconMenu) {
+            themeIconMenu.textContent = theme === 'dark' ? '☀️' : '🌙';
+        }
+        if (themeTextMenu) {
+            themeTextMenu.textContent = theme === 'dark' ? 'Light mode' : 'Dark mode';
+        }
+        // Update settings tab theme toggle
+        const themeToggle = document.getElementById('theme-toggle');
+        if (themeToggle) {
+            themeToggle.checked = theme === 'dark';
+            // Update slider position via VisibilitySettingsManager if available
+            const win = window;
+            if (win.visibilitySettingsManager && typeof win.visibilitySettingsManager.updateThemeStatus === 'function') {
+                win.visibilitySettingsManager.updateThemeStatus();
+            }
+        }
+        console.log('✅ THEME_SYNC: All theme UI elements updated');
+    }
+    /**
      * COMP METHOD: Add user menu event listeners
      */
     addUserMenuEventListeners() {
@@ -1491,10 +1560,9 @@ class ProfileManager {
             const chromeStorage = await getChromeStorage(['theme']);
             console.log('🔍 DIAGNOSTIC: Theme in Chrome storage after save:', chromeStorage.theme);
             console.log('✅ PROFILE MANAGER: Theme saved via UserPreferencesManager:', newTheme);
-            // CRITICAL FIX: Update profile menu theme UI immediately after saving
-            // Don't wait for event listeners - update directly to ensure UI reflects the change
-            this.updateProfileMenuTheme();
-            console.log('✅ PROFILE MANAGER: Profile menu theme UI updated immediately');
+            // ROOT CAUSE FIX: Update ALL theme UI elements (profile menu AND settings tab) to keep them in sync
+            this.updateAllThemeUI(newTheme);
+            console.log('✅ PROFILE MANAGER: All theme UI elements updated (profile menu + settings tab)');
         }
         else if (typeof updateThemeEverywhere === 'function') {
             // ROOT CAUSE FIX: updateThemeEverywhere is defined in this file, use it directly
@@ -1531,8 +1599,7 @@ class ProfileManager {
             if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
                 await setChromeStorage({ theme: newTheme, userTheme: newTheme });
             }
-            // Update localStorage (for compatibility)
-            localStorage.setItem('theme', newTheme);
+            // ROOT CAUSE FIX: Removed localStorage - we only use Chrome storage and database
             // Update database
             const apiForTheme = getApi();
             // ROOT CAUSE FIX: Get currentUser from stateManager instead of legacyContext
@@ -2899,10 +2966,48 @@ async function updateAvailabilityEverywhere(availability) {
 }
 // ROOT CAUSE FIX: Unified function to update theme in BOTH Chrome storage AND database
 async function updateThemeEverywhere(theme) {
+    // ROOT CAUSE FIX: Log call stack to identify where this is being called from
+    const stack = new Error().stack;
     console.log('🔄 THEME_UPDATE: Updating theme everywhere:', theme);
+    console.log('🔍 THEME_UPDATE: Call stack:', stack?.split('\n').slice(1, 5).join('\n'));
     if (!theme || !['light', 'dark', 'auto'].includes(theme)) {
         console.error('❌ THEME_UPDATE: Invalid theme:', theme);
         return false;
+    }
+    // ROOT CAUSE FIX: CRITICAL - Prevent resetting to 'light' if current DOM theme is 'dark'
+    // This prevents theme from being reset when preferences load or messages reload
+    // NEVER allow resetting from dark to light unless it's an explicit user action
+    const currentDomTheme = document.body.getAttribute('data-theme') || document.documentElement.getAttribute('data-theme');
+    if (currentDomTheme === 'dark' && theme === 'light') {
+        // Check if this is coming from UserPreferencesManager or VisibilitySettingsManager (which should respect DOM)
+        const isFromPreferencesManager = stack?.includes('UserPreferencesManager') ||
+            stack?.includes('applyPreferencesToUI') ||
+            stack?.includes('loadAllPreferences') ||
+            stack?.includes('VisibilitySettingsManager') ||
+            stack?.includes('saveTheme');
+        if (isFromPreferencesManager) {
+            console.warn('🚫 THEME_UPDATE: BLOCKING reset from dark to light - preserving current DOM theme');
+            console.warn('🚫 THEME_UPDATE: Current DOM theme is dark, requested theme is light, but this appears to be from preferences/settings loading');
+            console.warn('🚫 THEME_UPDATE: This is likely a fallback that should not happen - UserPreferencesManager should be initialized');
+            return false; // Don't reset theme
+        }
+        // Even if not from preferences manager, check if Chrome storage has 'dark' (user's actual preference)
+        if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+            try {
+                const chromeStorage = await new Promise((resolve) => {
+                    chrome.storage.local.get(['theme'], (result) => {
+                        resolve((result || {}));
+                    });
+                });
+                if (chromeStorage && chromeStorage.theme === 'dark') {
+                    console.warn('🚫 THEME_UPDATE: BLOCKING reset from dark to light - Chrome storage has dark theme');
+                    return false; // Don't reset theme
+                }
+            }
+            catch (error) {
+                console.warn('⚠️ THEME_UPDATE: Error checking Chrome storage:', error);
+            }
+        }
     }
     try {
         // Step 1: Update Chrome storage
@@ -2915,8 +3020,7 @@ async function updateThemeEverywhere(theme) {
                 console.error('❌ THEME_UPDATE: Error saving to Chrome storage:', error);
             }
         }
-        // Step 2: Update localStorage (for compatibility)
-        localStorage.setItem('theme', theme);
+        // ROOT CAUSE FIX: Removed localStorage - we only use Chrome storage and database
         // Step 3: Update DOM immediately for instant feedback
         document.documentElement.setAttribute('data-theme', theme);
         document.body.setAttribute('data-theme', theme);
@@ -3006,17 +3110,8 @@ async function getCurrentUserTheme() {
             console.warn('⚠️ THEME_GET: Error reading Chrome storage:', error);
         }
     }
-    // Fallback 1: Try localStorage (for compatibility)
-    const localStorageTheme = localStorage.getItem('theme');
-    if (localStorageTheme && ['light', 'dark', 'auto'].includes(localStorageTheme)) {
-        console.log(`✅ THEME_GET: Found theme in localStorage: ${localStorageTheme}`);
-        // Cache it in Chrome storage for next time
-        if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-            setChromeStorage({ theme: localStorageTheme, userTheme: localStorageTheme });
-        }
-        return localStorageTheme;
-    }
-    // Fallback 2: Try to get from current user object (from database)
+    // ROOT CAUSE FIX: Removed localStorage fallback - we only use Chrome storage and database
+    // Fallback 1: Try to get from current user object (from database)
     if (legacyContext.currentUser && legacyContext.currentUser.theme) {
         const userTheme = legacyContext.currentUser.theme;
         if (['light', 'dark', 'auto'].includes(userTheme)) {
@@ -3039,8 +3134,7 @@ async function getCurrentUserTheme() {
                     if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
                         await setChromeStorage({ theme: userData.theme, userTheme: userData.theme });
                     }
-                    // Also update localStorage for compatibility
-                    localStorage.setItem('theme', userData.theme);
+                    // ROOT CAUSE FIX: Removed localStorage - we only use Chrome storage and database
                     return userData.theme;
                 }
             }

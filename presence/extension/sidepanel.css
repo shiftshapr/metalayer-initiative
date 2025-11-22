@@ -298,6 +298,13 @@
         }
     }
 
+/* CRITICAL: HTML element must allow overflow for modals */
+html {
+    overflow-x: visible; /* Allow horizontal overflow for modals */
+    overflow-y: auto; /* Allow vertical scroll if needed */
+    /* Chrome extension sidepanels: viewport is constrained, but we allow overflow */
+}
+
 :root {
     /* Light theme colors */
     --background-primary: #ffffff;
@@ -370,10 +377,20 @@ body {
     width: 100vw;
     min-width: 100vw;
     max-width: 100vw;
-    overflow-x: hidden;
+    /* CRITICAL: Allow overflow for modals to escape sidepanel viewport */
+    /* In Chrome extension sidepanels, we need overflow:visible to allow fixed elements to overflow */
+    overflow-x: visible; /* Changed from hidden to visible to allow modal overflow */
+    overflow-y: auto; /* Allow vertical scroll if needed */
     font-size: 14px;
     line-height: 1.4;
     box-sizing: border-box;
+    /* 
+     * Chrome Extension Sidepanel Constraint:
+     * - Sidepanels have their own viewport (typically ~320-400px wide)
+     * - Fixed positioning is relative to sidepanel viewport, not browser window
+     * - To allow modal overflow, we need overflow:visible on body
+     * - Modal will overflow left of sidepanel viewport
+     */
 }
 
 .sidebar-container {
@@ -385,6 +402,9 @@ body {
     box-sizing: border-box;
     margin: 0;
     padding: 0;
+    /* CRITICAL: No overflow:hidden - allows fixed positioned modals to escape */
+    /* Fixed positioned children (modals) are viewport-relative, not constrained by this */
+    position: relative; /* Creates positioning context, but doesn't constrain fixed children */
 }
 
 /* --- Main Header --- */
@@ -1501,14 +1521,29 @@ html[data-theme="dark"] .focus-message-input-container {
   color: var(--text-secondary, #666) !important;
 }
 
+/* CRITICAL: Ensure message-footer-actions has space and proper layout */
+.message-footer-actions {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 8px !important;
+  flex-wrap: nowrap !important;
+  min-width: 200px !important; /* Ensure space for all buttons */
+  width: auto !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
 .focus-messages-container .message-footer .message-footer-actions {
   width: 100% !important;
   display: flex !important;
   flex-direction: row !important; /* CRITICAL: Icons must be horizontal */
   align-items: center !important;
   justify-content: space-evenly !important; /* CRITICAL: Evenly space icon/count pairs */
-  gap: 0 !important; /* Remove gap - space-evenly handles spacing */
+  gap: 8px !important; /* Add gap for spacing */
   flex-wrap: nowrap !important; /* Prevent wrapping */
+  min-width: 200px !important; /* Ensure space for all buttons */
 }
 
 [data-theme="dark"] .focus-messages-container .message-footer .focus-date {
@@ -1535,16 +1570,86 @@ html[data-theme="dark"] .focus-message-input-container {
   display: flex !important;
   align-items: center !important;
   gap: 2px !important;
-  color: #666 !important;
+  color: #333 !important; /* CRITICAL: Dark color for visibility on light backgrounds */
   pointer-events: auto !important;
   opacity: 1 !important;
   visibility: visible !important;
   z-index: 20 !important; /* CRITICAL FIX: Higher z-index to ensure clicks work */
   position: relative !important;
+  /* CRITICAL FIX: Ensure buttons have space for icons */
+  min-width: 26px !important; /* 18px icon + 8px padding */
+  min-height: 26px !important; /* 18px icon + 8px padding */
+  width: auto !important;
+  height: auto !important;
+  flex-shrink: 0 !important; /* Prevent buttons from shrinking */
   /* CRITICAL FIX: Ensure buttons are not blocked */
   user-select: none !important;
   -webkit-user-select: none !important;
   touch-action: manipulation !important;
+}
+
+/* CRITICAL FIX: Ensure SVG icons inside buttons are visible */
+.message-footer-actions button svg,
+.message-footer .inline-reply-btn svg,
+.message-footer .repost-btn svg,
+.message-footer .reaction-btn svg,
+.message-footer .bookmark-btn svg,
+.message-footer .share-btn svg {
+  display: inline-block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  width: 18px !important;
+  height: 18px !important;
+  min-width: 18px !important;
+  min-height: 18px !important;
+  max-width: 18px !important;
+  max-height: 18px !important;
+  fill: currentColor !important;
+  color: inherit !important;
+  pointer-events: none !important;
+  vertical-align: middle !important;
+  /* CRITICAL: Ensure SVG is actually rendered */
+  shape-rendering: geometricPrecision !important;
+  -webkit-font-smoothing: antialiased !important;
+  -moz-osx-font-smoothing: grayscale !important;
+  /* Force visibility */
+  position: relative !important;
+  z-index: 1 !important;
+  overflow: visible !important;
+}
+
+/* CRITICAL: Ensure SVG path elements are visible */
+.message-footer-actions button svg path,
+.message-footer .inline-reply-btn svg path,
+.message-footer .repost-btn svg path,
+.message-footer .reaction-btn svg path,
+.message-footer .bookmark-btn svg path,
+.message-footer .share-btn svg path {
+  fill: currentColor !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  display: block !important;
+  /* CRITICAL: Force dark color for visibility */
+  color: inherit !important;
+}
+
+/* CRITICAL: Override any light colors with visible dark color */
+.message-footer-actions button svg,
+.message-footer .inline-reply-btn svg,
+.message-footer .repost-btn svg,
+.message-footer .reaction-btn svg,
+.message-footer .bookmark-btn svg,
+.message-footer .share-btn svg {
+  color: #333 !important; /* Force dark color for light theme */
+}
+
+[data-theme="dark"] .message-footer-actions button svg,
+[data-theme="dark"] .message-footer .inline-reply-btn svg,
+[data-theme="dark"] .message-footer .repost-btn svg,
+[data-theme="dark"] .message-footer .reaction-btn svg,
+[data-theme="dark"] .message-footer .bookmark-btn svg,
+[data-theme="dark"] .message-footer .share-btn svg {
+  color: #ccc !important; /* Force light color for dark theme */
 }
 
 .message-footer .reaction-btn {
@@ -1572,7 +1677,27 @@ html[data-theme="dark"] .focus-message-input-container {
 [data-theme="dark"] .message-footer .reaction-btn,
 [data-theme="dark"] .message-footer .bookmark-btn,
 [data-theme="dark"] .message-footer .share-btn {
-  color: #999 !important;
+  color: #ccc !important; /* CRITICAL: Light color for visibility on dark backgrounds */
+}
+
+/* CRITICAL FIX: Ensure icons are visible in both themes with proper contrast */
+.message-footer-actions button svg,
+.message-footer .inline-reply-btn svg,
+.message-footer .repost-btn svg,
+.message-footer .reaction-btn svg,
+.message-footer .bookmark-btn svg,
+.message-footer .share-btn svg {
+  fill: currentColor !important;
+}
+
+[data-theme="dark"] .message-footer-actions button svg,
+[data-theme="dark"] .message-footer .inline-reply-btn svg,
+[data-theme="dark"] .message-footer .repost-btn svg,
+[data-theme="dark"] .message-footer .reaction-btn svg,
+[data-theme="dark"] .message-footer .bookmark-btn svg,
+[data-theme="dark"] .message-footer .share-btn svg {
+  fill: currentColor !important;
+  color: inherit !important;
 }
 
 [data-theme="dark"] .message-footer .bookmark-btn.active,
@@ -1754,6 +1879,12 @@ html[data-theme="dark"] .focus-message-input-container {
   z-index: 1000;
   /* Allow JavaScript to adjust position */
   min-width: 150px;
+  background: #ffffff !important; /* CRITICAL: Solid white background, not transparent */
+  border: 1px solid #ddd !important;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  padding: 4px 0;
+  opacity: 1 !important;
 }
 
 /* CRITICAL FIX: Dropdown visible when explicitly shown */
@@ -1762,6 +1893,18 @@ html[data-theme="dark"] .focus-message-input-container {
   visibility: visible !important;
   opacity: 1 !important;
   pointer-events: auto !important;
+  background: #ffffff !important; /* CRITICAL: Solid white background */
+}
+
+/* Dark theme for action dropdown */
+[data-theme="dark"] .action-dropdown {
+  background: #2a2a2a !important; /* CRITICAL: Solid dark background, not transparent */
+  border-color: #444 !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
+}
+
+[data-theme="dark"] .action-dropdown.visible {
+  background: #2a2a2a !important; /* CRITICAL: Solid dark background when visible */
 }
 
 /* CRITICAL FIX: Ensure action items (edit, delete, flag) are clickable */
@@ -2685,9 +2828,19 @@ html[data-theme="dark"] .focus-message-input-container {
 }
 
 /* HIDE UNTIL LOADED: Hide footer actions until message is loaded */
+/* REMOVED: This was hiding message footers and preventing icons from showing
 .message:not(.message-loaded) .message-footer,
 .focus-messages-container .message:not(.message-loaded) .message-footer {
   display: none !important;
+}
+*/
+
+/* CRITICAL FIX: Always show message footer - messages are loaded immediately */
+.message .message-footer,
+.focus-messages-container .message .message-footer {
+  display: flex !important;
+  width: 100% !important;
+  margin-top: 8px !important;
 }
 
 .message.message-loaded .message-footer,
@@ -3543,18 +3696,7 @@ div.message.message-reply.visible div.message-content-wrapper div.message-header
   color: #c0c0c0 !important;
 }
 
-.action-dropdown {
-  position: fixed;
-  top: auto;
-  right: auto;
-  background: var(--background-primary);
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  z-index: 10000;
-  min-width: 140px;
-  padding: 4px 0;
-}
+/* REMOVED: Duplicate .action-dropdown definition - using the one above */
 
 .action-item {
   display: block;
@@ -3585,7 +3727,8 @@ div.message.message-reply.visible div.message-content-wrapper div.message-header
 
 /* Dark mode for dropdown */
 [data-theme="dark"] .action-dropdown {
-  background: #2a2a2a !important;
+  background: #2a2a2a !important; /* ROOT CAUSE FIX: Explicit dark background */
+  opacity: 1 !important; /* ROOT CAUSE FIX: Ensure 100% opacity */
   border-color: #444 !important;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
 }
@@ -4860,16 +5003,27 @@ body.dark #visibility-access-modal #cancel-visibility-btn,
    UNIFIED MESSAGE MODAL
    ======================================== */
 
+/* X PATTERN: Modal centered within sidepanel viewport */
+/* Adjusted to fit within sidepanel constraints - slightly narrower than sidebar, taller */
 .unified-message-modal {
-  position: fixed;
+  position: fixed; /* Fixed = viewport-relative, escapes parent overflow constraints */
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
-  z-index: 10000;
+  z-index: 10000; /* Above sidebar */
   display: flex;
-  align-items: center;
-  justify-content: center;
+  align-items: center; /* Center vertically */
+  justify-content: center; /* Center horizontally */
+  padding: 0;
+  margin: 0;
+  /* 
+   * Fixed positioning behavior:
+   * - Relative to viewport, not parent container
+   * - Escapes parent overflow:hidden constraints
+   * - Must be appended to body (not sidebar) for proper stacking
+   * - Modal is now centered and sized to fit within sidepanel
+   */
 }
 
 .unified-message-modal-overlay {
@@ -4878,22 +5032,55 @@ body.dark #visibility-access-modal #cancel-visibility-btn,
   left: 0;
   width: 100%;
   height: 100%;
-  background-color: rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(4px);
+  background-color: rgba(0, 0, 0, 0.4); /* X's overlay opacity */
+  backdrop-filter: blur(2px); /* X's blur amount */
 }
 
+/* X PATTERN: Modal content - sized to fit within sidepanel, slightly narrower than sidebar, taller */
 .unified-message-modal-content {
   position: relative;
-  background: var(--background-primary);
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
-  width: 90%;
-  max-width: 600px;
-  max-height: 90vh;
+  background: #000000; /* X's black background */
+  border: 1px solid #2F3336; /* X's border color */
+  border-radius: 20px; /* X's modal radius */
+  width: calc(100vw - 40px); /* Slightly narrower than viewport (20px margin on each side) */
+  max-width: 300px; /* Max width to be narrower than typical sidepanel (320-400px) */
+  min-width: 280px; /* Minimum width for usability */
+  height: calc(100vh - 40px); /* Taller - use most of viewport height (20px margin top/bottom) */
+  min-height: 500px; /* Minimum height */
+  max-height: 90vh; /* Don't exceed 90% of viewport height */
+  margin: 0; /* Centered by parent flex container */
   display: flex;
   flex-direction: column;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  box-shadow: rgba(255, 255, 255, 0.03) 0px 0px 0px 1px inset; /* X's shadow */
   z-index: 10001;
+  overflow-y: auto; /* Allow vertical scrolling for taller modal */
+  overflow-x: hidden; /* Prevent horizontal scroll */
+  /* 
+   * Modal is now sized to fit within sidepanel viewport:
+   * - Width: 100vw - 40px (with max-width 300px to be narrower than sidebar)
+   * - Height: 100vh - 40px (taller, using most of viewport)
+   * - Centered by parent flex container
+   * - Scrollable content area for longer messages
+   */
+}
+
+/* Light mode support */
+[data-theme="light"] .unified-message-modal-content {
+  background: #FFFFFF;
+  border-color: #EFF3F4;
+}
+
+/* X PATTERN: Top bar - close button only */
+.unified-message-modal-top-bar {
+  display: flex;
+  align-items: center;
+  padding: 4px 16px; /* X pattern: Minimal padding */
+  min-height: 53px; /* X pattern: 53px height */
+  border-bottom: 1px solid #2F3336; /* X pattern: Subtle border */
+}
+
+[data-theme="light"] .unified-message-modal-top-bar {
+  border-bottom-color: #EFF3F4;
 }
 
 .unified-message-modal-header {
@@ -4911,26 +5098,83 @@ body.dark #visibility-access-modal #cancel-visibility-btn,
   color: var(--text-primary);
 }
 
+/* X PATTERN: Close button */
 .unified-message-modal-close {
   background: none;
   border: none;
-  font-size: 24px;
-  line-height: 1;
   cursor: pointer;
-  color: var(--text-secondary);
-  padding: 0;
-  width: 32px;
-  height: 32px;
+  color: #71767A; /* X pattern: Grey color */
+  padding: 8px; /* X pattern: 8px padding for hover area */
+  width: 34.75px; /* X pattern: Standard button size */
+  height: 34.75px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 4px;
-  transition: all 0.2s ease;
+  border-radius: 9999px; /* X pattern: Circular */
+  transition: background-color 0.2s ease;
+  margin-left: -8px; /* X pattern: Align with content */
 }
 
 .unified-message-modal-close:hover {
-  background: var(--background-secondary);
-  color: var(--text-primary);
+  background-color: rgba(15, 20, 25, 0.1); /* X pattern: Subtle hover */
+}
+
+[data-theme="light"] .unified-message-modal-close {
+  color: #536471;
+}
+
+[data-theme="light"] .unified-message-modal-close:hover {
+  background-color: rgba(15, 20, 25, 0.05);
+}
+
+/* X PATTERN: User section - avatar and audience selector */
+.unified-message-user-section {
+  display: flex;
+  align-items: flex-start;
+  padding: 12px 16px 0; /* X pattern: Padding */
+  gap: 12px; /* X pattern: Gap between avatar and audience */
+}
+
+.unified-message-user-avatar {
+  flex-shrink: 0;
+}
+
+/* X PATTERN: Avatar container - 40px Twitter size with aura (same pattern as profile avatar) */
+.unified-message-user-avatar .avatar-container {
+  width: 40px !important;
+  height: 40px !important;
+  position: relative;
+  overflow: visible !important; /* Allow aura to extend */
+}
+
+.unified-message-user-avatar .avatar-img {
+  width: 40px !important;
+  height: 40px !important;
+  border-radius: 50%;
+  object-fit: cover;
+  position: relative;
+  z-index: 1;
+  border: none !important; /* No border - same as profile avatar */
+  outline: none !important;
+  background-color: transparent;
+}
+
+.unified-message-user-avatar .avatar-initial {
+  width: 40px !important;
+  height: 40px !important;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  z-index: 1;
+  border: none !important; /* No border */
+}
+
+.unified-message-audience-selector {
+  flex: 1;
+  display: flex;
+  align-items: center;
 }
 
 .unified-message-modal-body {
@@ -4992,29 +5236,58 @@ body.dark #visibility-access-modal #cancel-visibility-btn,
   font-style: italic;
 }
 
-/* Input container */
+/* X PATTERN: Input container - positioned after user section */
 .unified-message-input-container {
-  margin-bottom: 16px;
+  padding: 0 16px; /* X pattern: Horizontal padding matches user section */
+  margin-top: 8px; /* X pattern: Small gap from user section */
+  margin-bottom: 0;
+}
+
+/* X PATTERN: Reply settings - positioned below input */
+.unified-message-reply-settings {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 16px; /* X pattern: Padding matches content */
+  color: #1D9BF0; /* X pattern: Neon blue */
+  font-size: 13px; /* X pattern: Small font */
+  border-top: 1px solid #2F3336; /* X pattern: Subtle border */
+}
+
+[data-theme="light"] .unified-message-reply-settings {
+  border-top-color: #EFF3F4;
+  color: #1D9BF0;
+}
+
+.unified-message-reply-settings .globe-icon {
+  width: 16px;
+  height: 16px;
+  color: #1D9BF0;
+}
+
+.reply-settings-text {
+  color: #1D9BF0;
+  font-size: 13px;
 }
 
 .unified-message-textarea {
   width: 100%;
-  min-height: 120px;
+  min-height: 200px; /* X pattern: Taller to fill space */
   padding: 12px;
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  background: var(--background-primary);
+  border: none; /* X pattern: No border */
+  border-radius: 0; /* X pattern: No border radius */
+  background: transparent; /* X pattern: Transparent background */
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: 15px; /* X pattern: 15px font */
   font-family: inherit;
   resize: vertical;
-  transition: border-color 0.2s ease;
+  transition: none; /* X pattern: No transition */
 }
 
 .unified-message-textarea:focus {
-  outline: none;
-  border-color: var(--primary-color);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  outline: none; /* X pattern: No focus outline */
+  border: none; /* X pattern: No border on focus */
+  box-shadow: none; /* X pattern: No box shadow */
 }
 
 /* Attachments preview */
@@ -5106,20 +5379,25 @@ body.dark #visibility-access-modal #cancel-visibility-btn,
 }
 
 /* Toolbar */
+/* X PATTERN: Toolbar - positioned at bottom, no border */
 .unified-message-toolbar {
   display: flex;
   justify-content: flex-start;
   align-items: center;
-  padding-top: 16px;
-  border-top: 1px solid var(--border-color);
+  padding: 12px 16px 0; /* X pattern: Padding matches content */
+  border-top: none; /* X pattern: No border */
 }
 
 .unified-message-toolbar-left {
   display: flex;
-  gap: 4px;
-  flex-wrap: wrap;
+  gap: 0; /* X pattern: No gap between icons */
+  flex-wrap: nowrap; /* X pattern: Force single row */
+  align-items: center;
+  overflow-x: auto; /* Allow horizontal scroll if needed on very small screens */
+  -webkit-overflow-scrolling: touch;
 }
 
+/* X PATTERN: Toolbar buttons - no gap, tighter spacing */
 .unified-message-toolbar-btn {
   background: none;
   border: none;
@@ -5129,19 +5407,28 @@ body.dark #visibility-access-modal #cancel-visibility-btn,
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #1D9BF0;
+  color: #1D9BF0; /* X pattern: Neon blue */
   transition: background-color 0.2s ease;
+  margin-right: -4px; /* X pattern: Negative margin to reduce visual gap */
+  padding: 0;
 }
 
 .unified-message-toolbar-btn:hover {
   background-color: rgba(29, 155, 240, 0.1);
 }
 
+/* X PATTERN: Action buttons - positioned at bottom right */
 .unified-message-actions {
-  margin-top: 16px;
+  padding: 12px 16px 16px; /* X pattern: Padding matches content */
   display: flex;
   justify-content: flex-end;
+  align-items: center;
   gap: 12px;
+  border-top: 1px solid #2F3336; /* X pattern: Subtle top border */
+}
+
+[data-theme="light"] .unified-message-actions {
+  border-top-color: #EFF3F4;
 }
 
 .unified-message-btn {

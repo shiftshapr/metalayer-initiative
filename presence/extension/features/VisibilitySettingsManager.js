@@ -252,10 +252,18 @@ class VisibilitySettingsManager {
             }
             this.themeToggle = newToggle;
             const toggle = this.themeToggle; // Store reference for callback
+            // ROOT CAUSE FIX: Track if we're programmatically setting the toggle to prevent save loops
+            let isProgrammaticChange = false;
             // Attach fresh event listener
             toggle.addEventListener('change', async (e) => {
+                // ROOT CAUSE FIX: Ignore change events that are programmatic (from loadSettings)
+                if (isProgrammaticChange) {
+                    console.log('🔍 DIAGNOSTIC: Ignoring programmatic theme toggle change');
+                    isProgrammaticChange = false;
+                    return;
+                }
                 e.stopPropagation();
-                console.log('🔍 DIAGNOSTIC: Settings tab theme toggle changed');
+                console.log('🔍 DIAGNOSTIC: Settings tab theme toggle changed (user action)');
                 console.log('🔍 DIAGNOSTIC: Event object:', e);
                 console.log('🔍 DIAGNOSTIC: Toggle element:', toggle);
                 console.log('🔍 DIAGNOSTIC: Toggle checked:', toggle.checked);
@@ -268,6 +276,8 @@ class VisibilitySettingsManager {
                 console.log('🔍 DIAGNOSTIC: Theme after change:', afterTheme);
                 console.log('🔍 DIAGNOSTIC: Theme changed:', beforeTheme !== afterTheme ? 'YES ✅' : 'NO ❌');
             });
+            // ROOT CAUSE FIX: Store flag setter on toggle element for programmatic changes
+            toggle._setProgrammaticChange = () => { isProgrammaticChange = true; };
             toggle.setAttribute('data-handler-attached', 'true');
             console.log('✅ VISIBILITY_SETTINGS: Theme toggle event listener attached');
         }
@@ -386,82 +396,119 @@ class VisibilitySettingsManager {
                 this.displayNameInput.value = displayName;
             }
             this.originalValues.displayName = displayName;
-            // Theme - FIX: Load from database first, then sync to Chrome storage and DOM
-            // ROOT CAUSE FIX: Get current theme from DOM first (user may have changed it), then check database
-            let theme = 'light'; // default
-            // Step 0: Check current DOM theme first (most recent user action)
-            const currentDOMTheme = document.body.getAttribute('data-theme') ||
-                document.documentElement.getAttribute('data-theme');
-            if (currentDOMTheme && (currentDOMTheme === 'dark' || currentDOMTheme === 'light')) {
-                theme = currentDOMTheme;
-                console.log('✅ VISIBILITY_SETTINGS: Using current DOM theme:', theme);
-            }
-            // Step 1: Check database (source of truth) - CRITICAL FIX: forceDatabase=true
-            else if (unifiedSettingsStorage && typeof unifiedSettingsStorage.getSetting === 'function') {
-                const dbTheme = await unifiedSettingsStorage.getSetting('theme', null, { skipApi: false, forceDatabase: true });
-                // CRITICAL FIX: Only use database value if it's explicitly set (not null/undefined)
-                if (dbTheme === 'dark' || dbTheme === 'light') {
-                    theme = dbTheme;
-                    console.log('✅ VISIBILITY_SETTINGS: Theme loaded from database:', theme);
+            // Theme - ROOT CAUSE FIX: If UserPreferencesManager is available, DON'T load theme here
+            // Let UserPreferencesManager handle theme loading - it has proper priority logic
+            // Only load theme if UserPreferencesManager is NOT available (fallback mode)
+            let theme = null;
+            // CRITICAL FIX: Check if UserPreferencesManager is available and initialized
+            if (userPreferencesManager && userPreferencesManager.isInitialized) {
+                console.log('ℹ️ VISIBILITY_SETTINGS: UserPreferencesManager is available - skipping theme load (UserPreferencesManager handles theme)');
+                // Don't load theme - UserPreferencesManager will handle it
+                // Just sync the toggle with current DOM theme
+                const currentDOMTheme = document.body.getAttribute('data-theme') || document.documentElement.getAttribute('data-theme');
+                if (currentDOMTheme === 'dark' || currentDOMTheme === 'light') {
+                    theme = currentDOMTheme;
+                    console.log('✅ VISIBILITY_SETTINGS: Syncing toggle with DOM theme (UserPreferencesManager is managing theme):', theme);
                 }
                 else {
-                    // If database has no value, check other sources
-                    const themeStorage = await chrome.storage.local.get(['theme']);
-                    if (themeStorage.theme === 'dark' || themeStorage.theme === 'light') {
-                        theme = themeStorage.theme;
-                        console.log('✅ VISIBILITY_SETTINGS: Theme loaded from Chrome storage:', theme);
-                    }
-                    else {
-                        const domTheme = document.documentElement.getAttribute('data-theme') ||
-                            document.body.getAttribute('data-theme');
-                        if (domTheme === 'dark' || domTheme === 'light') {
-                            theme = domTheme;
-                            console.log('✅ VISIBILITY_SETTINGS: Theme loaded from DOM:', theme);
+                    // Try to get from UserPreferencesManager
+                    try {
+                        const prefTheme = await userPreferencesManager.getPreference('theme');
+                        if (prefTheme === 'dark' || prefTheme === 'light') {
+                            theme = prefTheme;
+                            console.log('✅ VISIBILITY_SETTINGS: Got theme from UserPreferencesManager:', theme);
                         }
                     }
-                }
-            }
-            else if (getSetting) {
-                const settingTheme = await getSetting('theme', null, { forceDatabase: true });
-                if (settingTheme === 'dark' || settingTheme === 'light') {
-                    theme = settingTheme;
+                    catch (error) {
+                        console.warn('⚠️ VISIBILITY_SETTINGS: Error getting theme from UserPreferencesManager:', error);
+                    }
                 }
             }
             else {
-                // Step 2: Check Chrome storage as fallback
-                const themeStorage = await chrome.storage.local.get(['theme']);
-                if (themeStorage.theme === 'dark' || themeStorage.theme === 'light') {
-                    theme = themeStorage.theme;
-                    console.log('✅ VISIBILITY_SETTINGS: Theme loaded from Chrome storage:', theme);
+                // Fallback: Load theme if UserPreferencesManager is not available
+                console.log('⚠️ VISIBILITY_SETTINGS: UserPreferencesManager not available - loading theme as fallback');
+                // Step 0: Check current DOM theme first (most recent user action) - NEVER override if already set
+                const currentDOMTheme = document.body.getAttribute('data-theme') ||
+                    document.documentElement.getAttribute('data-theme');
+                if (currentDOMTheme && (currentDOMTheme === 'dark' || currentDOMTheme === 'light')) {
+                    theme = currentDOMTheme;
+                    console.log('✅ VISIBILITY_SETTINGS: Using current DOM theme:', theme);
                 }
-                else {
-                    // Step 3: Check DOM as last resort
-                    const domTheme = document.documentElement.getAttribute('data-theme') ||
-                        document.body.getAttribute('data-theme');
-                    if (domTheme === 'dark' || domTheme === 'light') {
-                        theme = domTheme;
-                        console.log('✅ VISIBILITY_SETTINGS: Theme loaded from DOM:', theme);
+                // Step 1: Check Chrome storage (fastest, most recent user preference)
+                else if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+                    try {
+                        const chromeTheme = await chrome.storage.local.get(['theme']);
+                        if (chromeTheme.theme === 'dark' || chromeTheme.theme === 'light') {
+                            theme = chromeTheme.theme;
+                            console.log('✅ VISIBILITY_SETTINGS: Theme loaded from Chrome storage:', theme);
+                        }
+                    }
+                    catch (error) {
+                        console.warn('⚠️ VISIBILITY_SETTINGS: Error reading Chrome storage for theme:', error);
+                    }
+                }
+                // Step 2: Check database (source of truth) - CRITICAL FIX: forceDatabase=true
+                if (!theme && unifiedSettingsStorage && typeof unifiedSettingsStorage.getSetting === 'function') {
+                    const dbTheme = await unifiedSettingsStorage.getSetting('theme', null, { skipApi: false, forceDatabase: true });
+                    // CRITICAL FIX: Only use database value if it's explicitly set (not null/undefined)
+                    if (dbTheme === 'dark' || dbTheme === 'light') {
+                        theme = dbTheme;
+                        console.log('✅ VISIBILITY_SETTINGS: Theme loaded from database:', theme);
+                    }
+                }
+                else if (getSetting && !theme) {
+                    const settingTheme = await getSetting('theme', null, { forceDatabase: true });
+                    if (settingTheme === 'dark' || settingTheme === 'light') {
+                        theme = settingTheme;
                     }
                 }
             }
-            // FIX: Always sync Chrome storage and DOM with database value BEFORE setting toggle
-            await chrome.storage.local.set({ theme: theme });
-            document.documentElement.setAttribute('data-theme', theme);
-            document.body.setAttribute('data-theme', theme);
+            // ROOT CAUSE FIX: Only set theme if we found one AND DOM is not already set to a different value
+            // This prevents overriding a dark theme with a light value
+            if (theme) {
+                const existingDOMTheme = document.body.getAttribute('data-theme') || document.documentElement.getAttribute('data-theme');
+                // CRITICAL: If DOM is already 'dark' and we're trying to set 'light', DON'T override
+                if (existingDOMTheme === 'dark' && theme === 'light') {
+                    console.warn('🚫 VISIBILITY_SETTINGS: BLOCKING theme reset from dark to light - preserving DOM theme');
+                    theme = 'dark'; // Use DOM theme instead
+                }
+                // Only set DOM if it's different from current (prevents unnecessary updates)
+                if (existingDOMTheme !== theme) {
+                    console.log(`🔧 VISIBILITY_SETTINGS: Setting DOM theme to: ${theme} (was: ${existingDOMTheme || 'NOT SET'})`);
+                    await chrome.storage.local.set({ theme: theme });
+                    document.documentElement.setAttribute('data-theme', theme);
+                    document.body.setAttribute('data-theme', theme);
+                }
+                else {
+                    console.log(`ℹ️ VISIBILITY_SETTINGS: DOM theme already matches: ${theme}`);
+                }
+            }
+            else {
+                // No theme found - don't set anything, let UserPreferencesManager handle it
+                console.log('ℹ️ VISIBILITY_SETTINGS: No theme found in any source - UserPreferencesManager will handle default');
+                // Don't set theme to 'light' - this prevents overriding existing dark theme
+            }
             // CRITICAL FIX: Set toggle state BEFORE updateThemeStatus to ensure correct initial state
             // ROOT CAUSE FIX: Coordinate toggle with current theme - sync toggle state with actual theme
             if (this.themeToggle) {
                 // Get actual current theme from DOM (may differ from loaded theme if user changed it)
                 const actualTheme = document.body.getAttribute('data-theme') ||
                     document.documentElement.getAttribute('data-theme') ||
-                    theme;
+                    (theme || 'light'); // Only use theme if found, otherwise check DOM, then default
                 const shouldBeDark = actualTheme === 'dark';
+                // ROOT CAUSE FIX: Mark as programmatic change to prevent saveTheme() from being called
+                if (this.themeToggle._setProgrammaticChange) {
+                    this.themeToggle._setProgrammaticChange();
+                }
                 this.themeToggle.checked = shouldBeDark;
                 console.log('🔧 VISIBILITY_SETTINGS: Theme toggle coordinated with current theme:', actualTheme, 'toggle checked:', shouldBeDark);
                 // Update slider position immediately to reflect actual theme
                 this.updateThemeStatus();
             }
-            this.originalValues.theme = theme;
+            // Only set originalValues.theme if we actually found a theme
+            if (theme) {
+                this.originalValues.theme = theme;
+            }
             console.log('✅ VISIBILITY_SETTINGS: Settings loaded');
         }
         catch (error) {
@@ -745,14 +792,51 @@ class VisibilitySettingsManager {
      */
     async saveTheme() {
         try {
-            if (!this.themeToggle) {
-                console.warn('⚠️ VISIBILITY_SETTINGS: Theme toggle not found');
-                return;
+            // ROOT CAUSE FIX: Don't rely solely on toggle state - check actual DOM theme first
+            // This prevents saving 'light' when the actual theme is 'dark' due to toggle state mismatch
+            const currentDOMTheme = document.body.getAttribute('data-theme') ||
+                document.documentElement.getAttribute('data-theme');
+            let theme;
+            if (this.themeToggle) {
+                // Use toggle state if available
+                theme = this.themeToggle.checked ? 'dark' : 'light';
+                // ROOT CAUSE FIX: If toggle says 'light' but DOM is 'dark', trust DOM (toggle is out of sync)
+                if (theme === 'light' && currentDOMTheme === 'dark') {
+                    console.warn('⚠️ VISIBILITY_SETTINGS: Toggle says light but DOM is dark - trusting DOM');
+                    theme = 'dark';
+                    // Sync toggle to match DOM
+                    this.themeToggle.checked = true;
+                }
+                else if (theme === 'dark' && currentDOMTheme === 'light') {
+                    console.warn('⚠️ VISIBILITY_SETTINGS: Toggle says dark but DOM is light - trusting DOM');
+                    theme = 'light';
+                    // Sync toggle to match DOM
+                    this.themeToggle.checked = false;
+                }
             }
-            const theme = this.themeToggle.checked ? 'dark' : 'light';
+            else {
+                // No toggle - use DOM theme or default
+                theme = (currentDOMTheme === 'dark' || currentDOMTheme === 'light') ? currentDOMTheme : 'light';
+                console.warn('⚠️ VISIBILITY_SETTINGS: Theme toggle not found, using DOM theme:', theme);
+            }
             console.log('🔍 DIAGNOSTIC: saveTheme called with theme:', theme);
+            console.log('🔍 DIAGNOSTIC: Current DOM theme:', currentDOMTheme);
             console.log('🔍 DIAGNOSTIC: UserPreferencesManager available:', !!userPreferencesManager);
             console.log('🔍 DIAGNOSTIC: UserPreferencesManager initialized:', userPreferencesManager?.isInitialized);
+            // ROOT CAUSE FIX: NEVER fall back to updateThemeEverywhere - it causes theme resets
+            // If UserPreferencesManager is not initialized, initialize it first
+            if (!userPreferencesManager || !userPreferencesManager.isInitialized) {
+                console.warn('⚠️ VISIBILITY_SETTINGS: UserPreferencesManager not initialized, initializing now...');
+                const userId = window.currentUser?.id;
+                if (userId && userPreferencesManager && typeof userPreferencesManager.initialize === 'function') {
+                    await userPreferencesManager.initialize(userId);
+                }
+                else {
+                    console.error('❌ VISIBILITY_SETTINGS: Cannot initialize UserPreferencesManager - no userId or manager');
+                    // Don't save if we can't use the proper system - prevents database corruption
+                    return;
+                }
+            }
             // CRITICAL FIX: Use UserPreferencesManager (unified preference system) - ensure it saves to both Chrome storage and database
             if (userPreferencesManager && userPreferencesManager.isInitialized) {
                 console.log('✅ VISIBILITY_SETTINGS: Using UserPreferencesManager to save theme');
@@ -763,42 +847,18 @@ class VisibilitySettingsManager {
                 const chromeStorage = await chrome.storage.local.get(['theme']);
                 console.log('🔍 DIAGNOSTIC: Theme in Chrome storage after save:', chromeStorage.theme);
             }
-            else if (typeof updateThemeEverywhere === 'function') {
-                // Fallback to old system during transition
-                console.log('⚠️ VISIBILITY_SETTINGS: UserPreferencesManager not available, using updateThemeEverywhere fallback');
-                await updateThemeEverywhere(theme);
-            }
-            else if (typeof setTheme === 'function') {
-                console.log('✅ VISIBILITY_SETTINGS: Using setTheme to save theme');
-                await setTheme(theme);
-            }
             else {
-                // Fallback: Apply theme to document FIRST (before saving) for immediate visual feedback
-                document.documentElement.setAttribute('data-theme', theme);
-                document.body.setAttribute('data-theme', theme);
-                // Use unified storage function
-                if (saveSetting) {
-                    await saveSetting('theme', theme);
-                }
-                else {
-                    // Fallback to direct storage
-                    await chrome.storage.local.set({ theme: theme });
-                    console.log('✅ VISIBILITY_SETTINGS: Saved theme to Chrome storage (fallback)');
-                }
+                // ROOT CAUSE FIX: If UserPreferencesManager still not available after initialization attempt, don't save
+                // This prevents falling back to updateThemeEverywhere which causes theme resets
+                console.error('❌ VISIBILITY_SETTINGS: UserPreferencesManager still not available after initialization attempt - aborting save');
+                return;
             }
+            // ROOT CAUSE FIX: Update ALL theme UI elements (settings tab AND profile menu) to keep them in sync
             // Update theme status text and slider
             this.updateThemeStatus();
-            // Update profile menu theme icon/text if available (both IDs)
-            const themeIcon = document.getElementById('theme-icon');
-            const themeText = document.getElementById('theme-text');
+            // Update profile menu theme icon/text (both IDs)
             const themeIconMenu = document.getElementById('theme-icon-menu');
             const themeTextMenu = document.getElementById('theme-text-menu');
-            if (themeIcon) {
-                themeIcon.textContent = theme === 'dark' ? '☀️' : '🌙';
-            }
-            if (themeText) {
-                themeText.textContent = theme === 'dark' ? 'Light mode' : 'Dark mode';
-            }
             if (themeIconMenu) {
                 themeIconMenu.textContent = theme === 'dark' ? '☀️' : '🌙';
             }

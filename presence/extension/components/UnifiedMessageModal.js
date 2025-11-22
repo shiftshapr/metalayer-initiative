@@ -55,7 +55,7 @@ export class UnifiedMessageModal {
         if (options.mode === 'quote' && options.quoteId) {
             await this.loadQuotedMessage(options.quoteId);
         }
-        this.render();
+        await this.render();
         this.isOpen = true;
     }
     /**
@@ -72,8 +72,12 @@ export class UnifiedMessageModal {
     }
     /**
      * Render the modal HTML
+     *
+     * CRITICAL: Modal must be appended to document.body (not sidebar) to escape
+     * sidebar container constraints. Fixed positioning is viewport-relative, but
+     * parent overflow:hidden can still clip it, so we ensure body is the parent.
      */
-    render() {
+    async render() {
         if (!this.options)
             return;
         // Remove existing modal if present
@@ -84,9 +88,25 @@ export class UnifiedMessageModal {
         const modal = document.createElement('div');
         modal.id = 'unified-message-modal';
         modal.className = 'unified-message-modal';
-        modal.innerHTML = this.getModalHTML();
+        modal.innerHTML = await this.getModalHTML();
+        // CRITICAL: Append to body (not sidebar) to escape container constraints
+        // Fixed positioning is viewport-relative, but parent overflow can still clip
+        // By appending to body, we ensure modal is outside sidebar container
+        // 
+        // Chrome Extension Sidepanel Note:
+        // - Sidepanels have their own viewport (typically 320-400px wide)
+        // - Fixed positioning is relative to sidepanel viewport, not browser window
+        // - Modal can overflow left using negative margin-left
+        // - Body/html must have overflow-x: visible to allow overflow
         document.body.appendChild(modal);
         this.modal = modal;
+        // Verify modal is actually in body (not sidebar)
+        if (this.modal.parentElement !== document.body) {
+            console.warn('⚠️ MODAL: Modal parent is not body! Moving to body...');
+            document.body.appendChild(this.modal);
+        }
+        // Modal is now sized to fit within sidepanel - no overflow needed
+        // CSS handles responsive sizing (calc(100vw - 40px) with max-width: 300px)
         // Setup event handlers
         this.setupModalHandlers();
         // Focus the textarea
@@ -106,7 +126,7 @@ export class UnifiedMessageModal {
      * - Bottom toolbar with icons (media, GIF, poll, list, emoji, calendar, location, bold, italic)
      * - Post button (gray when disabled, blue when active)
      */
-    getModalHTML() {
+    async getModalHTML() {
         if (!this.options)
             return '';
         const { mode, editMessage, parentId, quoteId } = this.options;
@@ -122,22 +142,22 @@ export class UnifiedMessageModal {
         const activeCommunities = win.stateManagerInstance?.getState('ui.activeCommunities');
         const communityId = activeCommunities?.[0] || this.options.communityId;
         const audienceLabel = communityId ? 'Community' : 'Everyone';
+        // Get avatar HTML (async)
+        const avatarHTML = await this.getAvatarHTML(currentUser, userAvatar, userName);
         return `
       <div class="unified-message-modal-overlay"></div>
       <div class="unified-message-modal-content x-design-pattern${this.options.premiumText ? ' premium-text' : ''}"${this.options.premiumText ? ' data-premium="true"' : ''}>
-        <!-- Top Bar: X (close) on left, Drafts on right -->
+        <!-- Top Bar: X (close) on left only -->
         <div class="unified-message-modal-top-bar">
           <button class="unified-message-modal-close x-close-btn" aria-label="Close">
             ${getXIcon('close', { width: 20, height: 20 })}
           </button>
-          <button class="unified-message-drafts-btn" id="drafts-btn">Drafts</button>
         </div>
         
         <!-- User Profile and Audience Selection -->
         <div class="unified-message-user-section">
           <div class="unified-message-user-avatar x-avatar-container">
-            ${userAvatar ? `<img src="${this.escapeHtml(userAvatar)}" alt="${this.escapeHtml(userName)}" class="x-avatar" />` :
-            `<div class="x-avatar x-avatar-fallback">${userName.charAt(0).toUpperCase()}</div>`}
+            ${avatarHTML}
           </div>
           <div class="unified-message-audience-selector">
             <button class="audience-select-btn x-audience-selector" id="audience-select-btn">
@@ -209,7 +229,7 @@ export class UnifiedMessageModal {
         <!-- Action Buttons -->
         <div class="unified-message-actions">
           <button class="unified-message-btn unified-message-btn-secondary x-save-draft-btn" id="save-draft-btn">
-            Save draft
+            Drafts
           </button>
           <button class="unified-message-btn unified-message-btn-primary x-post-button" id="send-btn" disabled>
             ${mode === 'edit' ? 'Update' : 'Post'}
@@ -630,18 +650,51 @@ export class UnifiedMessageModal {
             if (!currentUser?.id) {
                 throw new Error('User not authenticated');
             }
+            // Add authentication headers
+            const headers = {
+                'Content-Type': 'application/json'
+            };
+            // Add user identity header if available
+            const userEmail = currentUser && typeof currentUser === 'object' && 'email' in currentUser
+                ? currentUser.email
+                : currentUser && typeof currentUser === 'object' && 'user_metadata' in currentUser
+                    ? currentUser.user_metadata?.email
+                    : undefined;
+            if (userEmail) {
+                headers['X-User-Email'] = userEmail;
+            }
+            // Add user ID header
+            headers['X-User-Id'] = currentUser.id;
+            console.log('📤 SENDING_MESSAGE:', { endpoint, messageData: { ...messageData, userId: currentUser.id } });
             const response = await fetch(endpoint, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
+                headers,
                 body: JSON.stringify({
                     ...messageData,
                     userId: currentUser.id
                 })
             });
             if (!response.ok) {
-                throw new Error(`Failed to ${status === 'draft' ? 'save draft' : 'publish message'}: ${response.statusText}`);
+                // Try to get error details from response
+                let errorMessage = response.statusText;
+                try {
+                    const errorData = await response.json();
+                    errorMessage = errorData.error || errorData.message || errorMessage;
+                    console.error('❌ API_ERROR:', errorData);
+                }
+                catch (e) {
+                    // If response is not JSON, use status text
+                    try {
+                        const errorText = await response.text();
+                        console.error('❌ API_ERROR_TEXT:', errorText);
+                        errorMessage = errorText || errorMessage;
+                    }
+                    catch (textError) {
+                        // Fallback to status text
+                        console.error('❌ API_ERROR_STATUS:', response.status, response.statusText);
+                    }
+                }
+                throw new Error(`Failed to ${status === 'draft' ? 'save draft' : 'publish message'}: ${errorMessage} (${response.status})`);
             }
             const message = await response.json();
             if (status === 'draft') {
@@ -925,6 +978,89 @@ export class UnifiedMessageModal {
             : undefined;
         const user = win?.stateManagerInstance?.getState('currentUser');
         return user || null;
+    }
+    /**
+     * Get avatar HTML with aura support (40px Twitter size)
+     * Uses same pattern as AvatarUtils.createUnifiedAvatar
+     */
+    async getAvatarHTML(currentUser, userAvatar, userName) {
+        // Try to use AvatarUtils if available (same pattern as profile avatar)
+        const win = window;
+        if (win.AvatarUtils && typeof win.AvatarUtils.createUnifiedAvatar === 'function' && currentUser) {
+            try {
+                // Use AvatarUtils to create avatar with same pattern as profile
+                const userForAvatar = {
+                    id: currentUser.id,
+                    name: currentUser.name,
+                    avatarUrl: userAvatar || currentUser.avatarUrl || currentUser.picture,
+                    auraColor: currentUser.auraColor || currentUser.aura_color
+                };
+                return await win.AvatarUtils.createUnifiedAvatar(userForAvatar, 'profile', { size: 40, showAura: true });
+            }
+            catch (error) {
+                console.warn('⚠️ MODAL: Failed to use AvatarUtils, falling back to manual creation:', error);
+            }
+        }
+        // Fallback: Manual creation using same pattern as AvatarUtils
+        const size = 40;
+        const showAura = true;
+        // Get aura color
+        let auraColor = '#33aa33'; // Default green
+        if (currentUser) {
+            auraColor = currentUser.auraColor ||
+                currentUser.aura_color ||
+                auraColor;
+        }
+        // Get aura intensity (default 0.5)
+        const auraIntensity = 0.5;
+        const backgroundOpacity = auraIntensity * 0.6;
+        const glowOpacity = auraIntensity * 0.8;
+        const shadowOpacity = auraIntensity * 0.5;
+        // Convert hex to rgba
+        const hexToRgba = (hex, opacity) => {
+            hex = hex.replace('#', '');
+            const r = parseInt(hex.substring(0, 2), 16);
+            const g = parseInt(hex.substring(2, 4), 16);
+            const b = parseInt(hex.substring(4, 6), 16);
+            return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+        };
+        const auraColorRgba = hexToRgba(auraColor, backgroundOpacity);
+        const glowColorRgba = hexToRgba(auraColor, glowOpacity);
+        const shadowColorRgba = hexToRgba(auraColor, shadowOpacity);
+        const initial = userName.charAt(0).toUpperCase();
+        const auraPadding = Math.max(2, Math.floor(size * 0.08));
+        const glowSize = Math.max(2, Math.floor(size * 0.12));
+        const auraBackgroundSize = size + (auraPadding * 2);
+        if (userAvatar) {
+            return `
+        <div class="avatar-container" style="width: ${size}px; height: ${size}px; position: relative; overflow: visible;">
+          ${showAura ? `
+            <div class="avatar-aura avatar-aura-background" style="position: absolute; width: ${auraBackgroundSize}px; height: ${auraBackgroundSize}px; border-radius: 50%; background-color: ${auraColorRgba}; top: -${auraPadding}px; left: -${auraPadding}px; z-index: 0; pointer-events: none; box-shadow: 0 0 ${glowSize * 2}px ${glowSize}px ${glowColorRgba}, inset 0 0 ${glowSize}px ${shadowColorRgba};"></div>
+          ` : ''}
+          <img 
+            src="${this.escapeHtml(userAvatar)}" 
+            alt="${this.escapeHtml(userName)}" 
+            class="avatar-img" 
+            style="width: ${size}px; height: ${size}px; border-radius: 50%; position: relative; z-index: 1; object-fit: cover; border: none !important; outline: none !important; background-color: transparent; box-shadow: ${showAura ? `0 0 ${glowSize}px ${shadowColorRgba}` : 'none'};" 
+            referrerpolicy="no-referrer"
+            onerror="this.onerror=null; this.src='data:image/svg+xml,%3Csvg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'${size}\\' height=\\'${size}\\'%3E%3Crect width=\\'${size}\\' height=\\'${size}\\' fill=\\'${auraColor}\\'/%3E%3Ctext x=\\'50%25\\' y=\\'50%25\\' text-anchor=\\'middle\\' dy=\\'.3em\\' fill=\\'white\\' font-size=\\'${size * 0.4}\\'%3E${initial}%3C/text%3E%3C/svg%3E';"
+          />
+        </div>
+      `;
+        }
+        else {
+            const initialBgColor = hexToRgba(auraColor, backgroundOpacity);
+            return `
+        <div class="avatar-container" style="width: ${size}px; height: ${size}px; position: relative; overflow: visible;">
+          <div 
+            class="avatar-initial" 
+            style="width: ${size}px; height: ${size}px; border-radius: 50%; background-color: ${initialBgColor}; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: ${size * 0.4}px; position: relative; z-index: 1; box-shadow: ${showAura ? `0 0 ${glowSize}px ${shadowColorRgba}` : 'none'};"
+          >
+            <span>${initial}</span>
+          </div>
+        </div>
+      `;
+        }
     }
     /**
      * Resolve API base URL (same logic as MessageStore)

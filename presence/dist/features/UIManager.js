@@ -586,15 +586,20 @@ export class UIManager {
                 this.logger.warn?.('THEME: Failed to load from API, falling back to default', error);
             }
         }
-        await this.setTheme(savedTheme);
+        // During initialization, don't save to database - just apply the theme
+        // Only save when user explicitly changes the theme
+        await this.setTheme(savedTheme, false);
     }
-    async setTheme(theme) {
+    async setTheme(theme, saveToDatabase = true) {
         if (!this.document)
             return;
         const currentUser = this.getCurrentUser();
         const body = this.document.body;
         const themeIcon = this.document.getElementById('theme-icon');
         const themeText = this.document.getElementById('theme-text');
+        // Check if theme is already set to this value
+        const currentTheme = body?.getAttribute('data-theme') || this.document.documentElement?.getAttribute('data-theme') || 'light';
+        const themeChanged = currentTheme !== theme;
         if (theme === 'dark') {
             body?.setAttribute('data-theme', 'dark');
             this.document.documentElement?.setAttribute('data-theme', 'dark');
@@ -611,21 +616,26 @@ export class UIManager {
             if (themeText)
                 themeText.textContent = 'Dark mode';
         }
-        if (this.theme?.updateThemeEverywhere) {
-            await this.theme.updateThemeEverywhere(theme);
-        }
-        else if (currentUser?.id && this.apiClient) {
-            try {
-                await this.apiClient.request('/v1/users/update-preferences', {
-                    method: 'POST',
-                    body: JSON.stringify({
-                        userId: currentUser.id,
-                        preferences: { theme }
-                    })
-                });
+        // Only save to database if:
+        // 1. saveToDatabase is true (explicit save requested)
+        // 2. Theme actually changed (not just initialization with same value)
+        if (saveToDatabase && themeChanged) {
+            if (this.theme?.updateThemeEverywhere) {
+                await this.theme.updateThemeEverywhere(theme);
             }
-            catch (error) {
-                this.logger.error?.('THEME: Error saving theme preference', error);
+            else if (currentUser?.id && this.apiClient) {
+                try {
+                    await this.apiClient.request('/v1/users/update-preferences', {
+                        method: 'POST',
+                        body: JSON.stringify({
+                            userId: currentUser.id,
+                            preferences: { theme }
+                        })
+                    });
+                }
+                catch (error) {
+                    this.logger.error?.('THEME: Error saving theme preference', error);
+                }
             }
         }
     }

@@ -87,15 +87,25 @@ async function initializeNewMessageSystem() {
                     console.log(`🔍 onMessageUpdate: Skipping during initial load (${messages.length} messages will be rendered via loadChatHistory)`);
                     return;
                 }
-                // ROOT CAUSE FIX: Only add NEW messages, don't re-render everything
-                // This prevents duplicates when MessageStore updates after initial load
+                // CRITICAL FIX: Only add NEW messages, but check ALL containers for duplicates
                 const container = getChatMessagesContainer();
                 if (!container)
                     return;
-                // Get existing message IDs in DOM
-                const existingIds = new Set(Array.from(container.querySelectorAll('[data-message-id]'))
-                    .map(el => el.getAttribute('data-message-id'))
-                    .filter(Boolean));
+                // Get existing message IDs in ALL containers to prevent duplicates
+                const allChatContainers = document.querySelectorAll('.chat-messages');
+                const existingIds = new Set();
+                allChatContainers.forEach(cont => {
+                    const actualMessages = Array.from(cont.querySelectorAll('.message, [data-message-id]')).filter(el => {
+                        return el.classList.contains('message') ||
+                            el.querySelector('.message-content-wrapper') !== null ||
+                            (el.querySelector('.message-footer-actions') !== null && el.querySelector('.message-content') !== null);
+                    });
+                    actualMessages.forEach(el => {
+                        const id = el.getAttribute('data-message-id');
+                        if (id)
+                            existingIds.add(id);
+                    });
+                });
                 // Only process messages that aren't already in DOM
                 const newMessages = messages.filter(msg => !existingIds.has(msg.id));
                 if (newMessages.length > 0) {
@@ -269,7 +279,7 @@ const renderMessageElement = async (message, chatContainer = getChatMessagesCont
                 return getMessageActionMenu(msg);
             };
         }
-        // ROOT CAUSE FIX: Get community name from message or communities module
+        // CRITICAL FIX: Get community name from message or communities module
         let communityName = '';
         if (message.communityId) {
             // Try to get community name from CommunitiesModule or stateManager
@@ -566,8 +576,13 @@ async function addMessageToChat(rawMessage) {
     }
     try {
         const message = normalizeMessagePayload(rawMessage);
-        // ROOT CAUSE FIX: Check for duplicate BEFORE rendering
-        const existingElement = chatMessages.querySelector(`[data-message-id="${message.id}"]`);
+        // CRITICAL FIX: Check for duplicate, but only check actual message elements (not buttons)
+        const existingMessages = Array.from(chatMessages.querySelectorAll('.message, [data-message-id]')).filter(el => {
+            return el.classList.contains('message') ||
+                el.querySelector('.message-content-wrapper') !== null ||
+                (el.querySelector('.message-footer-actions') !== null && el.querySelector('.message-content') !== null);
+        });
+        const existingElement = existingMessages.find(el => el.getAttribute('data-message-id') === message.id);
         if (existingElement) {
             console.log(`⚠️ addMessageToChat: Message ${message.id} already exists in DOM, skipping duplicate`);
             return; // Don't add duplicate
@@ -1138,7 +1153,12 @@ async function handleMessageFocus(messageOrId) {
         // Handle both return types: Message[] or { replies, parent }
         const messages = Array.isArray(result) ? result : result.replies || [];
         const parentMessage = Array.isArray(result) ? null : (result.parent || null);
-        await unifiedMessageDisplay.render(messages, container, {
+        // CRITICAL FIX: Ensure all messages have communityId before rendering
+        const messagesWithCommunityId = messages.map(msg => ({
+            ...msg,
+            communityId: msg.communityId || communityId
+        }));
+        await unifiedMessageDisplay.render(messagesWithCommunityId, container, {
             focusContext: 'child',
             parentMessage: parentMessage,
             highlightMessageId: message.id,
@@ -1291,19 +1311,37 @@ async function loadChatHistory(communityIdOrRawUrl, activeCommunitiesOrUndefined
         });
         // ROOT CAUSE FIX: Mark initial load as complete AFTER getting messages but BEFORE rendering
         // This prevents onMessageUpdate from interfering
-        win.initialMessageLoadComplete = true;
-        // ROOT CAUSE FIX: Check if messages are already rendered before calling render
-        // This prevents duplicate rendering when onMessageUpdate callback also triggers
-        const existingMessageIds = new Set(Array.from(chatMessages.querySelectorAll('[data-message-id]'))
-            .map(el => el.getAttribute('data-message-id'))
-            .filter(Boolean));
+        // BUT: Only mark complete if we actually have messages to render
+        if (messages.length > 0) {
+            win.initialMessageLoadComplete = true;
+        }
+        // CRITICAL FIX: Check ALL containers for existing messages to prevent duplicates
+        const allChatContainers = document.querySelectorAll('.chat-messages');
+        const existingMessageIds = new Set();
+        allChatContainers.forEach(cont => {
+            const actualMessages = Array.from(cont.querySelectorAll('.message, [data-message-id]')).filter(el => {
+                return el.classList.contains('message') ||
+                    el.querySelector('.message-content-wrapper') !== null ||
+                    (el.querySelector('.message-footer-actions') !== null && el.querySelector('.message-content') !== null);
+            });
+            actualMessages.forEach(el => {
+                const id = el.getAttribute('data-message-id');
+                if (id)
+                    existingMessageIds.add(id);
+            });
+        });
         const newMessages = messages.filter(msg => !existingMessageIds.has(msg.id));
         if (newMessages.length === 0 && messages.length > 0) {
             console.log(`⚠️ loadChatHistory: All ${messages.length} messages already rendered, skipping render call`);
         }
         else {
+            // CRITICAL FIX: Ensure all messages have communityId before rendering
+            const messagesWithCommunityId = messages.map(msg => ({
+                ...msg,
+                communityId: msg.communityId || communityId
+            }));
             // Render using UnifiedMessageDisplay
-            await unifiedMessageDisplay.render(messages, chatMessages, {
+            await unifiedMessageDisplay.render(messagesWithCommunityId, chatMessages, {
                 focusContext: 'default',
                 onMessageClick: (message) => {
                     if (!message.author)

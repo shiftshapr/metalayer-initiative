@@ -185,27 +185,31 @@ class UnifiedContextMenu {
     /**
      * Auto-register context menus for common elements
      * Call this after DOM is ready to automatically set up right-click menus
-     * ROOT CAUSE FIX: Context menu should NEVER be active in sidebar - only on webpage
+     * ROOT CAUSE FIX: Our custom context menu should NEVER appear in sidebar - only on webpage
+     * But browser's default context menu should still work in sidebar
      */
     autoRegisterCommonElements() {
-        // CRITICAL FIX: Disable context menu completely if we're in sidebar (chrome-extension://)
-        if (typeof window !== 'undefined' && window.location.protocol === 'chrome-extension:') {
-            // In sidebar, prevent all context menus
-            document.addEventListener('contextmenu', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                // Do nothing - context menu disabled in sidebar
-            }, true);
-            console.log('✅ UNIFIED_CONTEXT_MENU: Context menu disabled in sidebar (chrome-extension://)');
-            return; // Exit early - don't register any context menu handlers
-        }
-        // Register for message elements (only on web pages, not in sidebar)
+        // Register for message elements (on both web pages and sidebar, but only show custom menu on web pages)
         document.addEventListener('contextmenu', (e) => {
             const target = e.target;
+            // ROOT CAUSE FIX: Check if we're in sidebar - if so, don't show our custom menu, but allow default
+            const isInSidebar = typeof window !== 'undefined' && window.location.protocol === 'chrome-extension:';
+            if (isInSidebar) {
+                // In sidebar: Don't prevent default, don't show our custom menu - let browser's default menu show
+                return; // Don't prevent default, don't show custom menu
+            }
+            // On web pages: Show our custom menu and prevent browser's default menu
             const messageElement = target.closest('[data-message-id]');
             if (messageElement) {
-                e.preventDefault();
-                e.stopPropagation();
+                // ROOT CAUSE FIX: Only prevent default and show custom menu on web pages, not in sidebar
+                if (!isInSidebar) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+                else {
+                    // In sidebar: Allow default browser context menu
+                    return;
+                }
                 const messageId = messageElement.dataset.messageId || '';
                 const win = window;
                 const currentUser = win.getCurrentUser?.() || win.stateManagerInstance?.getState('currentUser');
@@ -226,8 +230,15 @@ class UnifiedContextMenu {
             // Register for avatar elements
             const avatarElement = target.closest('.user-avatar, .message-avatar, [data-user-id]');
             if (avatarElement) {
-                e.preventDefault();
-                e.stopPropagation();
+                // ROOT CAUSE FIX: Only prevent default and show custom menu on web pages, not in sidebar
+                if (!isInSidebar) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+                else {
+                    // In sidebar: Allow default browser context menu
+                    return;
+                }
                 const userId = avatarElement.dataset.userId || avatarElement.closest('[data-user-id]')?.getAttribute('data-user-id') || '';
                 import('./ContextMenuConfig.js').then(({ getAvatarContextMenuOptions }) => {
                     // ROOT CAUSE FIX: Pass target element to context for sidebar detection
@@ -242,8 +253,15 @@ class UnifiedContextMenu {
             // Register for text selection
             const selection = window.getSelection();
             if (selection && selection.toString().trim().length > 0) {
-                e.preventDefault();
-                e.stopPropagation();
+                // ROOT CAUSE FIX: Only prevent default and show custom menu on web pages, not in sidebar
+                if (!isInSidebar) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+                else {
+                    // In sidebar: Allow default browser context menu
+                    return;
+                }
                 const selectedText = selection.toString();
                 import('./ContextMenuConfig.js').then(({ getTextSelectionContextMenuOptions }) => {
                     // ROOT CAUSE FIX: Pass target element to context for sidebar detection
@@ -256,6 +274,15 @@ class UnifiedContextMenu {
                 return;
             }
             // Default: page-level context menu
+            // ROOT CAUSE FIX: Only prevent default and show custom menu on web pages, not in sidebar
+            if (!isInSidebar) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            else {
+                // In sidebar: Allow default browser context menu
+                return;
+            }
             const win = window;
             const pageId = win.stateManagerInstance?.getState('currentUrlData')?.pageId || '';
             const communityId = win.stateManagerInstance?.getState('ui.activeCommunities')?.[0];

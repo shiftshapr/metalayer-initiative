@@ -106,12 +106,15 @@ export class UserPreferencesManager {
      * Must be called after user authentication
      */
     async initialize(userId) {
+        console.log('🔍 USER_PREFERENCES_MANAGER: initialize() called with userId:', userId || 'MISSING');
+        console.log('🔍 USER_PREFERENCES_MANAGER: Current isInitialized:', this.isInitialized);
         if (this.isInitialized) {
             console.log('⚠️ USER_PREFERENCES_MANAGER: Already initialized');
             return;
         }
         if (!userId) {
             console.warn('⚠️ USER_PREFERENCES_MANAGER: No userId provided, waiting...');
+            console.log('🔍 USER_PREFERENCES_MANAGER: Checking window.currentUser?.id:', window.currentUser?.id);
             // Wait for userId with longer timeout and better detection
             return new Promise((resolve) => {
                 let attempts = 0;
@@ -119,6 +122,7 @@ export class UserPreferencesManager {
                 const checkUser = setInterval(() => {
                     attempts++;
                     const currentUserId = window.currentUser?.id;
+                    console.log(`🔍 USER_PREFERENCES_MANAGER: Attempt ${attempts}/${maxAttempts}, checking for userId:`, currentUserId || 'NOT FOUND');
                     if (currentUserId) {
                         clearInterval(checkUser);
                         console.log(`✅ USER_PREFERENCES_MANAGER: Found userId after ${attempts} attempts: ${currentUserId}`);
@@ -178,29 +182,63 @@ export class UserPreferencesManager {
             console.log('✅ USER_PREFERENCES_MANAGER: Loaded from database:', Object.keys(dbPrefs).length, 'preferences');
             // Merge: Chrome storage takes precedence (most recent), database fills gaps
             // Database is authoritative source - Chrome storage is cache
-            // ROOT CAUSE FIX: For theme, also check current DOM theme to prevent overriding user's current theme
+            // ROOT CAUSE FIX: For theme, prioritize Chrome storage > DOM > database > default
+            // Chrome storage = extension-specific storage (persists across sessions)
+            // DOM = current UI state (preserve what user sees)
+            // Database = authoritative source (user's saved preference)
+            // Default = last resort
             const mergedPrefs = {};
             for (const [key, config] of Object.entries(this.schema)) {
                 const chromeValue = chromePrefs[config.chromeKey];
                 const dbValue = dbPrefs[key]; // dbPrefs already mapped by key
-                // Special handling for theme: Check DOM if no Chrome storage value
+                // ROOT CAUSE FIX: Comprehensive logging for theme resolution
+                if (key === 'theme') {
+                    console.log('🔍 THEME_RESOLUTION: === THEME RESOLUTION START ===');
+                    console.log('🔍 THEME_RESOLUTION: Chrome storage theme:', chromeValue !== undefined && chromeValue !== null ? chromeValue : 'NOT SET');
+                    console.log('🔍 THEME_RESOLUTION: Database theme:', dbValue !== undefined && dbValue !== null ? dbValue : 'NULL/NOT SET');
+                    const currentDomTheme = document.body.getAttribute('data-theme') || document.documentElement.getAttribute('data-theme');
+                    console.log('🔍 THEME_RESOLUTION: DOM theme:', currentDomTheme || 'NOT SET');
+                    console.log('🔍 THEME_RESOLUTION: Default theme:', config.defaultValue);
+                }
+                // Special handling for theme: Check multiple sources in priority order
                 let finalValue;
                 if (chromeValue !== undefined && chromeValue !== null) {
+                    // Priority 1: Chrome storage (extension-specific, most recent user preference)
                     finalValue = chromeValue;
-                }
-                else if (dbValue !== undefined && dbValue !== null) {
-                    finalValue = dbValue;
+                    if (key === 'theme') {
+                        console.log('🔍 THEME_RESOLUTION: ✅ RESOLVED: Using Chrome storage theme:', finalValue);
+                    }
                 }
                 else if (key === 'theme') {
-                    // ROOT CAUSE FIX: For theme, check DOM before using default
+                    // Priority 2: Check DOM (preserve current UI state - might be set by ProfileManager on startup)
                     const currentDomTheme = document.body.getAttribute('data-theme') || document.documentElement.getAttribute('data-theme');
                     if (currentDomTheme && ['light', 'dark', 'auto'].includes(currentDomTheme)) {
                         finalValue = currentDomTheme;
-                        console.log(`🔍 USER_PREFERENCES_MANAGER: Using DOM theme '${currentDomTheme}' instead of default for theme preference`);
+                        console.log(`🔍 THEME_RESOLUTION: ✅ RESOLVED: Using DOM theme '${currentDomTheme}' (preserving current UI state)`);
+                        // Cache it in Chrome storage for next time
+                        await chrome.storage.local.set({ [config.chromeKey]: currentDomTheme });
+                    }
+                    else if (dbValue !== undefined && dbValue !== null) {
+                        // Priority 3: Database (authoritative source - user's saved preference)
+                        finalValue = dbValue;
+                        console.log(`🔍 THEME_RESOLUTION: ✅ RESOLVED: Using database theme '${dbValue}'`);
+                        // Cache it in Chrome storage for next time
+                        await chrome.storage.local.set({ [config.chromeKey]: dbValue });
                     }
                     else {
+                        // Priority 4: Default (last resort - ONLY for local use, NEVER save to database)
                         finalValue = config.defaultValue;
+                        console.log(`🔍 THEME_RESOLUTION: ✅ RESOLVED: Using default theme '${config.defaultValue}' (local only, will not save to database)`);
+                        // ROOT CAUSE FIX: Mark this as a default value so it doesn't get saved to database
+                        // Store in a separate flag to prevent saving defaults
+                        this._defaultValues = this._defaultValues || {};
+                        this._defaultValues[key] = true;
                     }
+                    console.log('🔍 THEME_RESOLUTION: === THEME RESOLUTION END (finalValue:', finalValue, ') ===');
+                }
+                else if (dbValue !== undefined && dbValue !== null) {
+                    // For non-theme preferences, database is fine as fallback
+                    finalValue = dbValue;
                 }
                 else {
                     finalValue = config.defaultValue;
@@ -215,6 +253,12 @@ export class UserPreferencesManager {
             // Update window.currentUser immediately
             this.updateCurrentUser();
             // Apply preferences to UI immediately
+            // ROOT CAUSE FIX: Log what theme will be applied before calling applyPreferencesToUI
+            if (this.preferences.theme) {
+                console.log('🔍 THEME_APPLY: About to apply theme to UI:', this.preferences.theme);
+                const currentDomTheme = document.body.getAttribute('data-theme') || document.documentElement.getAttribute('data-theme');
+                console.log('🔍 THEME_APPLY: Current DOM theme before apply:', currentDomTheme || 'NOT SET');
+            }
             this.applyPreferencesToUI();
             const duration = Date.now() - startTime;
             this.metrics.loads.success++;
@@ -240,10 +284,19 @@ export class UserPreferencesManager {
     async loadFromChromeStorage() {
         const chromeKeys = Object.values(this.schema).map(c => c.chromeKey).filter(k => k);
         const storageData = await chrome.storage.local.get(chromeKeys);
+        // ROOT CAUSE FIX: Log Chrome storage theme value
+        const chromeTheme = storageData['theme'];
+        console.log('🔍 THEME_CHROME_LOAD: Chrome storage theme value:', chromeTheme !== undefined && chromeTheme !== null ? chromeTheme : 'NOT SET');
         const prefs = {};
         for (const [key, config] of Object.entries(this.schema)) {
             if (config.chromeKey && storageData[config.chromeKey] !== undefined) {
                 prefs[key] = storageData[config.chromeKey];
+                if (key === 'theme') {
+                    console.log('🔍 THEME_CHROME_LOAD: ✅ Theme found in Chrome storage:', storageData[config.chromeKey]);
+                }
+            }
+            else if (key === 'theme') {
+                console.log('🔍 THEME_CHROME_LOAD: ⚠️ Theme NOT SET in Chrome storage');
             }
         }
         return prefs;
@@ -263,16 +316,24 @@ export class UserPreferencesManager {
             if (!response) {
                 throw new Error('Empty response from API');
             }
+            // ROOT CAUSE FIX: Log database response for theme specifically
+            const dbTheme = response?.['theme'];
+            console.log('🔍 THEME_DB_LOAD: Database theme value:', dbTheme !== undefined && dbTheme !== null ? dbTheme : 'NULL/NOT SET');
+            console.log('🔍 THEME_DB_LOAD: Full database response theme field:', dbTheme);
             const prefs = {};
             for (const [key, config] of Object.entries(this.schema)) {
                 const dbValue = response[config.dbColumn];
                 if (dbValue !== undefined && dbValue !== null) {
                     prefs[key] = dbValue; // Map by preference key
+                    if (key === 'theme') {
+                        console.log('🔍 THEME_DB_LOAD: ✅ Theme found in database:', dbValue);
+                    }
                 }
-                else {
-                    // Use default if column doesn't exist or is null
-                    prefs[key] = config.defaultValue;
+                else if (key === 'theme') {
+                    console.log('🔍 THEME_DB_LOAD: ⚠️ Theme is NULL in database (will not use default, will check other sources)');
                 }
+                // ROOT CAUSE FIX: Do NOT set default for NULL values - NULL means "not set" and should not be saved back
+                // Only use defaults in loadAllPreferences() when all sources are unavailable
             }
             return prefs;
         }
@@ -308,6 +369,17 @@ export class UserPreferencesManager {
         }
         const config = this.schema[key];
         const oldValue = this.preferences[key];
+        // ROOT CAUSE FIX: Never save default values to database - they're only for local fallback
+        if (this._defaultValues && this._defaultValues[key] && value === config.defaultValue) {
+            console.log(`⚠️ USER_PREFERENCES_MANAGER: Skipping save of default value for ${key} (prevents overwriting database with defaults)`);
+            // Clear the default flag since user is explicitly setting it
+            delete this._defaultValues[key];
+            // Still update local state and Chrome storage, but skip database
+            this.preferences[key] = value;
+            await chrome.storage.local.set({ [config.chromeKey]: value });
+            this.updateCurrentUser();
+            return true;
+        }
         try {
             // Step 1: Validate
             if (!this.validatePreference(key, value)) {
@@ -624,9 +696,10 @@ export class UserPreferencesManager {
         if (this.preferences.theme) {
             const currentDomTheme = document.body.getAttribute('data-theme') || document.documentElement.getAttribute('data-theme');
             const isDefaultTheme = this.preferences.theme === this.schema.theme.defaultValue;
-            // CRITICAL FIX: If DOM already has a theme set, NEVER override it during preference loading
+            // ROOT CAUSE FIX: CRITICAL - If DOM already has a theme set, NEVER override it during preference loading
             // This prevents theme from resetting to light when messages load
             // Only apply theme if DOM has no theme set (first load)
+            // ALSO: Never apply default 'light' theme if DOM is already 'dark' - this is the root cause
             if (!currentDomTheme) {
                 // No DOM theme - safe to apply preference
                 console.log(`🔍 USER_PREFERENCES_MANAGER: Applying theme preference '${this.preferences.theme}' (no existing DOM theme)`);
@@ -652,6 +725,21 @@ export class UserPreferencesManager {
             }
             else {
                 // DOM theme exists - preserve it, don't override
+                // ROOT CAUSE FIX: CRITICAL - If DOM is 'dark' and preference is 'light' (especially if it's a default), DO NOT override
+                if (currentDomTheme === 'dark' && this.preferences.theme === 'light' && isDefaultTheme) {
+                    console.warn(`🚫 USER_PREFERENCES_MANAGER: BLOCKING theme override - DOM is 'dark', preference is default 'light' - preserving DOM theme`);
+                    // Sync preference to match DOM (DOM is the source of truth here)
+                    this.preferences.theme = 'dark';
+                    // Update Chrome storage to match DOM (prevent future resets)
+                    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+                        chrome.storage.local.set({ theme: 'dark' }, () => {
+                            if (chrome.runtime?.lastError) {
+                                console.warn('⚠️ USER_PREFERENCES_MANAGER: Failed to sync Chrome storage:', chrome.runtime.lastError);
+                            }
+                        });
+                    }
+                    return; // Don't apply anything, just exit
+                }
                 console.log(`🔍 USER_PREFERENCES_MANAGER: Preserving existing DOM theme '${currentDomTheme}' (preference '${this.preferences.theme}' will not override)`);
                 // Sync preference to match DOM (in case DOM was set by ProfileManager)
                 if (this.preferences.theme !== currentDomTheme) {

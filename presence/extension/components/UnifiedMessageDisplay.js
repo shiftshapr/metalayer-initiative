@@ -29,7 +29,13 @@ export class UnifiedMessageDisplay {
         // ROOT CAUSE FIX: ALWAYS clear container completely before rendering to prevent duplicates
         // The previous logic was keeping messages when focus context was the same, causing duplicates
         // Now we always clear to ensure a clean state
-        const existingMessageCount = container.querySelectorAll('[data-message-id]').length;
+        // CRITICAL FIX: Only count actual message elements, not buttons
+        const actualMessages = Array.from(container.querySelectorAll('.message, [data-message-id]')).filter(el => {
+            return el.classList.contains('message') ||
+                el.querySelector('.message-content-wrapper') !== null ||
+                (el.querySelector('.message-footer-actions') !== null && el.querySelector('.message-content') !== null);
+        });
+        const existingMessageCount = actualMessages.length;
         const existingFocusContext = container.className.match(/focus-mode-(\w+)/)?.[1];
         // Always clear - duplicates are caused by not clearing properly
         while (container.firstChild) {
@@ -76,12 +82,18 @@ export class UnifiedMessageDisplay {
      * ROOT CAUSE FIX: Check for duplicates before appending
      */
     async renderDefault(messages, container, options) {
-        // ROOT CAUSE FIX: Container is already cleared in render(), but check for any remaining messages
-        // Also check ALL containers with class chat-messages to prevent duplicates across multiple containers
+        // CRITICAL FIX: Only check actual message elements, not buttons
+        // Buttons have data-message-id but are not messages themselves
         const allChatContainers = document.querySelectorAll('.chat-messages');
         const allExistingIds = new Set();
         allChatContainers.forEach(cont => {
-            Array.from(cont.querySelectorAll('[data-message-id]')).forEach(el => {
+            // Only count elements with .message class or .message-content-wrapper (actual messages)
+            const messageElements = Array.from(cont.querySelectorAll('.message, [data-message-id]')).filter(el => {
+                return el.classList.contains('message') ||
+                    el.querySelector('.message-content-wrapper') !== null ||
+                    (el.querySelector('.message-footer-actions') !== null && el.querySelector('.message-content') !== null);
+            });
+            messageElements.forEach(el => {
                 const id = el.getAttribute('data-message-id');
                 if (id)
                     allExistingIds.add(id);
@@ -113,9 +125,14 @@ export class UnifiedMessageDisplay {
                 console.error(`❌ UnifiedMessageDisplay: Failed to append message ${message.id}:`, error);
             }
         }
-        // ROOT CAUSE FIX: Verify messages are in DOM after rendering
-        const finalCount = container.querySelectorAll('[data-message-id]').length;
-        console.log(`🔍 UnifiedMessageDisplay: Rendered ${newMessages.length} new messages, ${finalCount} total in container`);
+        // CRITICAL FIX: Verify actual message elements (not buttons)
+        const actualMessages = Array.from(container.querySelectorAll('.message, [data-message-id]')).filter(el => {
+            return el.classList.contains('message') ||
+                el.querySelector('.message-content-wrapper') !== null ||
+                (el.querySelector('.message-footer-actions') !== null && el.querySelector('.message-content') !== null);
+        });
+        const finalCount = actualMessages.length;
+        console.log(`🔍 UnifiedMessageDisplay: Rendered ${newMessages.length} new messages, ${finalCount} actual message elements in container`);
         if (finalCount > newMessages.length) {
             console.warn(`⚠️ UnifiedMessageDisplay: Container has more messages than expected! Expected ${newMessages.length} new, found ${finalCount} total`);
         }
@@ -198,6 +215,8 @@ export class UnifiedMessageDisplay {
         this.applyFocusClasses(messageEl, options);
         this.ensureDataAttributes(messageEl, message);
         this.attachFocusHandler(messageEl, message, options);
+        // CRITICAL FIX: Add message-loaded class so footer is visible
+        messageEl.classList.add('message-loaded');
         const win = typeof window !== 'undefined'
             ? window
             : undefined;
@@ -265,6 +284,24 @@ export class UnifiedMessageDisplay {
     }
     async renderWithUnifiedRenderer(message, container) {
         const typed = message;
+        // CRITICAL FIX: Ensure communityId is available - check message.communityId first, then fallback to state
+        if (!typed.communityId) {
+            // Try to get from message data directly
+            const messageData = message;
+            if (messageData.communityId) {
+                typed.communityId = messageData.communityId;
+            }
+            else {
+                // Fallback: Try to get from stateManager chat.data
+                const chatData = stateManagerInstance.getState('chat.data');
+                if (chatData) {
+                    const messageInState = chatData.find(m => m.id === message.id);
+                    if (messageInState?.communityId) {
+                        typed.communityId = messageInState.communityId;
+                    }
+                }
+            }
+        }
         const reactionCount = typeof typed.reactionCount === 'number'
             ? typed.reactionCount
             : Array.isArray(typed.reactions)
@@ -277,6 +314,7 @@ export class UnifiedMessageDisplay {
                 : 0;
         const bookmarkCount = typeof typed.bookmarkCount === 'number' ? typed.bookmarkCount : 0;
         const communityName = typed.communityName || (await this.resolveCommunityName(typed.communityId));
+        // Counts and community name are now properly resolved
         return UnifiedMessageRenderer.renderMessage(message, {
             isReply: !!message.parentId,
             isFocusMode: this.isFocusModeContainer(container),

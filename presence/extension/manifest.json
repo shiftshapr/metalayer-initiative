@@ -12,7 +12,8 @@
     "identity",
     "identity.email",
     "notifications",
-    "webRequest"
+    "webRequest",
+    "windows"
   ],
   "host_permissions": [
     "https://app.themetalayer.org/*",
