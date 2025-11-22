@@ -1527,7 +1527,7 @@ html[data-theme="dark"] .focus-message-input-container {
   flex-direction: row !important;
   align-items: center !important;
   justify-content: flex-start !important;
-  gap: 8px !important;
+  gap: 4px !important; /* CRITICAL FIX: Reduced gap to minimize whitespace */
   flex-wrap: nowrap !important;
   min-width: 200px !important; /* Ensure space for all buttons */
   width: auto !important;
@@ -1541,7 +1541,7 @@ html[data-theme="dark"] .focus-message-input-container {
   flex-direction: row !important; /* CRITICAL: Icons must be horizontal */
   align-items: center !important;
   justify-content: space-evenly !important; /* CRITICAL: Evenly space icon/count pairs */
-  gap: 8px !important; /* Add gap for spacing */
+  gap: 4px !important; /* CRITICAL FIX: Reduced gap to minimize whitespace */
   flex-wrap: nowrap !important; /* Prevent wrapping */
   min-width: 200px !important; /* Ensure space for all buttons */
 }
@@ -1633,6 +1633,24 @@ html[data-theme="dark"] .focus-message-input-container {
   color: inherit !important;
 }
 
+/* CRITICAL FIX: Ensure repost icon renders correctly - no corruption */
+.message-footer .repost-btn svg {
+  display: inline-block !important;
+  width: 18px !important;
+  height: 18px !important;
+  min-width: 18px !important;
+  min-height: 18px !important;
+  max-width: 18px !important;
+  max-height: 18px !important;
+  overflow: visible !important;
+  shape-rendering: geometricPrecision !important;
+}
+
+.message-footer .repost-btn svg path {
+  vector-effect: non-scaling-stroke !important;
+  shape-rendering: geometricPrecision !important;
+}
+
 /* CRITICAL: Override any light colors with visible dark color */
 .message-footer-actions button svg,
 .message-footer .inline-reply-btn svg,
@@ -1717,7 +1735,7 @@ html[data-theme="dark"] .focus-message-input-container {
 /* Icon count styling */
 .icon-count {
   font-size: 10px !important;
-  margin-left: 2px !important;
+  margin-left: 0px !important; /* CRITICAL FIX: Remove whitespace between icon and count */
   font-weight: 500 !important;
   color: #666 !important;
 }
@@ -3607,7 +3625,7 @@ div.message.message-reply.visible div.message-content-wrapper div.message-header
 /* Icon counts */
 .icon-count {
   font-size: 9px; /* 75% of 12px icon size */
-  margin-left: 2px;
+  margin-left: 0px !important; /* CRITICAL FIX: Remove whitespace between icon and count */
   font-weight: normal;
   color: #666;
 }

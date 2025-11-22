@@ -919,43 +919,64 @@ function addMessageActionListeners(messageDiv, message) {
     // Reaction button
     const reactionButton = messageDiv.querySelector('.reaction-btn');
     if (reactionButton) {
-        reactionButton.addEventListener('click', (e) => {
+        reactionButton.addEventListener('click', async (e) => {
             e.stopPropagation();
             const handleReactionClick = window.handleReactionClick;
             if (typeof handleReactionClick === 'function') {
-                handleReactionClick(messageId, message);
+                await handleReactionClick(messageId, message);
             }
             else {
                 console.log('❤️ Reaction clicked for message:', messageId);
-                // Fallback: show reaction picker or add default reaction
+                // Fallback: use reactionsIntegration
+                await handleReaction(message);
             }
         });
     }
     // Bookmark button
     const bookmarkButton = messageDiv.querySelector('.bookmark-btn');
     if (bookmarkButton) {
-        bookmarkButton.addEventListener('click', (e) => {
+        bookmarkButton.addEventListener('click', async (e) => {
             e.stopPropagation();
             const handleBookmarkClick = window.handleBookmarkClick;
             if (typeof handleBookmarkClick === 'function') {
-                handleBookmarkClick(messageId, message);
+                await handleBookmarkClick(messageId, message);
             }
             else {
                 console.log('🔖 Bookmark clicked for message:', messageId);
+                // Fallback: implement basic bookmark toggle
+                await handleBookmarkMessage(message);
+            }
+        });
+    }
+    // Repost button - CRITICAL FIX: Add missing click handler
+    const repostButton = messageDiv.querySelector('.repost-btn');
+    if (repostButton) {
+        repostButton.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const handleRepostClick = window.handleRepostClick;
+            if (typeof handleRepostClick === 'function') {
+                await handleRepostClick(messageId, message);
+            }
+            else {
+                console.log('🔄 Repost clicked for message:', messageId);
+                // Fallback: implement basic repost
+                await handleRepostMessage(message);
             }
         });
     }
     // Share button
     const shareButton = messageDiv.querySelector('.share-btn');
     if (shareButton) {
-        shareButton.addEventListener('click', (e) => {
+        shareButton.addEventListener('click', async (e) => {
             e.stopPropagation();
             const handleShareClick = window.handleShareClick;
             if (typeof handleShareClick === 'function') {
-                handleShareClick(messageId, message);
+                await handleShareClick(messageId, message);
             }
             else {
                 console.log('📤 Share clicked for message:', messageId);
+                // Fallback: use existing handleShareMessage
+                await handleShareMessage(message);
             }
         });
     }
@@ -1788,6 +1809,98 @@ async function getSenderAvatar(author) {
     return getSenderInitial(displayName);
 }
 /**
+ * Handle repost message
+ * Creates a repost of the message
+ */
+async function handleRepostMessage(message) {
+    console.log(`🔄 REPOST: Reposting message ${message.id}`);
+    try {
+        const urlData = getCurrentUrlData();
+        const pageId = urlData?.pageId || getCurrentLocationHref();
+        const communityId = message.communityId || getActiveCommunities()[0];
+        if (!pageId || !communityId) {
+            console.error('❌ handleRepostMessage: Missing pageId or communityId');
+            return;
+        }
+        // Use UnifiedMessageModal to create repost
+        const win = window;
+        // Try repost modal first, fallback to quote modal
+        if (win.openRepostModal && typeof win.openRepostModal === 'function') {
+            await win.openRepostModal(message, pageId, communityId);
+        }
+        else if (win.openQuoteModal && typeof win.openQuoteModal === 'function') {
+            // Use quote modal as repost (similar functionality)
+            await win.openQuoteModal(message, pageId);
+        }
+        else {
+            console.error('❌ handleRepostMessage: UnifiedMessageModal not available');
+            const showNotification = window.showNotification;
+            if (typeof window !== 'undefined' && showNotification) {
+                showNotification('Repost functionality not available');
+            }
+        }
+    }
+    catch (error) {
+        console.error('❌ handleRepostMessage: Failed to repost message:', error);
+        const showNotification = window.showNotification;
+        if (typeof window !== 'undefined' && showNotification) {
+            showNotification('Failed to repost message');
+        }
+    }
+}
+/**
+ * Handle bookmark message
+ * Toggles bookmark status
+ */
+async function handleBookmarkMessage(message) {
+    console.log(`🔖 BOOKMARK: Toggling bookmark for message ${message.id}`);
+    try {
+        const api = getApi();
+        if (!api) {
+            console.error('❌ handleBookmarkMessage: API not available');
+            return;
+        }
+        const currentUser = getCurrentUser();
+        if (!currentUser) {
+            console.error('❌ handleBookmarkMessage: User not authenticated');
+            return;
+        }
+        const isBookmarked = message.isBookmarked || false;
+        const endpoint = isBookmarked ? `/api/bookmarks/${message.id}` : '/api/bookmarks';
+        const method = isBookmarked ? 'DELETE' : 'POST';
+        const response = await api.request(endpoint, {
+            method,
+            body: isBookmarked ? undefined : { messageId: message.id }
+        });
+        if (response.data?.success) {
+            // Update message bookmark status
+            const messageDiv = document.querySelector(`[data-message-id="${message.id}"]`);
+            if (messageDiv) {
+                const bookmarkButton = messageDiv.querySelector('.bookmark-btn');
+                if (bookmarkButton) {
+                    bookmarkButton.classList.toggle('active', !isBookmarked);
+                    bookmarkButton.setAttribute('data-is-bookmarked', (!isBookmarked).toString());
+                }
+            }
+            const showNotification = window.showNotification;
+            if (typeof window !== 'undefined' && showNotification) {
+                showNotification(isBookmarked ? 'Bookmark removed' : 'Message bookmarked');
+            }
+            console.log(`✅ BOOKMARK: ${isBookmarked ? 'Removed' : 'Added'} bookmark for message ${message.id}`);
+        }
+        else {
+            throw new Error(response.error || 'Failed to toggle bookmark');
+        }
+    }
+    catch (error) {
+        console.error('❌ handleBookmarkMessage: Failed to toggle bookmark:', error);
+        const showNotification = window.showNotification;
+        if (typeof window !== 'undefined' && showNotification) {
+            showNotification('Failed to toggle bookmark');
+        }
+    }
+}
+/**
  * Handle share message
  * COMP METHOD: Matches original implementation
  */
@@ -2108,6 +2221,21 @@ const attachLegacyIntegrations = () => {
     win.addMessageActionListeners = addMessageActionListeners;
     win.handleReplyToMessage = handleReplyToMessage;
     win.handleQuoteMessage = handleQuoteMessage;
+    win.handleRepostMessage = handleRepostMessage;
+    win.handleBookmarkMessage = handleBookmarkMessage;
+    win.handleShareMessage = handleShareMessage;
+    win.handleReactionClick = async (messageId, message) => {
+        await handleReaction(message);
+    };
+    win.handleBookmarkClick = async (messageId, message) => {
+        await handleBookmarkMessage(message);
+    };
+    win.handleShareClick = async (messageId, message) => {
+        await handleShareMessage(message);
+    };
+    win.handleRepostClick = async (messageId, message) => {
+        await handleRepostMessage(message);
+    };
     win.handleReplyClick = async (messageId, message) => {
         await handleReplyToMessage(message);
     };
@@ -2115,7 +2243,7 @@ const attachLegacyIntegrations = () => {
 attachLegacyIntegrations();
 // ES6 module exports
 export { CanopiModule, addMessageToChat, createUnifiedMessageElement, updateReactionDisplay, addMessageActionListeners, loadMessageReactions, handleMessageFocus, loadChatHistory, // CRITICAL: Export for module imports
-updateMessageInChat, removeMessageFromChat, getSenderName, convertUrlsToLinks, formatMessageTime, getSenderInitial, canUserEditMessage, checkAndAddThreadToggle, toggleThreadReplies, sendMessageViaSupabase, getSenderAvatar, handleShareMessage, handleStartThread, handleCopyLink, focusOnMessage, parseMessageUrl, handleIncomingMessageUrl, handleBackNavigation, handleReaction, setupMessageInputEventListeners, sendChatMessage, handleReplyToMessage, handleQuoteMessage };
+updateMessageInChat, removeMessageFromChat, getSenderName, convertUrlsToLinks, formatMessageTime, getSenderInitial, canUserEditMessage, checkAndAddThreadToggle, toggleThreadReplies, sendMessageViaSupabase, getSenderAvatar, handleShareMessage, handleStartThread, handleCopyLink, focusOnMessage, parseMessageUrl, handleIncomingMessageUrl, handleBackNavigation, handleReaction, setupMessageInputEventListeners, sendChatMessage, handleReplyToMessage, handleQuoteMessage, handleRepostMessage, handleBookmarkMessage };
 // Also export as default object for convenience
 export default {
     CanopiModule,

@@ -110,7 +110,7 @@ export class UnifiedMessageRenderer {
         const bookmarkButtonClass = isBookmarked ? 'bookmark-btn active' : 'bookmark-btn';
         // CRITICAL FIX: Always generate buttons - they should always be present
         const replyButton = `<button class="${replyButtonClass}" data-message-id="${message.id}" data-has-replied="${hasUserReplied}" title="Reply">${replyIcon}${replyCountDisplay}</button>`;
-        const repostButton = `<button class="${repostButtonClass}" data-message-id="${message.id}" data-has-reposted="${hasUserReposted}" title="Repost">${repostIcon}</button>`;
+        const repostButton = `<button class="${repostButtonClass}" data-message-id="${message.id}" data-has-reposted="${hasUserReposted}" title="Repost" style="display: flex; align-items: center; gap: 0;">${repostIcon}</button>`;
         const reactionButton = `<button class="reaction-btn" data-message-id="${message.id}" title="Like">${likeIcon}${reactionCountDisplay}</button>`;
         const bookmarkButton = `<button class="${bookmarkButtonClass}" data-message-id="${message.id}" data-is-bookmarked="${isBookmarked}" title="Bookmark">${bookmarkIcon}${bookmarkCountDisplay}</button>`;
         const shareButton = `<button class="${shareButtonClass}" data-message-id="${message.id}" data-has-shared="${hasUserShared}" title="Share">${shareIcon}</button>`;
