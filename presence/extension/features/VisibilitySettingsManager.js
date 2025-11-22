@@ -69,18 +69,40 @@ class VisibilitySettingsManager {
     }
     /**
      * CRITICAL FIX: Ensure event listeners are attached (call when settings tab opens)
-     * Now checks ALL toggles, not just theme toggle
+     * FIX: Prevent double-attachment that causes double-click issue
      */
     async ensureEventListeners() {
         console.log('🔧 VISIBILITY_SETTINGS: Ensuring event listeners are attached...');
         // Re-get ALL DOM elements in case they were recreated
-        this.visibilityToggle = document.getElementById('visibility-toggle');
-        this.statusSelect = document.getElementById('status-select');
-        this.auraColorPicker = document.getElementById('aura-color-picker');
-        this.auraColorHex = document.getElementById('aura-color-hex');
-        this.auraIntensitySlider = document.getElementById('aura-intensity-slider');
-        this.auraIntensityValue = document.getElementById('aura-intensity-value');
-        this.themeToggle = document.getElementById('theme-toggle');
+        const visibilityToggleEl = document.getElementById('visibility-toggle');
+        const statusSelectEl = document.getElementById('status-select');
+        const auraColorPickerEl = document.getElementById('aura-color-picker');
+        const auraColorHexEl = document.getElementById('aura-color-hex');
+        const auraIntensitySliderEl = document.getElementById('aura-intensity-slider');
+        const auraIntensityValueEl = document.getElementById('aura-intensity-value');
+        const themeToggleEl = document.getElementById('theme-toggle');
+        // CRITICAL FIX: Only update references if elements exist and are different
+        if (visibilityToggleEl && visibilityToggleEl !== this.visibilityToggle) {
+            this.visibilityToggle = visibilityToggleEl;
+        }
+        if (statusSelectEl && statusSelectEl !== this.statusSelect) {
+            this.statusSelect = statusSelectEl;
+        }
+        if (auraColorPickerEl && auraColorPickerEl !== this.auraColorPicker) {
+            this.auraColorPicker = auraColorPickerEl;
+        }
+        if (auraColorHexEl && auraColorHexEl !== this.auraColorHex) {
+            this.auraColorHex = auraColorHexEl;
+        }
+        if (auraIntensitySliderEl && auraIntensitySliderEl !== this.auraIntensitySlider) {
+            this.auraIntensitySlider = auraIntensitySliderEl;
+        }
+        if (auraIntensityValueEl && auraIntensityValueEl !== this.auraIntensityValue) {
+            this.auraIntensityValue = auraIntensityValueEl;
+        }
+        if (themeToggleEl && themeToggleEl !== this.themeToggle) {
+            this.themeToggle = themeToggleEl;
+        }
         // Check if ALL handlers are attached
         const allHandlersAttached = (this.visibilityToggle?.getAttribute('data-handler-attached') === 'true') &&
             (this.statusSelect?.getAttribute('data-handler-attached') === 'true') &&
@@ -101,10 +123,19 @@ class VisibilitySettingsManager {
      * Set up event listeners
      */
     setupEventListeners() {
-        // Visibility toggle - CRITICAL FIX: Show modal if user is not visible and trying to enable
+        // Visibility toggle - CRITICAL FIX: Prevent double-attachment and preserve state
         if (this.visibilityToggle) {
+            // Check if already attached - if so, don't re-attach
+            if (this.visibilityToggle.getAttribute('data-handler-attached') === 'true') {
+                console.log('✅ VISIBILITY_SETTINGS: Visibility toggle handler already attached, skipping');
+                return;
+            }
+            // Store current checked state before cloning
+            const wasChecked = this.visibilityToggle.checked;
             // Clone element to remove existing listeners
             const newToggle = this.visibilityToggle.cloneNode(true);
+            // Restore checked state
+            newToggle.checked = wasChecked;
             if (this.visibilityToggle.parentNode) {
                 this.visibilityToggle.parentNode.replaceChild(newToggle, this.visibilityToggle);
             }
@@ -120,7 +151,7 @@ class VisibilitySettingsManager {
                 this.updateVisibilityStatus();
                 await this.saveVisibility();
                 console.log('🔍 DIAGNOSTIC: Visibility saved:', toggle.checked);
-            });
+            }, { once: false, passive: true });
             toggle.setAttribute('data-handler-attached', 'true');
         }
         // ROOT CAUSE FIX: Add click handler to visibility label/section to show Go Visible Modal when toggle is "No"
@@ -162,8 +193,15 @@ class VisibilitySettingsManager {
         }
         // Status select
         if (this.statusSelect) {
+            // Check if already attached
+            if (this.statusSelect.getAttribute('data-handler-attached') === 'true') {
+                return;
+            }
+            // Store current value before cloning
+            const currentValue = this.statusSelect.value;
             // Clone element to remove existing listeners
             const newSelect = this.statusSelect.cloneNode(true);
+            newSelect.value = currentValue;
             if (this.statusSelect.parentNode) {
                 this.statusSelect.parentNode.replaceChild(newSelect, this.statusSelect);
             }
@@ -243,10 +281,18 @@ class VisibilitySettingsManager {
                 this.resetDisplayName();
             });
         }
-        // Theme toggle - CRITICAL FIX: Remove existing listener first, then attach new one
+        // Theme toggle - COMP: Fix theme toggle functionality
         if (this.themeToggle) {
-            // Remove any existing event listeners by cloning the element
+            // Check if already attached
+            if (this.themeToggle.getAttribute('data-handler-attached') === 'true') {
+                console.log('✅ VISIBILITY_SETTINGS: Theme toggle handler already attached, skipping');
+                return;
+            }
+            // Store current checked state before cloning
+            const wasChecked = this.themeToggle.checked;
+            // Clone element to remove existing listeners
             const newToggle = this.themeToggle.cloneNode(true);
+            newToggle.checked = wasChecked;
             if (this.themeToggle.parentNode) {
                 this.themeToggle.parentNode.replaceChild(newToggle, this.themeToggle);
             }
@@ -264,12 +310,9 @@ class VisibilitySettingsManager {
                 }
                 e.stopPropagation();
                 console.log('🔍 DIAGNOSTIC: Settings tab theme toggle changed (user action)');
-                console.log('🔍 DIAGNOSTIC: Event object:', e);
-                console.log('🔍 DIAGNOSTIC: Toggle element:', toggle);
-                console.log('🔍 DIAGNOSTIC: Toggle checked:', toggle.checked);
                 const beforeTheme = document.body.getAttribute('data-theme') || document.documentElement.getAttribute('data-theme') || 'light';
                 console.log('🔍 DIAGNOSTIC: Theme before change:', beforeTheme);
-                // CRITICAL FIX: Save theme first, then update status
+                // COMP: Save theme and apply immediately
                 await this.saveTheme();
                 this.updateThemeStatus();
                 const afterTheme = document.body.getAttribute('data-theme') || document.documentElement.getAttribute('data-theme') || 'light';
@@ -291,7 +334,11 @@ class VisibilitySettingsManager {
      */
     async loadSettings() {
         try {
+            const stack = new Error().stack;
+            console.log('🔍 VISIBILITY_SETTINGS: ========================================');
             console.log('📖 VISIBILITY_SETTINGS: Loading settings...');
+            console.log('🔍 VISIBILITY_SETTINGS: Call stack:', stack?.split('\n').slice(1, 8).join('\n'));
+            console.log('🔍 VISIBILITY_SETTINGS: ========================================');
             const currentUser = stateManagerInstance.getState('currentUser');
             if (!currentUser || !currentUser.id) {
                 console.warn('⚠️ VISIBILITY_SETTINGS: No current user found');
@@ -400,9 +447,15 @@ class VisibilitySettingsManager {
             // Let UserPreferencesManager handle theme loading - it has proper priority logic
             // Only load theme if UserPreferencesManager is NOT available (fallback mode)
             let theme = null;
+            // Get current DOM theme BEFORE any changes
+            const currentDOMThemeBefore = document.body.getAttribute('data-theme') || document.documentElement.getAttribute('data-theme');
+            console.log('🔍 VISIBILITY_SETTINGS: Current DOM theme BEFORE loadSettings:', currentDOMThemeBefore || 'NOT SET');
             // CRITICAL FIX: Check if UserPreferencesManager is available and initialized
             if (userPreferencesManager && userPreferencesManager.isInitialized) {
-                console.log('ℹ️ VISIBILITY_SETTINGS: UserPreferencesManager is available - skipping theme load (UserPreferencesManager handles theme)');
+                console.log('🔍 VISIBILITY_SETTINGS: ========================================');
+                console.log('ℹ️ VISIBILITY_SETTINGS: UserPreferencesManager is available - SKIPPING theme load');
+                console.log('🔍 VISIBILITY_SETTINGS: UserPreferencesManager handles theme - we will NOT change it');
+                console.log('🔍 VISIBILITY_SETTINGS: ========================================');
                 // Don't load theme - UserPreferencesManager will handle it
                 // Just sync the toggle with current DOM theme
                 const currentDOMTheme = document.body.getAttribute('data-theme') || document.documentElement.getAttribute('data-theme');
@@ -423,6 +476,7 @@ class VisibilitySettingsManager {
                         console.warn('⚠️ VISIBILITY_SETTINGS: Error getting theme from UserPreferencesManager:', error);
                     }
                 }
+                // CRITICAL: Don't proceed to set DOM theme - UserPreferencesManager is managing it
             }
             else {
                 // Fallback: Load theme if UserPreferencesManager is not available
@@ -463,9 +517,9 @@ class VisibilitySettingsManager {
                     }
                 }
             }
-            // ROOT CAUSE FIX: Only set theme if we found one AND DOM is not already set to a different value
-            // This prevents overriding a dark theme with a light value
-            if (theme) {
+            // ROOT CAUSE FIX: Only set theme if UserPreferencesManager is NOT managing it
+            // If UserPreferencesManager is available, we already handled theme above and should NOT set DOM
+            if (theme && (!userPreferencesManager || !userPreferencesManager.isInitialized)) {
                 const existingDOMTheme = document.body.getAttribute('data-theme') || document.documentElement.getAttribute('data-theme');
                 // CRITICAL: If DOM is already 'dark' and we're trying to set 'light', DON'T override
                 if (existingDOMTheme === 'dark' && theme === 'light') {
@@ -486,6 +540,12 @@ class VisibilitySettingsManager {
                 else {
                     console.log(`ℹ️ VISIBILITY_SETTINGS: DOM theme already matches: ${theme}`);
                 }
+            }
+            else if (userPreferencesManager && userPreferencesManager.isInitialized) {
+                // UserPreferencesManager is managing theme - DO NOT SET DOM
+                console.log('🔍 VISIBILITY_SETTINGS: UserPreferencesManager is managing theme - NOT setting DOM theme');
+                const finalDOMTheme = document.body.getAttribute('data-theme') || document.documentElement.getAttribute('data-theme');
+                console.log('🔍 VISIBILITY_SETTINGS: Final DOM theme (preserved):', finalDOMTheme || 'NOT SET');
             }
             else {
                 // No theme found - don't set anything, let UserPreferencesManager handle it
@@ -806,22 +866,9 @@ class VisibilitySettingsManager {
                 document.documentElement.getAttribute('data-theme');
             let theme;
             if (this.themeToggle) {
-                // Use toggle state if available
+                // COMP: Use toggle state directly - user clicked it, trust the toggle
                 theme = this.themeToggle.checked ? 'dark' : 'light';
                 console.log('🔍 VISIBILITY_SETTINGS: Toggle state - checked:', this.themeToggle.checked, 'resolved theme:', theme);
-                // ROOT CAUSE FIX: If toggle says 'light' but DOM is 'dark', trust DOM (toggle is out of sync)
-                if (theme === 'light' && currentDOMTheme === 'dark') {
-                    console.warn('⚠️ VISIBILITY_SETTINGS: Toggle says light but DOM is dark - trusting DOM');
-                    theme = 'dark';
-                    // Sync toggle to match DOM
-                    this.themeToggle.checked = true;
-                }
-                else if (theme === 'dark' && currentDOMTheme === 'light') {
-                    console.warn('⚠️ VISIBILITY_SETTINGS: Toggle says dark but DOM is light - trusting DOM');
-                    theme = 'light';
-                    // Sync toggle to match DOM
-                    this.themeToggle.checked = false;
-                }
             }
             else {
                 // No toggle - use DOM theme or default
@@ -833,6 +880,10 @@ class VisibilitySettingsManager {
             console.log('🔍 VISIBILITY_SETTINGS: UserPreferencesManager available:', !!userPreferencesManager);
             console.log('🔍 VISIBILITY_SETTINGS: UserPreferencesManager initialized:', userPreferencesManager?.isInitialized);
             console.log('🔍 VISIBILITY_SETTINGS: ========================================');
+            // COMP: Apply theme to DOM immediately before saving
+            document.documentElement.setAttribute('data-theme', theme);
+            document.body.setAttribute('data-theme', theme);
+            console.log('✅ VISIBILITY_SETTINGS: Theme applied to DOM:', theme);
             // ROOT CAUSE FIX: NEVER fall back to updateThemeEverywhere - it causes theme resets
             // If UserPreferencesManager is not initialized, initialize it first
             if (!userPreferencesManager || !userPreferencesManager.isInitialized) {

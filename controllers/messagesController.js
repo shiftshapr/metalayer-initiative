@@ -474,14 +474,71 @@ exports.createMessage = async (req, res) => {
       return res.status(400).json({ error: 'content and pageId are required' });
     }
 
-    // TODO: Get user from auth/session
-    // For now, using a placeholder - this should come from authenticated session
-    const userId = req.body.userId || req.user?.id;
-    if (!userId) {
-      return res.status(401).json({ error: 'Authentication required' });
+    // Get user email from header (frontend sends Google ID, we need to look up by email)
+    const userEmail = req.headers['x-user-email'] || req.body.userEmail;
+    const googleId = req.body.userId || req.headers['x-user-id']; // For debugging
+    
+    console.log('📝 CREATE_MESSAGE_DEBUG:', { 
+      userEmail, 
+      googleId, 
+      headers: Object.keys(req.headers).filter(k => k.toLowerCase().includes('user')),
+      bodyUserId: req.body.userId 
+    });
+    
+    if (!userEmail) {
+      return res.status(401).json({ 
+        error: 'User email required (X-User-Email header)',
+        received: { 
+          emailHeader: req.headers['x-user-email'],
+          emailBody: req.body.userEmail,
+          googleId 
+        }
+      });
     }
 
-    console.log('📝 CREATE_MESSAGE:', { content, pageId, parentId, userId });
+    // Look up AppUser by email to get UUID
+    const userResult = await prisma.$queryRaw`
+      SELECT 
+        id,
+        name,
+        handle,
+        "avatarUrl",
+        "auraColor"
+      FROM "AppUser"
+      WHERE email = ${userEmail}
+      LIMIT 1
+    `;
+
+    console.log('📝 CREATE_MESSAGE_USER_LOOKUP:', { 
+      userEmail, 
+      found: userResult?.length > 0,
+      userId: userResult?.[0]?.id,
+      userResult 
+    });
+
+    if (!userResult || userResult.length === 0) {
+      return res.status(404).json({ 
+        error: 'User not found. Please ensure your account is set up.',
+        details: `No AppUser found with email: ${userEmail}`
+      });
+    }
+
+    const appUser = userResult[0];
+    const userId = appUser.id; // This is the UUID
+
+    // Validate that userId is actually a UUID (not a Google ID)
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!userId || typeof userId !== 'string' || !uuidRegex.test(userId)) {
+      console.error('❌ CREATE_MESSAGE: Invalid userId format:', { userId, type: typeof userId, userEmail, googleId });
+      return res.status(500).json({ 
+        error: 'Invalid user ID format. User lookup may have failed.',
+        details: `Expected UUID, got: ${typeof userId} "${userId}"`,
+        userEmail,
+        googleId
+      });
+    }
+
+    console.log('📝 CREATE_MESSAGE:', { content, pageId, parentId, userId, userEmail, userIdType: typeof userId });
 
     // Insert message
     // Handle nullable UUIDs properly for Prisma - use Prisma.raw for NULL
@@ -525,20 +582,8 @@ exports.createMessage = async (req, res) => {
 
     const message = messageResult[0];
 
-    // Get author info
-    const authorResult = await prisma.$queryRaw`
-      SELECT 
-        id,
-        name,
-        handle,
-        "avatarUrl",
-        "auraColor"
-      FROM "AppUser"
-      WHERE id = ${userId}::UUID
-      LIMIT 1
-    `;
-
-    const author = authorResult[0];
+    // Use the already-fetched author info
+    const author = appUser;
 
     const response = {
       id: message.id,

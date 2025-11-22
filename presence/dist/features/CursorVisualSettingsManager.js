@@ -65,6 +65,7 @@ class CursorVisualSettingsManager {
     }
     /**
      * Setup settings UI in the settings tab
+     * FIX: Work with existing HTML structure instead of creating new section
      */
     setupSettingsUI() {
         // Wait for settings tab to be available
@@ -74,74 +75,71 @@ class CursorVisualSettingsManager {
                 setTimeout(checkSettingsTab, 500);
                 return;
             }
-            // Find or create cursor visual settings section
-            let cursorVisualSection = document.getElementById('cursor-visual-settings-section');
-            if (!cursorVisualSection) {
-                cursorVisualSection = document.createElement('div');
-                cursorVisualSection.id = 'cursor-visual-settings-section';
-                cursorVisualSection.className = 'settings-section';
-                cursorVisualSection.innerHTML = `
-          <h4>Live Cursor Visual Style</h4>
-          <p class="settings-description">Choose how your cursor appears when live cursor is enabled</p>
-          <div class="cursor-visual-options">
-            <label class="cursor-visual-option">
-              <input type="radio" name="cursor-visual-style" value="regular" ${this.visualStyle === 'regular' ? 'checked' : ''}>
-              <span class="option-label">
-                <span class="option-icon">🖱️</span>
-                <span>Regular</span>
-              </span>
-            </label>
-            <label class="cursor-visual-option">
-              <input type="radio" name="cursor-visual-style" value="aura-circle" ${this.visualStyle === 'aura-circle' ? 'checked' : ''}>
-              <span class="option-label">
-                <span class="option-icon" style="width: 12px; height: 12px; border-radius: 50%; background: var(--aura-color, #33aa33); display: inline-block;"></span>
-                <span>Aura Color Circle</span>
-              </span>
-            </label>
-            <label class="cursor-visual-option">
-              <input type="radio" name="cursor-visual-style" value="avatar" ${this.visualStyle === 'avatar' ? 'checked' : ''}>
-              <span class="option-label">
-                <span class="option-icon">👤</span>
-                <span>Avatar</span>
-              </span>
-            </label>
-            <label class="cursor-visual-option">
-              <input type="radio" name="cursor-visual-style" value="custom-image" ${this.visualStyle === 'custom-image' ? 'checked' : ''}>
-              <span class="option-label">
-                <span class="option-icon">🖼️</span>
-                <span>Custom Image</span>
-              </span>
-            </label>
-          </div>
-          <div class="cursor-custom-image-upload" id="cursor-custom-image-upload" style="display: ${this.visualStyle === 'custom-image' ? 'block' : 'none'}; margin-top: 12px;">
-            <input type="file" id="cursor-custom-image-input" accept="image/*" style="display: none;">
-            <button type="button" id="cursor-custom-image-btn" class="settings-btn">Upload Image</button>
-            ${this.customImageUrl ? `<img src="${this.escapeHtml(this.customImageUrl)}" alt="Custom cursor" style="max-width: 48px; max-height: 48px; margin-left: 8px; border-radius: 4px;">` : ''}
-          </div>
-        `;
-                // Insert after Live Cursor section
-                const liveCursorSection = document.querySelector('#live-cursor-settings, [data-section="live-cursor"]');
-                if (liveCursorSection && liveCursorSection.parentElement) {
-                    liveCursorSection.parentElement.insertBefore(cursorVisualSection, liveCursorSection.nextSibling);
-                }
-                else {
-                    // Fallback: append to settings tab
-                    settingsTab.appendChild(cursorVisualSection);
-                }
+            // Check if visualization radios already exist in HTML
+            const existingRadios = document.querySelectorAll('input[name="cursor-visual-style"]');
+            if (existingRadios.length > 0) {
+                // HTML already has the structure, just sync state and attach listeners
+                this.syncVisualizationState();
+                this.attachEventListeners();
+                return;
             }
-            // Setup event listeners
-            this.attachEventListeners();
+            // If HTML doesn't have the structure yet, wait a bit more
+            setTimeout(checkSettingsTab, 500);
         };
         checkSettingsTab();
+    }
+    /**
+     * Sync visualization state with HTML
+     */
+    syncVisualizationState() {
+        // Set checked state based on saved preference
+        const radios = document.querySelectorAll('input[name="cursor-visual-style"]');
+        radios.forEach(radio => {
+            const input = radio;
+            if (input.value === this.visualStyle) {
+                input.checked = true;
+            }
+        });
+        // Update aura preview color
+        const auraPreview = document.getElementById('cursor-aura-preview');
+        const avatarPreview = document.getElementById('cursor-avatar-preview');
+        if (auraPreview || avatarPreview) {
+            // Get aura color from settings
+            chrome.storage.local.get(['auraColor'], (result) => {
+                const auraColor = result.auraColor || '#98d416';
+                if (auraPreview) {
+                    auraPreview.style.background = auraColor;
+                }
+                if (avatarPreview) {
+                    avatarPreview.style.background = auraColor;
+                    avatarPreview.style.borderColor = auraColor;
+                }
+            });
+        }
+        // Show/hide custom image upload
+        const uploadSection = document.getElementById('cursor-custom-image-upload');
+        if (uploadSection) {
+            uploadSection.style.display = this.visualStyle === 'custom-image' ? 'block' : 'none';
+        }
+        // Show custom image preview if available
+        if (this.customImageUrl) {
+            const preview = document.getElementById('cursor-custom-image-preview');
+            if (preview) {
+                preview.src = this.customImageUrl;
+                preview.style.display = 'inline-block';
+            }
+        }
     }
     /**
      * Attach event listeners to settings UI
      */
     attachEventListeners() {
-        // Radio button changes
+        // Remove existing listeners to prevent duplicates
         const radios = document.querySelectorAll('input[name="cursor-visual-style"]');
         radios.forEach(radio => {
-            radio.addEventListener('change', (e) => {
+            const newRadio = radio.cloneNode(true);
+            radio.parentNode?.replaceChild(newRadio, radio);
+            newRadio.addEventListener('change', (e) => {
                 const target = e.target;
                 this.visualStyle = target.value;
                 this.saveSettings();
@@ -152,41 +150,39 @@ class CursorVisualSettingsManager {
                 }
             });
         });
-        // Custom image upload
+        // Custom image upload - remove existing listeners first
         const uploadBtn = document.getElementById('cursor-custom-image-btn');
         const fileInput = document.getElementById('cursor-custom-image-input');
-        uploadBtn?.addEventListener('click', () => {
-            fileInput?.click();
-        });
-        fileInput?.addEventListener('change', async (e) => {
-            const target = e.target;
-            const file = target.files?.[0];
-            if (file) {
-                // Convert to data URL
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    this.customImageUrl = event.target?.result;
-                    this.saveSettings();
-                    // Update preview
-                    const preview = document.querySelector('#cursor-custom-image-upload img');
-                    if (preview) {
-                        preview.src = this.customImageUrl;
-                    }
-                    else {
-                        // Create preview if it doesn't exist
-                        const uploadSection = document.getElementById('cursor-custom-image-upload');
-                        if (uploadSection) {
-                            const img = document.createElement('img');
-                            img.src = this.customImageUrl;
-                            img.alt = 'Custom cursor';
-                            img.style.cssText = 'max-width: 48px; max-height: 48px; margin-left: 8px; border-radius: 4px;';
-                            uploadSection.appendChild(img);
+        if (uploadBtn) {
+            const newBtn = uploadBtn.cloneNode(true);
+            uploadBtn.parentNode?.replaceChild(newBtn, uploadBtn);
+            newBtn.addEventListener('click', () => {
+                fileInput?.click();
+            });
+        }
+        if (fileInput) {
+            const newInput = fileInput.cloneNode(true);
+            fileInput.parentNode?.replaceChild(newInput, fileInput);
+            newInput.addEventListener('change', async (e) => {
+                const target = e.target;
+                const file = target.files?.[0];
+                if (file) {
+                    // Convert to data URL
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        this.customImageUrl = event.target?.result;
+                        this.saveSettings();
+                        // Update preview
+                        const preview = document.getElementById('cursor-custom-image-preview');
+                        if (preview) {
+                            preview.src = this.customImageUrl;
+                            preview.style.display = 'inline-block';
                         }
-                    }
-                };
-                reader.readAsDataURL(file);
-            }
-        });
+                    };
+                    reader.readAsDataURL(file);
+                }
+            });
+        }
     }
     /**
      * Get current visual style

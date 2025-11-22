@@ -16,6 +16,29 @@ app.use(cors({
 app.use(express.json());
 
 // Serve static files from public directory
+// CRITICAL: Define routes BEFORE static file serving to ensure they're matched
+// Handle /message/:id route - redirect to share-message resolver
+// This supports URLs like: https://app.themetalayer.org/message/39555d38-784c-4d75-a495-eddc896c19f9
+app.get('/message/:id', (req, res) => {
+  const messageId = req.params.id;
+  const queryParams = new URLSearchParams();
+  
+  // Preserve any existing query parameters (like page, conversation)
+  if (req.query.page) {
+    queryParams.set('page', req.query.page);
+  }
+  if (req.query.conversation) {
+    queryParams.set('conversation', req.query.conversation);
+  }
+  
+  // Redirect to share-message with message ID as query parameter
+  const queryString = queryParams.toString();
+  const redirectUrl = `/share-message?message=${messageId}${queryString ? '&' + queryString : ''}`;
+  console.log(`🔗 ROUTE: Redirecting /message/${messageId} to ${redirectUrl}`);
+  res.redirect(redirectUrl);
+});
+
+// Serve static files from public directory (AFTER specific routes)
 app.use(express.static('public'));
 
 // Serve share message resolver page

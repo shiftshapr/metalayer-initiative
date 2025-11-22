@@ -92,6 +92,7 @@ export class BootController {
         this.currentUser = user ?? null;
         // ROOT CAUSE FIX: Use stateManager only (TypeScript migration - no window.currentUser)
         await this.graph.stateManager.setState('currentUser', user ?? null);
+        // COMP: Use visibility manager from graph only
         if (this.graph.visibilityManager && user?.email) {
             try {
                 await this.graph.visibilityManager.initialize(user.email);
@@ -111,6 +112,7 @@ export class BootController {
         await this.options.loadChatHistory();
         const urlData = await this.graph.stateManager.getState('currentUrlData');
         const currentPageId = urlData?.pageId ?? null;
+        // COMP: Use visibility manager from graph only
         if (currentPageId && this.graph.visibilityManager) {
             try {
                 await this.graph.visibilityManager.refreshVisibilityAvatars(currentPageId);

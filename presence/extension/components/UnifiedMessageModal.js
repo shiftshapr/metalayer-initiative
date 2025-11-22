@@ -647,11 +647,26 @@ export class UnifiedMessageModal {
             return;
         }
         const messageKind = this.determineMessageKind();
+        // COMP METHOD: Sanitize UUIDs - remove ::UUID suffix and ensure valid UUID format
+        const sanitizeId = (id) => {
+            if (!id)
+                return null;
+            // Remove ::UUID suffix if present
+            const cleaned = id.replace(/::UUID$/i, '');
+            // Validate UUID format
+            const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+            if (uuidRegex.test(cleaned)) {
+                return cleaned;
+            }
+            // If not a valid UUID, return null (API will handle Google ID conversion via headers)
+            console.warn(`⚠️ UnifiedMessageModal: Invalid UUID format: ${id}, will be handled by API`);
+            return null;
+        };
         const messageData = {
             content,
             pageId: this.options.pageId,
-            parentId: this.options.parentId || null,
-            quoteId: this.options.quoteId || null,
+            parentId: sanitizeId(this.options.parentId),
+            quoteId: sanitizeId(this.options.quoteId),
             communityId: this.options.communityId || 'comm-001',
             messageKind,
             attachments: this.attachments.map(att => ({

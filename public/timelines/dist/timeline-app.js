@@ -4,6 +4,13 @@
  */
 console.log('TimelineApp: Script loading...');
 // RED-LINE: Timeline scripts MUST import modules directly, NOT rely on window globals
+// @ts-ignore - Runtime paths, TypeScript can't resolve
+import { AvatarUtils } from '/presence/utils/AvatarUtils.js';
+// @ts-ignore - Runtime paths, TypeScript can't resolve
+import { AuthManager } from '/presence/features/AuthManager.js';
+// @ts-ignore - Runtime paths, TypeScript can't resolve
+import { SupabaseService } from '/presence/services/SupabaseService.js';
+
 // The timeline page is standalone and extension scripts may not be loaded
 import { TimelineManager } from './modules/TimelineManager.js';
 import { TimelineRealtime } from './modules/TimelineRealtime.js';

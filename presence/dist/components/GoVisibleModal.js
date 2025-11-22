@@ -113,6 +113,12 @@ class GoVisibleModal {
                 await win.setVisibilityStatus(true);
             }
             this.hide();
+            // Navigate to Visibility tab after setting visible
+            if (win.navigateToVisibilityTab) {
+                setTimeout(() => {
+                    win.navigateToVisibilityTab();
+                }, 100);
+            }
         });
         // Close on overlay click
         this.modal.addEventListener('click', (e) => {

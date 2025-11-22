@@ -314,6 +314,25 @@ async function updateVisibleTab(avatars) {
     const currentUser = (typeof window !== 'undefined' && window.currentUser) ? window.currentUser : null;
     const currentUserEmail = currentUser?.email || null;
     const currentUserId = currentUser?.id;
+    // Get current page ID for status determination
+    const resolveCurrentPageId = () => {
+        const tabContainer = (typeof window !== 'undefined' && window.tabContextManager)
+            ? window.tabContextManager?.getTabContainer('visibility-tab')
+            : null;
+        if (tabContainer?.dataset.pageId) {
+            return tabContainer.dataset.pageId;
+        }
+        const pageId = (typeof window !== 'undefined' && window.currentUrlData)
+            ? window.currentUrlData?.pageId
+            : null;
+        if (pageId) {
+            return pageId;
+        }
+        const firstMessage = typeof document !== 'undefined' ? document.querySelector('[data-page-id]') : null;
+        const pageIdAttr = firstMessage?.getAttribute('data-page-id');
+        return pageIdAttr || null;
+    };
+    const currentPageId = resolveCurrentPageId();
     // Filter out current user
     const usersWithAvatars = avatars.filter(avatar => {
         const avatarId = avatar.id;
@@ -326,6 +345,7 @@ async function updateVisibleTab(avatars) {
         return true;
     });
     console.log('🔍 VISIBILITY: Showing', usersWithAvatars.length, 'users (filtered from', avatars.length, 'total)');
+    console.log('🔍 VISIBILITY: Current page ID:', currentPageId);
     // COMP METHOD: Create full UI structure with header, search, count, and Go Invisible button
     visibilityTab.innerHTML = '';
     // Create main container
@@ -413,6 +433,21 @@ async function updateVisibleTab(avatars) {
                 userNameEl.style.cssText = 'font-weight: bold; color: var(--text-primary); font-size: 14px;';
                 userNameEl.textContent = userName;
                 userInfo.appendChild(userNameEl);
+                // COMP FIX: Create status element with Last Seen or Online message
+                const onSamePage = Boolean(user.page_id && currentPageId && user.page_id === currentPageId);
+                const shouldShowOnline = isActive && onSamePage;
+                const statusEl = document.createElement('div');
+                statusEl.className = 'user-status';
+                statusEl.style.cssText = 'font-size: 12px; color: var(--text-secondary); margin-top: 2px;';
+                if (shouldShowOnline) {
+                    // User is active and on the same page - show "Online on this page"
+                    statusEl.textContent = 'Online on this page';
+                }
+                else {
+                    // User is on different page or not active - show "Last seen X ago"
+                    statusEl.textContent = VisibilityManager.formatLastSeenDisplay(user.lastSeen || null);
+                }
+                userInfo.appendChild(statusEl);
                 listItem.appendChild(userInfo);
                 itemList.appendChild(listItem);
             }

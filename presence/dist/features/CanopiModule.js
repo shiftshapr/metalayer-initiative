@@ -1933,28 +1933,30 @@ async function handleBookmarkMessage(message) {
             return;
         }
         const isBookmarked = message.isBookmarked || false;
-        // COMP METHOD: Use /v1/bookmarks endpoint (matches backend route registration)
-        const endpoint = isBookmarked ? `/v1/bookmarks/${message.id}` : '/v1/bookmarks';
-        const method = isBookmarked ? 'DELETE' : 'POST';
+        // COMP METHOD: Use /v1/bookmarks/toggle endpoint (matches backend route registration)
+        const endpoint = '/v1/bookmarks/toggle';
+        const method = 'POST';
         const response = await api.request(endpoint, {
             method,
-            body: isBookmarked ? undefined : { messageId: message.id }
+            body: { messageId: message.id }
         });
         if (response.data?.success) {
+            const newBookmarkStatus = response.data.isBookmarked ?? !isBookmarked;
+            const action = response.data.action || (newBookmarkStatus ? 'added' : 'removed');
             // Update message bookmark status
             const messageDiv = document.querySelector(`[data-message-id="${message.id}"]`);
             if (messageDiv) {
                 const bookmarkButton = messageDiv.querySelector('.bookmark-btn');
                 if (bookmarkButton) {
-                    bookmarkButton.classList.toggle('active', !isBookmarked);
-                    bookmarkButton.setAttribute('data-is-bookmarked', (!isBookmarked).toString());
+                    bookmarkButton.classList.toggle('active', newBookmarkStatus);
+                    bookmarkButton.setAttribute('data-is-bookmarked', newBookmarkStatus.toString());
                 }
             }
             const showNotification = window.showNotification;
             if (typeof window !== 'undefined' && showNotification) {
-                showNotification(isBookmarked ? 'Bookmark removed' : 'Message bookmarked');
+                showNotification(newBookmarkStatus ? 'Message bookmarked' : 'Bookmark removed');
             }
-            console.log(`✅ BOOKMARK: ${isBookmarked ? 'Removed' : 'Added'} bookmark for message ${message.id}`);
+            console.log(`✅ BOOKMARK: ${action === 'added' ? 'Added' : 'Removed'} bookmark for message ${message.id}`);
         }
         else {
             throw new Error(response.error || 'Failed to toggle bookmark');
@@ -2172,9 +2174,11 @@ async function handleReaction(message) {
             // COMP METHOD: Use /v1/reactions endpoint (matches backend route registration)
             const endpoint = `/v1/reactions/${message.id}`;
             // Check existing reactions via API
-            const { data: existingReactions } = await api.request(endpoint, { method: 'GET' });
+            // API returns { success: true, reactions: [...] } - extract reactions array
+            const response = await api.request(endpoint, { method: 'GET' });
+            const existingReactions = response.data?.reactions || [];
             // API handles user matching (converts Google ID to UUID internally)
-            const userReaction = existingReactions?.find((r) => r.user_id === currentUser.id);
+            const userReaction = Array.isArray(existingReactions) ? existingReactions.find((r) => r.user_id === currentUser.id) : null;
             if (userReaction) {
                 // Remove reaction via API
                 const deleteResponse = await api.request(`${endpoint}?emoji=${userReaction.emoji}`, { method: 'DELETE' });
