@@ -38,14 +38,27 @@ app.get('/message/:id', (req, res) => {
   res.redirect(redirectUrl);
 });
 
-// Serve static files from public directory (AFTER specific routes)
-app.use(express.static('public'));
-
 // Serve share message resolver page
 const path = require('path');
 app.get('/share-message', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'share-message.html'));
 });
+
+// Serve timeline page (BEFORE static file serving)
+app.get('/timelines', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'timelines', 'index.html'));
+});
+
+app.get('/timelines/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'timelines', 'index.html'));
+});
+
+app.get('/timelines/index.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'timelines', 'index.html'));
+});
+
+// Serve static files from public directory (AFTER specific routes)
+app.use(express.static('public'));
 
 // Session configuration
 app.use(session({

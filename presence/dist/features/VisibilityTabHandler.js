@@ -36,18 +36,18 @@ class VisibilityTabHandler {
         // COMP FIX: Watch for visibility tab activation and trigger refresh
         this.setupTabActivationWatcher();
         // Intercept Visibility tab click - COMP: Show modal when Visible=No
+        // Use capture phase to intercept BEFORE tabNavigation runs
         const visibilityTabBtn = document.querySelector('[data-tab="visibility-tab"]');
         if (visibilityTabBtn) {
-            // Remove existing listener by cloning
-            const newBtn = visibilityTabBtn.cloneNode(true);
-            visibilityTabBtn.parentNode?.replaceChild(newBtn, visibilityTabBtn);
-            newBtn.addEventListener('click', async (e) => {
+            // COMP: Add listener in capture phase to intercept before tabNavigation
+            visibilityTabBtn.addEventListener('click', async (e) => {
                 const visibilityToggle = document.getElementById('visibility-toggle');
                 const isVisible = visibilityToggle?.checked || false;
                 if (!isVisible) {
                     // COMP: Show Go Visible modal instead of switching tabs
                     e.preventDefault();
                     e.stopPropagation();
+                    e.stopImmediatePropagation(); // COMP: Prevent tabNavigation from running
                     const win = window;
                     if (win.showGoVisibleModal) {
                         win.showGoVisibleModal();
@@ -60,11 +60,11 @@ class VisibilityTabHandler {
                     }
                 }
                 else {
-                    // Visible is Yes, proceed with normal tab switch
-                    // COMP FIX: Trigger visibility refresh when tab is opened
+                    // Visible is Yes, let tabNavigation handle it, then refresh
                     setTimeout(() => this.refreshVisibilityOnTabOpen(), 100);
                 }
-            });
+            }, true); // COMP: Capture phase - runs before tabNavigation
+            console.log('✅ VISIBILITY_TAB_HANDLER: Visibility tab click handler attached (capture phase)');
         }
         // Setup Go Invisible button in Visibility tab - COMP: Navigate to Discuss tab
         this.setupGoInvisibleButton();

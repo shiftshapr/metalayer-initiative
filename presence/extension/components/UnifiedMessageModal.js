@@ -80,6 +80,23 @@ export class UnifiedMessageModal {
     async render() {
         if (!this.options)
             return;
+        // Ensure pageId is set - resolve from stateManager if missing
+        if (!this.options.pageId) {
+            const win = window;
+            const urlData = win.stateManagerInstance?.getState('currentUrlData');
+            if (urlData?.pageId) {
+                this.options.pageId = urlData.pageId;
+                console.log('📝 UnifiedMessageModal: Resolved pageId from stateManager:', this.options.pageId);
+            }
+            else {
+                // Try to get from current location
+                const currentUrl = window.location.href;
+                // Generate pageId from URL (same logic as used elsewhere)
+                const pageId = currentUrl.replace(/^https?:\/\//, '').replace(/\/$/, '').replace(/[^a-zA-Z0-9]/g, '_');
+                this.options.pageId = pageId;
+                console.log('📝 UnifiedMessageModal: Generated pageId from URL:', this.options.pageId);
+            }
+        }
         // Remove existing modal if present
         const existing = document.getElementById('unified-message-modal');
         if (existing) {
@@ -638,12 +655,21 @@ export class UnifiedMessageModal {
      * Submit message (draft or published)
      */
     async submitMessage(status) {
-        if (!this.options || !this.modal)
+        if (!this.options || !this.modal) {
+            console.error('❌ submitMessage: Missing options or modal');
             return;
+        }
         const textarea = this.modal.querySelector('#message-content');
         const content = textarea?.value.trim() || '';
+        // Validate content - must have content OR attachments
         if (!content && this.attachments.length === 0) {
             alert('Please enter a message or attach media');
+            return;
+        }
+        // Validate pageId - must be provided
+        if (!this.options.pageId) {
+            console.error('❌ submitMessage: Missing pageId in options', this.options);
+            alert('Error: Page ID is missing. Please try again.');
             return;
         }
         const messageKind = this.determineMessageKind();
@@ -663,7 +689,7 @@ export class UnifiedMessageModal {
             return null;
         };
         const messageData = {
-            content,
+            content: content || '', // Ensure content is always a string (empty if no text but has attachments)
             pageId: this.options.pageId,
             parentId: sanitizeId(this.options.parentId),
             quoteId: sanitizeId(this.options.quoteId),
@@ -711,7 +737,23 @@ export class UnifiedMessageModal {
             }
             // Add user ID header
             headers['X-User-Id'] = currentUser.id;
-            console.log('📤 SENDING_MESSAGE:', { endpoint, messageData: { ...messageData, userId: currentUser.id } });
+            // Validate messageData before sending
+            if (!messageData.content && messageData.attachments.length === 0) {
+                throw new Error('Message must have content or attachments');
+            }
+            if (!messageData.pageId) {
+                throw new Error('Page ID is required');
+            }
+            console.log('📤 SENDING_MESSAGE:', {
+                endpoint,
+                messageData: {
+                    ...messageData,
+                    userId: currentUser.id,
+                    contentLength: messageData.content.length,
+                    hasAttachments: messageData.attachments.length > 0,
+                    pageId: messageData.pageId
+                }
+            });
             const response = await fetch(endpoint, {
                 method: 'POST',
                 headers,

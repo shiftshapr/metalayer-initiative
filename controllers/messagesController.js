@@ -1,5 +1,4 @@
-const { PrismaClient } = require('../generated/prisma');
-const { Prisma } = require('@prisma/client');
+const { PrismaClient, Prisma } = require('../generated/prisma');
 const prisma = new PrismaClient();
 
 /**
@@ -29,22 +28,22 @@ function generateCursor(message) {
  * Build status filter clause for message queries
  */
 function buildStatusFilter(messageStatus, userId, alias = 'm') {
-  const column = Prisma.raw(alias);
-
+  // Build SQL fragments using Prisma.sql and Prisma.raw from generated/prisma
   switch (messageStatus) {
     case 'draft': {
       if (!userId) {
         throw new Error('userId is required when fetching drafts');
       }
-      return Prisma.sql`AND ${column}.status = 'draft' AND ${column}.user_id::UUID = ${userId}::UUID`;
+      // Use Prisma.raw for column names, Prisma.sql for the query fragment
+      return Prisma.sql`AND ${Prisma.raw(alias)}.status = 'draft' AND ${Prisma.raw(alias)}.user_id::UUID = ${userId}::UUID`;
     }
     case 'deleted':
-      return Prisma.sql`AND ${column}.status = 'deleted'`;
+      return Prisma.sql`AND ${Prisma.raw(alias)}.status = 'deleted'`;
     case 'all':
       return Prisma.sql``;
     case 'published':
     default:
-      return Prisma.sql`AND (${column}.status IS NULL OR ${column}.status = 'published')`;
+      return Prisma.sql`AND (${Prisma.raw(alias)}.status IS NULL OR ${Prisma.raw(alias)}.status = 'published')`;
   }
 }
 
@@ -541,44 +540,153 @@ exports.createMessage = async (req, res) => {
     console.log('📝 CREATE_MESSAGE:', { content, pageId, parentId, userId, userEmail, userIdType: typeof userId });
 
     // Insert message
-    // Handle nullable UUIDs properly for Prisma - use Prisma.raw for NULL
-    const parentIdValue = parentId ? Prisma.raw(`${parentId}::UUID`) : Prisma.raw('NULL');
-    const quoteIdValue = quoteId ? Prisma.raw(`${quoteId}::UUID`) : Prisma.raw('NULL');
-    
-    const messageResult = await prisma.$queryRaw`
-      INSERT INTO messages (
-        page_id,
-        user_id,
-        content,
-        parent_id,
-        quote_id,
-        community_id,
-        status,
-        created_at,
-        updated_at
-      )
-      VALUES (
-        ${pageId},
-        ${userId}::UUID,
-        ${content},
-        ${parentIdValue},
-        ${quoteIdValue},
-        ${communityId},
-        ${status},
-        NOW(),
-        NOW()
-      )
-      RETURNING 
-        id,
-        content,
-        created_at,
-        updated_at,
-        parent_id,
-        quote_id,
-        community_id,
-        user_id,
-        status
-    `;
+    // Handle nullable UUIDs properly - use conditional SQL fragments
+    let messageResult;
+    if (parentId && quoteId) {
+      // Both parentId and quoteId provided
+      messageResult = await prisma.$queryRaw`
+        INSERT INTO messages (
+          page_id,
+          user_id,
+          content,
+          parent_id,
+          quote_id,
+          community_id,
+          status,
+          created_at,
+          updated_at
+        )
+        VALUES (
+          ${pageId},
+          ${userId}::UUID,
+          ${content},
+          ${parentId}::UUID,
+          ${quoteId}::UUID,
+          ${communityId},
+          ${status},
+          NOW(),
+          NOW()
+        )
+        RETURNING 
+          id,
+          content,
+          created_at,
+          updated_at,
+          parent_id,
+          quote_id,
+          community_id,
+          user_id,
+          status
+      `;
+    } else if (parentId) {
+      // Only parentId provided
+      messageResult = await prisma.$queryRaw`
+        INSERT INTO messages (
+          page_id,
+          user_id,
+          content,
+          parent_id,
+          quote_id,
+          community_id,
+          status,
+          created_at,
+          updated_at
+        )
+        VALUES (
+          ${pageId},
+          ${userId}::UUID,
+          ${content},
+          ${parentId}::UUID,
+          NULL,
+          ${communityId},
+          ${status},
+          NOW(),
+          NOW()
+        )
+        RETURNING 
+          id,
+          content,
+          created_at,
+          updated_at,
+          parent_id,
+          quote_id,
+          community_id,
+          user_id,
+          status
+      `;
+    } else if (quoteId) {
+      // Only quoteId provided
+      messageResult = await prisma.$queryRaw`
+        INSERT INTO messages (
+          page_id,
+          user_id,
+          content,
+          parent_id,
+          quote_id,
+          community_id,
+          status,
+          created_at,
+          updated_at
+        )
+        VALUES (
+          ${pageId},
+          ${userId}::UUID,
+          ${content},
+          NULL,
+          ${quoteId}::UUID,
+          ${communityId},
+          ${status},
+          NOW(),
+          NOW()
+        )
+        RETURNING 
+          id,
+          content,
+          created_at,
+          updated_at,
+          parent_id,
+          quote_id,
+          community_id,
+          user_id,
+          status
+      `;
+    } else {
+      // Neither parentId nor quoteId provided
+      messageResult = await prisma.$queryRaw`
+        INSERT INTO messages (
+          page_id,
+          user_id,
+          content,
+          parent_id,
+          quote_id,
+          community_id,
+          status,
+          created_at,
+          updated_at
+        )
+        VALUES (
+          ${pageId},
+          ${userId}::UUID,
+          ${content},
+          NULL,
+          NULL,
+          ${communityId},
+          ${status},
+          NOW(),
+          NOW()
+        )
+        RETURNING 
+          id,
+          content,
+          created_at,
+          updated_at,
+          parent_id,
+          quote_id,
+          community_id,
+          user_id,
+          status
+      `;
+    }
 
     const message = messageResult[0];
 

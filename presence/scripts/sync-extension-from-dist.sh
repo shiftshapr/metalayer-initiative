@@ -70,8 +70,9 @@ done
 # Copy hand-authored JavaScript files that aren't compiled from TypeScript
 HAND_AUTHED_FILES=(
   "real-google-auth.js"
-  "scripts/diagnose-auth.js"
-  "scripts/diagnose-remaining-errors.js"
+  # Diagnostic scripts removed - not loaded in sidepanel.html
+  # "scripts/diagnose-auth.js"
+  # "scripts/diagnose-remaining-errors.js"
 )
 
 for file in "${HAND_AUTHED_FILES[@]}"; do

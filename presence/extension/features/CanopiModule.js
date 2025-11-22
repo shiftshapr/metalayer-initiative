@@ -41,7 +41,18 @@ const getActiveCommunities = () => {
     const communities = stateManagerInstance.getState('ui.activeCommunities');
     return Array.isArray(communities) ? communities : [];
 };
-const getCurrentLocationHref = () => globalThis.location?.href || '';
+/**
+ * Get current location href, but NEVER return sidepanel URLs
+ * ROOT CAUSE FIX: This prevents sidepanel URLs from being used as pageIds
+ */
+const getCurrentLocationHref = () => {
+    const href = globalThis.location?.href || '';
+    // ROOT CAUSE FIX: Never return sidepanel or chrome-extension URLs
+    if (href.includes('sidepanel') || href.startsWith('chrome-extension://') || href.startsWith('chrome://')) {
+        return '';
+    }
+    return href;
+};
 const getCurrentVisibilityData = () => {
     const data = stateManagerInstance.getState('currentVisibilityData');
     return data && typeof data === 'object' ? data : undefined;
@@ -82,9 +93,39 @@ async function initializeNewMessageSystem() {
             onMessageUpdate: (messages) => {
                 // ROOT CAUSE FIX: During initial load, skip onMessageUpdate callback
                 // Messages will be rendered via loadChatHistory's render() call
+                // BUT: Always process NEW messages (replies/quotes) even during initial load
                 const win = window;
-                if (win.isInitialMessageLoad && !win.initialMessageLoadComplete) {
-                    console.log(`🔍 onMessageUpdate: Skipping during initial load (${messages.length} messages will be rendered via loadChatHistory)`);
+                const isInitialLoad = win.isInitialMessageLoad && !win.initialMessageLoadComplete;
+                // CRITICAL FIX: Check if any messages are NEW (not in DOM yet)
+                const messagesContainer = getChatMessagesContainer();
+                if (messagesContainer) {
+                    const allChatContainers = document.querySelectorAll('.chat-messages');
+                    const existingIds = new Set();
+                    allChatContainers.forEach(cont => {
+                        const actualMessages = Array.from(cont.querySelectorAll('.message, [data-message-id]')).filter(el => {
+                            return el.classList.contains('message') ||
+                                el.querySelector('.message-content-wrapper') !== null ||
+                                (el.querySelector('.message-footer-actions') !== null && el.querySelector('.message-content') !== null);
+                        });
+                        actualMessages.forEach(el => {
+                            const id = el.getAttribute('data-message-id');
+                            if (id)
+                                existingIds.add(id);
+                        });
+                    });
+                    const hasNewMessages = messages.some(msg => !existingIds.has(msg.id));
+                    // If initial load AND no new messages, skip (messages will be rendered by loadChatHistory)
+                    if (isInitialLoad && !hasNewMessages) {
+                        console.log(`🔍 onMessageUpdate: Skipping during initial load (${messages.length} messages will be rendered via loadChatHistory)`);
+                        return;
+                    }
+                    // If initial load BUT has new messages, process them (replies/quotes from real-time)
+                    if (isInitialLoad && hasNewMessages) {
+                        console.log(`🔍 onMessageUpdate: Initial load but ${messages.filter(m => !existingIds.has(m.id)).length} new messages detected, processing them`);
+                    }
+                }
+                else if (isInitialLoad) {
+                    console.log(`🔍 onMessageUpdate: Skipping during initial load (container not ready)`);
                     return;
                 }
                 // CRITICAL FIX: Only add NEW messages, but check ALL containers for duplicates
@@ -1265,8 +1306,11 @@ async function loadChatHistory(communityIdOrRawUrl, activeCommunitiesOrUndefined
             const urlData = getCurrentUrlData();
             rawUrl = urlData?.rawUrl || getCurrentLocationHref();
         }
-        if (!rawUrl) {
-            console.warn('⚠️ loadChatHistory: No URL provided');
+        // ROOT CAUSE FIX: Never use sidepanel URLs - they're not real web pages
+        if (!rawUrl || rawUrl.includes('sidepanel') || rawUrl.startsWith('chrome-extension://') || rawUrl.startsWith('chrome://')) {
+            console.warn('⚠️ loadChatHistory: No valid web page URL available (sidepanel URLs are not valid for message loading)');
+            console.warn('⚠️ loadChatHistory: rawUrl was:', rawUrl);
+            console.warn('⚠️ loadChatHistory: currentUrlData was:', getCurrentUrlData());
             return;
         }
         // Get active communities if not provided
@@ -1281,6 +1325,12 @@ async function loadChatHistory(communityIdOrRawUrl, activeCommunitiesOrUndefined
         let normalizedUrlData = getCurrentUrlData();
         if (normalizedUrlData?.pageId) {
             pageId = normalizedUrlData.pageId;
+            // ROOT CAUSE FIX: Validate that pageId is not a sidepanel pageId
+            if (pageId.includes('_sidepanel_html') || pageId.includes('sidepanel')) {
+                console.error('❌ loadChatHistory: currentUrlData contains sidepanel pageId:', pageId);
+                console.error('❌ loadChatHistory: This should never happen - currentUrlData is corrupted');
+                return;
+            }
         }
         else {
             // ROOT CAUSE FIX: Get normalizeUrl from window (set by TabContextManager)
@@ -1288,9 +1338,21 @@ async function loadChatHistory(communityIdOrRawUrl, activeCommunitiesOrUndefined
             if (normalizer) {
                 normalizedUrlData = await normalizer(rawUrl);
                 pageId = normalizedUrlData?.pageId || rawUrl;
+                // ROOT CAUSE FIX: Validate normalized pageId is not a sidepanel pageId
+                if (pageId.includes('_sidepanel_html') || pageId.includes('sidepanel')) {
+                    console.error('❌ loadChatHistory: URL normalizer returned sidepanel pageId:', pageId);
+                    console.error('❌ loadChatHistory: rawUrl was:', rawUrl);
+                    return;
+                }
             }
             else {
                 pageId = rawUrl.replace(/https?:\/\//, '').replace(/\//g, '_').replace(/\./g, '_');
+                // ROOT CAUSE FIX: Validate generated pageId is not a sidepanel pageId
+                if (pageId.includes('_sidepanel_html') || pageId.includes('sidepanel')) {
+                    console.error('❌ loadChatHistory: Generated pageId is sidepanel pageId:', pageId);
+                    console.error('❌ loadChatHistory: rawUrl was:', rawUrl);
+                    return;
+                }
             }
         }
         console.log('📜 loadChatHistory: Loading messages for page:', pageId, 'communities:', activeCommunities);
@@ -1943,15 +2005,25 @@ async function handleBookmarkMessage(message) {
         if (response.data?.success) {
             const newBookmarkStatus = response.data.isBookmarked ?? !isBookmarked;
             const action = response.data.action || (newBookmarkStatus ? 'added' : 'removed');
-            // Update message bookmark status
-            const messageDiv = document.querySelector(`[data-message-id="${message.id}"]`);
-            if (messageDiv) {
-                const bookmarkButton = messageDiv.querySelector('.bookmark-btn');
-                if (bookmarkButton) {
-                    bookmarkButton.classList.toggle('active', newBookmarkStatus);
-                    bookmarkButton.setAttribute('data-is-bookmarked', newBookmarkStatus.toString());
+            // CRITICAL FIX: Update message bookmark status in ALL containers
+            const allChatContainers = document.querySelectorAll('.chat-messages');
+            allChatContainers.forEach(chatContainer => {
+                const messageDiv = chatContainer.querySelector(`[data-message-id="${message.id}"]`);
+                if (messageDiv) {
+                    const bookmarkButton = messageDiv.querySelector('.bookmark-btn');
+                    if (bookmarkButton) {
+                        bookmarkButton.classList.toggle('active', newBookmarkStatus);
+                        bookmarkButton.setAttribute('data-is-bookmarked', newBookmarkStatus.toString());
+                        // Update bookmark count if present
+                        const bookmarkCount = bookmarkButton.querySelector('.icon-count');
+                        if (bookmarkCount && response.data && response.data.count !== undefined) {
+                            const count = response.data.count;
+                            bookmarkCount.textContent = count > 0 ? count.toString() : '';
+                            bookmarkCount.style.display = count > 0 ? 'inline' : 'none';
+                        }
+                    }
                 }
-            }
+            });
             const showNotification = window.showNotification;
             if (typeof window !== 'undefined' && showNotification) {
                 showNotification(newBookmarkStatus ? 'Message bookmarked' : 'Bookmark removed');
@@ -2172,16 +2244,18 @@ async function handleReaction(message) {
                 return;
             }
             // COMP METHOD: Use /v1/reactions endpoint (matches backend route registration)
-            const endpoint = `/v1/reactions/${message.id}`;
+            // GET endpoint: /v1/reactions/:messageId
+            // POST endpoint: /v1/reactions (with {messageId, emoji} in body)
+            const getEndpoint = `/v1/reactions/${message.id}`;
             // Check existing reactions via API
             // API returns { success: true, reactions: [...] } - extract reactions array
-            const response = await api.request(endpoint, { method: 'GET' });
+            const response = await api.request(getEndpoint, { method: 'GET' });
             const existingReactions = response.data?.reactions || [];
             // API handles user matching (converts Google ID to UUID internally)
             const userReaction = Array.isArray(existingReactions) ? existingReactions.find((r) => r.user_id === currentUser.id) : null;
             if (userReaction) {
-                // Remove reaction via API
-                const deleteResponse = await api.request(`${endpoint}?emoji=${userReaction.emoji}`, { method: 'DELETE' });
+                // Remove reaction via API - DELETE /v1/reactions/:messageId?emoji=👍
+                const deleteResponse = await api.request(`${getEndpoint}?emoji=${userReaction.emoji}`, { method: 'DELETE' });
                 if (deleteResponse.data?.success) {
                     console.log('✅ REACTION: Removed reaction');
                 }
@@ -2190,10 +2264,11 @@ async function handleReaction(message) {
                 }
             }
             else {
-                // Add reaction via API
-                const addResponse = await api.request(endpoint, {
+                // Add reaction via API - POST /v1/reactions with {messageId, emoji} in body
+                const postEndpoint = '/v1/reactions';
+                const addResponse = await api.request(postEndpoint, {
                     method: 'POST',
-                    body: { emoji: '👍' }
+                    body: { messageId: message.id, emoji: '👍' }
                 });
                 if (addResponse.data?.success) {
                     console.log('✅ REACTION: Added reaction');

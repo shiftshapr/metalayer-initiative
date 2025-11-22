@@ -123,36 +123,28 @@ class VisibilitySettingsManager {
      * Set up event listeners
      */
     setupEventListeners() {
-        // Visibility toggle - CRITICAL FIX: Prevent double-attachment and preserve state
+        // Visibility toggle - COMP: Prevent double-attachment without cloning
         if (this.visibilityToggle) {
-            // Check if already attached - if so, don't re-attach
+            // Check if already attached - COMP: Skip if already attached to prevent double-click
             if (this.visibilityToggle.getAttribute('data-handler-attached') === 'true') {
                 console.log('✅ VISIBILITY_SETTINGS: Visibility toggle handler already attached, skipping');
                 return;
             }
-            // Store current checked state before cloning
-            const wasChecked = this.visibilityToggle.checked;
-            // Clone element to remove existing listeners
-            const newToggle = this.visibilityToggle.cloneNode(true);
-            // Restore checked state
-            newToggle.checked = wasChecked;
-            if (this.visibilityToggle.parentNode) {
-                this.visibilityToggle.parentNode.replaceChild(newToggle, this.visibilityToggle);
-            }
-            this.visibilityToggle = newToggle;
-            const toggle = this.visibilityToggle; // Store reference for callback
-            toggle.addEventListener('change', async () => {
+            // COMP: Don't clone - cloning causes double-click issue
+            // Just attach the handler directly
+            const toggle = this.visibilityToggle;
+            toggle.addEventListener('change', async (e) => {
+                e.stopPropagation(); // COMP: Prevent event bubbling
                 console.log('🔍 DIAGNOSTIC: Visibility toggle changed');
                 const isVisible = toggle.checked;
                 console.log('🔍 DIAGNOSTIC: Visibility toggle checked:', isVisible);
-                // FIX: Don't show modal when toggling to Yes - just save directly
-                // The modal should only appear when user explicitly clicks "Go Visible" button elsewhere
-                // When toggling in settings, assume user wants to enable visibility immediately
+                // COMP: Update UI and save immediately
                 this.updateVisibilityStatus();
                 await this.saveVisibility();
                 console.log('🔍 DIAGNOSTIC: Visibility saved:', toggle.checked);
-            }, { once: false, passive: true });
+            }, { once: false, passive: false });
             toggle.setAttribute('data-handler-attached', 'true');
+            console.log('✅ VISIBILITY_SETTINGS: Visibility toggle handler attached');
         }
         // ROOT CAUSE FIX: Add click handler to visibility label/section to show Go Visible Modal when toggle is "No"
         const visibilityLabel = document.getElementById('visibility-label');

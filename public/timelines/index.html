@@ -88,6 +88,22 @@
   <!-- Load Timeline Modules -->
   <!-- TypeScript: Load compiled version from dist/ -->
   <script type="module" src="dist/timeline-app.js"></script>
+  <script>
+    // Error handling for module loading
+    window.addEventListener('error', (e) => {
+      if (e.filename && e.filename.includes('timeline-app.js')) {
+        console.error('❌ Timeline module failed to load:', e.message);
+        const errorState = document.getElementById('error-state');
+        if (errorState) {
+          errorState.classList.remove('hidden');
+          const errorMessage = errorState.querySelector('p');
+          if (errorMessage) {
+            errorMessage.textContent = `Failed to load timeline: ${e.message}`;
+          }
+        }
+      }
+    });
+  </script>
 </body>
 </html>
 
