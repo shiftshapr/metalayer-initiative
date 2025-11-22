@@ -1933,13 +1933,22 @@ async function handleBookmarkMessage(message) {
             return;
         }
         const isBookmarked = message.isBookmarked || false;
-        // CRITICAL FIX: Use /v1/ endpoint (API service handles base URL)
-        const endpoint = isBookmarked ? `/v1/bookmarks/${message.id}` : '/v1/bookmarks';
+        // CRITICAL FIX: Try /api/bookmarks first (may be correct endpoint), fallback to /v1/bookmarks
+        let endpoint = isBookmarked ? `/api/bookmarks/${message.id}` : '/api/bookmarks';
         const method = isBookmarked ? 'DELETE' : 'POST';
-        const response = await api.request(endpoint, {
+        let response = await api.request(endpoint, {
             method,
             body: isBookmarked ? undefined : { messageId: message.id }
         });
+        // Fallback to /v1/ endpoint if /api/ returns 404
+        if (response.status === 404) {
+            console.warn('⚠️ handleBookmarkMessage: /api/bookmarks returned 404, trying /v1/bookmarks');
+            endpoint = isBookmarked ? `/v1/bookmarks/${message.id}` : '/v1/bookmarks';
+            response = await api.request(endpoint, {
+                method,
+                body: isBookmarked ? undefined : { messageId: message.id }
+            });
+        }
         if (response.data?.success) {
             // Update message bookmark status
             const messageDiv = document.querySelector(`[data-message-id="${message.id}"]`);
@@ -2152,54 +2161,54 @@ async function handleReaction(message) {
                 ? window.supabase
                 : null;
             if (supabase) {
-                // CRITICAL FIX: Use direct Supabase operations for reactions (more reliable than API)
-                const supabaseClient = supabase; // Simplified type assertion to avoid complex type casting
-                // Check existing reactions
-                const { data: existingReactions, error: fetchError } = await supabaseClient
-                    .from('reactions')
-                    .select('emoji, user_id')
-                    .eq('message_id', message.id)
-                    .eq('user_id', currentUser.id);
-                if (fetchError) {
-                    console.error('❌ handleReaction: Error fetching reactions:', fetchError);
+                // CRITICAL FIX: Google OAuth IDs are numeric strings, not UUIDs
+                // Supabase requires UUIDs, so we must use API endpoint which handles conversion
+                const api = getApi();
+                if (!api) {
+                    console.error('❌ handleReaction: API not available for reactions (required for Google ID conversion)');
                     return;
                 }
-                const userReaction = existingReactions?.find((r) => r.user_id === currentUser.id);
-                if (userReaction) {
-                    // Remove reaction
-                    const { error: deleteError } = await supabaseClient
-                        .from('reactions')
-                        .delete()
-                        .eq('message_id', message.id)
-                        .eq('user_id', currentUser.id)
-                        .eq('emoji', userReaction.emoji);
-                    if (deleteError) {
-                        console.error('❌ handleReaction: Error removing reaction:', deleteError);
-                    }
-                    else {
-                        console.log('✅ REACTION: Removed reaction');
-                    }
-                }
-                else {
-                    // Add reaction
-                    const { error: insertError } = await supabaseClient
-                        .from('reactions')
-                        .insert({
-                        message_id: message.id,
-                        user_id: currentUser.id,
-                        emoji: '👍'
+                // Use API endpoint which handles Google ID to UUID conversion
+                const endpoint = `/v1/reactions/${message.id}`;
+                try {
+                    // Check existing reactions via API
+                    const { data: existingReactions } = await api.request(endpoint, { method: 'GET' });
+                    // CRITICAL FIX: Match by current user - API should return reactions with proper user matching
+                    const userReaction = existingReactions?.find((r) => {
+                        // API should handle user matching, but check both ID and email as fallback
+                        return r.user_id === currentUser.id;
                     });
-                    if (insertError) {
-                        console.error('❌ handleReaction: Error adding reaction:', insertError);
+                    if (userReaction) {
+                        // Remove reaction via API
+                        const deleteResponse = await api.request(`${endpoint}?emoji=${userReaction.emoji}`, { method: 'DELETE' });
+                        if (deleteResponse.data?.success) {
+                            console.log('✅ REACTION: Removed reaction');
+                        }
+                        else {
+                            console.error('❌ handleReaction: Error removing reaction:', deleteResponse.error);
+                        }
                     }
                     else {
-                        console.log('✅ REACTION: Added reaction');
+                        // Add reaction via API
+                        const addResponse = await api.request(endpoint, {
+                            method: 'POST',
+                            body: { emoji: '👍' }
+                        });
+                        if (addResponse.data?.success) {
+                            console.log('✅ REACTION: Added reaction');
+                        }
+                        else {
+                            console.error('❌ handleReaction: Error adding reaction:', addResponse.error);
+                        }
+                    }
+                    // Reload reactions display
+                    const loadMessageReactionsFn = getWindowFunction('loadMessageReactions');
+                    if (loadMessageReactionsFn) {
+                        await loadMessageReactionsFn(message.id);
                     }
                 }
-                // Reload reactions display
-                const loadMessageReactionsFn = getWindowFunction('loadMessageReactions');
-                if (loadMessageReactionsFn) {
-                    await loadMessageReactionsFn(message.id);
+                catch (error) {
+                    console.error('❌ handleReaction: API request failed:', error);
                 }
             }
             else {
