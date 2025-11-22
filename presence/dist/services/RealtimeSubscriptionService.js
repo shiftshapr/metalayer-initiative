@@ -30,7 +30,7 @@ export class RealtimeSubscriptionService {
      * Subscribe to messages for a page
      */
     async subscribeToPage(config) {
-        const { pageId, communityId = 'comm-001', onError } = config;
+        const { pageId, communityId = 'abe5ec85-4ba6-456f-adaf-03d7d51cecf4', onError } = config;
         if (!this.isInitialized) {
             const initialized = await this.initialize();
             if (!initialized) {

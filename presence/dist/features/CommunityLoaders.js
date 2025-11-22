@@ -111,12 +111,12 @@ export async function loadCommunities() {
         console.log(`Failed to load communities: ${error.message}`);
         // Fallback: show default community
         console.log('🔧 COMMUNITIES: Using fallback default community due to API error');
-        await updateCommunityDropdown([{ id: 'comm-001', name: 'Public Square' }]);
+        await updateCommunityDropdown([{ id: 'abe5ec85-4ba6-456f-adaf-03d7d51cecf4', name: 'Public Square' }]);
         // Load chat history with default community
         console.log('🔍 INIT: Attempting to load chat history with default community');
         if (typeof window.loadChatHistory === 'function') {
             try {
-                await window.loadChatHistory('comm-001');
+                await window.loadChatHistory('abe5ec85-4ba6-456f-adaf-03d7d51cecf4');
                 console.log('✅ INIT: Chat history loaded with default community');
             }
             catch (chatError) {

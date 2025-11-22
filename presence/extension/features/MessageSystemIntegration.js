@@ -63,7 +63,7 @@ export class MessageSystemIntegration {
             if (this.realtimeService) {
                 await this.realtimeService.subscribeToPage({
                     pageId,
-                    communityId: options.communityId || 'comm-001',
+                    communityId: options.communityId || 'abe5ec85-4ba6-456f-adaf-03d7d51cecf4',
                     onError: this.onErrorCallback
                 });
             }
@@ -107,7 +107,7 @@ export class MessageSystemIntegration {
             if (this.realtimeService) {
                 await this.realtimeService.subscribeToPage({
                     pageId,
-                    communityId: options.communityId || 'comm-001',
+                    communityId: options.communityId || 'abe5ec85-4ba6-456f-adaf-03d7d51cecf4',
                     onError: this.onErrorCallback
                 });
             }
@@ -131,7 +131,7 @@ export class MessageSystemIntegration {
             throw error;
         }
     }
-    async handlePageChange(newPageId, communityId = 'comm-001') {
+    async handlePageChange(newPageId, communityId = 'abe5ec85-4ba6-456f-adaf-03d7d51cecf4') {
         // Unsubscribe from old page
         if (this.currentPageId && this.currentPageId !== newPageId && this.realtimeService) {
             this.realtimeService.unsubscribeFromPage(this.currentPageId);

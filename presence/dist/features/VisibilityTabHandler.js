@@ -184,32 +184,14 @@ class VisibilityTabHandler {
                 console.warn('⚠️ VISIBILITY_TAB_HANDLER: No page ID available for refresh');
                 return;
             }
-            // Get visibility manager
-            const win = window;
-            const visibilityManager = win.visibilityManager || win.supabaseRealtimeClient?.visibilityManager;
-            if (visibilityManager) {
-                // Set current page if method exists
-                if (visibilityManager.setCurrentPage && typeof visibilityManager.setCurrentPage === 'function') {
-                    visibilityManager.setCurrentPage(currentPageId);
-                }
-                // Refresh visibility avatars
-                if (visibilityManager.refreshVisibilityAvatars && typeof visibilityManager.refreshVisibilityAvatars === 'function') {
-                    console.log('🔄 VISIBILITY_TAB_HANDLER: Calling refreshVisibilityAvatars');
-                    await visibilityManager.refreshVisibilityAvatars(currentPageId);
-                    console.log('✅ VISIBILITY_TAB_HANDLER: Visibility refresh completed');
-                }
-                else {
-                    console.warn('⚠️ VISIBILITY_TAB_HANDLER: refreshVisibilityAvatars method not available');
-                }
+            // COMP: Use window.refreshVisibilityAvatars (set by buildGraph.js) which uses graph.visibilityManager
+            if (typeof window !== 'undefined' && window.refreshVisibilityAvatars && typeof window.refreshVisibilityAvatars === 'function') {
+                console.log('🔄 VISIBILITY_TAB_HANDLER: Calling refreshVisibilityAvatars (COMP method)');
+                await window.refreshVisibilityAvatars(currentPageId);
+                console.log('✅ VISIBILITY_TAB_HANDLER: Visibility refresh completed');
             }
             else {
-                console.warn('⚠️ VISIBILITY_TAB_HANDLER: Visibility manager not found');
-                // Fallback: Try to call refreshVisibility if available
-                const refreshVisibility = window.refreshVisibility;
-                if (refreshVisibility && typeof refreshVisibility === 'function') {
-                    console.log('🔄 VISIBILITY_TAB_HANDLER: Calling refreshVisibility fallback');
-                    await refreshVisibility(currentPageId);
-                }
+                console.warn('⚠️ VISIBILITY_TAB_HANDLER: refreshVisibilityAvatars not available');
             }
         }
         catch (error) {

@@ -251,7 +251,7 @@ const normalizeMessagePayload = (rawMessage) => {
         communityId: String(rawMessage.communityId ||
             getStringValue(rawMessage.community_id) ||
             fallbackCommunities[0] ||
-            'comm-001'),
+            publicSquareUUID),
         conversationId: (() => {
             const convId = rawMessage.conversationId ?? getStringValue(rawMessage.conversation_id);
             if (typeof convId === 'string')
@@ -314,10 +314,12 @@ const renderMessageElement = async (message, chatContainer = getChatMessagesCont
     if (UnifiedMessageRenderer && typeof UnifiedMessageRenderer.generateMessageHTML === 'function') {
         // ROOT CAUSE FIX: Ensure getMessageActionsMenu is available for UnifiedMessageRenderer
         // Note: UnifiedMessageRenderer will await the Promise, so we can return the Promise directly
+        // CRITICAL FIX: Pass canEdit/canDelete to getMessageActionsMenu
         const win = window;
         if (!win.getMessageActionsMenu) {
-            win.getMessageActionsMenu = (msg, edit, del) => {
-                return getMessageActionMenu(msg);
+            win.getMessageActionsMenu = async (msg, edit, del) => {
+                // CRITICAL FIX: Pass canEdit/canDelete to getMessageActionMenu
+                return await getMessageActionMenu(msg, edit, del);
             };
         }
         // CRITICAL FIX: Get community name from message or communities module
@@ -341,6 +343,9 @@ const renderMessageElement = async (message, chatContainer = getChatMessagesCont
                 communityName = 'Public Square';
             }
         }
+        // CRITICAL FIX: Calculate reply count from current chat data
+        const currentChatData = getCurrentChatData();
+        const replyCount = currentChatData.filter(m => m.parentId === message.id).length;
         const html = await UnifiedMessageRenderer.generateMessageHTML(message, {
             isReply,
             isFocusMode,
@@ -348,7 +353,7 @@ const renderMessageElement = async (message, chatContainer = getChatMessagesCont
             communityName,
             formattedTime: safeFormattedTime,
             reactionCount: (Array.isArray(message.reactions) ? message.reactions.length : 0),
-            replyCount: 0,
+            replyCount,
             bookmarkCount: typeof message.bookmarkCount === 'number' ? message.bookmarkCount : 0,
             isBookmarked: typeof message.isBookmarked === 'boolean' ? message.isBookmarked : false,
             hasUserReplied: false,
@@ -1233,7 +1238,7 @@ async function handleMessageFocus(messageOrId) {
         const urlData = getCurrentUrlData();
         const pageId = urlData?.pageId || '';
         const activeCommunities = getActiveCommunities();
-        const communityId = activeCommunities[0] || 'comm-001';
+        const communityId = activeCommunities[0] || publicSquareUUID;
         const result = await messageSystemIntegration.loadFocusMode(pageId, message.parentId, { communityId });
         // Render in focus mode
         const container = getChatMessagesContainer();
@@ -1407,7 +1412,7 @@ async function loadChatHistory(communityIdOrRawUrl, activeCommunitiesOrUndefined
             }
         }
         console.log('📜 loadChatHistory: Loading messages with new message system');
-        const communityId = activeCommunities[0] || 'comm-001';
+        const communityId = activeCommunities[0] || publicSquareUUID;
         // ROOT CAUSE FIX: Mark as initial load to prevent onMessageUpdate from adding messages
         const win = window;
         win.isInitialMessageLoad = true;
@@ -1470,6 +1475,22 @@ async function loadChatHistory(communityIdOrRawUrl, activeCommunitiesOrUndefined
                     };
                     handleMessageFocus(legacyMessage);
                 },
+                onFocusClick: (message) => {
+                    if (!message.author)
+                        return;
+                    // CRITICAL FIX: onFocusClick should trigger focus mode
+                    const legacyMessage = {
+                        id: message.id,
+                        content: message.content,
+                        authorId: message.author.id || '',
+                        communityId: communityId,
+                        parentId: message.parentId || null,
+                        author: message.author,
+                        createdAt: message.createdAt,
+                        updatedAt: message.updatedAt
+                    };
+                    handleMessageFocus(legacyMessage);
+                },
                 onReplyClick: async (message) => {
                     if (!message.author)
                         return;
@@ -1484,21 +1505,6 @@ async function loadChatHistory(communityIdOrRawUrl, activeCommunitiesOrUndefined
                         updatedAt: message.updatedAt
                     };
                     await handleReplyToMessage(legacyMessage);
-                },
-                onFocusClick: (message) => {
-                    if (!message.author)
-                        return;
-                    const legacyMessage = {
-                        id: message.id,
-                        content: message.content,
-                        authorId: message.author.id || '',
-                        communityId: communityId,
-                        parentId: message.parentId || null,
-                        author: message.author,
-                        createdAt: message.createdAt,
-                        updatedAt: message.updatedAt
-                    };
-                    handleMessageFocus(legacyMessage);
                 }
             });
         }
@@ -1599,23 +1605,31 @@ async function toggleThreadReplies(threadId, messageElement) {
  * Get message action menu HTML
  * COMP METHOD: Matches original implementation
  */
-async function getMessageActionMenu(message) {
+async function getMessageActionMenu(message, canEdit, canDelete) {
     const now = new Date();
     const messageDate = new Date(message.createdAt || '');
     const diffMs = now.getTime() - messageDate.getTime();
     const diffMinutes = Math.floor(diffMs / (1000 * 60));
     const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-    // Get current user to check ownership
-    const currentUser = getCurrentUser();
-    // Use email for user identification
-    let isOwner = false;
-    if (currentUser && currentUser.email) {
-        const authorEmail = message.authorEmail || (message.author && message.author.email);
-        isOwner = (authorEmail === currentUser.email);
+    // CRITICAL FIX: Use passed canEdit/canDelete if provided, otherwise calculate
+    let finalCanEdit;
+    let finalCanDelete;
+    if (canEdit !== undefined && canDelete !== undefined) {
+        // Use passed values (from UnifiedMessageRenderer)
+        finalCanEdit = canEdit;
+        finalCanDelete = canDelete;
     }
-    // Check if user can edit/delete (only if they own the message)
-    const canEdit = isOwner && diffHours < 1; // Can edit within 1 hour
-    const canDelete = isOwner; // User can only delete their own messages
+    else {
+        // Calculate from message (fallback for direct calls)
+        const currentUser = getCurrentUser();
+        let isOwner = false;
+        if (currentUser && currentUser.email) {
+            const authorEmail = message.authorEmail || (message.author && message.author.email);
+            isOwner = (authorEmail === currentUser.email);
+        }
+        finalCanEdit = isOwner && diffHours < 1; // Can edit within 1 hour
+        finalCanDelete = isOwner; // User can only delete their own messages
+    }
     const silentEdit = diffMinutes <= 5; // Silent edit within 5 minutes
     // Get current theme for background color
     const currentTheme = document.body.getAttribute('data-theme') ||
@@ -1638,8 +1652,8 @@ async function getMessageActionMenu(message) {
         ${typeof window !== 'undefined' && window.XIcons ? window.XIcons.more({ width: 20, height: 20 }) : '<span class="action-dots" style="opacity: 1 !important; display: inline-block !important; visibility: visible !important; font-size: 16px !important; color: var(--text-secondary) !important; background: none !important;">⋯</span>'}
       </button>
       <div class="action-dropdown" style="display: none; background: ${safeDropdownBg} !important; color: ${safeDropdownColor} !important; border: 1px solid var(--border-color, ${currentTheme === 'dark' ? '#333' : '#ddd'}) !important; border-radius: 8px !important; box-shadow: 0 2px 8px rgba(0,0,0,0.15) !important;">
-        ${canEdit ? `<button class="action-item edit-btn" data-message-id="${message.id}">✏️ Edit</button>` : ''}
-        ${canDelete ? `<button class="action-item delete-btn" data-message-id="${message.id}">🗑️ Delete</button>` : ''}
+        ${finalCanEdit ? `<button class="action-item edit-btn" data-message-id="${message.id}">✏️ Edit</button>` : ''}
+        ${finalCanDelete ? `<button class="action-item delete-btn" data-message-id="${message.id}">🗑️ Delete</button>` : ''}
         <button class="action-item flag-btn" data-message-id="${message.id}" disabled>🚩 Flag</button>
       </div>
     </div>

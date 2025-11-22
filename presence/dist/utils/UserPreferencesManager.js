@@ -396,7 +396,12 @@ export class UserPreferencesManager {
             // Step 5: Emit change event (immediate)
             this.emitPreferenceChanged(key, value, oldValue, 'user');
             // Step 6: Apply to UI immediately (CRITICAL FIX: Update UI after save)
-            this.applyPreferencesToUI();
+            // ROOT CAUSE FIX: Only apply theme if this is a theme preference change, not other preferences
+            // This prevents theme from resetting when saving non-theme preferences (like isVisible) during message loading
+            const isThemeChange = key === 'theme';
+            if (isThemeChange) {
+                this.applyPreferencesToUI();
+            }
             // Step 7: Handle database save (with batching support)
             if (!options.skipDatabase) {
                 if (options.batch === true || options.batch === undefined) {
@@ -688,12 +693,14 @@ export class UserPreferencesManager {
     }
     /**
      * Apply preferences to UI immediately after loading
+     * ROOT CAUSE FIX: Only apply theme if DOM theme is not set (first load) or if theme preference was explicitly changed
      */
-    applyPreferencesToUI() {
+    applyPreferencesToUI(skipTheme = false) {
         // Apply theme to DOM
         // ROOT CAUSE FIX: Never override an existing DOM theme unless the preference is explicitly different and not a default
         // This prevents overriding a user's current theme (set by ProfileManager on startup) with a stale database value
-        if (this.preferences.theme) {
+        // CRITICAL: Skip theme application if this is called after saving a non-theme preference (like isVisible)
+        if (!skipTheme && this.preferences.theme) {
             const currentDomTheme = document.body.getAttribute('data-theme') || document.documentElement.getAttribute('data-theme');
             const isDefaultTheme = this.preferences.theme === this.schema.theme.defaultValue;
             // ROOT CAUSE FIX: CRITICAL - If DOM already has a theme set, NEVER override it during preference loading
@@ -750,6 +757,9 @@ export class UserPreferencesManager {
                     this.preferences.theme = currentDomTheme;
                 }
             }
+        }
+        else if (skipTheme) {
+            console.log(`🔍 USER_PREFERENCES_MANAGER: Skipping theme application (called after non-theme preference save)`);
         }
         // Apply visibility to toggle if exists
         if (this.preferences.isVisible !== undefined) {

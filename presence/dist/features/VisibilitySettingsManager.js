@@ -134,7 +134,13 @@ class VisibilitySettingsManager {
             // Just attach the handler directly
             const toggle = this.visibilityToggle;
             toggle.addEventListener('change', async (e) => {
+                // COMP: CRITICAL FIX - Ensure this is the visibility toggle, not theme toggle
+                if (e.target !== toggle || toggle.id !== 'visibility-toggle') {
+                    console.warn('⚠️ VISIBILITY_SETTINGS: Ignoring change event - wrong target');
+                    return;
+                }
                 e.stopPropagation(); // COMP: Prevent event bubbling
+                e.stopImmediatePropagation(); // COMP: Prevent other handlers from running
                 console.log('🔍 DIAGNOSTIC: Visibility toggle changed');
                 const isVisible = toggle.checked;
                 console.log('🔍 DIAGNOSTIC: Visibility toggle checked:', isVisible);
@@ -142,7 +148,7 @@ class VisibilitySettingsManager {
                 this.updateVisibilityStatus();
                 await this.saveVisibility();
                 console.log('🔍 DIAGNOSTIC: Visibility saved:', toggle.checked);
-            }, { once: false, passive: false });
+            }, { once: false, passive: false, capture: false });
             toggle.setAttribute('data-handler-attached', 'true');
             console.log('✅ VISIBILITY_SETTINGS: Visibility toggle handler attached');
         }
@@ -294,6 +300,11 @@ class VisibilitySettingsManager {
             let isProgrammaticChange = false;
             // Attach fresh event listener
             toggle.addEventListener('change', async (e) => {
+                // COMP: CRITICAL FIX - Ensure this is the theme toggle, not visibility toggle
+                if (e.target !== toggle || toggle.id !== 'theme-toggle') {
+                    console.warn('⚠️ VISIBILITY_SETTINGS: Ignoring change event - wrong target');
+                    return;
+                }
                 // ROOT CAUSE FIX: Ignore change events that are programmatic (from loadSettings)
                 if (isProgrammaticChange) {
                     console.log('🔍 DIAGNOSTIC: Ignoring programmatic theme toggle change');
@@ -301,16 +312,17 @@ class VisibilitySettingsManager {
                     return;
                 }
                 e.stopPropagation();
+                e.stopImmediatePropagation(); // COMP: Prevent other handlers from running
                 console.log('🔍 DIAGNOSTIC: Settings tab theme toggle changed (user action)');
                 const beforeTheme = document.body.getAttribute('data-theme') || document.documentElement.getAttribute('data-theme') || 'light';
                 console.log('🔍 DIAGNOSTIC: Theme before change:', beforeTheme);
-                // COMP: Save theme and apply immediately
+                // COMP: Save theme and apply immediately - DO NOT touch visibility
                 await this.saveTheme();
                 this.updateThemeStatus();
                 const afterTheme = document.body.getAttribute('data-theme') || document.documentElement.getAttribute('data-theme') || 'light';
                 console.log('🔍 DIAGNOSTIC: Theme after change:', afterTheme);
                 console.log('🔍 DIAGNOSTIC: Theme changed:', beforeTheme !== afterTheme ? 'YES ✅' : 'NO ❌');
-            });
+            }, { once: false, passive: false, capture: false });
             // ROOT CAUSE FIX: Store flag setter on toggle element for programmatic changes
             toggle._setProgrammaticChange = () => { isProgrammaticChange = true; };
             toggle.setAttribute('data-handler-attached', 'true');

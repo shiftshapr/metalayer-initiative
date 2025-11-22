@@ -693,7 +693,7 @@ export class UnifiedMessageModal {
             pageId: this.options.pageId,
             parentId: sanitizeId(this.options.parentId),
             quoteId: sanitizeId(this.options.quoteId),
-            communityId: this.options.communityId || 'comm-001',
+            communityId: this.options.communityId || 'abe5ec85-4ba6-456f-adaf-03d7d51cecf4',
             messageKind,
             attachments: this.attachments.map(att => ({
                 id: att.id,

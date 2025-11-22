@@ -79,7 +79,7 @@ class MessageStore {
     }
     async load(pageId, parentId = null, options = {}) {
         const key = this.getCacheKey(pageId, parentId);
-        const { limit = 10, cursor = null, includeTopReply = parentId === null, communityId = 'comm-001' } = options;
+        const { limit = 10, cursor = null, includeTopReply = parentId === null, communityId = 'abe5ec85-4ba6-456f-adaf-03d7d51cecf4' } = options;
         const existingEntry = this.cache.get(key);
         if (existingEntry) {
             existingEntry.status = 'loading';

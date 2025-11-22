@@ -1,4 +1,4 @@
-const INITIAL_COMMUNITY = 'comm-001';
+const INITIAL_COMMUNITY = 'abe5ec85-4ba6-456f-adaf-03d7d51cecf4';
 export class BootController {
     constructor(graph, options) {
         this.currentUser = null;

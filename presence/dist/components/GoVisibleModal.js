@@ -45,6 +45,11 @@ class GoVisibleModal {
      * Create modal HTML
      */
     createModal() {
+        // COMP: Get current theme to set appropriate colors
+        const currentTheme = document.body.getAttribute('data-theme') ||
+            document.documentElement.getAttribute('data-theme') ||
+            'light';
+        const isLightTheme = currentTheme === 'light';
         this.modal = document.createElement('div');
         this.modal.className = 'go-visible-modal-overlay';
         this.modal.style.cssText = `
@@ -73,6 +78,8 @@ class GoVisibleModal {
       transform: scale(0.9);
       transition: transform 0.3s ease;
     `;
+        // COMP: Cancel button color - dark for light theme, light for dark theme
+        const cancelButtonColor = isLightTheme ? '#212529' : 'var(--text-primary, #fff)';
         content.innerHTML = `
       <h3 style="margin: 0 0 16px 0; font-size: 20px; color: var(--text-primary);">Go Visible</h3>
       <p style="margin: 0 0 24px 0; color: var(--text-secondary); line-height: 1.5;">
@@ -84,7 +91,7 @@ class GoVisibleModal {
           background: transparent;
           border: 1px solid var(--border-color, #ddd);
           border-radius: 8px;
-          color: var(--text-primary);
+          color: ${cancelButtonColor};
           cursor: pointer;
           font-size: 14px;
         ">Cancel</button>

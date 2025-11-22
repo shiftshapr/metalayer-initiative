@@ -94,7 +94,7 @@ async function authenticateWithSupabase(user) {
         // Set the current user in the real-time client for context
         const supabaseRealtimeClient = window.supabaseRealtimeClient;
         if (supabaseRealtimeClient && supabaseRealtimeClient.setCurrentUser) {
-            await supabaseRealtimeClient.setCurrentUser(user.email, user.id, 'comm-001');
+            await supabaseRealtimeClient.setCurrentUser(user.email, user.id, 'abe5ec85-4ba6-456f-adaf-03d7d51cecf4');
             console.log('✅ SUPABASE AUTH: Real-time client user set');
         }
         // ROOT CAUSE FIX: Fetch AppUser UUID from backend (AppUser table always has UUIDs)
@@ -177,7 +177,7 @@ async function authenticateWithSupabase(user) {
             }
             const currentUserForCommunity = stateManagerInstance.getState('currentUser');
             if (currentUserForCommunity) {
-                stateManagerInstance.setState('currentUser', { ...currentUserForCommunity, communityId: 'comm-001' });
+                stateManagerInstance.setState('currentUser', { ...currentUserForCommunity, communityId: 'abe5ec85-4ba6-456f-adaf-03d7d51cecf4' });
             }
         }
         console.log('✅ SUPABASE AUTH: User context set globally');

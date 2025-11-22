@@ -12,7 +12,7 @@ export class MessageLoader {
      * Load messages for the default (top-level) view.
      */
     async loadDefault(options) {
-        const { pageId, limit = 10, includeTopReply = true, communityId = 'comm-001', showSpinner = true, onUpdate, onError } = options;
+        const { pageId, limit = 10, includeTopReply = true, communityId = 'abe5ec85-4ba6-456f-adaf-03d7d51cecf4', showSpinner = true, onUpdate, onError } = options;
         this.currentPageId = pageId;
         this.currentParentId = null;
         try {
@@ -51,7 +51,7 @@ export class MessageLoader {
      * Load messages for focus mode (replies to a parent).
      */
     async loadFocus(options) {
-        const { pageId, focusParentId, limit = 10, communityId = 'comm-001', showSpinner = true, onUpdate, onError } = options;
+        const { pageId, focusParentId, limit = 10, communityId = 'abe5ec85-4ba6-456f-adaf-03d7d51cecf4', showSpinner = true, onUpdate, onError } = options;
         this.currentPageId = pageId;
         this.currentParentId = focusParentId;
         try {
