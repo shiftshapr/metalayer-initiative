@@ -1591,9 +1591,38 @@ async function handleQuoteMessage(message) {
     const win = window;
     if (!win.openQuoteModal || typeof win.openQuoteModal !== 'function') {
         console.error('❌ handleQuoteMessage: UnifiedMessageModal not available');
+        // CRITICAL FIX: Try alternative - use openMessageModal directly
+        const unifiedMessageModal = win.unifiedMessageModal;
+        if (unifiedMessageModal && typeof unifiedMessageModal.open === 'function') {
+            try {
+                await unifiedMessageModal.open({
+                    mode: 'quote',
+                    pageId,
+                    quoteId: message.id,
+                    communityId: message.communityId
+                });
+                return;
+            }
+            catch (error) {
+                console.error('❌ handleQuoteMessage: Failed to open quote modal:', error);
+            }
+        }
+        else {
+            console.error('❌ handleQuoteMessage: Neither openQuoteModal nor unifiedMessageModal available');
+        }
         return;
     }
-    await win.openQuoteModal(message, pageId);
+    try {
+        await win.openQuoteModal(message, pageId);
+    }
+    catch (error) {
+        console.error('❌ handleQuoteMessage: Error opening quote modal:', error);
+        // CRITICAL FIX: Show user-friendly error
+        const showNotification = window.showNotification;
+        if (typeof window !== 'undefined' && showNotification) {
+            showNotification('Failed to open quote modal. Please try again.');
+        }
+    }
 }
 /**
  * Handle delete message
@@ -1866,7 +1895,8 @@ async function handleBookmarkMessage(message) {
             return;
         }
         const isBookmarked = message.isBookmarked || false;
-        const endpoint = isBookmarked ? `/api/bookmarks/${message.id}` : '/api/bookmarks';
+        // CRITICAL FIX: Use /v1/ endpoint (API service handles base URL)
+        const endpoint = isBookmarked ? `/v1/bookmarks/${message.id}` : '/v1/bookmarks';
         const method = isBookmarked ? 'DELETE' : 'POST';
         const response = await api.request(endpoint, {
             method,
@@ -2071,7 +2101,58 @@ async function handleReaction(message) {
         await reactionsIntegration.reactionsManager.addReaction(message.id, '👍');
     }
     else {
-        console.warn('⚠️ REACTION: Reactions integration not available');
+        // CRITICAL FIX: Fallback to direct API call when reactionsIntegration not available
+        console.warn('⚠️ REACTION: Reactions integration not available, using API fallback');
+        try {
+            const api = getApi();
+            if (!api) {
+                console.error('❌ handleReaction: API not available');
+                return;
+            }
+            const currentUser = getCurrentUser();
+            if (!currentUser) {
+                console.error('❌ handleReaction: User not authenticated');
+                return;
+            }
+            // Check if user already reacted
+            const supabase = typeof window !== 'undefined'
+                ? window.supabase
+                : null;
+            if (supabase) {
+                // CRITICAL FIX: Use API endpoint for reactions when reactionsIntegration not available
+                const endpoint = `/v1/reactions/${message.id}`;
+                const { data: existingReactions } = await api.request(endpoint, { method: 'GET' });
+                const userReaction = existingReactions?.find(r => r.user_id === currentUser.id);
+                if (userReaction) {
+                    // Remove reaction
+                    const deleteResponse = await api.request(`${endpoint}?emoji=${userReaction.emoji}`, { method: 'DELETE' });
+                    if (deleteResponse.data?.success) {
+                        console.log('✅ REACTION: Removed reaction');
+                    }
+                }
+                else {
+                    // Add reaction
+                    const addResponse = await api.request(endpoint, {
+                        method: 'POST',
+                        body: { emoji: '👍' }
+                    });
+                    if (addResponse.data?.success) {
+                        console.log('✅ REACTION: Added reaction');
+                    }
+                }
+                // Reload reactions display
+                const loadMessageReactionsFn = getWindowFunction('loadMessageReactions');
+                if (loadMessageReactionsFn) {
+                    await loadMessageReactionsFn(message.id);
+                }
+            }
+            else {
+                console.error('❌ handleReaction: Supabase client not available');
+            }
+        }
+        catch (error) {
+            console.error('❌ handleReaction: Failed to toggle reaction:', error);
+        }
     }
 }
 /**

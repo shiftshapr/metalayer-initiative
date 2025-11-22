@@ -484,9 +484,9 @@ exports.createMessage = async (req, res) => {
     console.log('📝 CREATE_MESSAGE:', { content, pageId, parentId, userId });
 
     // Insert message
-    // Handle nullable UUIDs properly for Prisma
-    const parentIdValue = parentId ? Prisma.sql`${parentId}::UUID` : Prisma.sql`NULL`;
-    const quoteIdValue = quoteId ? Prisma.sql`${quoteId}::UUID` : Prisma.sql`NULL`;
+    // Handle nullable UUIDs properly for Prisma - use Prisma.raw for NULL
+    const parentIdValue = parentId ? Prisma.raw(`${parentId}::UUID`) : Prisma.raw('NULL');
+    const quoteIdValue = quoteId ? Prisma.raw(`${quoteId}::UUID`) : Prisma.raw('NULL');
     
     const messageResult = await prisma.$queryRaw`
       INSERT INTO messages (

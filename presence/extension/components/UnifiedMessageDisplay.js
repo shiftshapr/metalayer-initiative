@@ -239,6 +239,27 @@ export class UnifiedMessageDisplay {
                 }
             }, 100);
         }
+        // CRITICAL FIX: Attach avatar hover handlers for user hover modal
+        const avatarContainer = messageEl.querySelector('.avatar-container');
+        if (avatarContainer && message.author) {
+            const userHoverModal = win.userHoverModal;
+            if (userHoverModal && userHoverModal.show) {
+                const showFn = userHoverModal.show;
+                avatarContainer.addEventListener('mouseenter', (e) => {
+                    e.stopPropagation();
+                    try {
+                        showFn(message.author, avatarContainer);
+                    }
+                    catch (error) {
+                        console.warn('⚠️ UnifiedMessageDisplay: Failed to show user hover modal:', error);
+                    }
+                });
+                avatarContainer.addEventListener('mouseleave', (e) => {
+                    e.stopPropagation();
+                    // Hover modal should handle hiding on mouseleave
+                });
+            }
+        }
         return messageEl;
     }
     applyFocusClasses(messageEl, options) {

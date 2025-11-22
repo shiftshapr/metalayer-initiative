@@ -5477,7 +5477,7 @@ body.dark #visibility-access-modal #cancel-visibility-btn,
 
 .unified-message-btn-primary {
   background: #1D9BF0;
-  color: #0F1419;
+  color: #FFFFFF; /* White text in all modes */
 }
 
 .unified-message-btn-primary:hover:not(:disabled) {
