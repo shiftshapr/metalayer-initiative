@@ -662,6 +662,8 @@ class ProfileManager {
                 }
                 // ROOT CAUSE FIX: Ensure parent container #user-info is visible
                 this.ensureUserInfoVisible();
+                // COMP: Update user info display (name in menu)
+                this.updateUserInfo();
                 // Find or create user avatar container
                 let userAvatarContainer = document.getElementById('user-avatar-container');
                 if (!userAvatarContainer) {

@@ -31,8 +31,20 @@ export class MessageSystemIntegration {
                 if (data.key && this.onMessageUpdateCallback) {
                     const [pageId, parentIdStr] = data.key.split('|');
                     const parentId = parentIdStr === 'null' ? null : parentIdStr;
+                    console.log('📝 MessageSystemIntegration: Update event received', { 
+                        key: data.key, 
+                        pageId, 
+                        parentId, 
+                        currentPageId: this.currentPageId, 
+                        currentParentId: this.currentParentId,
+                        messageCount: data.data?.items?.length 
+                    });
+                    // Update UI if it matches current view OR if it's a new message (real-time)
                     if (pageId === this.currentPageId && parentId === this.currentParentId) {
+                        console.log('📝 MessageSystemIntegration: Calling onMessageUpdateCallback with', data.data.items.length, 'messages');
                         this.onMessageUpdateCallback(data.data.items);
+                    } else {
+                        console.log('📝 MessageSystemIntegration: Update for different page/parent, skipping UI update');
                     }
                 }
             });

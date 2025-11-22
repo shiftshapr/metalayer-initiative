@@ -165,9 +165,10 @@ class MessageStore {
             entry.items[existingIndex] = normalized;
         }
         else {
-            console.log(`📝 MessageStore: Adding new message ${normalized.id} to cache`);
+            console.log(`📝 MessageStore: Adding new message ${normalized.id} to cache (key: ${key})`);
             entry.items.unshift(normalized);
         }
+        console.log(`📝 MessageStore: Emitting update event for key ${key} with ${entry.items.length} messages`);
         this.emit('update', { key, data: entry });
     }
     handleRealtimeUpdate(message) {
@@ -179,16 +180,24 @@ class MessageStore {
         this.emit('messageDeleted', { id: messageId });
     }
     normalizeMessage(message) {
+        // Handle Supabase format: user_id instead of authorId, and may need to fetch author
+        const authorId = message.authorId || message.user_id || '';
         const normalized = {
             id: message.id || '',
             content: message.content || '',
-            authorId: message.authorId || '',
+            authorId,
             pageId: message.page_id || message.pageId,
             parentId: message.parent_id || message.parentId || null,
-            author: message.author,
-            createdAt: message.createdAt,
-            updatedAt: message.updatedAt
+            author: message.author, // May be undefined for real-time messages - will need to be fetched
+            createdAt: (message.createdAt || message.created_at || undefined),
+            updatedAt: (message.updatedAt || message.updated_at || undefined),
+            communityId: (message.communityId || message.community_id || undefined),
+            status: message.status
         };
+        // If author is missing but we have authorId, log a warning
+        if (!normalized.author && authorId) {
+            console.warn(`⚠️ MessageStore.normalizeMessage: Message ${normalized.id} missing author info (authorId: ${authorId})`);
+        }
         return normalized;
     }
 }
