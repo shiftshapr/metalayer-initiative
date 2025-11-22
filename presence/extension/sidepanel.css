@@ -2865,7 +2865,7 @@ html[data-theme="dark"] .focus-message-input-container {
 .focus-messages-container .message.message-loaded .message-footer {
   display: flex !important;
   width: 100% !important;
-  margin-top: 8px !important;
+  margin-top: 0px !important; /* CRITICAL FIX: Remove whitespace between content and buttons */
 }
 
 /* CRITICAL FIX: Focus mode footer layout */
