@@ -1567,13 +1567,34 @@ async function handleReplyToMessage(message) {
         console.error('❌ handleReplyToMessage: No pageId available');
         return;
     }
+    // CRITICAL FIX: Sanitize message ID to remove any ::UUID suffix
+    const sanitizeId = (id) => {
+        if (!id)
+            return null;
+        return id.replace(/::UUID$/i, '').trim();
+    };
+    // Create sanitized message copy
+    const sanitizedMessage = {
+        ...message,
+        id: sanitizeId(message.id) || message.id,
+        parentId: sanitizeId(message.parentId) || message.parentId || null
+    };
     // Use UnifiedMessageModal
     const win = window;
     if (!win.openReplyModal || typeof win.openReplyModal !== 'function') {
         console.error('❌ handleReplyToMessage: UnifiedMessageModal not available');
         return;
     }
-    await win.openReplyModal(message, pageId);
+    try {
+        await win.openReplyModal(sanitizedMessage, pageId);
+    }
+    catch (error) {
+        console.error('❌ handleReplyToMessage: Error opening reply modal:', error);
+        const showNotification = window.showNotification;
+        if (typeof window !== 'undefined' && showNotification) {
+            showNotification('Failed to open reply modal. Please try again.');
+        }
+    }
 }
 /**
  * Handle quote message
@@ -1589,6 +1610,19 @@ async function handleQuoteMessage(message) {
     }
     // Use UnifiedMessageModal
     const win = window;
+    // CRITICAL FIX: Sanitize message ID to remove any ::UUID suffix
+    const sanitizeId = (id) => {
+        if (!id)
+            return null;
+        return id.replace(/::UUID$/i, '').trim();
+    };
+    // Create sanitized message copy
+    const sanitizedMessage = {
+        ...message,
+        id: sanitizeId(message.id) || message.id,
+        parentId: sanitizeId(message.parentId) || message.parentId || null
+    };
+    const sanitizedQuoteId = sanitizeId(message.id) || message.id;
     if (!win.openQuoteModal || typeof win.openQuoteModal !== 'function') {
         console.error('❌ handleQuoteMessage: UnifiedMessageModal not available');
         // CRITICAL FIX: Try alternative - use openMessageModal directly
@@ -1598,13 +1632,17 @@ async function handleQuoteMessage(message) {
                 await unifiedMessageModal.open({
                     mode: 'quote',
                     pageId,
-                    quoteId: message.id,
+                    quoteId: sanitizedQuoteId,
                     communityId: message.communityId
                 });
                 return;
             }
             catch (error) {
                 console.error('❌ handleQuoteMessage: Failed to open quote modal:', error);
+                const showNotification = window.showNotification;
+                if (typeof window !== 'undefined' && showNotification) {
+                    showNotification('Failed to open quote modal. Please try again.');
+                }
             }
         }
         else {
@@ -1613,7 +1651,7 @@ async function handleQuoteMessage(message) {
         return;
     }
     try {
-        await win.openQuoteModal(message, pageId);
+        await win.openQuoteModal(sanitizedMessage, pageId);
     }
     catch (error) {
         console.error('❌ handleQuoteMessage: Error opening quote modal:', error);
@@ -2101,14 +2139,9 @@ async function handleReaction(message) {
         await reactionsIntegration.reactionsManager.addReaction(message.id, '👍');
     }
     else {
-        // CRITICAL FIX: Fallback to direct API call when reactionsIntegration not available
-        console.warn('⚠️ REACTION: Reactions integration not available, using API fallback');
+        // CRITICAL FIX: Fallback to direct Supabase operations when reactionsIntegration not available
+        console.warn('⚠️ REACTION: Reactions integration not available, using Supabase fallback');
         try {
-            const api = getApi();
-            if (!api) {
-                console.error('❌ handleReaction: API not available');
-                return;
-            }
             const currentUser = getCurrentUser();
             if (!currentUser) {
                 console.error('❌ handleReaction: User not authenticated');
@@ -2119,24 +2152,47 @@ async function handleReaction(message) {
                 ? window.supabase
                 : null;
             if (supabase) {
-                // CRITICAL FIX: Use API endpoint for reactions when reactionsIntegration not available
-                const endpoint = `/v1/reactions/${message.id}`;
-                const { data: existingReactions } = await api.request(endpoint, { method: 'GET' });
-                const userReaction = existingReactions?.find(r => r.user_id === currentUser.id);
+                // CRITICAL FIX: Use direct Supabase operations for reactions (more reliable than API)
+                const supabaseClient = supabase; // Simplified type assertion to avoid complex type casting
+                // Check existing reactions
+                const { data: existingReactions, error: fetchError } = await supabaseClient
+                    .from('reactions')
+                    .select('emoji, user_id')
+                    .eq('message_id', message.id)
+                    .eq('user_id', currentUser.id);
+                if (fetchError) {
+                    console.error('❌ handleReaction: Error fetching reactions:', fetchError);
+                    return;
+                }
+                const userReaction = existingReactions?.find((r) => r.user_id === currentUser.id);
                 if (userReaction) {
                     // Remove reaction
-                    const deleteResponse = await api.request(`${endpoint}?emoji=${userReaction.emoji}`, { method: 'DELETE' });
-                    if (deleteResponse.data?.success) {
+                    const { error: deleteError } = await supabaseClient
+                        .from('reactions')
+                        .delete()
+                        .eq('message_id', message.id)
+                        .eq('user_id', currentUser.id)
+                        .eq('emoji', userReaction.emoji);
+                    if (deleteError) {
+                        console.error('❌ handleReaction: Error removing reaction:', deleteError);
+                    }
+                    else {
                         console.log('✅ REACTION: Removed reaction');
                     }
                 }
                 else {
                     // Add reaction
-                    const addResponse = await api.request(endpoint, {
-                        method: 'POST',
-                        body: { emoji: '👍' }
+                    const { error: insertError } = await supabaseClient
+                        .from('reactions')
+                        .insert({
+                        message_id: message.id,
+                        user_id: currentUser.id,
+                        emoji: '👍'
                     });
-                    if (addResponse.data?.success) {
+                    if (insertError) {
+                        console.error('❌ handleReaction: Error adding reaction:', insertError);
+                    }
+                    else {
                         console.log('✅ REACTION: Added reaction');
                     }
                 }
