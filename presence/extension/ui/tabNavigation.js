@@ -24,6 +24,11 @@ export function attachTabNavigation(options = {}) {
                 return;
             }
             logger.debug?.(`🔗 TAB_NAVIGATION: Switching to main tab ${targetTabId}`);
+            // COMP: Ensure nav tabs are visible before switching
+            const navMain = doc.querySelector('.sidebar-nav-main');
+            if (navMain) {
+                navMain.style.display = 'flex';
+            }
             mainTabs.forEach(t => t.classList.remove('active'));
             mainTabContents.forEach(content => content.classList.remove('active'));
             tab.classList.add('active');

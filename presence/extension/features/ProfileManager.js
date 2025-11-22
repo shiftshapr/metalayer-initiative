@@ -1867,10 +1867,18 @@ class ProfileManager {
         if (userInfoDiv) {
             userInfoDiv.style.display = 'flex';
         }
-        if (userMenuName && this.profileData) {
-            // FIX: Use displayName first, fallback to name, then email
-            const displayName = this.profileData.displayName || this.profileData.name || this.profileData.email || 'User';
+        if (userMenuName) {
+            // COMP: Get user name from currentUser in StateManager (most up-to-date)
+            const currentUser = stateManagerInstance.getState('currentUser');
+            const displayName = currentUser?.displayName ||
+                currentUser?.name ||
+                this.profileData?.displayName ||
+                this.profileData?.name ||
+                currentUser?.email ||
+                this.profileData?.email ||
+                'User';
             userMenuName.textContent = displayName;
+            console.log('✅ PROFILE_MANAGER: Updated user menu name:', displayName);
         }
     }
     /**

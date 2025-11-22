@@ -1316,6 +1316,14 @@ async function handleMessageFocus(messageOrId) {
  * CRITICAL: This function must be exported to window for tab change handlers
  */
 async function loadChatHistory(communityIdOrRawUrl, activeCommunitiesOrUndefined) {
+    // COMP FIX: Don't load messages when visibility tab is active - visibility tab should only show visibility, not messages
+    if (typeof document !== 'undefined') {
+        const visibilityTab = document.getElementById('visibility-tab');
+        if (visibilityTab && visibilityTab.classList.contains('active')) {
+            console.log('⚠️ loadChatHistory: Skipping - visibility tab is active (should only refresh visibility, not load messages)');
+            return;
+        }
+    }
     // COMP METHOD: Handle both old signature (communityId) and new signature (rawUrl, activeCommunities)
     let rawUrl;
     let activeCommunities;

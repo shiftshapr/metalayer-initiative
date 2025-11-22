@@ -259,7 +259,11 @@ export class UserPreferencesManager {
                 const currentDomTheme = document.body.getAttribute('data-theme') || document.documentElement.getAttribute('data-theme');
                 console.log('🔍 THEME_APPLY: Current DOM theme before apply:', currentDomTheme || 'NOT SET');
             }
-            this.applyPreferencesToUI();
+            // ROOT CAUSE FIX: During initial load, only apply theme if DOM theme is not set
+            // If DOM theme is already set (by ProfileManager on startup), preserve it and skip theme application
+            const currentDomTheme = document.body.getAttribute('data-theme') || document.documentElement.getAttribute('data-theme');
+            const skipThemeDuringLoad = !!currentDomTheme; // Skip if DOM theme is already set
+            this.applyPreferencesToUI(skipThemeDuringLoad);
             const duration = Date.now() - startTime;
             this.metrics.loads.success++;
             this.metrics.loads.totalTime += duration;
@@ -697,21 +701,19 @@ export class UserPreferencesManager {
      */
     applyPreferencesToUI(skipTheme = false) {
         // Apply theme to DOM
-        // ROOT CAUSE FIX: Never override an existing DOM theme unless the preference is explicitly different and not a default
+        // ROOT CAUSE FIX: NEVER override an existing DOM theme - DOM is the source of truth once set
         // This prevents overriding a user's current theme (set by ProfileManager on startup) with a stale database value
         // CRITICAL: Skip theme application if this is called after saving a non-theme preference (like isVisible)
         if (!skipTheme && this.preferences.theme) {
             const currentDomTheme = document.body.getAttribute('data-theme') || document.documentElement.getAttribute('data-theme');
-            const isDefaultTheme = this.preferences.theme === this.schema.theme.defaultValue;
-            // ROOT CAUSE FIX: CRITICAL - If DOM already has a theme set, NEVER override it during preference loading
+            // ROOT CAUSE FIX: CRITICAL - If DOM already has a theme set, NEVER override it, period
             // This prevents theme from resetting to light when messages load
-            // Only apply theme if DOM has no theme set (first load)
-            // ALSO: Never apply default 'light' theme if DOM is already 'dark' - this is the root cause
+            // Only apply theme if DOM has no theme set (first load, before ProfileManager sets it)
             if (!currentDomTheme) {
-                // No DOM theme - safe to apply preference
+                // No DOM theme - safe to apply preference (only on first load)
                 const stack = new Error().stack;
                 console.log(`🔍 USER_PREFERENCES_MANAGER: ========================================`);
-                console.log(`🔍 USER_PREFERENCES_MANAGER: Applying theme preference '${this.preferences.theme}' (no existing DOM theme)`);
+                console.log(`🔍 USER_PREFERENCES_MANAGER: Applying theme preference '${this.preferences.theme}' (no existing DOM theme - first load)`);
                 console.log(`🔍 USER_PREFERENCES_MANAGER: Call stack:`, stack?.split('\n').slice(1, 8).join('\n'));
                 console.log(`🔍 USER_PREFERENCES_MANAGER: ========================================`);
                 document.documentElement.setAttribute('data-theme', this.preferences.theme);
@@ -735,31 +737,46 @@ export class UserPreferencesManager {
                 }
             }
             else {
-                // DOM theme exists - preserve it, don't override
-                // ROOT CAUSE FIX: CRITICAL - If DOM is 'dark' and preference is 'light' (especially if it's a default), DO NOT override
-                if (currentDomTheme === 'dark' && this.preferences.theme === 'light' && isDefaultTheme) {
-                    console.warn(`🚫 USER_PREFERENCES_MANAGER: BLOCKING theme override - DOM is 'dark', preference is default 'light' - preserving DOM theme`);
-                    // Sync preference to match DOM (DOM is the source of truth here)
-                    this.preferences.theme = 'dark';
+                // DOM theme exists - ALWAYS preserve it, NEVER override
+                // ROOT CAUSE FIX: DOM theme is the source of truth - sync preference to match DOM, not the other way around
+                console.warn(`🚫 USER_PREFERENCES_MANAGER: BLOCKING theme override - DOM theme '${currentDomTheme}' is source of truth, preference '${this.preferences.theme}' will be ignored`);
+                // Sync preference to match DOM (DOM is the source of truth)
+                if (this.preferences.theme !== currentDomTheme) {
+                    console.log(`🔄 USER_PREFERENCES_MANAGER: Syncing preference theme from '${this.preferences.theme}' to '${currentDomTheme}' to match DOM`);
+                    this.preferences.theme = currentDomTheme;
                     // Update Chrome storage to match DOM (prevent future resets)
                     if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-                        chrome.storage.local.set({ theme: 'dark' }, () => {
+                        chrome.storage.local.set({ theme: currentDomTheme }, () => {
                             if (chrome.runtime?.lastError) {
                                 console.warn('⚠️ USER_PREFERENCES_MANAGER: Failed to sync Chrome storage:', chrome.runtime.lastError);
                             }
+                            else {
+                                console.log(`✅ USER_PREFERENCES_MANAGER: Synced Chrome storage theme to '${currentDomTheme}' to match DOM`);
+                            }
                         });
                     }
-                    return; // Don't apply anything, just exit
                 }
-                console.log(`🔍 USER_PREFERENCES_MANAGER: Preserving existing DOM theme '${currentDomTheme}' (preference '${this.preferences.theme}' will not override)`);
-                // Sync preference to match DOM (in case DOM was set by ProfileManager)
-                if (this.preferences.theme !== currentDomTheme) {
-                    this.preferences.theme = currentDomTheme;
+                // Update UI elements to match DOM theme (but don't change DOM)
+                const themeToggle = document.getElementById('theme-toggle');
+                if (themeToggle) {
+                    themeToggle.checked = currentDomTheme === 'dark';
+                    if (window.visibilitySettingsManager && typeof window.visibilitySettingsManager.updateThemeStatus === 'function') {
+                        window.visibilitySettingsManager.updateThemeStatus();
+                    }
+                }
+                // Update profile menu theme icon/text
+                const themeIconMenu = document.getElementById('theme-icon-menu');
+                const themeTextMenu = document.getElementById('theme-text-menu');
+                if (themeIconMenu) {
+                    themeIconMenu.textContent = currentDomTheme === 'dark' ? '☀️' : '🌙';
+                }
+                if (themeTextMenu) {
+                    themeTextMenu.textContent = currentDomTheme === 'dark' ? 'Light mode' : 'Dark mode';
                 }
             }
         }
         else if (skipTheme) {
-            console.log(`🔍 USER_PREFERENCES_MANAGER: Skipping theme application (called after non-theme preference save)`);
+            console.log(`🔍 USER_PREFERENCES_MANAGER: Skipping theme application (skipTheme=true, called after non-theme preference save)`);
         }
         // Apply visibility to toggle if exists
         if (this.preferences.isVisible !== undefined) {

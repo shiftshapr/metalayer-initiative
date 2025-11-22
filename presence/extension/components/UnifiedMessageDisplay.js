@@ -37,12 +37,15 @@ export class UnifiedMessageDisplay {
         });
         const existingMessageCount = actualMessages.length;
         const existingFocusContext = container.className.match(/focus-mode-(\w+)/)?.[1];
-        // Always clear - duplicates are caused by not clearing properly
-        while (container.firstChild) {
-            container.removeChild(container.firstChild);
-        }
-        container.innerHTML = '';
-        console.log(`🔍 UnifiedMessageDisplay: Cleared container (${existingMessageCount} existing messages, context: ${existingFocusContext} -> ${focusContext})`);
+        // CRITICAL FIX: Only clear message elements, not other content (like tabs)
+        // Remove only .message elements and elements with data-message-id that are actual messages
+        const messageElementsToRemove = Array.from(container.querySelectorAll('.message, [data-message-id]')).filter(el => {
+            return el.classList.contains('message') ||
+                el.querySelector('.message-content-wrapper') !== null ||
+                (el.querySelector('.message-footer-actions') !== null && el.querySelector('.message-content') !== null);
+        });
+        messageElementsToRemove.forEach(el => el.remove());
+        console.log(`🔍 UnifiedMessageDisplay: Removed ${messageElementsToRemove.length} message elements (${existingMessageCount} existing messages, context: ${existingFocusContext} -> ${focusContext})`);
         console.log(`🔍 UnifiedMessageDisplay: Rendering ${messages.length} messages to container:`, container.id || container.className);
         // Apply focus mode class
         container.classList.remove('focus-mode-parent', 'focus-mode-child', 'focus-mode-default');
