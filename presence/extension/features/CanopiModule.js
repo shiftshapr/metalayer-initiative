@@ -1933,22 +1933,13 @@ async function handleBookmarkMessage(message) {
             return;
         }
         const isBookmarked = message.isBookmarked || false;
-        // CRITICAL FIX: Try /api/bookmarks first (may be correct endpoint), fallback to /v1/bookmarks
-        let endpoint = isBookmarked ? `/api/bookmarks/${message.id}` : '/api/bookmarks';
+        // COMP METHOD: Use /v1/bookmarks endpoint (matches backend route registration)
+        const endpoint = isBookmarked ? `/v1/bookmarks/${message.id}` : '/v1/bookmarks';
         const method = isBookmarked ? 'DELETE' : 'POST';
-        let response = await api.request(endpoint, {
+        const response = await api.request(endpoint, {
             method,
             body: isBookmarked ? undefined : { messageId: message.id }
         });
-        // Fallback to /v1/ endpoint if /api/ returns 404
-        if (response.status === 404) {
-            console.warn('⚠️ handleBookmarkMessage: /api/bookmarks returned 404, trying /v1/bookmarks');
-            endpoint = isBookmarked ? `/v1/bookmarks/${message.id}` : '/v1/bookmarks';
-            response = await api.request(endpoint, {
-                method,
-                body: isBookmarked ? undefined : { messageId: message.id }
-            });
-        }
         if (response.data?.success) {
             // Update message bookmark status
             const messageDiv = document.querySelector(`[data-message-id="${message.id}"]`);
@@ -2139,7 +2130,7 @@ async function handleBackNavigation() {
 }
 /**
  * Handle reaction
- * COMP METHOD: Matches original implementation
+ * COMP METHOD: Matches original implementation - uses reactionsIntegration if available, API fallback for Google ID conversion
  */
 async function handleReaction(message) {
     console.log(`❤️ REACTION: Handling reaction for message: ${message.id}`);
@@ -2148,71 +2139,52 @@ async function handleReaction(message) {
         await reactionsIntegration.reactionsManager.addReaction(message.id, '👍');
     }
     else {
-        // CRITICAL FIX: Fallback to direct Supabase operations when reactionsIntegration not available
-        console.warn('⚠️ REACTION: Reactions integration not available, using Supabase fallback');
+        // COMP METHOD: Fallback to API endpoint (handles Google ID to UUID conversion)
+        console.warn('⚠️ REACTION: Reactions integration not available, using API endpoint');
         try {
+            const api = getApi();
+            if (!api) {
+                console.error('❌ handleReaction: API not available');
+                return;
+            }
             const currentUser = getCurrentUser();
             if (!currentUser) {
                 console.error('❌ handleReaction: User not authenticated');
                 return;
             }
-            // Check if user already reacted
-            const supabase = typeof window !== 'undefined'
-                ? window.supabase
-                : null;
-            if (supabase) {
-                // CRITICAL FIX: Google OAuth IDs are numeric strings, not UUIDs
-                // Supabase requires UUIDs, so we must use API endpoint which handles conversion
-                const api = getApi();
-                if (!api) {
-                    console.error('❌ handleReaction: API not available for reactions (required for Google ID conversion)');
-                    return;
+            // COMP METHOD: Use /v1/reactions endpoint (matches backend route registration)
+            const endpoint = `/v1/reactions/${message.id}`;
+            // Check existing reactions via API
+            const { data: existingReactions } = await api.request(endpoint, { method: 'GET' });
+            // API handles user matching (converts Google ID to UUID internally)
+            const userReaction = existingReactions?.find((r) => r.user_id === currentUser.id);
+            if (userReaction) {
+                // Remove reaction via API
+                const deleteResponse = await api.request(`${endpoint}?emoji=${userReaction.emoji}`, { method: 'DELETE' });
+                if (deleteResponse.data?.success) {
+                    console.log('✅ REACTION: Removed reaction');
                 }
-                // Use API endpoint which handles Google ID to UUID conversion
-                const endpoint = `/v1/reactions/${message.id}`;
-                try {
-                    // Check existing reactions via API
-                    const { data: existingReactions } = await api.request(endpoint, { method: 'GET' });
-                    // CRITICAL FIX: Match by current user - API should return reactions with proper user matching
-                    const userReaction = existingReactions?.find((r) => {
-                        // API should handle user matching, but check both ID and email as fallback
-                        return r.user_id === currentUser.id;
-                    });
-                    if (userReaction) {
-                        // Remove reaction via API
-                        const deleteResponse = await api.request(`${endpoint}?emoji=${userReaction.emoji}`, { method: 'DELETE' });
-                        if (deleteResponse.data?.success) {
-                            console.log('✅ REACTION: Removed reaction');
-                        }
-                        else {
-                            console.error('❌ handleReaction: Error removing reaction:', deleteResponse.error);
-                        }
-                    }
-                    else {
-                        // Add reaction via API
-                        const addResponse = await api.request(endpoint, {
-                            method: 'POST',
-                            body: { emoji: '👍' }
-                        });
-                        if (addResponse.data?.success) {
-                            console.log('✅ REACTION: Added reaction');
-                        }
-                        else {
-                            console.error('❌ handleReaction: Error adding reaction:', addResponse.error);
-                        }
-                    }
-                    // Reload reactions display
-                    const loadMessageReactionsFn = getWindowFunction('loadMessageReactions');
-                    if (loadMessageReactionsFn) {
-                        await loadMessageReactionsFn(message.id);
-                    }
-                }
-                catch (error) {
-                    console.error('❌ handleReaction: API request failed:', error);
+                else {
+                    console.error('❌ handleReaction: Error removing reaction:', deleteResponse.error);
                 }
             }
             else {
-                console.error('❌ handleReaction: Supabase client not available');
+                // Add reaction via API
+                const addResponse = await api.request(endpoint, {
+                    method: 'POST',
+                    body: { emoji: '👍' }
+                });
+                if (addResponse.data?.success) {
+                    console.log('✅ REACTION: Added reaction');
+                }
+                else {
+                    console.error('❌ handleReaction: Error adding reaction:', addResponse.error);
+                }
+            }
+            // Reload reactions display
+            const loadMessageReactionsFn = getWindowFunction('loadMessageReactions');
+            if (loadMessageReactionsFn) {
+                await loadMessageReactionsFn(message.id);
             }
         }
         catch (error) {
