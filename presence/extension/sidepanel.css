@@ -1570,7 +1570,7 @@ html[data-theme="dark"] .focus-message-input-container {
   display: flex !important;
   align-items: center !important;
   gap: 0px !important; /* CRITICAL FIX: No gap between icon and count */
-  color: #333 !important; /* CRITICAL: Dark color for visibility on light backgrounds */
+  color: #ffffff !important; /* CRITICAL FIX: White text in light mode */
   pointer-events: auto !important;
   opacity: 1 !important;
   visibility: visible !important;
@@ -1737,7 +1737,7 @@ html[data-theme="dark"] .focus-message-input-container {
   font-size: 10px !important;
   margin-left: 0px !important; /* CRITICAL FIX: Remove whitespace between icon and count */
   font-weight: 500 !important;
-  color: #666 !important;
+  color: #ffffff !important; /* CRITICAL FIX: White text in light mode */
 }
 
 .icon-count.bookmark-count {
