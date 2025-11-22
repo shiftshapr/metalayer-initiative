@@ -1570,7 +1570,7 @@ html[data-theme="dark"] .focus-message-input-container {
   display: flex !important;
   align-items: center !important;
   gap: 0px !important; /* CRITICAL FIX: No gap between icon and count */
-  color: #ffffff !important; /* CRITICAL FIX: White text in light mode */
+  color: #333 !important; /* CRITICAL FIX: Dark color for visibility in light mode */
   pointer-events: auto !important;
   opacity: 1 !important;
   visibility: visible !important;
@@ -1651,14 +1651,14 @@ html[data-theme="dark"] .focus-message-input-container {
   shape-rendering: geometricPrecision !important;
 }
 
-/* CRITICAL: Override any light colors with visible white color */
+/* CRITICAL: Override with dark color for light mode visibility */
 .message-footer-actions button svg,
 .message-footer .inline-reply-btn svg,
 .message-footer .repost-btn svg,
 .message-footer .reaction-btn svg,
 .message-footer .bookmark-btn svg,
 .message-footer .share-btn svg {
-  color: #ffffff !important; /* CRITICAL FIX: White color for light theme */
+  color: #333 !important; /* CRITICAL FIX: Dark color for visibility in light mode */
 }
 
 [data-theme="dark"] .message-footer-actions button svg,
@@ -1737,7 +1737,7 @@ html[data-theme="dark"] .focus-message-input-container {
   font-size: 10px !important;
   margin-left: 0px !important; /* CRITICAL FIX: Remove whitespace between icon and count */
   font-weight: 500 !important;
-  color: #ffffff !important; /* CRITICAL FIX: White text in light mode */
+  color: #333 !important; /* CRITICAL FIX: Dark color for visibility in light mode */
 }
 
 .icon-count.bookmark-count {
