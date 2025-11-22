@@ -675,6 +675,16 @@ function handleMessageChange(payload) {
     switch (eventType) {
         case 'INSERT':
             console.log('💬 MESSAGE: New message received:', newRecord);
+            // NEW MESSAGE SYSTEM: Dispatch realtime-message event for MessageStore
+            // MessageStore listens for this event and will update the UI via onMessageUpdate
+            if (typeof window !== 'undefined' && newRecord) {
+                const realtimeEvent = new CustomEvent('realtime-message', {
+                    detail: newRecord
+                });
+                window.dispatchEvent(realtimeEvent);
+                console.log('💬 MESSAGE: Dispatched realtime-message event for MessageStore');
+            }
+            // LEGACY FALLBACK: Also try old system for backward compatibility
             const addMessageToChat = window.addMessageToChat;
             if (addMessageToChat && newRecord) {
                 // Type assertion: newRecord from Supabase may need conversion to Message type
@@ -832,12 +842,21 @@ function setupSupabaseEventHandlers() {
         const messageWithEmail = message;
         console.log('💬 SUPABASE: From:', messageWithEmail.user_email);
         console.log('💬 SUPABASE: Content:', messageWithEmail.content?.substring(0, 50) + '...');
-        // COMP METHOD: Convert Supabase message format to API format for addMessageToChat
+        // NEW MESSAGE SYSTEM: Dispatch realtime-message event for MessageStore
+        // MessageStore listens for this event and will update the UI via onMessageUpdate
+        if (typeof window !== 'undefined') {
+            const realtimeEvent = new CustomEvent('realtime-message', {
+                detail: message
+            });
+            window.dispatchEvent(realtimeEvent);
+            console.log('💬 SUPABASE: Dispatched realtime-message event for MessageStore');
+        }
+        // LEGACY FALLBACK: Also try old system for backward compatibility
         const convertSupabaseMessageToAPIFormat = window.convertSupabaseMessageToAPIFormat;
         if (convertSupabaseMessageToAPIFormat) {
             const convertedMessage = await convertSupabaseMessageToAPIFormat(message);
-            console.log('💬 SUPABASE: Converted message:', convertedMessage);
-            // Add message to chat immediately
+            console.log('💬 SUPABASE: Converted message (legacy):', convertedMessage);
+            // Add message to chat immediately (legacy)
             const addMessageToChat = window.addMessageToChat;
             if (addMessageToChat) {
                 await addMessageToChat(convertedMessage);
