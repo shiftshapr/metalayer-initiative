@@ -109,9 +109,13 @@ export class UnifiedMessageModal {
         // CSS handles responsive sizing (calc(100vw - 40px) with max-width: 300px)
         // Setup event handlers
         this.setupModalHandlers();
-        // Focus the textarea
+        // Auto-resize textarea on initial render and focus
         const textarea = modal.querySelector('#message-content');
         if (textarea) {
+            // Initial resize to fill available space
+            setTimeout(() => {
+                this.autoResizeTextarea(textarea);
+            }, 50);
             textarea.focus();
         }
     }
@@ -179,7 +183,7 @@ export class UnifiedMessageModal {
             id="message-content" 
             class="unified-message-textarea x-input"
             placeholder="What's happening?"
-            rows="1"
+            rows="10"
           >${content}</textarea>
           
           <div class="unified-message-attachments-preview" id="attachments-preview"></div>
@@ -454,8 +458,35 @@ export class UnifiedMessageModal {
      * Auto-resize textarea
      */
     autoResizeTextarea(textarea) {
+        if (!this.modal)
+            return;
+        // Calculate available height for textarea
+        const modalContent = this.modal.querySelector('.unified-message-modal-content');
+        if (!modalContent)
+            return;
+        // Get heights of other elements
+        const topBar = this.modal.querySelector('.unified-message-modal-top-bar');
+        const userSection = this.modal.querySelector('.unified-message-user-section');
+        const contextSection = this.modal.querySelector('.unified-message-context');
+        const replySettings = this.modal.querySelector('.unified-message-reply-settings');
+        const toolbar = this.modal.querySelector('.unified-message-toolbar');
+        const actions = this.modal.querySelector('.unified-message-actions');
+        const modalHeight = modalContent.clientHeight;
+        const usedHeight = (topBar?.offsetHeight || 0) +
+            (userSection?.offsetHeight || 0) +
+            (contextSection?.offsetHeight || 0) +
+            (replySettings?.offsetHeight || 0) +
+            (toolbar?.offsetHeight || 0) +
+            (actions?.offsetHeight || 0) +
+            32; // Padding/margins
+        const availableHeight = modalHeight - usedHeight;
+        const minHeight = parseFloat(getComputedStyle(textarea).lineHeight || '22.5') * 10; // 10 lines
+        // Reset height to calculate scrollHeight
         textarea.style.height = 'auto';
-        textarea.style.height = `${Math.min(textarea.scrollHeight, 400)}px`;
+        const contentHeight = textarea.scrollHeight;
+        // Set height to fill available space, but not less than 10 lines
+        const targetHeight = Math.max(minHeight, Math.min(contentHeight, availableHeight));
+        textarea.style.height = `${targetHeight}px`;
     }
     /**
      * Handle drafts

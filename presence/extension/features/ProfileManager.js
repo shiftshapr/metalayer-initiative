@@ -1816,6 +1816,8 @@ class ProfileManager {
             if (!this.isAuthenticated) {
                 console.log('🔧 PROFILE_MANAGER: Authentication completed, initializing profile avatar...');
                 this.isAuthenticated = true;
+                // ROOT CAUSE FIX: Initialize UserPreferencesManager FIRST (before avatar) to ensure theme is loaded correctly
+                await this.initializeUserPreferencesManager(authData.user);
                 // ROOT CAUSE FIX: Force avatar recreation by calling setupProfileMenuAndAuraModal directly
                 // This ensures avatar is created even if it was skipped earlier due to missing currentUser
                 await this.setupProfileMenuAndAuraModal();
@@ -1824,6 +1826,8 @@ class ProfileManager {
             else {
                 // ROOT CAUSE FIX: If already authenticated but user data updated, refresh avatar
                 console.log('🔧 PROFILE_MANAGER: User data updated, refreshing profile avatar...');
+                // ROOT CAUSE FIX: Ensure UserPreferencesManager is initialized even if already authenticated
+                await this.initializeUserPreferencesManager(authData.user);
                 await this.setupProfileMenuAndAuraModal(); // This will update existing avatar if currentUser is now available
                 this.updateProfileUI();
             }

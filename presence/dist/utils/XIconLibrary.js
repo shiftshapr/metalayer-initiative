@@ -165,12 +165,13 @@ export function ReplyIcon({ width = 20, height = 20, fill = 'currentColor', clas
 }
 /**
  * Repost/Retweet icon
+ * CRITICAL FIX: Updated with correct X/Twitter SVG path
  */
 export function RepostIcon({ width = 20, height = 20, fill = 'currentColor', className = '' } = {}) {
     return `
     <svg viewBox="0 0 24 24" width="${width}" height="${height}" fill="${fill}" class="${className}" aria-hidden="true">
       <g>
-        <path d="M4.75 3.79l4.603 4.3-1.706 1.82L1 4.96l6.647-6.95 1.706 1.82-4.603 4.3H11v2.5H4.75zm14.5 16.42l-4.603-4.3 1.706-1.82L23 19.04l-6.647 6.95-1.706-1.82 4.603-4.3H13v-2.5h6.25z"></path>
+        <path d="M4.5 3.88l4.432 4.14-1.364 1.46L5.5 7.55V16c0 1.1.896 2 2 2H13v2H7.5c-2.209 0-4-1.79-4-4V7.55L1.432 9.48.068 8.02 4.5 3.88zM16.5 6H11V4h5.5c2.209 0 4 1.79 4 4v8.45l2.068-1.93 1.364 1.46-4.432 4.14-4.432-4.14 1.364-1.46 2.068 1.93V8c0-1.1-.896-2-2-2z"></path>
       </g>
     </svg>
   `;
