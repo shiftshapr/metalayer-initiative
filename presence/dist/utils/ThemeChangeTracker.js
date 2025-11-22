@@ -18,18 +18,24 @@ class ThemeChangeTracker {
         const originalSetAttribute = Element.prototype.setAttribute;
         const self = this;
         Element.prototype.setAttribute = function (name, value) {
-            if (name === 'data-theme' && (this === document.body || this === document.documentElement)) {
-                const oldValue = this.getAttribute('data-theme');
-                const stack = new Error().stack;
-                const caller = stack?.split('\n')[2]?.trim() || 'unknown';
-                console.log('🔍 THEME_TRACKER: ========================================');
-                console.log('🔍 THEME_TRACKER: data-theme attribute SET');
-                console.log('🔍 THEME_TRACKER: Element:', this === document.body ? 'document.body' : 'document.documentElement');
-                console.log('🔍 THEME_TRACKER: Old value:', oldValue || 'NOT SET');
-                console.log('🔍 THEME_TRACKER: New value:', value);
-                console.log('🔍 THEME_TRACKER: Caller:', caller);
-                console.log('🔍 THEME_TRACKER: Full stack:', stack?.split('\n').slice(1, 10).join('\n'));
-                console.log('🔍 THEME_TRACKER: ========================================');
+            // Check if this is a theme attribute change on body or html element
+            if (name === 'data-theme') {
+                const isBody = this === document.body;
+                const isDocumentElement = this === document.documentElement;
+                if (isBody || isDocumentElement) {
+                    const oldValue = this.getAttribute('data-theme');
+                    const stack = new Error().stack;
+                    const caller = stack?.split('\n')[2]?.trim() || 'unknown';
+                    console.log('🔍 THEME_TRACKER: ========================================');
+                    console.log('🔍 THEME_TRACKER: data-theme attribute SET');
+                    console.log('🔍 THEME_TRACKER: Element:', isBody ? 'document.body' : 'document.documentElement');
+                    console.log('🔍 THEME_TRACKER: Old value:', oldValue || 'NOT SET');
+                    console.log('🔍 THEME_TRACKER: New value:', value);
+                    console.log('🔍 THEME_TRACKER: Caller:', caller);
+                    console.log('🔍 THEME_TRACKER: Full stack:', stack?.split('\n').slice(1, 15).join('\n'));
+                    console.log('🔍 THEME_TRACKER: Timestamp:', new Date().toISOString());
+                    console.log('🔍 THEME_TRACKER: ========================================');
+                }
             }
             return originalSetAttribute.call(this, name, value);
         };
@@ -40,11 +46,14 @@ class ThemeChangeTracker {
                     const target = mutation.target;
                     const newValue = target.getAttribute('data-theme');
                     const oldValue = mutation.oldValue;
+                    const stack = new Error().stack;
                     console.log('🔍 THEME_TRACKER: ========================================');
                     console.log('🔍 THEME_TRACKER: data-theme attribute CHANGED (MutationObserver)');
                     console.log('🔍 THEME_TRACKER: Element:', target === document.body ? 'document.body' : target === document.documentElement ? 'document.documentElement' : target.tagName);
                     console.log('🔍 THEME_TRACKER: Old value:', oldValue || 'NOT SET');
                     console.log('🔍 THEME_TRACKER: New value:', newValue || 'NOT SET');
+                    console.log('🔍 THEME_TRACKER: Call stack:', stack?.split('\n').slice(1, 15).join('\n'));
+                    console.log('🔍 THEME_TRACKER: Timestamp:', new Date().toISOString());
                     console.log('🔍 THEME_TRACKER: ========================================');
                 }
             });

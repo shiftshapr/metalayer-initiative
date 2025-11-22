@@ -11,6 +11,8 @@
  *
  * Based on: PREFERENCE_MANAGEMENT_PLAN.md
  */
+// Import ThemeChangeTracker to start tracking theme changes (static import ensures it's bundled)
+import { themeChangeTracker } from './ThemeChangeTracker';
 /**
  * USER PREFERENCES MANAGER
  * Unified preference management system - Single source of truth for all user preferences
@@ -1067,8 +1069,8 @@ if (typeof window !== 'undefined') {
     window.savePreference = (key, value, options) => userPreferencesManager.savePreference(key, value, options);
 }
 console.log('✅ USER_PREFERENCES_MANAGER: Module loaded');
-// Import ThemeChangeTracker to start tracking theme changes
-import('./ThemeChangeTracker').catch(err => {
-    console.warn('⚠️ USER_PREFERENCES_MANAGER: Failed to load ThemeChangeTracker:', err);
-});
+// Start theme change tracking immediately
+if (typeof window !== 'undefined' && themeChangeTracker) {
+    themeChangeTracker.startTracking();
+}
 export default userPreferencesManager;

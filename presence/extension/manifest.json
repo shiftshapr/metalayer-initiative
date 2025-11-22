@@ -48,7 +48,7 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["images/*.png", "images/*.svg"],
+      "resources": ["images/*.png", "images/*.svg", ".build-info.json"],
       "matches": ["<all_urls>"]
     }
   ],
