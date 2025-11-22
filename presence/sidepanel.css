@@ -1356,8 +1356,8 @@ body {
 
 /* UX/UI: Ensure proper spacing between message content and footer icons (match default mode) */
 .focus-messages-container .message-footer {
-  margin-top: 4px !important; /* CRITICAL FIX: Reduced space to save space */
-  padding-top: 4px !important; /* CRITICAL FIX: Reduced padding to save space */
+  margin-top: 0px !important; /* CRITICAL FIX: Remove whitespace line between content and buttons */
+  padding-top: 0px !important; /* CRITICAL FIX: Remove whitespace line between content and buttons */
   border-top: none !important; /* CRITICAL FIX: Remove any white border-top */
   border-bottom: none !important; /* CRITICAL FIX: Remove any white border-bottom */
 }
@@ -2517,7 +2517,7 @@ html[data-theme="dark"] .focus-message-input-container {
 }
 
 .unified-message-display .message-content {
-  margin-bottom: 8px !important;
+  margin-bottom: 0px !important; /* CRITICAL FIX: Remove whitespace line between content and footer */
 }
 
 .unified-message-display .message-body {
