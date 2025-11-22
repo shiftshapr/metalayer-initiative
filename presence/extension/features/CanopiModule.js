@@ -610,6 +610,7 @@ function removeMessageFromChat(deletedMessage) {
  * Add or update a single message in the chat container
  */
 async function addMessageToChat(rawMessage) {
+    console.log('🔍 ADD_MESSAGE: Called with rawMessage:', rawMessage);
     const chatMessages = getChatMessagesContainer();
     if (!chatMessages) {
         console.warn('⚠️ ADD_MESSAGE: Chat messages container not found');
@@ -617,6 +618,7 @@ async function addMessageToChat(rawMessage) {
     }
     try {
         const message = normalizeMessagePayload(rawMessage);
+        console.log('🔍 ADD_MESSAGE: Normalized message:', message.id, message.content?.substring(0, 50));
         // CRITICAL FIX: Check for duplicate, but only check actual message elements (not buttons)
         const existingMessages = Array.from(chatMessages.querySelectorAll('.message, [data-message-id]')).filter(el => {
             return el.classList.contains('message') ||
@@ -636,11 +638,17 @@ async function addMessageToChat(rawMessage) {
             return; // Don't add duplicate
         }
         const messageElement = await renderMessageElement(message, chatMessages);
+        console.log('✅ ADD_MESSAGE: Rendered message element for:', message.id);
         chatMessages.appendChild(messageElement);
+        console.log('✅ ADD_MESSAGE: Appended message to DOM:', message.id);
         // ROOT CAUSE FIX: Get addMessageActionListeners from window
         const addMessageActionListenersFn = getWindowFunction('addMessageActionListeners');
         if (addMessageActionListenersFn) {
             addMessageActionListenersFn(messageElement, message);
+            console.log('✅ ADD_MESSAGE: Attached action listeners for:', message.id);
+        }
+        else {
+            console.warn('⚠️ ADD_MESSAGE: addMessageActionListeners not available');
         }
         // ROOT CAUSE FIX: Get loadMessageReactions from window
         const loadMessageReactionsFn = getWindowFunction('loadMessageReactions');
@@ -659,13 +667,16 @@ async function addMessageToChat(rawMessage) {
             const updated = [...chatData];
             updated[existingIndex] = message;
             setCurrentChatData(updated);
+            console.log('✅ ADD_MESSAGE: Updated existing message in state:', message.id);
         }
         else {
             setCurrentChatData([...chatData, message]);
+            console.log('✅ ADD_MESSAGE: Added new message to state:', message.id, 'Total messages:', chatData.length + 1);
         }
     }
     catch (error) {
         console.error('❌ ADD_MESSAGE: Failed to add message to chat:', error);
+        console.error('❌ ADD_MESSAGE: Error details:', error instanceof Error ? error.stack : error);
     }
 }
 /**
@@ -962,14 +973,23 @@ function addMessageActionListeners(messageDiv, message) {
     if (reactionButton) {
         reactionButton.addEventListener('click', async (e) => {
             e.stopPropagation();
-            const handleReactionClick = window.handleReactionClick;
-            if (typeof handleReactionClick === 'function') {
-                await handleReactionClick(messageId, message);
+            console.log('❤️ REACTION_BUTTON: Clicked for message:', messageId);
+            // COMP METHOD: Check if reaction picker/modal exists
+            const win = window;
+            if (win.showReactionPicker && typeof win.showReactionPicker === 'function') {
+                console.log('✅ REACTION_BUTTON: Using reaction picker modal');
+                win.showReactionPicker(messageId, message, reactionButton);
             }
             else {
-                console.log('❤️ Reaction clicked for message:', messageId);
-                // Fallback: use reactionsIntegration
-                await handleReaction(message);
+                console.log('⚠️ REACTION_BUTTON: No reaction picker, using direct toggle');
+                const handleReactionClick = win.handleReactionClick;
+                if (typeof handleReactionClick === 'function') {
+                    await handleReactionClick(messageId, message);
+                }
+                else {
+                    // Fallback: use reactionsIntegration
+                    await handleReaction(message);
+                }
             }
         });
     }

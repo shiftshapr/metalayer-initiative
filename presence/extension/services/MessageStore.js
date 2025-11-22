@@ -139,15 +139,36 @@ class MessageStore {
     handleRealtimeMessage(message) {
         const pageId = message.page_id || message.pageId;
         const parentId = message.parent_id || message.parentId || null;
-        if (!pageId)
+        if (!pageId) {
+            console.warn('⚠️ MessageStore.handleRealtimeMessage: Missing pageId', message);
             return;
-        const key = this.getCacheKey(pageId, parentId);
-        const entry = this.cache.get(key);
-        if (entry) {
-            const normalized = this.normalizeMessage(message);
-            entry.items.unshift(normalized);
-            this.emit('update', { key, data: entry });
         }
+        const key = this.getCacheKey(pageId, parentId);
+        let entry = this.cache.get(key);
+        // If cache entry doesn't exist, create it
+        if (!entry) {
+            console.log(`📝 MessageStore: Creating new cache entry for ${key}`);
+            entry = {
+                items: [],
+                nextCursor: null,
+                status: 'ready',
+                lastFetched: Date.now(),
+                parent: null
+            };
+            this.cache.set(key, entry);
+        }
+        const normalized = this.normalizeMessage(message);
+        // Check if message already exists (prevent duplicates)
+        const existingIndex = entry.items.findIndex(m => m.id === normalized.id);
+        if (existingIndex >= 0) {
+            console.log(`📝 MessageStore: Message ${normalized.id} already in cache, updating`);
+            entry.items[existingIndex] = normalized;
+        }
+        else {
+            console.log(`📝 MessageStore: Adding new message ${normalized.id} to cache`);
+            entry.items.unshift(normalized);
+        }
+        this.emit('update', { key, data: entry });
     }
     handleRealtimeUpdate(message) {
         // Implementation for handling updates
