@@ -1570,7 +1570,7 @@ html[data-theme="dark"] .focus-message-input-container {
   display: flex !important;
   align-items: center !important;
   gap: 0px !important; /* CRITICAL FIX: No gap between icon and count */
-  color: #ffffff !important; /* CRITICAL FIX: White text in light mode */
+  color: #333 !important; /* CRITICAL FIX: Dark color for visibility on light backgrounds */
   pointer-events: auto !important;
   opacity: 1 !important;
   visibility: visible !important;
