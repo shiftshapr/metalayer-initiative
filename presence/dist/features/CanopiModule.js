@@ -2316,48 +2316,34 @@ async function handleReaction(message) {
             // API returns { success: true, reactions: [...] } - extract reactions array
             const response = await api.request(getEndpoint, { method: 'GET' });
             const existingReactions = response.data?.reactions || [];
-            // CRITICAL FIX: API handles user matching (converts Google ID to UUID internally)
-            // The API returns reactions with user_id as UUID, but currentUser.id might be Google ID
-            // So we need to check if there's a reaction, but the API will handle the actual matching
-            // For now, we'll use a simple toggle: if reactions exist, try to remove; otherwise add
-            // Actually, let's check the response more carefully - the API should return reactions with our user_id
+            // CRITICAL FIX: The API returns reactions with user_id as UUID (converted from Google ID)
+            // We need to check if the current user has already reacted
+            // The API endpoint POST /v1/reactions will toggle: add if not exists, remove if exists
+            // So we can just POST to toggle, but let's check first to show correct state
             const userReaction = Array.isArray(existingReactions)
                 ? existingReactions.find((r) => {
-                    // The API converts Google ID to UUID, so we can't directly match
-                    // Instead, we'll check if there are any reactions and toggle
-                    // The API endpoint will handle the actual user matching
-                    return r.emoji === '👍'; // Check for the emoji we're using
+                    // Check if this reaction is from the current user
+                    // The API converts Google ID to UUID, so user_id in response is UUID
+                    // But currentUser.id might be Google ID, so we can't directly match
+                    // Instead, we'll check if there are any 👍 reactions (the emoji we're using)
+                    // The POST endpoint will handle the actual toggle logic
+                    return r.emoji === '👍';
                 })
                 : null;
-            // CRITICAL FIX: Since API handles user matching, we'll just toggle
-            // If we have reactions, assume user might have reacted and try to remove
-            // Otherwise, add a new reaction
-            const shouldRemove = existingReactions.length > 0;
-            if (shouldRemove && userReaction) {
-                // Remove reaction via API - DELETE /v1/reactions/:messageId?emoji=👍
-                const deleteResponse = await api.request(`${getEndpoint}?emoji=${userReaction.emoji || '👍'}`, { method: 'DELETE' });
-                if (deleteResponse.data?.success) {
-                    console.log('✅ REACTION: Removed reaction');
-                }
-                else {
-                    console.error('❌ handleReaction: Error removing reaction:', deleteResponse.error);
-                    console.error('❌ handleReaction: Response:', deleteResponse);
-                }
+            // CRITICAL FIX: Use POST /v1/reactions which toggles the reaction
+            // If user already reacted, it removes; if not, it adds
+            const postEndpoint = '/v1/reactions';
+            const toggleResponse = await api.request(postEndpoint, {
+                method: 'POST',
+                body: { messageId: message.id, emoji: '👍' }
+            });
+            if (toggleResponse.data?.success) {
+                const action = toggleResponse.data.action || (userReaction ? 'removed' : 'added');
+                console.log(`✅ REACTION: ${action === 'added' ? 'Added' : 'Removed'} reaction`);
             }
             else {
-                // Add reaction via API - POST /v1/reactions with {messageId, emoji} in body
-                const postEndpoint = '/v1/reactions';
-                const addResponse = await api.request(postEndpoint, {
-                    method: 'POST',
-                    body: { messageId: message.id, emoji: '👍' }
-                });
-                if (addResponse.data?.success) {
-                    console.log('✅ REACTION: Added reaction');
-                }
-                else {
-                    console.error('❌ handleReaction: Error adding reaction:', addResponse.error);
-                    console.error('❌ handleReaction: Response:', addResponse);
-                }
+                console.error('❌ handleReaction: Error toggling reaction:', toggleResponse.error);
+                console.error('❌ handleReaction: Response:', toggleResponse);
             }
             // CRITICAL FIX: Always reload reactions display after toggle
             const loadMessageReactionsFn = getWindowFunction('loadMessageReactions');
@@ -2368,7 +2354,8 @@ async function handleReaction(message) {
                 }
                 catch (error) {
                     console.error('❌ handleReaction: Failed to reload reactions display:', error);
-                    // Fallback: Manually update reaction count
+                    // Fallback: Manually update reaction count based on action
+                    const action = toggleResponse.data?.action;
                     const messageDiv = document.querySelector(`[data-message-id="${message.id}"]`);
                     if (messageDiv) {
                         const reactionButton = messageDiv.querySelector('.reaction-btn');
@@ -2376,7 +2363,7 @@ async function handleReaction(message) {
                             const countElement = reactionButton.querySelector('.icon-count');
                             if (countElement) {
                                 const currentCount = parseInt(countElement.textContent || '0', 10);
-                                const newCount = shouldRemove ? Math.max(0, currentCount - 1) : currentCount + 1;
+                                const newCount = action === 'removed' ? Math.max(0, currentCount - 1) : currentCount + 1;
                                 countElement.textContent = newCount > 0 ? newCount.toString() : '';
                                 countElement.style.display = newCount > 0 ? 'inline-block' : 'none';
                             }
@@ -2386,7 +2373,8 @@ async function handleReaction(message) {
             }
             else {
                 console.warn('⚠️ handleReaction: loadMessageReactions not available, manually updating UI');
-                // Fallback: Manually update reaction count
+                // Fallback: Manually update reaction count based on action
+                const action = toggleResponse.data?.action;
                 const messageDiv = document.querySelector(`[data-message-id="${message.id}"]`);
                 if (messageDiv) {
                     const reactionButton = messageDiv.querySelector('.reaction-btn');
@@ -2394,7 +2382,7 @@ async function handleReaction(message) {
                         const countElement = reactionButton.querySelector('.icon-count');
                         if (countElement) {
                             const currentCount = parseInt(countElement.textContent || '0', 10);
-                            const newCount = shouldRemove ? Math.max(0, currentCount - 1) : currentCount + 1;
+                            const newCount = action === 'removed' ? Math.max(0, currentCount - 1) : currentCount + 1;
                             countElement.textContent = newCount > 0 ? newCount.toString() : '';
                             countElement.style.display = newCount > 0 ? 'inline-block' : 'none';
                         }
