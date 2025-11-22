@@ -1658,7 +1658,7 @@ html[data-theme="dark"] .focus-message-input-container {
 .message-footer .reaction-btn svg,
 .message-footer .bookmark-btn svg,
 .message-footer .share-btn svg {
-  color: #ffffff !important; /* CRITICAL FIX: White color for light theme */
+  color: #333 !important; /* CRITICAL FIX: Dark color for visibility on light backgrounds */
 }
 
 [data-theme="dark"] .message-footer-actions button svg,
@@ -1737,7 +1737,7 @@ html[data-theme="dark"] .focus-message-input-container {
   font-size: 10px !important;
   margin-left: 0px !important; /* CRITICAL FIX: Remove whitespace between icon and count */
   font-weight: 500 !important;
-  color: #ffffff !important; /* CRITICAL FIX: White text in light mode */
+  color: #666 !important; /* CRITICAL FIX: Dark gray for visibility on light backgrounds */
 }
 
 .icon-count.bookmark-count {

@@ -3026,6 +3026,12 @@ async function updateThemeEverywhere(theme) {
         }
         // ROOT CAUSE FIX: Removed localStorage - we only use Chrome storage and database
         // Step 3: Update DOM immediately for instant feedback
+        const currentDomBeforeUpdate = document.body.getAttribute('data-theme') || document.documentElement.getAttribute('data-theme');
+        console.log('🔍 THEME_UPDATE: ========================================');
+        console.log('🔍 THEME_UPDATE: About to set DOM theme');
+        console.log('🔍 THEME_UPDATE: Current DOM theme:', currentDomBeforeUpdate || 'NOT SET');
+        console.log('🔍 THEME_UPDATE: New theme:', theme);
+        console.log('🔍 THEME_UPDATE: ========================================');
         document.documentElement.setAttribute('data-theme', theme);
         document.body.setAttribute('data-theme', theme);
         // Step 4: Update database via API

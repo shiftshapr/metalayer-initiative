@@ -702,7 +702,11 @@ export class UserPreferencesManager {
             // ALSO: Never apply default 'light' theme if DOM is already 'dark' - this is the root cause
             if (!currentDomTheme) {
                 // No DOM theme - safe to apply preference
+                const stack = new Error().stack;
+                console.log(`🔍 USER_PREFERENCES_MANAGER: ========================================`);
                 console.log(`🔍 USER_PREFERENCES_MANAGER: Applying theme preference '${this.preferences.theme}' (no existing DOM theme)`);
+                console.log(`🔍 USER_PREFERENCES_MANAGER: Call stack:`, stack?.split('\n').slice(1, 8).join('\n'));
+                console.log(`🔍 USER_PREFERENCES_MANAGER: ========================================`);
                 document.documentElement.setAttribute('data-theme', this.preferences.theme);
                 document.body.setAttribute('data-theme', this.preferences.theme);
                 // Update theme toggle in settings tab if exists
@@ -1063,4 +1067,8 @@ if (typeof window !== 'undefined') {
     window.savePreference = (key, value, options) => userPreferencesManager.savePreference(key, value, options);
 }
 console.log('✅ USER_PREFERENCES_MANAGER: Module loaded');
+// Import ThemeChangeTracker to start tracking theme changes
+import('./ThemeChangeTracker').catch(err => {
+    console.warn('⚠️ USER_PREFERENCES_MANAGER: Failed to load ThemeChangeTracker:', err);
+});
 export default userPreferencesManager;

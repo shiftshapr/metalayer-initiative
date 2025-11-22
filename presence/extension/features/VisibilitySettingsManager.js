@@ -474,7 +474,11 @@ class VisibilitySettingsManager {
                 }
                 // Only set DOM if it's different from current (prevents unnecessary updates)
                 if (existingDOMTheme !== theme) {
+                    const stack = new Error().stack;
+                    console.log('🔍 VISIBILITY_SETTINGS: ========================================');
                     console.log(`🔧 VISIBILITY_SETTINGS: Setting DOM theme to: ${theme} (was: ${existingDOMTheme || 'NOT SET'})`);
+                    console.log('🔍 VISIBILITY_SETTINGS: Call stack:', stack?.split('\n').slice(1, 8).join('\n'));
+                    console.log('🔍 VISIBILITY_SETTINGS: ========================================');
                     await chrome.storage.local.set({ theme: theme });
                     document.documentElement.setAttribute('data-theme', theme);
                     document.body.setAttribute('data-theme', theme);
@@ -792,6 +796,10 @@ class VisibilitySettingsManager {
      */
     async saveTheme() {
         try {
+            const stack = new Error().stack;
+            console.log('🔍 VISIBILITY_SETTINGS: ========================================');
+            console.log('🔍 VISIBILITY_SETTINGS: saveTheme() CALLED');
+            console.log('🔍 VISIBILITY_SETTINGS: Call stack:', stack?.split('\n').slice(1, 8).join('\n'));
             // ROOT CAUSE FIX: Don't rely solely on toggle state - check actual DOM theme first
             // This prevents saving 'light' when the actual theme is 'dark' due to toggle state mismatch
             const currentDOMTheme = document.body.getAttribute('data-theme') ||
@@ -800,6 +808,7 @@ class VisibilitySettingsManager {
             if (this.themeToggle) {
                 // Use toggle state if available
                 theme = this.themeToggle.checked ? 'dark' : 'light';
+                console.log('🔍 VISIBILITY_SETTINGS: Toggle state - checked:', this.themeToggle.checked, 'resolved theme:', theme);
                 // ROOT CAUSE FIX: If toggle says 'light' but DOM is 'dark', trust DOM (toggle is out of sync)
                 if (theme === 'light' && currentDOMTheme === 'dark') {
                     console.warn('⚠️ VISIBILITY_SETTINGS: Toggle says light but DOM is dark - trusting DOM');
@@ -819,10 +828,11 @@ class VisibilitySettingsManager {
                 theme = (currentDOMTheme === 'dark' || currentDOMTheme === 'light') ? currentDOMTheme : 'light';
                 console.warn('⚠️ VISIBILITY_SETTINGS: Theme toggle not found, using DOM theme:', theme);
             }
-            console.log('🔍 DIAGNOSTIC: saveTheme called with theme:', theme);
-            console.log('🔍 DIAGNOSTIC: Current DOM theme:', currentDOMTheme);
-            console.log('🔍 DIAGNOSTIC: UserPreferencesManager available:', !!userPreferencesManager);
-            console.log('🔍 DIAGNOSTIC: UserPreferencesManager initialized:', userPreferencesManager?.isInitialized);
+            console.log('🔍 VISIBILITY_SETTINGS: Final theme to save:', theme);
+            console.log('🔍 VISIBILITY_SETTINGS: Current DOM theme:', currentDOMTheme);
+            console.log('🔍 VISIBILITY_SETTINGS: UserPreferencesManager available:', !!userPreferencesManager);
+            console.log('🔍 VISIBILITY_SETTINGS: UserPreferencesManager initialized:', userPreferencesManager?.isInitialized);
+            console.log('🔍 VISIBILITY_SETTINGS: ========================================');
             // ROOT CAUSE FIX: NEVER fall back to updateThemeEverywhere - it causes theme resets
             // If UserPreferencesManager is not initialized, initialize it first
             if (!userPreferencesManager || !userPreferencesManager.isInitialized) {
