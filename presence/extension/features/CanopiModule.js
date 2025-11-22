@@ -1978,9 +1978,26 @@ async function handleShareMessage(message, shareType = 'link') {
     try {
         if (shareType === 'link') {
             await navigator.clipboard.writeText(messageUrl);
-            const showNotification = window.showNotification;
-            if (typeof window !== 'undefined' && showNotification) {
-                showNotification('Message link copied to clipboard!');
+            // COMP METHOD: Show toast notification using NotificationManager's showToastNotification
+            // Try notificationManager first, then fallback to simple toast
+            const win = window;
+            if (win.notificationManager && typeof win.notificationManager.showToastNotification === 'function') {
+                win.notificationManager.showToastNotification('Message link copied to clipboard!');
+            }
+            else if (win.showNotification && typeof win.showNotification === 'function') {
+                win.showNotification('Message link copied to clipboard!');
+            }
+            else {
+                // COMP METHOD: Fallback - create simple toast notification
+                const toast = document.createElement('div');
+                toast.textContent = 'Message link copied to clipboard!';
+                toast.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #007bff; color: white; padding: 12px 16px; border-radius: 6px; font-size: 14px; z-index: 10000; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);';
+                document.body.appendChild(toast);
+                setTimeout(() => {
+                    if (toast.parentNode) {
+                        toast.parentNode.removeChild(toast);
+                    }
+                }, 3000);
             }
             console.log('✅ SHARE: Message link copied:', messageUrl);
         }
