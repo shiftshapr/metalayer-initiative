@@ -1356,8 +1356,8 @@ body {
 
 /* UX/UI: Ensure proper spacing between message content and footer icons (match default mode) */
 .focus-messages-container .message-footer {
-  margin-top: 8px !important; /* Space between content and icons - match default mode */
-  padding-top: 8px !important; /* Padding above icons - match default mode */
+  margin-top: 4px !important; /* CRITICAL FIX: Reduced space to save space */
+  padding-top: 4px !important; /* CRITICAL FIX: Reduced padding to save space */
   border-top: none !important; /* CRITICAL FIX: Remove any white border-top */
   border-bottom: none !important; /* CRITICAL FIX: Remove any white border-bottom */
 }
@@ -1527,7 +1527,7 @@ html[data-theme="dark"] .focus-message-input-container {
   flex-direction: row !important;
   align-items: center !important;
   justify-content: flex-start !important;
-  gap: 4px !important; /* CRITICAL FIX: Reduced gap to minimize whitespace */
+  gap: 2px !important; /* CRITICAL FIX: Minimal gap to save space */
   flex-wrap: nowrap !important;
   min-width: 200px !important; /* Ensure space for all buttons */
   width: auto !important;
@@ -1541,7 +1541,7 @@ html[data-theme="dark"] .focus-message-input-container {
   flex-direction: row !important; /* CRITICAL: Icons must be horizontal */
   align-items: center !important;
   justify-content: space-evenly !important; /* CRITICAL: Evenly space icon/count pairs */
-  gap: 4px !important; /* CRITICAL FIX: Reduced gap to minimize whitespace */
+  gap: 2px !important; /* CRITICAL FIX: Minimal gap to save space */
   flex-wrap: nowrap !important; /* Prevent wrapping */
   min-width: 200px !important; /* Ensure space for all buttons */
 }
@@ -1564,21 +1564,21 @@ html[data-theme="dark"] .focus-message-input-container {
   background: none !important;
   border: none !important;
   cursor: pointer !important;
-  padding: 4px !important;
+  padding: 2px !important; /* CRITICAL FIX: Reduced padding to save space */
   border-radius: 4px !important;
   font-size: 14px !important;
   display: flex !important;
   align-items: center !important;
-  gap: 2px !important;
+  gap: 0px !important; /* CRITICAL FIX: No gap between icon and count */
   color: #333 !important; /* CRITICAL: Dark color for visibility on light backgrounds */
   pointer-events: auto !important;
   opacity: 1 !important;
   visibility: visible !important;
   z-index: 20 !important; /* CRITICAL FIX: Higher z-index to ensure clicks work */
   position: relative !important;
-  /* CRITICAL FIX: Ensure buttons have space for icons */
-  min-width: 26px !important; /* 18px icon + 8px padding */
-  min-height: 26px !important; /* 18px icon + 8px padding */
+  /* CRITICAL FIX: Reduced button size to save space */
+  min-width: 22px !important; /* 18px icon + 4px padding */
+  min-height: 22px !important; /* 18px icon + 4px padding */
   width: auto !important;
   height: auto !important;
   flex-shrink: 0 !important; /* Prevent buttons from shrinking */

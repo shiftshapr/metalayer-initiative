@@ -1,9 +1,9 @@
 // Auto-generated build info - DO NOT EDIT
-// Generated at build time: 2025-11-22T02:55:56Z
+// Generated at build time: 2025-11-22T03:04:01Z
 window.__BUILD_INFO__ = {
-  buildNumber: 129,
-  timestamp: "2025-11-22T02:55:56Z",
-  gitCommit: "e35fb8c",
+  buildNumber: 131,
+  timestamp: "2025-11-22T03:04:01Z",
+  gitCommit: "6209295",
   gitBranch: "new",
-  buildTime: "2025-11-22T02:55:56Z"
+  buildTime: "2025-11-22T03:04:01Z"
 };
