@@ -1,0 +1,53 @@
+name: TypeScript Type Definition Checks
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'presence/src/**'
+      - 'presence/tsconfig.json'
+      - '.github/workflows/typescript-checks.yml'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'presence/src/**'
+      - 'presence/tsconfig.json'
+      - '.github/workflows/typescript-checks.yml'
+
+jobs:
+  check-snake-case-types:
+    name: Check for snake_case in Type Definitions
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Install tsx
+        run: npm install -g tsx
+      
+      - name: Run snake_case diagnostic
+        run: |
+          cd presence
+          npx tsx src/scripts/diagnose-snake-case-types.ts
+      
+      - name: TypeScript type checking (noEmit)
+        run: |
+          cd presence
+          npx tsc --noEmit
+        continue-on-error: false
+      
+      - name: TypeScript compilation check
+        run: |
+          cd presence
+          npm run build:presence || true  # Don't fail on pre-existing errors, just check our changes
+

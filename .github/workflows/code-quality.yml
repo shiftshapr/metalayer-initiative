@@ -1,0 +1,59 @@
+name: Code Quality Check
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'presence/src/**'
+      - 'presence/tsconfig.json'
+      - '.github/workflows/code-quality.yml'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'presence/src/**'
+      - 'presence/tsconfig.json'
+      - '.github/workflows/code-quality.yml'
+  schedule:
+    # Run daily at 2 AM UTC
+    - cron: '0 2 * * *'
+
+jobs:
+  code-quality:
+    name: Code Quality Check
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Install tsx
+        run: npm install -g tsx
+      
+      - name: Run TypeScript type check
+        run: |
+          cd presence
+          npx tsc --noEmit
+        continue-on-error: false
+      
+      - name: Run code quality check
+        run: npm run check:quality
+        continue-on-error: true
+      
+      - name: Upload quality report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: code-quality-report
+          path: |
+            presence/src/scripts/code-quality-check.ts
+          retention-days: 7
+

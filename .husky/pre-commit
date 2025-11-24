@@ -1,0 +1,19 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+# Run TypeScript type checking before commit
+echo "🔍 Running TypeScript type check..."
+npm run type-check
+
+# If type check fails, prevent commit
+if [ $? -ne 0 ]; then
+  echo "❌ TypeScript errors found. Please fix errors before committing."
+  echo "💡 Run 'npm run check:quality' for detailed report"
+  exit 1
+fi
+
+# Run code quality check (warnings only, doesn't block commit)
+echo "📊 Running code quality check..."
+npm run check:quality || echo "⚠️  Code quality warnings found (not blocking commit)"
+
+echo "✅ Pre-commit checks passed"

@@ -15,7 +15,14 @@
     "ci:presence": "npm run build:presence && npm run test:diagnostics",
     "sync": "./sync-extension.sh",
     "watch": "./watch-sync.sh",
-    "lint:fallbacks": "node presence/scripts/enforce-fallback-policy.js"
+    "lint:fallbacks": "node presence/scripts/enforce-fallback-policy.js",
+    "check:snake-case": "cd presence && npx tsx src/scripts/diagnose-snake-case-types.ts",
+    "type-check": "cd presence && npx tsc --noEmit",
+    "type-check:components": "cd presence && npx tsc --noEmit src/components/*.ts",
+    "check:interface-exports": "npx tsx presence/src/scripts/check-interface-exports.ts",
+    "check:quality": "npx tsx presence/src/scripts/code-quality-check.ts",
+    "precommit:types": "npm run type-check && npm run check:snake-case && npm run check:interface-exports",
+    "prepare": "husky"
   },
   "keywords": [
     "metaweb",
@@ -46,6 +53,7 @@
     "@types/chrome": "^0.1.29",
     "@types/node": "^24.10.1",
     "happy-dom": "^20.0.10",
+    "husky": "^9.1.7",
     "nodemon": "^3.0.1",
     "ts-node": "^10.9.2",
     "typescript": "^5.6.3",
