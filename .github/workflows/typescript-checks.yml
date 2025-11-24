@@ -40,6 +40,52 @@ jobs:
           cd presence
           npx tsx src/scripts/diagnose-snake-case-types.ts
       
+      - name: Check for any type annotations (Slice 2)
+        id: slice2-check
+        run: |
+          cd presence
+          npx tsx src/scripts/diagnose-slice2-any-types-strict.ts
+        continue-on-error: false
+      
+      - name: Annotate PR with results
+        if: failure() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            
+            // Try to read diagnostic output if available
+            const diagnosticPath = path.join(process.cwd(), 'presence', 'src', 'scripts', 'diagnose-slice2-any-types-strict.ts');
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## ❌ Slice 2 Type Safety Check Failed
+              
+              This PR introduces \`: any\` type annotations in Slice 2 files, which violates our type safety standards.
+              
+              **Action Required:**
+              - Review the CI/CD logs for details on which files have \`: any\` annotations
+              - Replace all \`: any\` with proper types
+              - See \`presence/src/types/window-utils.ts\` for helper types
+              - See \`presence/src/types/global.d.ts\` for window interface patterns
+              
+              **Files to check:**
+              - \`presence/src/features/CursorVisualSettingsManager.ts\`
+              - \`presence/src/features/DisplayNameManager.ts\`
+              - \`presence/src/features/SettingsHeadlineManager.ts\`
+              - \`presence/src/sidepanel/Sidepanel.ts\`
+              - \`presence/src/utils/DEFAULT_VS_FOCUS_MODE_DIAGNOSTIC.ts\`
+              
+              Run locally to see details:
+              \`\`\`bash
+              cd presence && npx tsx src/scripts/diagnose-slice2-any-types-strict.ts
+              \`\`\`
+              `
+            });
+      
       - name: TypeScript type checking (noEmit)
         run: |
           cd presence

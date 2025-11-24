@@ -1,0 +1,131 @@
+name: Slice 2 Type Safety Monitor
+
+on:
+  # Run on schedule (daily at 2 AM UTC)
+  schedule:
+    - cron: '0 2 * * *'
+  
+  # Allow manual triggering
+  workflow_dispatch:
+  
+  # Run on pushes to main/develop (optional - already covered by typescript-checks.yml)
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'presence/src/features/CursorVisualSettingsManager.ts'
+      - 'presence/src/features/DisplayNameManager.ts'
+      - 'presence/src/features/SettingsHeadlineManager.ts'
+      - 'presence/src/sidepanel/Sidepanel.ts'
+      - 'presence/src/utils/DEFAULT_VS_FOCUS_MODE_DIAGNOSTIC.ts'
+
+jobs:
+  monitor-slice2:
+    name: Monitor Slice 2 Type Safety
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Install tsx
+        run: npm install -g tsx
+      
+      - name: Run Slice 2 diagnostic (strict)
+        id: diagnostic
+        run: |
+          cd presence
+          npx tsx src/scripts/diagnose-slice2-any-types-strict.ts
+        continue-on-error: true
+      
+      - name: Create issue if regressions found
+        if: steps.diagnostic.outcome == 'failure' && github.event_name == 'schedule'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Check if issue already exists
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'slice2-type-safety'
+            });
+            
+            if (issues.length === 0) {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: '🚨 Slice 2 Type Safety Regression Detected',
+                body: `## Slice 2 Type Safety Check Failed
+                
+                The automated daily check found \`: any\` type annotations in Slice 2 files.
+                
+                **Action Required:**
+                1. Run the diagnostic locally: \`cd presence && npx tsx src/scripts/diagnose-slice2-any-types-strict.ts\`
+                2. Review the output to identify which files have \`: any\` annotations
+                3. Replace all \`: any\` with proper types
+                4. Verify the fix: Re-run the diagnostic
+                
+                **Files monitored:**
+                - \`presence/src/features/CursorVisualSettingsManager.ts\`
+                - \`presence/src/features/DisplayNameManager.ts\`
+                - \`presence/src/features/SettingsHeadlineManager.ts\`
+                - \`presence/src/sidepanel/Sidepanel.ts\`
+                - \`presence/src/utils/DEFAULT_VS_FOCUS_MODE_DIAGNOSTIC.ts\`
+                
+                **Resources:**
+                - Helper types: \`presence/src/types/window-utils.ts\`
+                - Window interfaces: \`presence/src/types/global.d.ts\`
+                
+                This issue will auto-close when the diagnostic passes.
+                `,
+                labels: ['slice2-type-safety', 'type-safety', 'automated']
+              });
+            }
+      
+      - name: Close issue if fixed
+        if: steps.diagnostic.outcome == 'success' && github.event_name == 'schedule'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Find and close any open issues
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'slice2-type-safety'
+            });
+            
+            for (const issue of issues) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                body: '✅ Slice 2 type safety check now passes. Closing this issue.'
+              });
+              
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                state: 'closed'
+              });
+            }
+      
+      - name: Upload diagnostic logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: slice2-diagnostic-logs
+          path: |
+            presence/src/scripts/diagnose-slice2-any-types-strict.ts
+          retention-days: 7
+
