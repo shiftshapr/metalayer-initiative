@@ -6,10 +6,10 @@
 !README.md
 docs/
 
-# TypeScript source (should compile to dist/)
-src/
-*.ts
-!*.d.ts
+# TypeScript source files are now tracked in git (best practice)
+# Only ignore specific TypeScript file patterns (tests, diagnostics, etc.)
+# src/ is tracked - source files should be version controlled
+# *.ts is tracked - TypeScript source files should be version controlled
 
 # Build artifacts
 build/
@@ -48,6 +48,8 @@ test_*.js
 
 # Archive directories
 presence-archive-*/
+
+
 
 
 
