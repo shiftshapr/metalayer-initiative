@@ -5,6 +5,7 @@
 
 import type { User, Message, SupabaseClient, ApiResponse, StateManager } from './index.js';
 import type { BaseManagerWindowAPI, ManagerWindowAPI } from './window-utils.js';
+type AuraChangePayload = import('../features/RealtimeManager.js').AuraChangePayload;
 
 type AgentModuleConstructor = typeof import('../features/AgentModule.js')['AgentModule'];
 type InitializeAgentTabFn = typeof import('../features/AgentModule.js')['initializeAgentTab'];
@@ -163,6 +164,7 @@ declare global {
       getStatusDotColor?: (status: string) => string;
       [key: string]: unknown;
     };
+    ENABLE_4STATE_STATUS?: boolean;
     AvatarUtils?: {
       createUnifiedAvatar?: (user: User, context: string, options: { size?: number; showAura?: boolean; showStatus?: boolean }) => Promise<string>;
       [key: string]: unknown;
@@ -262,6 +264,11 @@ declare global {
     SettingsHeadlineManager?: SettingsHeadlineManagerConstructor;
     cursorVisualSettingsManager?: CursorVisualSettingsManagerInstance;
     CursorVisualSettingsManager?: CursorVisualSettingsManagerConstructor;
+    visibilitySettingsManager?: {
+      updateThemeStatus?: () => void;
+      ensureEventListeners?: () => Promise<void>;
+      [key: string]: unknown;
+    };
     
     // Additional managers
     profileManager?: InstanceType<ProfileManagerConstructor>;
@@ -306,6 +313,7 @@ declare global {
     
     // API configuration
     API_URL?: string;
+    API_BASE_URL?: string;
     apiBaseURL?: string;
     METALAYER_API_URL?: string;
     configManager?: {
@@ -360,6 +368,93 @@ declare global {
       register: (name: string, hooks: { init?: () => boolean; destroy?: () => boolean; initialize?: () => boolean }, options?: { dependencies?: string[]; autoInitialize?: boolean }) => void;
       [key: string]: unknown;
     };
+    
+    // Additional application-specific properties
+    authModule?: unknown;
+    authenticateWithSupabase?: (user: User) => Promise<void>;
+    clickOutsideListenerAdded?: boolean;
+    completeOTPForRealtime?: (otpCode: string) => Promise<boolean>;
+    createAuthPromptModal?: (action: string) => void;
+    
+    // Diagnostic Framework (grouped for better organization)
+    diagnosticFramework?: {
+      // Core diagnostic functions
+      diagnoseAll?: () => Promise<unknown>;
+      diagnoseIssue?: (issue: string) => Promise<unknown>;
+      diagnoseFocusModeReplies?: () => Promise<unknown>;
+      diagnoseReplyDisplay?: () => Promise<unknown>;
+      
+      // Diagnostic getters
+      getDiagnosticResults?: () => unknown;
+      getFocusModeReplyDiagnostic?: () => Promise<unknown>;
+      getLoadingReplyDiagnostic?: () => Promise<unknown>;
+      getReplyDisplayDiagnostic?: () => Promise<unknown>;
+      
+      // Diagnostic runners
+      runComprehensiveFormattingDiagnostic?: () => Promise<unknown>;
+      runMessageDisplayDiagnostic?: () => Promise<unknown>;
+      runMessageFetchDiagnostic?: () => Promise<unknown>;
+      runRootCauseDiagnostic?: () => Promise<unknown>;
+      
+      // Diagnostic results
+      comprehensiveDiagnosticResults?: unknown;
+      
+      // Allow additional diagnostic properties
+      [key: string]: unknown;
+    };
+    eventBus?: {
+      on?: (event: string, handler: (...args: unknown[]) => void) => void;
+      emit?: (event: string, ...args: unknown[]) => void;
+      off?: (event: string, handler: (...args: unknown[]) => void) => void;
+      [key: string]: unknown;
+    };
+    focusedMessage?: Message | null;
+    getCurrentPageUri?: () => string | null;
+    getCurrentUserAvatarBgColor?: () => string;
+    getCurrentUserAvatarColor?: () => Promise<string>;
+    getCurrentUserEmail?: () => Promise<string | null>;
+    getCurrentUserId?: () => Promise<string | null>;
+    getMessageActionsMenu?: (message: Message) => HTMLElement | null;
+    getPreference?: (key: string) => Promise<string | number | boolean | null>;
+    getUserAvatarBgColor?: () => string;
+    handleAuraChange?: (payload: AuraChangePayload) => void;
+    handleRepostClick?: (message: Message) => Promise<void>;
+    handleShareClick?: (message: Message) => Promise<void>;
+    initializePresenceTracking?: () => Promise<boolean>;
+    initializeRealGoogleAuth?: () => void;
+    monitoringService?: {
+      start?: () => void;
+      stop?: () => void;
+      [key: string]: unknown;
+    };
+    normalizeCurrentUrl?: () => Promise<{ normalizedUrl?: string; pageId?: string }>;
+    performLogout?: () => Promise<void>;
+    presenceTrackingActive?: boolean;
+    refreshAllMessageAvatars?: () => Promise<void>;
+    refreshVisibilityAvatars?: () => Promise<void>;
+    savePreference?: (key: string, value: string | number | boolean, options?: { skipDatabase?: boolean; batch?: boolean }) => Promise<boolean>;
+    showColorPickerModal?: () => void;
+    stateManager?: StateManager;
+    subscriptionManager?: {
+      subscribe?: (channel: string, callback: (data: unknown) => void) => void;
+      unsubscribe?: (channel: string) => void;
+      [key: string]: unknown;
+    };
+    supabaseUser?: User;
+    updateVisibleTab?: () => void;
+    userPref?: {
+      get?: (key: string) => Promise<unknown>;
+      set?: (key: string, value: unknown) => Promise<void>;
+      [key: string]: unknown;
+    };
+    visibilityModalHandler?: {
+      open?: () => void;
+      close?: () => void;
+      [key: string]: unknown;
+    };
+    
+    // Additional properties that may be accessed but not always defined
+    isCursorParked?: () => boolean;
     
     // Dynamic properties
     [key: string]: unknown;

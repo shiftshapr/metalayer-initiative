@@ -1,6 +1,8 @@
 import { createProfileSettingChannel } from './settings/helpers/profileSettingChannel.js';
 import { ensureManager, waitForPreferencesManager, getSettingContracts } from '../sidepanel/windowInjections.js';
 
+import { handleError } from '../utils/ErrorHandler.js';
+import { Logger } from '../utils/Logger.js';
 /**
  * SETTINGS HEADLINE MANAGER - CRUD Operations for Settings Headline
  * Handles Create, Read, Update, Delete operations for user headline
@@ -37,11 +39,11 @@ class SettingsHeadlineManager {
    */
   async initialize(): Promise<void> {
     if (this.isInitialized) {
-      console.log('⚠️ SETTINGS_HEADLINE: Already initialized');
+      Logger.debug('⚠️ SETTINGS_HEADLINE: Already initialized', null, 'settings');
       return;
     }
 
-    console.log('🔧 SETTINGS_HEADLINE: Initializing headline manager...');
+    Logger.debug('🔧 SETTINGS_HEADLINE: Initializing headline manager...', null, 'settings');
 
     try {
       // Get DOM elements
@@ -59,7 +61,7 @@ class SettingsHeadlineManager {
       this.statusDiv = document.getElementById('headline-status');
 
       if (!this.headlineInput || !this.charCount || !this.saveBtn || !this.cancelBtn) {
-        console.warn('⚠️ SETTINGS_HEADLINE: Required DOM elements not found');
+        Logger.warn('⚠️ SETTINGS_HEADLINE: Required DOM elements not found', null, 'settings');
         return;
       }
 
@@ -76,9 +78,17 @@ class SettingsHeadlineManager {
       this.setupEventListeners();
 
       this.isInitialized = true;
-      console.log('✅ SETTINGS_HEADLINE: Headline manager initialized');
-    } catch (error) {
-      console.error('❌ SETTINGS_HEADLINE: Failed to initialize:', error);
+      Logger.debug('✅ SETTINGS_HEADLINE: Headline manager initialized', null, 'settings');
+    } catch (error: unknown) {
+      handleError(error, {
+            log: true,
+            logLevel: 'error',
+            context: {
+                operation: 'catch',
+            component: 'SettingsHeadline'
+            }
+        });;
+    
     }
   }
 
@@ -160,7 +170,7 @@ class SettingsHeadlineManager {
       }
     });
 
-    console.log('✅ SETTINGS_HEADLINE: Event listeners attached');
+    Logger.debug('✅ SETTINGS_HEADLINE: Event listeners attached', null, 'settings');
   }
 
   /**
@@ -195,8 +205,8 @@ class SettingsHeadlineManager {
    */
   async readHeadline(): Promise<void> {
     try {
-      console.log('📖 SETTINGS_HEADLINE: Reading headline...');
-      console.log('🔍 DIAGNOSTIC: Reading headline via unified storage channel');
+      Logger.debug('📖 SETTINGS_HEADLINE: Reading headline...', null, 'settings');
+      Logger.debug('🔍 DIAGNOSTIC: Reading headline via unified storage channel', null, 'settings');
 
       const headline = await this.storage.read();
       this.currentHeadline = headline || '';
@@ -207,28 +217,36 @@ class SettingsHeadlineManager {
       this.updateCharCount();
       this.updateUIState();
       if (headline) {
-        console.log('✅ SETTINGS_HEADLINE: Headline loaded via profile setting channel');
+        Logger.debug('✅ SETTINGS_HEADLINE: Headline loaded via profile setting channel', null, 'settings');
       } else {
-        console.log('ℹ️ SETTINGS_HEADLINE: No headline found, starting fresh');
+        Logger.debug('ℹ️ SETTINGS_HEADLINE: No headline found, starting fresh', 'settings');
       }
 
       // If UserPreferencesManager wasn't ready, retry when it becomes available
       const { userPreferencesManager } = getSettingContracts();
       if (!userPreferencesManager?.isInitialized) {
-        console.log('🔄 SETTINGS_HEADLINE: UserPreferencesManager not ready, will retry when available');
+        Logger.debug('🔄 SETTINGS_HEADLINE: UserPreferencesManager not ready, will retry when available', 'settings');
         const retryHandler = async (): Promise<void> => {
           const contracts = getSettingContracts();
           if (contracts.userPreferencesManager?.isInitialized) {
             window.removeEventListener('preferenceLoaded', retryHandler);
-            console.log('🔄 SETTINGS_HEADLINE: UserPreferencesManager now ready, re-reading headline');
+            Logger.debug('🔄 SETTINGS_HEADLINE: UserPreferencesManager now ready, re-reading headline', 'settings');
             await this.readHeadline();
           }
         };
         window.addEventListener('preferenceLoaded', retryHandler);
       }
-    } catch (error) {
-      console.error('❌ SETTINGS_HEADLINE: Failed to read headline:', error);
+    } catch (error: unknown) {
+      handleError(error, {
+            log: true,
+            logLevel: 'error',
+            context: {
+                operation: 'catch',
+            component: 'SettingsHeadline'
+            }
+        });;
       this.showStatus('Error loading headline', 'error');
+    
     }
   }
 
@@ -314,7 +332,7 @@ class SettingsHeadlineManager {
         }
       }
 
-      console.log('💾 SETTINGS_HEADLINE: Saving headline...');
+      Logger.debug('💾 SETTINGS_HEADLINE: Saving headline...', null, 'settings');
       await this.storage.save(newHeadline || null);
       
       this.currentHeadline = newHeadline || null;
@@ -323,10 +341,18 @@ class SettingsHeadlineManager {
       this.updateUIState();
 
       this.showStatus('Headline saved successfully', 'success');
-      console.log('✅ SETTINGS_HEADLINE: Headline saved');
-    } catch (error) {
-      console.error('❌ SETTINGS_HEADLINE: Failed to save headline:', error);
+      Logger.debug('✅ SETTINGS_HEADLINE: Headline saved', null, 'settings');
+    } catch (error: unknown) {
+      handleError(error, {
+            log: true,
+            logLevel: 'error',
+            context: {
+                operation: 'catch',
+            component: 'SettingsHeadline'
+            }
+        });;
       this.showStatus('Error saving headline', 'error');
+    
     }
   }
 
@@ -335,7 +361,7 @@ class SettingsHeadlineManager {
    */
   async deleteHeadline(): Promise<void> {
     try {
-      console.log('🗑️ SETTINGS_HEADLINE: Deleting headline...');
+      Logger.debug('🗑️ SETTINGS_HEADLINE: Deleting headline...', null, 'settings');
       await this.storage.delete();
       this.currentHeadline = '';
       this.originalHeadline = '';
@@ -347,10 +373,18 @@ class SettingsHeadlineManager {
       this.updateUIState();
       this.hideMenu();
       this.showStatus('Headline deleted successfully', 'success');
-      console.log('✅ SETTINGS_HEADLINE: Headline deleted');
-    } catch (error) {
-      console.error('❌ SETTINGS_HEADLINE: Failed to delete headline:', error);
+      Logger.debug('✅ SETTINGS_HEADLINE: Headline deleted', null, 'settings');
+    } catch (error: unknown) {
+      handleError(error, {
+            log: true,
+            logLevel: 'error',
+            context: {
+                operation: 'catch',
+            component: 'SettingsHeadline'
+            }
+        });;
       this.showStatus('Error deleting headline', 'error');
+    
     }
   }
 
@@ -365,7 +399,7 @@ class SettingsHeadlineManager {
     this.isEditing = false;
     this.updateUIState();
     this.showStatus('Changes cancelled', 'info');
-    console.log('❌ SETTINGS_HEADLINE: Edit cancelled');
+    Logger.debug('❌ SETTINGS_HEADLINE: Edit cancelled', null, 'settings');
   }
 
   /**
@@ -404,10 +438,21 @@ class SettingsHeadlineManager {
 
 // Initialize when DOM is ready and UserPreferencesManager is available
 const bootstrapSettingsHeadlineManager = async (): Promise<void> => {
-  const manager = ensureManager('settingsHeadlineManager', () => new SettingsHeadlineManager());
-  // Wait for UserPreferencesManager to be ready before initializing
-  await waitForPreferencesManager();
-  await manager.initialize();
+  try {
+    const manager = ensureManager('settingsHeadlineManager', () => new SettingsHeadlineManager());
+    // Wait for UserPreferencesManager to be ready before initializing
+    await waitForPreferencesManager();
+    await manager.initialize();
+  } catch (error: unknown) {
+    handleError(error, {
+      log: true,
+      logLevel: 'error',
+      context: {
+        operation: 'bootstrapSettingsHeadlineManager',
+        component: 'SettingsHeadlineManager'
+      }
+    });
+  }
 };
 
 if (typeof window !== 'undefined' && typeof document !== 'undefined') {
@@ -419,7 +464,7 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
     void bootstrapSettingsHeadlineManager();
   }
 
-  (window as Window).SettingsHeadlineManager = SettingsHeadlineManager;
+  // Constructor export removed - use window.settingsHeadlineManager instance instead
 }
 
 export { SettingsHeadlineManager };

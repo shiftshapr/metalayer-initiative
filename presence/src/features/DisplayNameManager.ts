@@ -1,6 +1,8 @@
 import { createProfileSettingChannel } from './settings/helpers/profileSettingChannel.js';
 import { ensureManager, waitForPreferencesManager, getSettingContracts } from '../sidepanel/windowInjections.js';
 
+import { handleError } from '../utils/ErrorHandler.js';
+import { Logger } from '../utils/Logger.js';
 /**
  * DISPLAY NAME MANAGER - CRUD Operations for Display Name
  * Handles Create, Read, Update, Delete operations for user display name
@@ -35,11 +37,11 @@ class DisplayNameManager {
    */
   async initialize(): Promise<void> {
     if (this.isInitialized) {
-      console.log('⚠️ DISPLAY_NAME: Already initialized');
+      Logger.debug('⚠️ DISPLAY_NAME: Already initialized', null, 'display-name');
       return;
     }
 
-    console.log('🔧 DISPLAY_NAME: Initializing display name manager...');
+    Logger.debug('🔧 DISPLAY_NAME: Initializing display name manager...', null, 'display-name');
 
     try {
       // Get DOM elements
@@ -57,7 +59,7 @@ class DisplayNameManager {
       this.statusDiv = document.getElementById('display-name-status');
 
       if (!this.displayNameInput || !this.charCount || !this.saveBtn || !this.cancelBtn) {
-        console.warn('⚠️ DISPLAY_NAME: Required DOM elements not found');
+        Logger.warn('⚠️ DISPLAY_NAME: Required DOM elements not found', null, 'display-name');
         return;
       }
 
@@ -74,9 +76,17 @@ class DisplayNameManager {
       this.setupEventListeners();
 
       this.isInitialized = true;
-      console.log('✅ DISPLAY_NAME: Display name manager initialized');
-    } catch (error) {
-      console.error('❌ DISPLAY_NAME: Failed to initialize:', error);
+      Logger.debug('✅ DISPLAY_NAME: Display name manager initialized', null, 'display-name');
+    } catch (error: unknown) {
+      handleError(error, {
+            log: true,
+            logLevel: 'error',
+            context: {
+                operation: 'catch',
+            component: 'DisplayName'
+            }
+        });;
+    
     }
   }
 
@@ -158,7 +168,7 @@ class DisplayNameManager {
       }
     });
 
-    console.log('✅ DISPLAY_NAME: Event listeners attached');
+    Logger.debug('✅ DISPLAY_NAME: Event listeners attached', null, 'display-name');
   }
 
   /**
@@ -191,8 +201,8 @@ class DisplayNameManager {
    */
   async readDisplayName(): Promise<void> {
     try {
-      console.log('📖 DISPLAY_NAME: Reading display name...');
-      console.log('🔍 DIAGNOSTIC: Reading display name via unified storage channel');
+      Logger.debug('📖 DISPLAY_NAME: Reading display name...', null, 'display-name');
+      Logger.debug('🔍 DIAGNOSTIC: Reading display name via unified storage channel', null, 'display-name');
 
       const displayName = await this.storage.read();
       this.currentDisplayName = displayName || '';
@@ -203,28 +213,36 @@ class DisplayNameManager {
       this.updateCharCount();
       this.updateUIState();
       if (displayName) {
-        console.log('✅ DISPLAY_NAME: Display name loaded via profile setting channel');
+        Logger.debug('✅ DISPLAY_NAME: Display name loaded via profile setting channel', null, 'display-name');
       } else {
-        console.log('ℹ️ DISPLAY_NAME: No display name found, starting fresh');
+        Logger.debug('ℹ️ DISPLAY_NAME: No display name found, starting fresh', 'display-name');
       }
 
       // If UserPreferencesManager wasn't ready, retry when it becomes available
       const { userPreferencesManager } = getSettingContracts();
       if (!userPreferencesManager?.isInitialized) {
-        console.log('🔄 DISPLAY_NAME: UserPreferencesManager not ready, will retry when available');
+        Logger.debug('🔄 DISPLAY_NAME: UserPreferencesManager not ready, will retry when available', 'display-name');
         const retryHandler = async (): Promise<void> => {
           const contracts = getSettingContracts();
           if (contracts.userPreferencesManager?.isInitialized) {
             window.removeEventListener('preferenceLoaded', retryHandler);
-            console.log('🔄 DISPLAY_NAME: UserPreferencesManager now ready, re-reading display name');
+            Logger.debug('🔄 DISPLAY_NAME: UserPreferencesManager now ready, re-reading display name', 'display-name');
             await this.readDisplayName();
           }
         };
         window.addEventListener('preferenceLoaded', retryHandler);
       }
-    } catch (error) {
-      console.error('❌ DISPLAY_NAME: Failed to read display name:', error);
+    } catch (error: unknown) {
+      handleError(error, {
+            log: true,
+            logLevel: 'error',
+            context: {
+                operation: 'catch',
+            component: 'DisplayName'
+            }
+        });;
       this.showStatus('Error loading display name', 'error');
+    
     }
   }
 
@@ -310,7 +328,7 @@ class DisplayNameManager {
         }
       }
 
-      console.log('💾 DISPLAY_NAME: Saving display name...');
+      Logger.debug('💾 DISPLAY_NAME: Saving display name...', null, 'display-name');
       await this.storage.save(newDisplayName || null);
       
       this.currentDisplayName = newDisplayName;
@@ -319,10 +337,18 @@ class DisplayNameManager {
       this.updateUIState();
 
       this.showStatus('Display name saved successfully', 'success');
-      console.log('✅ DISPLAY_NAME: Display name saved');
-    } catch (error) {
-      console.error('❌ DISPLAY_NAME: Failed to save display name:', error);
+      Logger.debug('✅ DISPLAY_NAME: Display name saved', null, 'display-name');
+    } catch (error: unknown) {
+      handleError(error, {
+            log: true,
+            logLevel: 'error',
+            context: {
+                operation: 'catch',
+            component: 'DisplayName'
+            }
+        });;
       this.showStatus('Error saving display name', 'error');
+    
     }
   }
 
@@ -331,7 +357,7 @@ class DisplayNameManager {
    */
   async deleteDisplayName(): Promise<void> {
     try {
-      console.log('🗑️ DISPLAY_NAME: Deleting display name...');
+      Logger.debug('🗑️ DISPLAY_NAME: Deleting display name...', null, 'display-name');
       await this.storage.delete();
       this.currentDisplayName = '';
       this.originalDisplayName = '';
@@ -343,10 +369,18 @@ class DisplayNameManager {
       this.updateUIState();
       this.hideMenu();
       this.showStatus('Display name deleted successfully', 'success');
-      console.log('✅ DISPLAY_NAME: Display name deleted');
-    } catch (error) {
-      console.error('❌ DISPLAY_NAME: Failed to delete display name:', error);
+      Logger.debug('✅ DISPLAY_NAME: Display name deleted', null, 'display-name');
+    } catch (error: unknown) {
+      handleError(error, {
+            log: true,
+            logLevel: 'error',
+            context: {
+                operation: 'catch',
+            component: 'DisplayName'
+            }
+        });;
       this.showStatus('Error deleting display name', 'error');
+    
     }
   }
 
@@ -361,7 +395,7 @@ class DisplayNameManager {
     this.isEditing = false;
     this.updateUIState();
     this.showStatus('Changes cancelled', 'info');
-    console.log('❌ DISPLAY_NAME: Edit cancelled');
+    Logger.debug('❌ DISPLAY_NAME: Edit cancelled', null, 'display-name');
   }
 
   /**
@@ -400,10 +434,21 @@ class DisplayNameManager {
 
 // Initialize when DOM is ready and UserPreferencesManager is available
 const bootstrapDisplayNameManager = async (): Promise<void> => {
-  const manager = ensureManager('displayNameManager', () => new DisplayNameManager());
-  // Wait for UserPreferencesManager to be ready before initializing
-  await waitForPreferencesManager();
-  await manager.initialize();
+  try {
+    const manager = ensureManager('displayNameManager', () => new DisplayNameManager());
+    // Wait for UserPreferencesManager to be ready before initializing
+    await waitForPreferencesManager();
+    await manager.initialize();
+  } catch (error: unknown) {
+    handleError(error, {
+      log: true,
+      logLevel: 'error',
+      context: {
+        operation: 'bootstrapDisplayNameManager',
+        component: 'DisplayNameManager'
+      }
+    });
+  }
 };
 
 if (typeof window !== 'undefined' && typeof document !== 'undefined') {
@@ -415,7 +460,7 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
     void bootstrapDisplayNameManager();
   }
 
-  (window as Window).DisplayNameManager = DisplayNameManager;
+  // Constructor export removed - use window.displayNameManager instance instead
 }
 
 export { DisplayNameManager };

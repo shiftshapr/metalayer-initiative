@@ -10,6 +10,8 @@
 
 import type { CursorVisualStyle } from '../core/CursorParkManager.js';
 
+import { handleError } from '../utils/ErrorHandler.js';
+import { Logger } from '../utils/Logger.js';
 interface AuraColorStorageResult {
   auraColor?: string;
   [key: string]: unknown;
@@ -24,16 +26,27 @@ class CursorVisualSettingsManager {
    * Initialize the settings manager
    */
   async initialize(): Promise<void> {
-    if (this.isInitialized) return;
+    try {
+      if (this.isInitialized) return;
 
-    // Load saved settings
-    await this.loadSettings();
+      // Load saved settings
+      await this.loadSettings();
 
-    // Setup UI if settings tab is available
-    this.setupSettingsUI();
+      // Setup UI if settings tab is available
+      this.setupSettingsUI();
 
-    this.isInitialized = true;
-    console.log('✅ CURSOR_VISUAL_SETTINGS: Initialized');
+      this.isInitialized = true;
+      Logger.debug('✅ CURSOR_VISUAL_SETTINGS: Initialized', null, 'cursor');
+    } catch (error: unknown) {
+      handleError(error, {
+        log: true,
+        logLevel: 'error',
+        context: {
+          operation: 'initialize',
+          component: 'CursorVisualSettingsManager'
+        }
+      });
+    }
   }
 
   /**
@@ -50,8 +63,16 @@ class CursorVisualSettingsManager {
       if (win.cursorParkManager) {
         win.cursorParkManager.setVisualStyle(this.visualStyle, this.customImageUrl);
       }
-    } catch (error) {
-      console.error('❌ CURSOR_VISUAL_SETTINGS: Failed to load settings:', error);
+    } catch (error: unknown) {
+      handleError(error, {
+            log: true,
+            logLevel: 'error',
+            context: {
+                operation: 'catch',
+            component: 'CursorVisualSettings'
+            }
+        });;
+    
     }
   }
 
@@ -71,9 +92,17 @@ class CursorVisualSettingsManager {
         win.cursorParkManager.setVisualStyle(this.visualStyle, this.customImageUrl);
       }
 
-      console.log('✅ CURSOR_VISUAL_SETTINGS: Settings saved');
-    } catch (error) {
-      console.error('❌ CURSOR_VISUAL_SETTINGS: Failed to save settings:', error);
+      Logger.debug('✅ CURSOR_VISUAL_SETTINGS: Settings saved', null, 'cursor');
+    } catch (error: unknown) {
+      handleError(error, {
+            log: true,
+            logLevel: 'error',
+            context: {
+                operation: 'catch',
+            component: 'CursorVisualSettings'
+            }
+        });;
+    
     }
   }
 
@@ -248,7 +277,7 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
   }
 
   (window as Window).CursorVisualSettingsManager = CursorVisualSettingsManager;
-  console.log('✅ CURSOR_VISUAL_SETTINGS: Exported to window');
+  Logger.debug('✅ CURSOR_VISUAL_SETTINGS: Exported to window', null, 'cursor');
 }
 
 export { CursorVisualSettingsManager, cursorVisualSettingsManagerInstance };
