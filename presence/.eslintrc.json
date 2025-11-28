@@ -17,7 +17,7 @@
     "@typescript-eslint"
   ],
   "rules": {
-    "no-console": "off",
+    "no-console": "error",
     "@typescript-eslint/no-explicit-any": "warn",
     "@typescript-eslint/no-unused-vars": [
       "error",
@@ -27,9 +27,21 @@
         "caughtErrorsIgnorePattern": "^_"
       }
     ],
-    "no-unused-vars": "off"
+    "no-unused-vars": "off",
+    "eqeqeq": ["error", "always", { "null": "ignore" }]
   },
   "overrides": [
+    {
+      "files": ["src/**/*.ts"],
+      "rules": {
+        "no-console": [
+          "error",
+          {
+            "allow": []
+          }
+        ]
+      }
+    },
     {
       "files": ["src/types/**/*.ts"],
       "rules": {
@@ -41,8 +53,87 @@
           }
         ]
       }
+    },
+    {
+      "files": [
+        "**/DIAGNOSTIC_*.ts",
+        "**/diagnose-*.ts",
+        "**/migrate-*.ts",
+        "**/security-audit-*.ts",
+        "**/Logger.ts",
+        "src/scripts/**/*.ts"
+      ],
+      "rules": {
+        "no-console": "off"
+      }
+    },
+    {
+      "files": ["src/**/*.ts", "routes/**/*.js", "controllers/**/*.js", "services/**/*.js"],
+      "rules": {
+        "no-restricted-syntax": [
+          "error",
+          {
+            "selector": "CallExpression[callee.property.name='eq'] > Literal[value='email']",
+            "message": "UUID-Only Policy: Do not use .eq('email') - use UUID for lookups"
+          },
+          {
+            "selector": "MemberExpression[property.name='email'] > BinaryExpression[operator='===']",
+            "message": "UUID-Only Policy: Do not match users by email - use UUID (user.id === message.authorId)"
+          },
+          {
+            "selector": "Literal[value='x-user-email'], Literal[value='X-User-Email']",
+            "message": "UUID-Only Policy: Do not use x-user-email header - use x-user-id only"
+          },
+          {
+            "selector": "CallExpression[callee.name='setTimeout'][arguments.length>=2][arguments.1.value>=100]",
+            "message": "ANTI-PATTERN: setTimeout delays are race condition workarounds. Use proper async coordination: await events, promises, or dependency injection. See .cursorrules 'Async Coordination Best Practices' section."
+          },
+          {
+            "selector": "CallExpression[callee.name='setTimeout'][arguments.length>=2][arguments.1.type='Identifier']",
+            "message": "ANTI-PATTERN: setTimeout with variable delays suggests race condition workaround. Use proper async coordination instead. See .cursorrules 'Async Coordination Best Practices' section."
+          },
+          {
+            "selector": "AssignmentExpression[left.object.name='window'][left.property.name!='location'][left.property.name!='document'][left.property.name!='navigator'][left.property.name!='localStorage'][left.property.name!='sessionStorage']",
+            "message": "Window Usage Policy (RED-LINE): Do not assign to window object. Use ES6 exports/imports or StateManager instead. See .cursorrules 'Window Object Usage Policy' section."
+          },
+          {
+            "selector": "MemberExpression[object.name='window'][property.name='currentUser']",
+            "message": "Window Usage Policy (RED-LINE): Do not use window.currentUser. Use stateManagerInstance.getState('currentUser') or authManagerInstance.getCurrentUser() instead."
+          },
+          {
+            "selector": "MemberExpression[object.name='window'][property.name='api']",
+            "message": "Window Usage Policy (RED-LINE): Do not use window.api. Import api from './APIModule.js' instead."
+          },
+          {
+            "selector": "MemberExpression[object.name='window'][property.name='currentVisibilityData']",
+            "message": "Window Usage Policy (RED-LINE): Do not use window.currentVisibilityData. Use stateManagerInstance.getState('currentVisibilityData') instead."
+          },
+          {
+            "selector": "MemberExpression[object.name='window'][property.name='currentVisibilityDataUnfiltered']",
+            "message": "Window Usage Policy (RED-LINE): Do not use window.currentVisibilityDataUnfiltered. Use stateManagerInstance.getState('currentVisibilityDataUnfiltered') instead."
+          },
+          {
+            "selector": "MemberExpression[object.name='window'][property.name='currentUrlData']",
+            "message": "Window Usage Policy (RED-LINE): Do not use window.currentUrlData. Use stateManagerInstance.getState('currentUrlData') instead."
+          },
+          {
+            "selector": "MemberExpression[object.name='window'][property.name='supabase']",
+            "message": "Window Usage Policy (RED-LINE): Do not use window.supabase. Import Supabase client via ES6 imports instead."
+          },
+          {
+            "selector": "MemberExpression[object.name='window'][property.name='supabaseRealtimeClient']",
+            "message": "Window Usage Policy (RED-LINE): Do not use window.supabaseRealtimeClient. Use ES6 module exports/imports instead."
+          },
+          {
+            "selector": "MemberExpression[object.name='window'][property.name=/^(loadChatHistory|initializePresenceTracking|refreshVisibilityAvatars|refreshAllMessageAvatars|updateMessageInChat|removeMessageFromChat|addReactionToMessage|updateReactionInMessage|removeReactionFromMessage|updateUserAuraInUI|getCurrentUserId|StatusDotHelper|aurasIntegration|ENABLE_4STATE_STATUS)$/]",
+            "message": "Window Usage Policy (RED-LINE): Do not use window globals for application functions. Import these functions via ES6 imports instead."
+          },
+          {
+            "selector": "MemberExpression[object.name='window'][property.name=/^(RealtimeManager|initializeSupabaseRealtimeClient|initializeSomething)$/]",
+            "message": "Window Usage Policy (RED-LINE): Do not assign functions to window. Export them from modules and import via ES6 instead."
+          }
+        ]
+      }
     }
   ]
 }
-
-

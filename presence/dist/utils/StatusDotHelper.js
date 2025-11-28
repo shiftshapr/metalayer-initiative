@@ -123,9 +123,5 @@ export class StatusDotHelper {
         return typeof window !== 'undefined' && window.ENABLE_4STATE_STATUS !== false;
     }
 }
-// Export for use in other modules
-if (typeof window !== 'undefined') {
-    // Use Object.assign to avoid strict type checking issues
-    Object.assign(window, { StatusDotHelper });
-}
+// Export removed - use ES6 imports instead of window.StatusDotHelper
 export default StatusDotHelper;

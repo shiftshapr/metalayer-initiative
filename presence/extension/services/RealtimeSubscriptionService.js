@@ -5,6 +5,8 @@
  * Uses anon key + RLS for secure, filtered subscriptions.
  */
 import { messageStore } from './MessageStore.js';
+import { handleError } from '../utils/ErrorHandler.js';
+import { Logger } from '../utils/Logger.js';
 export class RealtimeSubscriptionService {
     constructor(supabaseClient) {
         this.channels = new Map();
@@ -19,18 +21,18 @@ export class RealtimeSubscriptionService {
             return true;
         }
         if (!this.supabase || !this.supabase.realtime) {
-            console.error('RealtimeSubscriptionService: Supabase client not available');
+            Logger.error('RealtimeSubscriptionService: Supabase client not available', null, 'general');
             return false;
         }
         this.isInitialized = true;
-        console.log('✅ RealtimeSubscriptionService: Initialized');
+        Logger.debug('✅ RealtimeSubscriptionService: Initialized', null, 'general');
         return true;
     }
     /**
      * Subscribe to messages for a page
      */
     async subscribeToPage(config) {
-        const { pageId, communityId = 'abe5ec85-4ba6-456f-adaf-03d7d51cecf4', onError } = config;
+        const { pageId, onError } = config;
         if (!this.isInitialized) {
             const initialized = await this.initialize();
             if (!initialized) {
@@ -41,53 +43,70 @@ export class RealtimeSubscriptionService {
         this.unsubscribeFromPage(pageId);
         try {
             const channelName = `messages:${pageId}`;
-            const channelBase = this.supabase.channel(channelName);
-            const channelChain = channelBase
-                .on('postgres_changes', {
+            // Use proper Supabase channel type - channels support method chaining
+            const channel = this.supabase.channel(channelName);
+            // Set up INSERT listener
+            channel.on('postgres_changes', {
                 event: 'INSERT',
                 schema: 'public',
                 table: 'messages',
                 filter: `page_id=eq.${pageId}`
             }, (payload) => {
-                const p = payload;
-                this.handleMessageInsert(p.new);
+                const inserted = payload.new;
+                if (inserted) {
+                    this.handleMessageInsert(inserted);
+                }
             });
-            const channel = channelChain
-                .on('postgres_changes', {
+            // Set up UPDATE listener
+            channel.on('postgres_changes', {
                 event: 'UPDATE',
                 schema: 'public',
                 table: 'messages',
                 filter: `page_id=eq.${pageId}`
             }, (payload) => {
-                const p = payload;
-                this.handleMessageUpdate(p.new);
-            })
-                .on('postgres_changes', {
+                const updated = payload.new;
+                if (updated) {
+                    this.handleMessageUpdate(updated);
+                }
+            });
+            // Set up DELETE listener
+            channel.on('postgres_changes', {
                 event: 'DELETE',
                 schema: 'public',
                 table: 'messages',
                 filter: `page_id=eq.${pageId}`
             }, (payload) => {
-                const p = payload;
-                this.handleMessageDelete(p.old);
+                const removed = payload.old;
+                if (removed) {
+                    this.handleMessageDelete(removed);
+                }
             });
             channel.subscribe((status, err) => {
                 if (err) {
-                    console.error('RealtimeSubscriptionService: Subscription error:', err);
+                    Logger.error('RealtimeSubscriptionService: Subscription error:', err, 'general');
                     if (onError) {
                         onError(err);
                     }
                     this.showNotification('Real-time connection error. Some updates may be delayed.');
                 }
                 else if (status === 'SUBSCRIBED') {
-                    console.log(`✅ RealtimeSubscriptionService: Subscribed to ${channelName}`);
+                    Logger.debug(`✅ RealtimeSubscriptionService: Subscribed to ${channelName}`, null, 'general');
                 }
             });
-            this.channels.set(pageId, channelBase);
+            this.channels.set(pageId, channel);
             return true;
         }
         catch (error) {
-            console.error('RealtimeSubscriptionService: Error subscribing:', error);
+            handleError(error, {
+                log: true,
+                logLevel: 'error',
+                context: {
+                    operation: 'catch',
+                    component: 'RealtimeSubscriptionService',
+                    pageId
+                }
+            });
+            ;
             if (onError) {
                 onError(error instanceof Error ? error : new Error(String(error)));
             }
@@ -100,10 +119,19 @@ export class RealtimeSubscriptionService {
     unsubscribeFromPage(pageId) {
         const channel = this.channels.get(pageId);
         if (channel) {
+            // Supabase client has removeChannel method
             const supabaseWithRemove = this.supabase;
-            supabaseWithRemove.removeChannel?.(channel);
+            if (supabaseWithRemove && typeof supabaseWithRemove.removeChannel === 'function') {
+                supabaseWithRemove.removeChannel(channel);
+            }
+            else {
+                // Fallback: unsubscribe from channel directly
+                if (typeof channel.unsubscribe === 'function') {
+                    channel.unsubscribe();
+                }
+            }
             this.channels.delete(pageId);
-            console.log(`✅ RealtimeSubscriptionService: Unsubscribed from ${pageId}`);
+            Logger.debug(`✅ RealtimeSubscriptionService: Unsubscribed from ${pageId}`, null, 'general');
         }
     }
     /**
@@ -118,7 +146,7 @@ export class RealtimeSubscriptionService {
      * Handle message insert (new message)
      */
     handleMessageInsert(message) {
-        console.log('📨 RealtimeSubscriptionService: New message:', message.id);
+        Logger.debug('📨 RealtimeSubscriptionService: New message:', message.id, 'general');
         // Dispatch event for MessageStore to handle
         if (typeof window !== 'undefined') {
             window.dispatchEvent(new CustomEvent('realtime-message', {
@@ -132,7 +160,7 @@ export class RealtimeSubscriptionService {
      * Handle message update
      */
     handleMessageUpdate(message) {
-        console.log('✏️ RealtimeSubscriptionService: Message updated:', message.id);
+        Logger.debug('✏️ RealtimeSubscriptionService: Message updated:', message.id, 'general');
         if (typeof window !== 'undefined') {
             window.dispatchEvent(new CustomEvent('realtime-message-updated', {
                 detail: message
@@ -145,7 +173,7 @@ export class RealtimeSubscriptionService {
      * Handle message delete
      */
     handleMessageDelete(message) {
-        console.log('🗑️ RealtimeSubscriptionService: Message deleted:', message.id);
+        Logger.debug('🗑️ RealtimeSubscriptionService: Message deleted:', message.id, 'general');
         if (typeof window !== 'undefined') {
             window.dispatchEvent(new CustomEvent('realtime-message-deleted', {
                 detail: message
@@ -192,3 +220,9 @@ export function initializeRealtimeSubscriptionService(supabaseClient) {
 export function getRealtimeSubscriptionService() {
     return realtimeSubscriptionService;
 }
+export const supabaseRealtimeApi = {
+    RealtimeSubscriptionService,
+    initializeRealtimeSubscriptionService,
+    getRealtimeSubscriptionService
+};
+export default supabaseRealtimeApi;

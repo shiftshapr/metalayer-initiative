@@ -1,5 +1,5 @@
 {
-  "name": "metalayer-initiative",
+  "name": "canopi",
   "version": "1.0.0",
   "description": "Metaweb-inspired coordination layer enabling human-avatar (agent) interaction with community-aware policies, messaging, and presence tracking",
   "main": "app.js",

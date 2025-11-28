@@ -1,169 +1,303 @@
 /**
- * Shared Type Definitions
- * Common types used across the application
+ * Core Type Definitions
+ * Shared types used across the application
  */
+export * from './api.js';
+export * from './events.js';
+export * from './notifications.js';
+export * from './provenance.js';
+export * from './subscriptions.js';
+export * from './anchors.js';
+export * from './supabaseTables.js';
+export * from './realtime.js';
 export interface User {
-    id: string;
-    name?: string;
+    id?: string;
     email?: string;
-    avatarUrl?: string;
+    name?: string;
     handle?: string;
-    communityId?: string;
-    lastSeen?: string | Date;
-    status?: 'online' | 'offline' | 'inactive' | 'AVAILABLE' | 'BUSY' | 'AWAY';
+    avatarUrl?: string;
     auraColor?: string;
-    auraIntensity?: number;
-    isActive?: boolean;
-    userMetadata?: any;
-    isVisible?: boolean;
-    visibilityEnabled?: boolean;
+    headline?: string;
     displayName?: string;
-    availability?: string;
+    userId?: string;
+    communities?: string[] | Array<{
+        id: string;
+        name: string;
+        [key: string]: unknown;
+    }>;
+    [key: string]: unknown;
+}
+export interface Attachment {
+    id: string;
+    type: 'image' | 'audio' | 'video';
+    url: string;
+    thumbnailUrl?: string;
+    filename: string;
+    size: number;
+    mimeType: string;
+}
+export interface EmojiMetadata {
+    emojis?: string[];
+    emojiCount?: number;
+    hasEmoji?: boolean;
+}
+export interface FocusContext {
+    mode: 'default' | 'parent-in-focus' | 'child-in-focus';
+    parentId?: string;
+    childId?: string;
 }
 export interface Message {
     id: string;
     content: string;
+    authorId: string;
+    communityId?: string;
+    pageId?: string;
     parentId?: string | null;
     author?: User;
-    authorId: string;
-    communityId: string;
+    createdAt: Date | string;
+    updatedAt: Date | string;
+    isReply?: boolean;
+    hasReplies?: boolean;
+    replyCount?: number;
+    messageKind?: 'TEXT' | 'IMAGE' | 'AUDIO' | 'VIDEO' | 'MIXED';
+    attachments?: Attachment[];
+    emojiMetadata?: EmojiMetadata;
+    focusContext?: FocusContext;
+    cameraSource?: string;
+    hasSensitiveMedia?: boolean;
     conversationId?: string;
-    pageId?: string;
-    rawUrl?: string | null;
-    normalizedUrl?: string | null;
-    createdAt: string | Date;
-    updatedAt?: string | Date;
-    reactions?: Reaction[];
     optionalContent?: string | null;
-    uri?: string | null;
-    threadId?: string | null;
-    deletedAt?: string | Date | null;
-    bookmarks?: Bookmark[];
     bookmarkCount?: number;
     isBookmarked?: boolean;
-    shares?: Share[];
+    [key: string]: unknown;
+}
+/**
+ * Raw message payload from API/database
+ * May have different field names (snake_case, camelCase, etc.)
+ */
+export interface RawMessagePayload {
+    id?: string;
+    messageId?: string;
+    uuid?: string;
+    content?: string;
+    body?: string;
+    message?: string;
+    authorId?: string;
+    author_id?: string;
+    userId?: string;
+    user_id?: string;
+    communityId?: string;
+    community_id?: string;
+    pageId?: string;
+    page_id?: string;
+    parentId?: string | null;
+    parent_id?: string | null;
+    replyTo?: string | null;
+    conversationId?: string;
+    conversation_id?: string;
+    threadId?: string;
+    thread_id?: string;
+    createdAt?: Date | string;
+    created_at?: Date | string;
+    timestamp?: Date | string;
+    updatedAt?: Date | string;
+    updated_at?: Date | string;
+    modified_at?: Date | string;
+    deletedAt?: Date | string;
+    deleted_at?: Date | string;
+    author?: User | Record<string, unknown>;
+    AppUser?: User | Record<string, unknown>;
+    user?: User | Record<string, unknown>;
+    reactions?: Array<Record<string, unknown>>;
+    optionalContent?: string | null;
+    optional_content?: string | null;
+    uri?: string;
+    url?: string;
+    messageUrl?: string;
+    rawUrl?: string;
+    normalizedUrl?: string;
+    isBookmarked?: boolean;
+    bookmarkCount?: number;
     shareCount?: number;
     isShared?: boolean;
+    authorEmail?: string;
+    [key: string]: unknown;
 }
-export interface Reaction {
+export interface Community {
     id: string;
-    emoji: string;
-    messageId: string;
-    AppUser?: User;
+    name: string;
+    description?: string;
+    avatarUrl?: string;
+    bannerUrl?: string;
+    memberCount?: number;
+    isPublic?: boolean;
+    isPrimary?: boolean;
+    createdAt?: Date | string;
+    updatedAt?: Date | string;
+    settings?: {
+        allowPublicMessages?: boolean;
+        requireApproval?: boolean;
+        [key: string]: unknown;
+    };
+    metadata?: {
+        [key: string]: unknown;
+    };
+    [key: string]: unknown;
 }
-export interface Bookmark {
-    id: string;
-    userId: string;
-    messageId: string;
-    categoryId?: string;
-    comments?: string;
-    isPrivate?: boolean;
-    tags?: string[];
-    priority?: number;
-    sortOrder?: number;
-    archived?: boolean;
-    createdAt?: string | Date;
-    updatedAt?: string | Date;
-    deletedAt?: string | Date | null;
-    AppUser?: User;
-    message?: Message;
-}
-export type ShareType = 'link' | 'twitter' | 'navigate' | 'focus' | 'notify' | 'reference';
-export interface Share {
-    id?: string;
-    messageId: string;
-    userId?: string;
-    shareType: ShareType;
-    shareUrl?: string;
-    createdAt?: string | Date;
-    pageUrl?: string;
-    conversationId?: string;
-    messageUrl?: string;
-    message?: Message;
-    user?: User;
-}
-export interface VisibilityData {
-    id: string;
-    userId: string;
-    pageId: string;
-    isVisible: boolean;
-    enterTime?: string;
-    lastSeen?: string;
-}
-export interface UrlData {
-    pageId: string;
-    rawUrl: string;
-    normalizedUrl: string;
-}
-export interface ChatData {
-    messages: Message[];
-    communityId: string;
-    pageId: string;
-}
+export type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'success';
 export interface StateData {
-    [key: string]: any;
+    [key: string]: unknown;
 }
 export interface StateManager {
-    initialize(initialState: StateData): Promise<void>;
-    get(key: string): Promise<any>;
-    set(key: string, value: any): Promise<void>;
+    initialize(initialState?: StateData): Promise<void>;
+    get(key: string): Promise<unknown>;
+    set(key: string, value: unknown): Promise<void>;
     getAll(): Promise<StateData>;
+    getState(path: string): unknown;
+    setState(path: string, value: unknown, persist?: boolean): void;
+    subscribe(path: string, callback: (newValue: unknown, oldValue: unknown, path: string) => void): () => void;
+    getHistory(path?: string): unknown[];
+    getSnapshot(): unknown;
+    resetState(path?: string): void;
+    cleanup(): void;
 }
-export type EventCallback = (data?: any) => void | Promise<void>;
-export type EventType = string;
-export interface EventBus {
-    on(event: EventType, callback: EventCallback): string;
-    off(event: EventType, listenerId: string): void;
-    emit(event: EventType, data?: any): void;
+export interface SupabaseQueryBuilder<T = Record<string, unknown>> {
+    select: (columns: string) => SupabaseFilterBuilder<T>;
+    insert: (values: unknown) => SupabaseFilterBuilder<T>;
+    update: (values: unknown) => SupabaseFilterBuilder<T>;
+    delete: () => SupabaseFilterBuilder<T>;
+}
+export interface SupabaseFilterBuilder<T = Record<string, unknown>> {
+    eq: (column: string, value: string | boolean | number) => SupabaseFilterBuilder<T>;
+    neq: (column: string, value: string | boolean | number) => SupabaseFilterBuilder<T>;
+    gt: (column: string, value: string | number) => SupabaseFilterBuilder<T>;
+    lt: (column: string, value: string | number) => SupabaseFilterBuilder<T>;
+    gte: (column: string, value: string | number) => SupabaseFilterBuilder<T>;
+    lte: (column: string, value: string | number) => SupabaseFilterBuilder<T>;
+    like: (column: string, pattern: string) => SupabaseFilterBuilder<T>;
+    ilike: (column: string, pattern: string) => SupabaseFilterBuilder<T>;
+    is: (column: string, value: unknown) => SupabaseFilterBuilder<T>;
+    in: (column: string, values: unknown[]) => SupabaseFilterBuilder<T>;
+    contains: (column: string, value: unknown) => SupabaseFilterBuilder<T>;
+    order: (column: string, options?: {
+        ascending?: boolean;
+    }) => Promise<{
+        data: T[] | null;
+        error: {
+            message: string;
+            code?: string;
+        } | null;
+    }>;
+    limit: (count: number) => SupabaseFilterBuilder<T>;
+    range: (from: number, to: number) => SupabaseFilterBuilder<T>;
+    single: () => Promise<{
+        data: T | null;
+        error: {
+            message: string;
+            code?: string;
+        } | null;
+    }>;
+    maybeSingle: () => Promise<{
+        data: T | null;
+        error: {
+            message: string;
+            code?: string;
+        } | null;
+    }>;
+    then: <U>(onfulfilled?: (value: {
+        data: T[] | null;
+        error: {
+            message: string;
+            code?: string;
+        } | null;
+    }) => U | PromiseLike<U>, onrejected?: (reason: unknown) => U | PromiseLike<U>) => Promise<U>;
+}
+export interface SupabaseRealtimeChannel {
+    on: (event: string, filter: {
+        event?: string;
+        schema?: string;
+        table?: string;
+        filter?: string;
+    }, callback: (payload?: {
+        eventType?: string;
+        new?: unknown;
+        old?: unknown;
+        key?: string;
+        newPresences?: unknown[];
+        leftPresences?: unknown[];
+    }) => void) => SupabaseRealtimeChannel;
+    subscribe: (callback?: (status: string, err?: Error) => void | Promise<void>) => void;
+    unsubscribe: () => void;
+    send: (type: string, payload: unknown) => void;
+    presenceState?: () => unknown;
+    track?: (data: {
+        userId?: string;
+        userName?: string;
+        [key: string]: unknown;
+    }) => Promise<void>;
 }
 export interface SupabaseClient {
-    channel: (name: string) => SupabaseChannel;
-    from: (table: string) => SupabaseQueryBuilder;
+    from: <T = Record<string, unknown>>(table: string) => SupabaseQueryBuilder<T>;
+    channel: (name: string) => SupabaseRealtimeChannel;
+    removeChannel: (channel: SupabaseRealtimeChannel) => void;
     auth: {
-        getUser: () => Promise<any>;
-        signInWithOAuth: (options: any) => Promise<any>;
-        signOut: () => Promise<any>;
-        onAuthStateChange: (callback: (event: string, session: any) => void) => {
+        getSession: () => Promise<{
             data: {
-                subscription: any;
+                session: {
+                    user: {
+                        id?: string;
+                        email?: string;
+                    };
+                    expires_at: number;
+                } | null;
+            } | null;
+            error: unknown;
+        }>;
+        onAuthStateChange: (callback: (event: string, session: unknown) => void) => {
+            data: {
+                subscription: unknown;
             };
-            unsubscribe: () => void;
         };
+        [key: string]: unknown;
     };
-    [key: string]: any;
+    realtime?: {
+        channel: (name: string) => SupabaseRealtimeChannel;
+        [key: string]: unknown;
+    };
+    [key: string]: unknown;
 }
-export interface SupabaseChannel {
-    on: (event: string, callback: (payload: any) => void) => SupabaseChannel;
-    subscribe: (callback: (status: string) => void) => SupabaseChannel;
-    unsubscribe: () => void;
+export type { ApiResponse as APIResponse } from './api.js';
+export interface Reaction {
+    id: string;
+    messageId: string;
+    userId: string;
+    type: string;
+    createdAt?: Date | string;
+    [key: string]: unknown;
 }
-export interface SupabaseQueryBuilder {
-    select: (columns?: string) => SupabaseQueryBuilder;
-    insert: (data: any) => Promise<any>;
-    update: (data: any) => SupabaseQueryBuilder;
-    delete: () => SupabaseQueryBuilder;
-    eq: (column: string, value: any) => SupabaseQueryBuilder;
-    [key: string]: any;
+export interface PresenceData {
+    userId: string;
+    lastSeen: string;
+    pageId?: string;
+    status?: string;
+    [key: string]: unknown;
 }
-export interface APIRequestOptions {
-    method?: string;
-    headers?: Record<string, string>;
-    body?: any;
-    allow404?: boolean;
+export interface AurasIntegration {
+    initialize?: () => Promise<void>;
+    updateAura?: (userId: string, auraColor: string) => Promise<void>;
+    [key: string]: unknown;
 }
-export interface APIResponse<T = any> {
-    data?: T;
-    error?: string;
-    status?: number;
+export interface TabData {
+    id: string;
+    label: string;
+    content?: unknown;
+    active?: boolean;
+    [key: string]: unknown;
 }
-export type LogLevel = 'ERROR' | 'WARN' | 'INFO' | 'DEBUG' | 'SUCCESS';
-export interface Logger {
-    error(message: string, ...args: any[]): void;
-    warn(message: string, ...args: any[]): void;
-    info(message: string, ...args: any[]): void;
-    debug(message: string, ...args: any[]): void;
-    setLevel(level: LogLevel): void;
+export interface Preferences {
+    theme?: string;
+    displayName?: string;
+    headline?: string;
+    [key: string]: unknown;
 }
-export * from './provenance';
-export * from './anchors';
 //# sourceMappingURL=index.d.ts.map

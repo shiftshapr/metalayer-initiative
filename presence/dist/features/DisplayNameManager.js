@@ -1,7 +1,7 @@
-/**
- * DISPLAY NAME MANAGER - CRUD Operations for Display Name
- * Handles Create, Read, Update, Delete operations for user display name
- */
+import { createProfileSettingChannel } from './settings/helpers/profileSettingChannel.js';
+import { ensureManager, waitForPreferencesManager, getSettingContracts } from '../sidepanel/windowInjections.js';
+import { handleError } from '../utils/ErrorHandler.js';
+import { Logger } from '../utils/Logger.js';
 class DisplayNameManager {
     constructor() {
         this.minLength = 4; // Min characters for display name
@@ -10,6 +10,7 @@ class DisplayNameManager {
         this.originalDisplayName = null;
         this.isInitialized = false;
         this.isEditing = false;
+        this.storage = createProfileSettingChannel('displayName');
         this.displayNameInput = null;
         this.charCount = null;
         this.charMax = null;
@@ -28,10 +29,10 @@ class DisplayNameManager {
      */
     async initialize() {
         if (this.isInitialized) {
-            console.log('⚠️ DISPLAY_NAME: Already initialized');
+            Logger.debug('⚠️ DISPLAY_NAME: Already initialized', null, 'display-name');
             return;
         }
-        console.log('🔧 DISPLAY_NAME: Initializing display name manager...');
+        Logger.debug('🔧 DISPLAY_NAME: Initializing display name manager...', null, 'display-name');
         try {
             // Get DOM elements
             this.displayNameInput = document.getElementById('display-name-input');
@@ -47,7 +48,7 @@ class DisplayNameManager {
             this.menuDelete = document.getElementById('display-name-menu-delete');
             this.statusDiv = document.getElementById('display-name-status');
             if (!this.displayNameInput || !this.charCount || !this.saveBtn || !this.cancelBtn) {
-                console.warn('⚠️ DISPLAY_NAME: Required DOM elements not found');
+                Logger.warn('⚠️ DISPLAY_NAME: Required DOM elements not found', null, 'display-name');
                 return;
             }
             if (this.charMax) {
@@ -60,10 +61,18 @@ class DisplayNameManager {
             // Set up event listeners
             this.setupEventListeners();
             this.isInitialized = true;
-            console.log('✅ DISPLAY_NAME: Display name manager initialized');
+            Logger.debug('✅ DISPLAY_NAME: Display name manager initialized', null, 'display-name');
         }
         catch (error) {
-            console.error('❌ DISPLAY_NAME: Failed to initialize:', error);
+            handleError(error, {
+                log: true,
+                logLevel: 'error',
+                context: {
+                    operation: 'catch',
+                    component: 'DisplayName'
+                }
+            });
+            ;
         }
     }
     /**
@@ -136,7 +145,7 @@ class DisplayNameManager {
                 this.updateUIState();
             }
         });
-        console.log('✅ DISPLAY_NAME: Event listeners attached');
+        Logger.debug('✅ DISPLAY_NAME: Event listeners attached', null, 'display-name');
     }
     /**
      * Update character count display
@@ -167,92 +176,49 @@ class DisplayNameManager {
      */
     async readDisplayName() {
         try {
-            console.log('📖 DISPLAY_NAME: Reading display name...');
-            console.log('🔍 DIAGNOSTIC: Reading display name from UserPreferencesManager');
-            // Use UserPreferencesManager (unified system)
-            const userPreferencesManager = window.userPreferencesManager;
-            if (userPreferencesManager && userPreferencesManager.isInitialized) {
-                const displayName = await userPreferencesManager.getPreference('displayName');
-                this.currentDisplayName = (typeof displayName === 'string' ? displayName : '') || '';
-                this.originalDisplayName = (typeof displayName === 'string' ? displayName : '') || '';
-                if (this.displayNameInput) {
-                    this.displayNameInput.value = this.currentDisplayName;
-                }
-                this.updateCharCount();
-                this.updateUIState();
-                console.log('✅ DISPLAY_NAME: Display name loaded from UserPreferencesManager');
-                console.log('🔍 DIAGNOSTIC: Display name value:', this.currentDisplayName);
-                return;
-            }
-            // Fallback to old system during transition
-            console.log('⚠️ DISPLAY_NAME: UserPreferencesManager not available, using fallback');
-            // Try Chrome storage first
-            const storageData = await chrome.storage.local.get(['displayName']);
-            if (storageData.displayName) {
-                this.currentDisplayName = storageData.displayName;
-                this.originalDisplayName = storageData.displayName;
-                if (this.displayNameInput) {
-                    this.displayNameInput.value = this.currentDisplayName;
-                }
-                this.updateCharCount();
-                this.updateUIState();
-                console.log('✅ DISPLAY_NAME: Display name loaded from Chrome storage');
-                return;
-            }
-            // Try API if available (DEPRECATED - will be removed after migration)
-            if (window.currentUser && window.currentUser.id) {
-                try {
-                    const authToken = await this.getAuthToken();
-                    const response = await fetch(`http://216.238.91.120:3002/v1/users/${window.currentUser.id}`, {
-                        method: 'GET',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${authToken}`
-                        }
-                    });
-                    if (response.ok) {
-                        const data = await response.json();
-                        // Try column first (new system) - FIX: Use camelCase displayName, not snake_case
-                        if (data.displayName) {
-                            this.currentDisplayName = data.displayName;
-                        }
-                        else if (data.display_name) {
-                            // Fallback to snake_case if API returns it
-                            this.currentDisplayName = data.display_name;
-                        }
-                        else if (data.preferences && data.preferences.displayName) {
-                            // Fallback to JSON (old system - DEPRECATED)
-                            this.currentDisplayName = data.preferences.displayName;
-                        }
-                        if (this.currentDisplayName) {
-                            this.originalDisplayName = this.currentDisplayName;
-                            if (this.displayNameInput) {
-                                this.displayNameInput.value = this.currentDisplayName;
-                            }
-                            this.updateCharCount();
-                            this.updateUIState();
-                            await chrome.storage.local.set({ displayName: this.currentDisplayName });
-                            console.log('✅ DISPLAY_NAME: Display name loaded from API');
-                            return;
-                        }
-                    }
-                }
-                catch (apiError) {
-                    console.warn('⚠️ DISPLAY_NAME: API read failed:', apiError);
-                }
-            }
-            // No display name found
-            this.currentDisplayName = '';
-            this.originalDisplayName = '';
+            Logger.debug('📖 DISPLAY_NAME: Reading display name...', null, 'display-name');
+            Logger.debug('🔍 DIAGNOSTIC: Reading display name via unified storage channel', null, 'display-name');
+            const displayName = await this.storage.read();
+            this.currentDisplayName = displayName || '';
+            this.originalDisplayName = displayName || '';
             if (this.displayNameInput) {
-                this.displayNameInput.value = '';
+                this.displayNameInput.value = this.currentDisplayName;
             }
             this.updateCharCount();
             this.updateUIState();
-            console.log('ℹ️ DISPLAY_NAME: No display name found, starting fresh');
+            if (displayName) {
+                Logger.debug('✅ DISPLAY_NAME: Display name loaded via profile setting channel', null, 'display-name');
+            }
+            else {
+                Logger.debug('ℹ️ DISPLAY_NAME: No display name found, starting fresh', 'display-name');
+            }
+            // If UserPreferencesManager wasn't ready, retry when it becomes available
+            const { userPreferencesManager } = getSettingContracts();
+            const prefsMgr = userPreferencesManager;
+            if (!prefsMgr?.isInitialized) {
+                Logger.debug('🔄 DISPLAY_NAME: UserPreferencesManager not ready, will retry when available', 'display-name');
+                const retryHandler = async () => {
+                    const contracts = getSettingContracts();
+                    const prefsMgr = contracts.userPreferencesManager;
+                    if (prefsMgr?.isInitialized) {
+                        window.removeEventListener('preferenceLoaded', retryHandler);
+                        Logger.debug('🔄 DISPLAY_NAME: UserPreferencesManager now ready, re-reading display name', 'display-name');
+                        await this.readDisplayName();
+                    }
+                };
+                window.addEventListener('preferenceLoaded', retryHandler);
+            }
         }
         catch (error) {
-            console.error('❌ DISPLAY_NAME: Failed to read display name:', error);
+            handleError(error, {
+                log: true,
+                logLevel: 'error',
+                context: {
+                    operation: 'catch',
+                    component: 'DisplayName'
+                }
+            });
+            ;
             this.showStatus('Error loading display name', 'error');
         }
     }
@@ -330,59 +296,25 @@ class DisplayNameManager {
                     return;
                 }
             }
-            console.log('💾 DISPLAY_NAME: Saving display name...');
-            // Use UserPreferencesManager (unified system)
-            const userPreferencesManager = window.userPreferencesManager;
-            if (userPreferencesManager && userPreferencesManager.isInitialized) {
-                // FIX: Save immediately (not batched) to ensure database save happens right away
-                await userPreferencesManager.savePreference('displayName', newDisplayName || null, { batch: false });
-                console.log('✅ DISPLAY_NAME: Display name saved via UserPreferencesManager');
-            }
-            else {
-                // Fallback to old system during transition
-                console.log('⚠️ DISPLAY_NAME: UserPreferencesManager not available, using fallback');
-                // Save to Chrome storage
-                await chrome.storage.local.set({ displayName: newDisplayName });
-                // Save to API (DEPRECATED - will be removed after migration)
-                if (window.currentUser && window.currentUser.id) {
-                    try {
-                        const authToken = await this.getAuthToken();
-                        const response = await fetch(`http://216.238.91.120:3002/v1/users/${window.currentUser.id}`, {
-                            method: 'PATCH',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'Authorization': `Bearer ${authToken}`
-                            },
-                            body: JSON.stringify({
-                                displayName: newDisplayName || null // FIX: Use camelCase to match database column
-                            })
-                        });
-                        if (response.ok) {
-                            console.log('✅ DISPLAY_NAME: Display name saved to API (fallback)');
-                        }
-                        else {
-                            console.warn('⚠️ DISPLAY_NAME: API save failed, but saved locally');
-                        }
-                    }
-                    catch (apiError) {
-                        console.warn('⚠️ DISPLAY_NAME: API save error, but saved locally:', apiError);
-                    }
-                }
-            }
+            Logger.debug('💾 DISPLAY_NAME: Saving display name...', null, 'display-name');
+            await this.storage.save(newDisplayName || null);
             this.currentDisplayName = newDisplayName;
             this.originalDisplayName = newDisplayName;
             this.isEditing = false;
             this.updateUIState();
-            // Update window.currentUser
-            if (window.currentUser) {
-                window.currentUser.displayName = newDisplayName;
-                window.currentUser.name = newDisplayName || window.currentUser.name;
-            }
             this.showStatus('Display name saved successfully', 'success');
-            console.log('✅ DISPLAY_NAME: Display name saved');
+            Logger.debug('✅ DISPLAY_NAME: Display name saved', null, 'display-name');
         }
         catch (error) {
-            console.error('❌ DISPLAY_NAME: Failed to save display name:', error);
+            handleError(error, {
+                log: true,
+                logLevel: 'error',
+                context: {
+                    operation: 'catch',
+                    component: 'DisplayName'
+                }
+            });
+            ;
             this.showStatus('Error saving display name', 'error');
         }
     }
@@ -391,9 +323,8 @@ class DisplayNameManager {
      */
     async deleteDisplayName() {
         try {
-            console.log('🗑️ DISPLAY_NAME: Deleting display name...');
-            // Delete from Chrome storage
-            await chrome.storage.local.remove(['displayName']);
+            Logger.debug('🗑️ DISPLAY_NAME: Deleting display name...', null, 'display-name');
+            await this.storage.delete();
             this.currentDisplayName = '';
             this.originalDisplayName = '';
             if (this.displayNameInput) {
@@ -403,42 +334,19 @@ class DisplayNameManager {
             this.isEditing = false;
             this.updateUIState();
             this.hideMenu();
-            // Delete from API if available
-            if (window.currentUser && window.currentUser.id) {
-                try {
-                    const authToken = await this.getAuthToken();
-                    const response = await fetch(`http://216.238.91.120:3002/v1/users/${window.currentUser.id}/preferences`, {
-                        method: 'PATCH',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${authToken}`
-                        },
-                        body: JSON.stringify({
-                            preferences: {
-                                displayName: null
-                            }
-                        })
-                    });
-                    if (response.ok) {
-                        console.log('✅ DISPLAY_NAME: Display name deleted from API');
-                    }
-                    else {
-                        console.warn('⚠️ DISPLAY_NAME: API delete failed, but deleted locally');
-                    }
-                }
-                catch (apiError) {
-                    console.warn('⚠️ DISPLAY_NAME: API delete error, but deleted locally:', apiError);
-                }
-            }
-            // Update window.currentUser
-            if (window.currentUser) {
-                window.currentUser.displayName = null;
-            }
             this.showStatus('Display name deleted successfully', 'success');
-            console.log('✅ DISPLAY_NAME: Display name deleted');
+            Logger.debug('✅ DISPLAY_NAME: Display name deleted', null, 'display-name');
         }
         catch (error) {
-            console.error('❌ DISPLAY_NAME: Failed to delete display name:', error);
+            handleError(error, {
+                log: true,
+                logLevel: 'error',
+                context: {
+                    operation: 'catch',
+                    component: 'DisplayName'
+                }
+            });
+            ;
             this.showStatus('Error deleting display name', 'error');
         }
     }
@@ -453,7 +361,7 @@ class DisplayNameManager {
         this.isEditing = false;
         this.updateUIState();
         this.showStatus('Changes cancelled', 'info');
-        console.log('❌ DISPLAY_NAME: Edit cancelled');
+        Logger.debug('❌ DISPLAY_NAME: Edit cancelled', null, 'display-name');
     }
     /**
      * Show status message
@@ -485,31 +393,35 @@ class DisplayNameManager {
             this.statusDiv.style.display = 'none';
         }, 3000);
     }
-    /**
-     * Get auth token for API calls
-     */
-    async getAuthToken() {
-        try {
-            const authData = await chrome.storage.local.get(['authToken', 'googleAccessToken']);
-            return (authData.authToken || authData.googleAccessToken || '');
-        }
-        catch (error) {
-            console.warn('⚠️ DISPLAY_NAME: Failed to get auth token:', error);
-            return '';
-        }
+}
+// Initialize when DOM is ready and UserPreferencesManager is available
+const bootstrapDisplayNameManager = async () => {
+    try {
+        const manager = ensureManager('displayNameManager', () => new DisplayNameManager());
+        // Wait for UserPreferencesManager to be ready before initializing
+        await waitForPreferencesManager();
+        await manager.initialize();
     }
+    catch (error) {
+        handleError(error, {
+            log: true,
+            logLevel: 'error',
+            context: {
+                operation: 'bootstrapDisplayNameManager',
+                component: 'DisplayNameManager'
+            }
+        });
+    }
+};
+if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+            void bootstrapDisplayNameManager();
+        });
+    }
+    else {
+        void bootstrapDisplayNameManager();
+    }
+    // Constructor export removed - use window.displayNameManager instance instead
 }
-// Initialize when DOM is ready
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-        window.displayNameManager = new DisplayNameManager();
-        window.displayNameManager?.initialize();
-    });
-}
-else {
-    window.displayNameManager = new DisplayNameManager();
-    window.displayNameManager?.initialize();
-}
-// Export for use in other modules
-window.DisplayNameManager = DisplayNameManager;
 export { DisplayNameManager };

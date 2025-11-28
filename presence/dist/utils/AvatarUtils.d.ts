@@ -2,7 +2,7 @@
  * AVATAR UTILITIES - TypeScript Version
  * Centralized avatar management system
  */
-import { User } from '../types/index.js';
+import type { User } from '../types/index.js';
 export interface AvatarOptions {
     size?: number;
     showAura?: boolean;
@@ -20,6 +20,14 @@ declare class AvatarUtils {
      * Get avatar URL for a user
      */
     static getAvatarUrl(user: User, context?: string): Promise<AvatarData>;
+    /**
+     * Convert hex color to rgba with opacity
+     */
+    private static hexToRgba;
+    /**
+     * Get aura intensity from user object or preferences
+     */
+    private static getAuraIntensity;
     /**
      * Create unified avatar HTML
      */

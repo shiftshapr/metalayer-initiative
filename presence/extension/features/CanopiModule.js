@@ -12,7 +12,6 @@ import { ensureMessageContent, formatAuthorName, formatUserHandle } from '../uti
 import { initializeMessageSystemIntegration } from './MessageSystemIntegration.js';
 import { UnifiedMessageDisplay } from '../components/UnifiedMessageDisplay.js';
 import { UnifiedMessageRenderer } from '../utils/UnifiedMessageRenderer.js';
-// ROOT CAUSE FIX: Removed LegacyIntegrationContext - all references must use proper TypeScript imports or window functions
 // Helper to get window functions (set by other modules)
 const getWindowFunction = (name) => {
     if (typeof window === 'undefined')
@@ -1251,7 +1250,7 @@ async function handleMessageFocus(messageOrId) {
             onMessageClick: (msg) => {
                 if (!msg.author)
                     return;
-                const legacyMessage = {
+                const message = {
                     id: msg.id,
                     content: msg.content,
                     authorId: msg.author.id || '',
@@ -1261,12 +1260,12 @@ async function handleMessageFocus(messageOrId) {
                     createdAt: msg.createdAt,
                     updatedAt: msg.updatedAt
                 };
-                handleMessageFocus(legacyMessage);
+                handleMessageFocus(message);
             },
             onReplyClick: async (msg) => {
                 if (!msg.author)
                     return;
-                const legacyMessage = {
+                const message = {
                     id: msg.id,
                     content: msg.content,
                     authorId: msg.author.id || '',
@@ -1276,12 +1275,12 @@ async function handleMessageFocus(messageOrId) {
                     createdAt: msg.createdAt,
                     updatedAt: msg.updatedAt
                 };
-                await handleReplyToMessage(legacyMessage);
+                await handleReplyToMessage(message);
             },
             onFocusClick: (msg) => {
                 if (!msg.author)
                     return;
-                const legacyMessage = {
+                const message = {
                     id: msg.id,
                     content: msg.content,
                     authorId: msg.author.id || '',
@@ -1291,7 +1290,7 @@ async function handleMessageFocus(messageOrId) {
                     createdAt: msg.createdAt,
                     updatedAt: msg.updatedAt
                 };
-                handleMessageFocus(legacyMessage);
+                handleMessageFocus(message);
             }
         });
         console.log('🎯 FOCUS: Message focused using focus mode');
@@ -1338,12 +1337,45 @@ async function loadChatHistory(communityIdOrRawUrl, activeCommunitiesOrUndefined
             const urlData = getCurrentUrlData();
             rawUrl = urlData?.rawUrl || getCurrentLocationHref();
         }
-        // ROOT CAUSE FIX: Never use sidepanel URLs - they're not real web pages
+        // ROOT CAUSE FIX: If rawUrl is still empty (e.g., we're in sidepanel), try to get active tab URL
         if (!rawUrl || rawUrl.includes('sidepanel') || rawUrl.startsWith('chrome-extension://') || rawUrl.startsWith('chrome://')) {
-            console.warn('⚠️ loadChatHistory: No valid web page URL available (sidepanel URLs are not valid for message loading)');
-            console.warn('⚠️ loadChatHistory: rawUrl was:', rawUrl);
-            console.warn('⚠️ loadChatHistory: currentUrlData was:', getCurrentUrlData());
-            return;
+            // Try to get active tab URL as fallback
+            if (typeof chrome !== 'undefined' && chrome.tabs) {
+                try {
+                    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+                    if (tabs && tabs.length > 0 && tabs[0].url) {
+                        const tabUrl = tabs[0].url;
+                        // Only use if it's a valid web page URL
+                        if (tabUrl && !tabUrl.startsWith('chrome://') && !tabUrl.startsWith('chrome-extension://') && !tabUrl.includes('sidepanel')) {
+                            console.log('📜 loadChatHistory: Using active tab URL as fallback:', tabUrl);
+                            rawUrl = tabUrl;
+                            // Update currentUrlData with the tab URL so future calls work
+                            const normalizer = getNormalizeUrl();
+                            if (normalizer) {
+                                const normalized = await normalizer(tabUrl);
+                                if (normalized) {
+                                    stateManagerInstance.setState('currentUrlData', {
+                                        rawUrl: tabUrl,
+                                        pageId: normalized.pageId,
+                                        normalizedUrl: normalized.normalizedUrl,
+                                        canonicalUrl: normalized.canonicalUrl
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+                catch (error) {
+                    console.warn('⚠️ loadChatHistory: Failed to get active tab URL:', error);
+                }
+            }
+            // If still no valid URL, return early
+            if (!rawUrl || rawUrl.includes('sidepanel') || rawUrl.startsWith('chrome-extension://') || rawUrl.startsWith('chrome://')) {
+                console.warn('⚠️ loadChatHistory: No valid web page URL available (sidepanel URLs are not valid for message loading)');
+                console.warn('⚠️ loadChatHistory: rawUrl was:', rawUrl);
+                console.warn('⚠️ loadChatHistory: currentUrlData was:', getCurrentUrlData());
+                return;
+            }
         }
         // Get active communities if not provided
         // CRITICAL: Retry mechanism - communities may not be loaded yet
@@ -1462,7 +1494,7 @@ async function loadChatHistory(communityIdOrRawUrl, activeCommunitiesOrUndefined
                     if (!message.author)
                         return;
                     // Convert MessageStoreMessage to Message for handleMessageFocus
-                    const legacyMessage = {
+                    const msg = {
                         id: message.id,
                         content: message.content,
                         authorId: message.author.id || '',
@@ -1472,13 +1504,13 @@ async function loadChatHistory(communityIdOrRawUrl, activeCommunitiesOrUndefined
                         createdAt: message.createdAt,
                         updatedAt: message.updatedAt
                     };
-                    handleMessageFocus(legacyMessage);
+                    handleMessageFocus(msg);
                 },
                 onFocusClick: (message) => {
                     if (!message.author)
                         return;
                     // CRITICAL FIX: onFocusClick should trigger focus mode
-                    const legacyMessage = {
+                    const msg = {
                         id: message.id,
                         content: message.content,
                         authorId: message.author.id || '',
@@ -1488,12 +1520,12 @@ async function loadChatHistory(communityIdOrRawUrl, activeCommunitiesOrUndefined
                         createdAt: message.createdAt,
                         updatedAt: message.updatedAt
                     };
-                    handleMessageFocus(legacyMessage);
+                    handleMessageFocus(msg);
                 },
                 onReplyClick: async (message) => {
                     if (!message.author)
                         return;
-                    const legacyMessage = {
+                    const msg = {
                         id: message.id,
                         content: message.content,
                         authorId: message.author.id || '',
@@ -1503,7 +1535,7 @@ async function loadChatHistory(communityIdOrRawUrl, activeCommunitiesOrUndefined
                         createdAt: message.createdAt,
                         updatedAt: message.updatedAt
                     };
-                    await handleReplyToMessage(legacyMessage);
+                    await handleReplyToMessage(msg);
                 }
             });
         }
@@ -2470,7 +2502,6 @@ async function sendChatMessage() {
     const content = chatTextarea.value.trim();
     if (!content)
         return;
-    // Legacy reply handling removed - replies now use UnifiedMessageModal
     // Only handle editing here
     const editingMessageId = chatTextarea.dataset.editingMessageId || null;
     try {
@@ -2527,11 +2558,10 @@ async function sendChatMessage() {
 }
 // ES6 MODULE EXPORTS ONLY - No window globals
 // All functions are exported as ES6 modules for proper type safety and tree shaking
-const attachLegacyIntegrations = () => {
+const attachWindowIntegrations = () => {
     if (typeof window === 'undefined') {
         return;
     }
-    // ROOT CAUSE FIX: Removed LegacyIntegrationContext - use window directly
     const win = window;
     win.loadChatHistory = loadChatHistory;
     win.addMessageToChat = addMessageToChat;
@@ -2561,7 +2591,7 @@ const attachLegacyIntegrations = () => {
         await handleReplyToMessage(message);
     };
 };
-attachLegacyIntegrations();
+attachWindowIntegrations();
 // ES6 module exports
 export { CanopiModule, addMessageToChat, createUnifiedMessageElement, updateReactionDisplay, addMessageActionListeners, loadMessageReactions, handleMessageFocus, loadChatHistory, // CRITICAL: Export for module imports
 updateMessageInChat, removeMessageFromChat, getSenderName, convertUrlsToLinks, formatMessageTime, getSenderInitial, canUserEditMessage, checkAndAddThreadToggle, toggleThreadReplies, sendMessageViaSupabase, getSenderAvatar, handleShareMessage, handleStartThread, handleCopyLink, focusOnMessage, parseMessageUrl, handleIncomingMessageUrl, handleBackNavigation, handleReaction, setupMessageInputEventListeners, sendChatMessage, handleReplyToMessage, handleQuoteMessage, handleRepostMessage, handleBookmarkMessage };

@@ -25,9 +25,8 @@ let getCurrentUserEmail: (() => Promise<string | null>) | undefined;
 let normalizeUrl: ((url: string) => string) | undefined;
 
 // Extended APIRequestOptions for internal use
+// Note: allow401 and allow500 are already in APIRequestOptions, so we just add user
 interface ExtendedAPIRequestOptions extends APIRequestOptions {
-  allow401?: boolean;
-  allow500?: boolean;
   user?: User; // For passing user context
 }
 
@@ -60,6 +59,51 @@ function isSupabaseClientLike(value: unknown): value is SupabaseClient {
   return typeof candidate.from === 'function';
 }
 
+// UUID validation helper - prevents Google IDs from being sent to /v1/users/:id endpoints
+function isValidUUID(id: string | undefined | null): boolean {
+  if (!id || typeof id !== 'string') {
+    return false;
+  }
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(id);
+}
+
+// Validate and sanitize endpoint to prevent Google IDs in /v1/users/:id paths
+function validateUserEndpoint(endpoint: string, method?: string): { isValid: boolean; error?: string } {
+  // Check if this is a /v1/users/:id endpoint (not /v1/users/:email or /v1/users/me)
+  const userEndpointMatch = endpoint.match(/^\/v1\/users\/([^\/\?]+)/);
+  if (userEndpointMatch) {
+    const userId = userEndpointMatch[1];
+    if (!userId) {
+      return { isValid: false, error: 'User ID is missing from endpoint' };
+    }
+    // Skip validation for special endpoints
+    if (userId === 'me' || userId === 'preferences' || userId === 'update-avatar' || userId === 'update-preferences') {
+      return { isValid: true };
+    }
+    // Email endpoints are ONLY valid for POST method (create/update user by email)
+    // GET /v1/users/:email returns 400 - backend only accepts UUIDs for GET
+    if (userId.includes('@')) {
+      if (method === 'POST') {
+        return { isValid: true }; // POST /v1/users/:email is valid
+      } else {
+        return {
+          isValid: false,
+          error: `Invalid endpoint: ${endpoint}. Email endpoints are only valid for POST method. Use UUID for GET/PATCH/PUT/DELETE.`
+        };
+      }
+    }
+    // Validate UUID format for all other methods
+    if (!isValidUUID(userId)) {
+      return {
+        isValid: false,
+        error: `Invalid user ID format in endpoint: ${endpoint}. Expected UUID, got: ${userId}`
+      };
+    }
+  }
+  return { isValid: true };
+}
+
 // API client for Meta-Layer Initiative (COMP VERSION)
 class MetaLayerAPI {
   private baseURL: string;
@@ -69,6 +113,36 @@ class MetaLayerAPI {
   }
 
   async request<T = unknown>(endpoint: string, options: ExtendedAPIRequestOptions = {}): Promise<APIResponseOrNull<T>> {
+    // ROOT CAUSE FIX: Validate endpoint to prevent Google IDs in /v1/users/:id paths
+    const method = options.method || 'GET';
+    
+    // Extract endpoint from full URL if needed
+    let cleanEndpoint = endpoint;
+    if (endpoint.startsWith('http://') || endpoint.startsWith('https://')) {
+      try {
+        const url = new URL(endpoint);
+        cleanEndpoint = url.pathname + url.search;
+      } catch {
+        // If URL parsing fails, try regex extraction
+        const match = endpoint.match(/\/v1\/users\/[^\/\?]+/);
+        if (match) {
+          cleanEndpoint = match[0];
+        }
+      }
+    }
+    
+    const endpointValidation = validateUserEndpoint(cleanEndpoint, method);
+    if (!endpointValidation.isValid) {
+      Logger.error(`❌ API: ${endpointValidation.error}`, null, 'api');
+      Logger.warn('⚠️ API: BLOCKING request with invalid user ID format. This prevents 400 Bad Request errors.', { 
+        originalEndpoint: endpoint,
+        cleanEndpoint: cleanEndpoint,
+        method: method 
+      }, 'api');
+      // Return null to prevent the request
+      return null;
+    }
+    
     // COMP_API_FIX: Handle comprehensive API endpoint redirection
     let finalUrl = `${this.baseURL}${endpoint}`;
     
@@ -144,11 +218,18 @@ class MetaLayerAPI {
           // CRITICAL FIX: If auraColor is missing or resolved to fallback, fetch it now to prevent delays
           const api = stateManagerInstance.getState('api') as { request: <T>(endpoint: string, options?: ExtendedAPIRequestOptions) => Promise<ApiResponse<T> | null> } | undefined;
           if (!user.auraColor && user.id && api) {
-            Logger.debug('🔍 USER_IDENTITY: 🎨 AuraColor missing, fetching immediately...', 'api');
-          try {
-            const userResponse = await api.request(`/v1/users/${user.id}`, {
-              method: 'GET'
-            });
+            // ROOT CAUSE FIX: Validate that user.id is a UUID before making API request
+            // Google IDs (like "116467399993975200419") are NOT UUIDs and will cause 400 Bad Request
+            if (!isValidUUID(user.id)) {
+              Logger.warn('⚠️ USER_IDENTITY: user.id is not a UUID, cannot fetch auraColor via /v1/users/:id endpoint', { userId: user.id, userEmail: user.email }, 'api');
+              Logger.debug('🔍 USER_IDENTITY: user.id appears to be a Google ID - UUID conversion may not have completed yet', null, 'api');
+              // Skip the API request - auraColor will be fetched later when UUID is available
+            } else {
+              Logger.debug('🔍 USER_IDENTITY: 🎨 AuraColor missing, fetching immediately...', 'api');
+              try {
+                const userResponse = await api.request(`/v1/users/${user.id}`, {
+                  method: 'GET'
+                });
 
             if (userResponse && userResponse.data) {
               const auraColor = (userResponse.data as { auraColor?: string }).auraColor;
@@ -181,8 +262,8 @@ class MetaLayerAPI {
             component: 'API'
             }
         });;
-          
-    }
+            }
+          }
         }
         } else if (authManagerInstance && typeof authManagerInstance.getCurrentUser === 'function') {
           user = await authManagerInstance.getCurrentUser();
@@ -289,35 +370,45 @@ class MetaLayerAPI {
       
       // ROOT CAUSE FIX: Only set currentUser.id from responses that are FOR THE CURRENT USER
       // DO NOT set it from other users' data in reactions/messages!
-      // Only trust user.id from /v1/users/:email or user objects that match current email
+      // UUID-ONLY: Only use UUID matching - no email fallback
       const currentUser = stateManagerInstance.getState('currentUser') as User | undefined;
-      if (data && typeof data === 'object' && currentUser && !currentUser.id) {
+      if (data && typeof data === 'object' && currentUser) {
         const dataObj = data as Record<string, unknown>;
-        const currentUserEmail = currentUser.email?.toLowerCase().trim();
+        const currentUserId = currentUser.id;
         
-        // Only set UUID if:
-        // 1. Response has a user object with matching email, OR
-        // 2. Response is from /v1/users/:email endpoint (which returns user data for current user)
-        let appUserId = null;
-        const userObj = dataObj.user as { email?: string; id?: string } | undefined;
-        if (userObj && userObj.email && userObj.email.toLowerCase().trim() === currentUserEmail) {
-          // This is a user object for the current user
-          appUserId = userObj.id || null;
-        } else if (dataObj.email && typeof dataObj.email === 'string' && dataObj.email.toLowerCase().trim() === currentUserEmail) {
-          // Direct user response (from /v1/users/:email)
-          appUserId = (dataObj.id as string) || null;
-        }
-        
-        // CRITICAL: DO NOT use reaction.user_id or reaction.AppUser.id - those are OTHER users' IDs!
-        // DO NOT use data.id unless we've verified it's for the current user
-        
-        if (appUserId) {
-          Logger.debug('✅ ROOT CAUSE FIX: Backend returned AppUser UUID for current user:', appUserId, 'api');
-          Logger.debug('✅ Storing AppUser UUID in currentUser.id', null, 'api');
-          currentUser.id = appUserId;
-          stateManagerInstance.setState('currentUser', currentUser);
-        } else {
-          Logger.debug('🔍 APIModule: Skipping UUID assignment - response not for current user or no email match', null, 'api');
+        // UUID-ONLY: Only process if we have a UUID to match against
+        if (currentUserId && isValidUUID(currentUserId)) {
+          const userObj = dataObj.user as { id?: string } | undefined;
+          let appUserId: string | null = null;
+          
+          // UUID matching only - verify response is for current user by UUID
+          if (userObj && userObj.id === currentUserId) {
+            appUserId = userObj.id;
+            Logger.debug('✅ APIModule: UUID match confirmed for current user', { userId: appUserId }, 'api');
+          } else if (dataObj.id === currentUserId) {
+            appUserId = dataObj.id as string;
+            Logger.debug('✅ APIModule: UUID match confirmed in direct response', { userId: appUserId }, 'api');
+          }
+          
+          // CRITICAL: DO NOT use reaction.user_id or reaction.AppUser.id - those are OTHER users' IDs!
+          // DO NOT use data.id unless we've verified it matches currentUser.id (UUID)
+          
+          if (appUserId && isValidUUID(appUserId)) {
+            Logger.debug('✅ APIModule: UUID match confirmed - response is for current user', { userId: appUserId }, 'api');
+          } else {
+            Logger.debug('🔍 APIModule: Response does not match current user UUID - skipping', { 
+              currentUserId, 
+              responseUserId: userObj?.id || dataObj.id 
+            }, 'api');
+          }
+        } else if (!currentUserId) {
+          // UUID not set yet - skip processing (UUID must be set during auth before API calls)
+          Logger.debug('⚠️ APIModule: currentUser.id not set - UUID must be set during auth before processing API responses', null, 'api');
+        } else if (currentUserId && !isValidUUID(currentUserId)) {
+          // Invalid ID format - skip processing
+          Logger.warn('⚠️ APIModule: currentUser.id is not a valid UUID, skipping response processing', { 
+            currentUserId 
+          }, 'api');
         }
       }
       
@@ -374,30 +465,95 @@ class MetaLayerAPI {
     }
   }
 
+  async leaveCommunity(communityId: string): Promise<APIResponseOrNull> {
+    try {
+      Logger.debug(`🔍 API: Leaving community: ${communityId}`, null, 'api');
+      const response = await this.request(`/v1/communities/${communityId}/leave`, {
+        method: 'DELETE'
+      });
+      Logger.debug('🔍 API: Leave community response:', response, 'api');
+      return response;
+    } catch (error: unknown) {
+      handleError(error, {
+        log: true,
+        logLevel: 'error',
+        context: {
+          operation: 'leaveCommunity',
+          component: 'API',
+          communityId
+        }
+      });
+      return null;
+    }
+  }
+
   async getCommunities(): Promise<APIResponseOrNull<{ communities?: Array<{ id: string; name: string; [key: string]: unknown }> }>> {
     // Get current user to filter communities by membership - use AuthManager
+    // NOTE: Backend uses MetaCommunity table via /communities endpoint
     const user = await authManagerInstance.getCurrentUser();
-    const userId = user?.id;
+    // CRITICAL: Ensure userId is a UUID, not a Google ID
+    let userId = user?.id;
     
+    // Validate that userId is a UUID format
+    if (userId) {
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(userId)) {
+        Logger.warn('⚠️ API: userId is not a UUID format, using email instead', { userId, email: user?.email }, 'api');
+        // If not a UUID, use email instead (backend can handle email lookup)
+        userId = user?.email || undefined;
+      }
+    }
+    
+    // Backend endpoint /communities uses MetaCommunity table
+    // It returns communities from MetaCommunityMembership for the user
     const url = userId ? `/communities?userId=${encodeURIComponent(userId)}` : '/communities';
     
-    // CRITICAL FIX: Handle 500 errors gracefully by returning null instead of throwing
+    // CRITICAL DEBUG: Log what we're sending
+    Logger.debug(`🔍 API: getCommunities REQUEST`, { 
+      url, 
+      userId, 
+      userEmail: user?.email,
+      isUUID: userId ? /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId) : false,
+      fullUrl: `${this.baseURL}${url}`
+    }, 'api');
+    
+    // CRITICAL: Do NOT silently return null on 500 errors - this masks real bugs
     try {
-      const response = await this.request(url, { allow500: true }); // Allow 500 to return null
+      const response = await this.request(url);
+      const communitiesCount = Array.isArray(response) 
+        ? response.length 
+        : (response && typeof response === 'object' && 'communities' in response && Array.isArray(response.communities))
+          ? response.communities.length
+          : 0;
+      Logger.debug(`✅ API: getCommunities response received`, { 
+        hasData: !!response?.data, 
+        hasCommunities: !!response?.communities,
+        isArray: Array.isArray(response),
+        responseType: typeof response,
+        responseKeys: response && typeof response === 'object' ? Object.keys(response) : [],
+        communitiesCount: communitiesCount
+      }, 'api');
       return response as APIResponseOrNull<{ communities?: Array<{ id: string; name: string; [key: string]: unknown }> }>;
     } catch (error: unknown) {
-      // CRITICAL FIX: For 500 errors, return null instead of throwing to allow graceful degradation
-      const errorObj = error as { status?: number };
+      // CRITICAL: Log 500 errors as ERRORS, not warnings - this is a backend bug
+      const errorObj = error as { status?: number; message?: string };
       if (errorObj.status === 500) {
+        Logger.error('❌ API: 500 error from /communities endpoint - this is a BACKEND BUG!', { 
+          userId, 
+          url, 
+          error: errorObj.message 
+        }, 'api');
         handleError(error, {
           log: true,
-          logLevel: 'warn',
+          logLevel: 'error', // Changed from 'warn' to 'error'
           context: {
             operation: 'getCommunities',
             component: 'API',
-            userId
+            userId,
+            severity: 'HIGH - User has communities but API returns 500'
           }
         });
+        // Still return null to allow frontend to handle, but log as error
         return null as APIResponseOrNull<{ communities?: Array<{ id: string; name: string; [key: string]: unknown }> }>;
       }
       // Re-throw other errors
@@ -674,11 +830,41 @@ class MetaLayerAPI {
 const api = new MetaLayerAPI('http://216.238.91.120:3002');
 
 // COMP_API_FIX: Also handle XMLHttpRequest redirection for older code
+// CRITICAL: This must be set up BEFORE any authentication code runs
 const originalXHROpen = XMLHttpRequest.prototype.open;
 XMLHttpRequest.prototype.open = function(method: string, url: string | URL, async?: boolean, username?: string | null, password?: string | null): void {
   if (typeof url === 'string') {
+    // ROOT CAUSE FIX: Validate /v1/users/:id endpoints in XHR requests too
+    // Extract endpoint from full URL if needed
+    let cleanUrl = url;
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      try {
+        const urlObj = new URL(url);
+        cleanUrl = urlObj.pathname + urlObj.search;
+      } catch {
+        // If URL parsing fails, try regex extraction
+        const match = url.match(/\/v1\/users\/[^\/\?]+/);
+        if (match) {
+          cleanUrl = match[0];
+        }
+      }
+    }
+    
+    const endpointValidation = validateUserEndpoint(cleanUrl, method);
+    if (!endpointValidation.isValid) {
+      Logger.error(`❌ XHR: ${endpointValidation.error}`, null, 'api');
+      Logger.warn('⚠️ XHR: BLOCKING request with invalid user ID format. This prevents 400 Bad Request errors.', { 
+        originalUrl: url,
+        cleanUrl: cleanUrl,
+        method: method 
+      }, 'api');
+      // Throw error to prevent the request
+      throw new Error(endpointValidation.error || 'Invalid user ID format');
+    }
+    
     let modifiedUrl = url;
     
+    // URL redirection logic (only if validation passed)
     if (url.includes('api.themetalayer.org')) {
       modifiedUrl = url.replace('https://api.themetalayer.org', 'http://216.238.91.120:3002');
       Logger.debug(`🔍 COMP_API_FIX: XHR Redirecting api.themetalayer.org ${url} to ${modifiedUrl}`, null, 'api');
@@ -688,6 +874,7 @@ XMLHttpRequest.prototype.open = function(method: string, url: string | URL, asyn
       Logger.debug(`🔍 COMP_API_FIX: XHR Redirecting relative URL ${url} to ${modifiedUrl}`, null, 'api');
     }
     
+    // Use modifiedUrl for all cases (validation passed, so safe to proceed)
     if (async !== undefined && username !== undefined && password !== undefined) {
       originalXHROpen.call(this, method, modifiedUrl, async, username, password);
       return;
@@ -699,6 +886,8 @@ XMLHttpRequest.prototype.open = function(method: string, url: string | URL, asyn
       return;
     }
   }
+  
+  // Handle URL object case (validation not needed for non-string URLs)
   if (async !== undefined && username !== undefined && password !== undefined) {
     originalXHROpen.call(this, method, url, async, username, password);
     return;
@@ -709,6 +898,56 @@ XMLHttpRequest.prototype.open = function(method: string, url: string | URL, asyn
     originalXHROpen.call(this, method, url, true);
     return;
   }
+};
+
+// ROOT CAUSE FIX: Intercept fetch() to validate /v1/users/:id endpoints
+// CRITICAL: This must be set up BEFORE any authentication code runs
+const originalFetch = window.fetch;
+window.fetch = function(url: string | Request | URL, options?: RequestInit): Promise<Response> {
+  // Extract endpoint from URL
+  let endpoint = '';
+  let fullUrl = '';
+  
+  if (typeof url === 'string') {
+    fullUrl = url;
+    // Remove base URL to get endpoint
+    endpoint = url.replace(/^https?:\/\/[^\/]+/, '');
+  } else if (url instanceof Request) {
+    fullUrl = url.url;
+    endpoint = url.url.replace(/^https?:\/\/[^\/]+/, '');
+  } else if (url instanceof URL) {
+    fullUrl = url.href;
+    endpoint = url.pathname + url.search;
+  }
+  
+  // Validate /v1/users/:id endpoints
+  if (endpoint.startsWith('/v1/users/') || fullUrl.includes('/v1/users/')) {
+    const method = options?.method || (url instanceof Request ? url.method : 'GET');
+    
+    // Extract clean endpoint if full URL was provided
+    let cleanEndpoint = endpoint;
+    if (!cleanEndpoint.startsWith('/v1/users/') && fullUrl.includes('/v1/users/')) {
+      const match = fullUrl.match(/\/v1\/users\/[^\/\?]+/);
+      if (match) {
+        cleanEndpoint = match[0];
+      }
+    }
+    
+    const endpointValidation = validateUserEndpoint(cleanEndpoint, method);
+    if (!endpointValidation.isValid) {
+      Logger.error(`❌ FETCH: ${endpointValidation.error}`, null, 'api');
+      Logger.warn('⚠️ FETCH: BLOCKING request with invalid user ID format. This prevents 400 Bad Request errors.', { 
+        fullUrl: fullUrl,
+        endpoint: cleanEndpoint, 
+        method: method 
+      }, 'api');
+      // Return rejected promise to prevent the request
+      return Promise.reject(new Error(endpointValidation.error || 'Invalid user ID format'));
+    }
+  }
+  
+  // Call original fetch
+  return originalFetch.apply(this, arguments as unknown as Parameters<typeof fetch>);
 };
 
 // Export API instance for ES6 modules
@@ -724,3 +963,9 @@ Logger.debug('✅ APIModule: MetaLayerAPI initialized with global fetch override
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = { MetaLayerAPI, api };
 }
+
+// CRITICAL: Expose api to window for legacy code (real-google-auth.js, etc.)
+// ES6 pattern: api is exported via ES6 module exports only
+// No window assignment - api should be imported where needed
+// Violates no-backward-compatibility requirement - removed window.api assignment
+Logger.debug('✅ APIModule: api available via ES6 imports only', null, 'api');

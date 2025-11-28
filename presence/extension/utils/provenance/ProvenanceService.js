@@ -11,6 +11,8 @@
  * - Graceful degradation (fails silently if unavailable)
  */
 import { ensureMessageContent } from '../../utils/Fallbacks.js';
+import { handleError } from '../ErrorHandler.js';
+import { Logger } from '../Logger.js';
 class ProvenanceService {
     constructor() {
         this.isEnabled = false;
@@ -26,7 +28,7 @@ class ProvenanceService {
      */
     async initialize(forceEnable = false) {
         if (this.isInitialized) {
-            console.log('[Provenance] Already initialized');
+            Logger.debug('[Provenance] Already initialized', null, 'provenance');
             return;
         }
         try {
@@ -34,11 +36,11 @@ class ProvenanceService {
             const stored = localStorage.getItem(this.enabledKey);
             this.isEnabled = forceEnable || stored === 'true';
             if (!this.isEnabled) {
-                console.log('[Provenance] Service disabled (set localStorage.provenance_enabled = "true" to enable)');
+                Logger.debug('[Provenance] Service disabled (set localStorage.provenance_enabled = "true" to enable)', null, 'provenance');
                 this.isInitialized = true;
                 return;
             }
-            console.log('[Provenance] Initializing...');
+            Logger.debug('[Provenance] Initializing...', null, 'provenance');
             // Initialize key pair
             await this.initializeKeyPair();
             // Initialize IndexedDB
@@ -46,10 +48,18 @@ class ProvenanceService {
             // Attach event listeners (non-invasive)
             this.attachListeners();
             this.isInitialized = true;
-            console.log('[Provenance] Service initialized successfully');
+            Logger.debug('[Provenance] Service initialized successfully', null, 'provenance');
         }
         catch (error) {
-            console.error('[Provenance] Initialization failed:', error);
+            handleError(error, {
+                log: true,
+                logLevel: 'error',
+                context: {
+                    operation: 'catch',
+                    component: 'ProvenanceService'
+                }
+            });
+            ;
             // Fail gracefully - don't break the app
             this.isInitialized = true;
             this.isEnabled = false;
@@ -73,12 +83,20 @@ class ProvenanceService {
                     privateKey: await this.importKey(privateKeyData, 'private', parsed.algorithm),
                     algorithm: parsed.algorithm || 'Ed25519'
                 };
-                console.log('[Provenance] Loaded key pair from storage');
+                Logger.debug('[Provenance] Loaded key pair from storage', null, 'provenance');
                 return;
             }
         }
         catch (error) {
-            console.warn('[Provenance] Failed to load key pair, generating new one:', error);
+            handleError(error, {
+                log: true,
+                logLevel: 'warn',
+                context: {
+                    operation: 'catch',
+                    component: 'ProvenanceService'
+                }
+            });
+            ;
         }
         // Generate new key pair
         // Try Ed25519 first (preferred), fallback to ECDSA P-256
@@ -90,18 +108,26 @@ class ProvenanceService {
                 namedCurve: 'Ed25519'
             }, true, // extractable
             ['sign', 'verify']);
-            console.log('[Provenance] Generated Ed25519 key pair');
+            Logger.debug('[Provenance] Generated Ed25519 key pair', null, 'provenance');
         }
         catch (error) {
             // Fallback to ECDSA P-256 for older browsers
-            console.warn('[Provenance] Ed25519 not available, using ECDSA P-256:', error);
+            handleError(error, {
+                log: true,
+                logLevel: 'warn',
+                context: {
+                    operation: 'catch',
+                    component: 'ProvenanceService'
+                }
+            });
+            ;
             algorithm = 'ECDSA-P256';
             try {
                 keyPair = await crypto.subtle.generateKey({
                     name: 'ECDSA',
                     namedCurve: 'P-256'
                 }, true, ['sign', 'verify']);
-                console.log('[Provenance] Generated ECDSA P-256 key pair');
+                Logger.debug('[Provenance] Generated ECDSA P-256 key pair', null, 'provenance');
             }
             catch (fallbackError) {
                 throw new Error(`Failed to generate key pair: ${fallbackError instanceof Error ? fallbackError.message : 'Unknown error'}`);
@@ -123,10 +149,18 @@ class ProvenanceService {
                 algorithm: algorithm
             };
             localStorage.setItem(storageKey, JSON.stringify(stored));
-            console.log('[Provenance] Key pair stored');
+            Logger.debug('[Provenance] Key pair stored', null, 'provenance');
         }
         catch (error) {
-            console.error('[Provenance] Failed to store key pair:', error);
+            handleError(error, {
+                log: true,
+                logLevel: 'error',
+                context: {
+                    operation: 'catch',
+                    component: 'ProvenanceService'
+                }
+            });
+            ;
             throw error;
         }
     }
@@ -183,7 +217,7 @@ class ProvenanceService {
                 // Capture provenance after message is sent
                 if (result && result.id) {
                     this.captureMessageProvenance('create', result).catch(err => {
-                        console.warn('[Provenance] Failed to capture create provenance:', err);
+                        Logger.warn('[Provenance] Failed to capture create provenance:', err, 'provenance');
                     });
                 }
                 return result;
@@ -200,7 +234,7 @@ class ProvenanceService {
                 // Note: We only have messageId, so we create a minimal ProvenanceMessage
                 const provenanceMessage = { id: messageId };
                 this.captureMessageProvenance('delete', provenanceMessage).catch(err => {
-                    console.warn('[Provenance] Failed to capture delete provenance:', err);
+                    Logger.warn('[Provenance] Failed to capture delete provenance:', err, 'provenance');
                 });
                 return result;
             });
@@ -229,13 +263,13 @@ class ProvenanceService {
                 };
                 if (provenanceMessage.id) {
                     this.captureMessageProvenance('update', provenanceMessage).catch(err => {
-                        console.warn('[Provenance] Failed to capture update provenance:', err);
+                        Logger.warn('[Provenance] Failed to capture update provenance:', err, 'provenance');
                     });
                 }
             });
             this.listeners.push({ type: 'intercept', target: 'updateMessageInChat' });
         }
-        console.log('[Provenance] Attached', this.listeners.length, 'listeners');
+        Logger.debug('[Provenance] Attached', { data: this.listeners.length, extra: 'listeners' }, 'provenance');
     }
     /**
      * Capture provenance artifact for a message event
@@ -251,11 +285,20 @@ class ProvenanceService {
             await this.storeArtifact(artifact, message.id);
             // Store in backend database (if available)
             await this.storeArtifactInBackend(message.id, artifact);
-            console.log('[Provenance] Captured', action, 'for message', message.id);
+            Logger.debug('[Provenance] Captured', { data: action, extra: 'for message', messageId: message.id }, 'provenance');
             return artifact;
         }
         catch (error) {
-            console.error('[Provenance] Failed to capture provenance:', error);
+            handleError(error, {
+                log: true,
+                logLevel: 'error',
+                context: {
+                    operation: 'catch',
+                    component: 'ProvenanceService',
+                    messageId: message?.id
+                }
+            });
+            ;
             return null;
         }
     }
@@ -275,18 +318,26 @@ class ProvenanceService {
             });
             if (response.ok) {
                 const result = await response.json();
-                console.log('[Provenance] Stored artifact in backend:', result.artifactId);
+                Logger.debug('[Provenance] Stored artifact in backend:', result.artifactId, 'provenance');
                 return result;
             }
             else {
                 const error = await response.json().catch(() => ({ error: 'Unknown error' }));
-                console.warn('[Provenance] Failed to store in backend:', error);
+                Logger.warn('[Provenance] Failed to store in backend:', error, 'provenance');
                 // Don't throw - local storage is sufficient
                 return null;
             }
         }
         catch (error) {
-            console.warn('[Provenance] Backend storage failed (non-critical):', error instanceof Error ? error.message : 'Unknown error');
+            handleError(error, {
+                log: true,
+                logLevel: 'warn',
+                context: {
+                    operation: 'saveProvenanceToBackend',
+                    component: 'ProvenanceService'
+                }
+            });
+            Logger.warn('[Provenance] Backend storage failed (non-critical):', error instanceof Error ? error : { message: 'Unknown error' }, 'provenance');
             // Don't throw - local storage is sufficient
             return null;
         }
@@ -393,10 +444,10 @@ class ProvenanceService {
             const transaction = this.db.transaction(['artifacts', 'message_index'], 'readwrite');
             // Store artifact
             const artifactStore = transaction.objectStore('artifacts');
-            const artifactRequest = artifactStore.add(artifact);
+            artifactStore.add(artifact);
             // Update message index
             const indexStore = transaction.objectStore('message_index');
-            const indexRequest = indexStore.put({
+            indexStore.put({
                 messageId: messageId,
                 artifactId: artifact['@id'],
                 timestamp: artifact.timestamp
@@ -452,7 +503,7 @@ class ProvenanceService {
     setEnabled(enabled) {
         this.isEnabled = enabled;
         localStorage.setItem(this.enabledKey, enabled.toString());
-        console.log('[Provenance] Service', enabled ? 'enabled' : 'disabled');
+        Logger.debug('[Provenance] Service', enabled ? 'enabled' : 'disabled', 'provenance');
     }
     /**
      * Cleanup listeners (for testing or disabling)
@@ -473,6 +524,6 @@ class ProvenanceService {
 // Export singleton instance
 if (typeof window !== 'undefined') {
     Object.assign(window, { provenanceService: new ProvenanceService() });
-    console.log('[Provenance] Service available at window.provenanceService');
+    Logger.debug('[Provenance] Service available at window.provenanceService', null, 'provenance');
 }
 export default ProvenanceService;

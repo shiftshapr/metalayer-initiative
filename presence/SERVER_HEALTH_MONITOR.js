@@ -46,7 +46,7 @@
           console.warn('⚠️ SERVER HEALTH: Backend server appears to be down');
           console.warn('   → Multiple health checks failed');
           console.warn('   → Server may need to be restarted');
-          console.warn('   → Run: cd /home/ubuntu/metalayer-initiative && bash start_backend.sh');
+          console.warn('   → Run: cd /home/ubuntu/canopi && bash start_backend.sh');
           console.warn('   → Or: pm2 restart metalayer-api');
         }
       } else {

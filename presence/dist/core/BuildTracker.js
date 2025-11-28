@@ -8,6 +8,8 @@
  * - Loaded from .build-info.json or Chrome storage at runtime
  * - Logged to console and .build-log.txt
  */
+import { handleError } from '../utils/ErrorHandler.js';
+import { Logger } from '../utils/Logger.js';
 class BuildTracker {
     constructor() {
         this.buildInfo = null;
@@ -42,9 +44,8 @@ class BuildTracker {
         });
     }
     tryLoadInjectedBuildInfo() {
-        const win = typeof window !== 'undefined' ? window : undefined;
-        if (win?.__BUILD_INFO__) {
-            this.buildInfo = win.__BUILD_INFO__;
+        if (typeof window !== 'undefined' && window.__BUILD_INFO__) {
+            this.buildInfo = window.__BUILD_INFO__;
             this.buildInfoLoaded = true;
             this.logBuildInfo();
             return true;
@@ -75,7 +76,15 @@ class BuildTracker {
             return true;
         }
         catch (error) {
-            console.warn('⚠️ BUILD_TRACKER: Build info file not available yet. Run npm run build:presence to inject build metadata.', error);
+            handleError(error, {
+                log: true,
+                logLevel: 'warn',
+                context: {
+                    operation: 'catch',
+                    component: 'BuildTracker'
+                }
+            });
+            ;
             return false;
         }
     }
@@ -106,7 +115,15 @@ class BuildTracker {
             });
         }
         catch (error) {
-            console.warn('⚠️ BUILD_TRACKER: Failed to load build info:', error);
+            handleError(error, {
+                log: true,
+                logLevel: 'warn',
+                context: {
+                    operation: 'catch',
+                    component: 'BuildTracker'
+                }
+            });
+            ;
             // Fallback: generate build number
             this.buildInfo = {
                 buildNumber: Math.floor(Date.now() / 1000),
@@ -123,7 +140,15 @@ class BuildTracker {
             }
         }
         catch (error) {
-            console.warn('⚠️ BUILD_TRACKER: Unable to resolve build info URL from chrome.runtime:', error);
+            handleError(error, {
+                log: true,
+                logLevel: 'warn',
+                context: {
+                    operation: 'catch',
+                    component: 'BuildTracker'
+                }
+            });
+            ;
         }
         return '.build-info.json';
     }
@@ -151,11 +176,11 @@ class BuildTracker {
             const timestamp = this.buildInfo.timestamp;
             const commit = this.buildInfo.gitCommit || 'unknown';
             const branch = this.buildInfo.gitBranch || 'unknown';
-            console.log(`🏗️ BUILD_TRACKER: Build #${buildNum} | Commit: ${commit} | Branch: ${branch} | Time: ${timestamp}`);
+            Logger.debug(`🏗️ BUILD_TRACKER: Build #${buildNum} | Commit: ${commit} | Branch: ${branch} | Time: ${timestamp}`, null, 'general');
             try {
                 const reloadTimestamp = window.stateManagerInstance?.getState?.('extension.reloadTimestamp');
                 if (reloadTimestamp) {
-                    console.log(`🏗️ BUILD_TRACKER: Extension reload timestamp: ${reloadTimestamp}`);
+                    Logger.debug(`🏗️ BUILD_TRACKER: Extension reload timestamp: ${reloadTimestamp}`, null, 'general');
                 }
             }
             catch (e) {
@@ -195,8 +220,13 @@ class BuildTracker {
 const buildTracker = BuildTracker.getInstance();
 // Export to window for debugging
 if (typeof window !== 'undefined') {
-    window.buildTracker = buildTracker;
-    console.log('✅ BUILD_TRACKER: Initialized and exported to window');
+    window.buildTracker = {
+        getBuildNumber: () => buildTracker.getBuildNumber(),
+        getBuildInfo: () => buildTracker.getBuildInfo(),
+        isLoaded: () => buildTracker.isLoaded(),
+        getBuildString: () => buildTracker.getBuildString()
+    };
+    Logger.debug('✅ BUILD_TRACKER: Initialized and exported to window', null, 'general');
 }
 export { BuildTracker, buildTracker };
 export default BuildTracker;

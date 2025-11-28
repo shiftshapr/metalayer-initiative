@@ -4,6 +4,7 @@
  * Diagnoses why replies are not displaying despite successful loading.
  * Checks database values vs query parameters to identify mismatches.
  */
+import type { SupabaseClient } from '../types/index.js';
 export interface DiagnosticLogEntry {
     time: string;
     event: string;
@@ -53,7 +54,7 @@ export interface DiagnosticData {
 }
 declare global {
     interface Window {
-        supabase?: any;
+        supabase?: SupabaseClient;
         diagnoseReplyDisplay?: (messageId: string, pageId: string, communityId: string) => Promise<DiagnosticResults>;
         getReplyDisplayDiagnostic?: () => DiagnosticData;
         __replyDisplayDiagnosticActive?: boolean;

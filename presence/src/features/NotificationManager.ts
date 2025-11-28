@@ -1003,10 +1003,13 @@ export class NotificationManager {
     async checkSubscription(notification: NotificationHistoryEntry): Promise<boolean> {
         try {
             // If no subscription manager available, allow notification
-            if (typeof window === 'undefined' || !window.subscriptionManager) {
+            // ES6 pattern: Optional check for subscriptionManager (for backward compatibility)
+            // TODO: Export subscriptionManager from a module instead of window
+            const win = window as Window & { subscriptionManager?: { findSubscription?: (targetType: string, targetId: string) => unknown } };
+            if (typeof window === 'undefined' || !win.subscriptionManager) {
                 return true;
             }
-            const subscriptionManager = window.subscriptionManager;
+            const subscriptionManager = win.subscriptionManager;
             const source = notification.source;
             if (!source || !source.subscriptionId) {
                 // No subscription info, check by target

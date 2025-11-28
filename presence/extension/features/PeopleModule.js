@@ -2,15 +2,16 @@
  * PEOPLE MODULE - People and Connections
  * Handles all people and connection functionality
  */
-import { Logger } from '../utils/Logger.js';
 import { supabaseServiceInstance } from '../services/SupabaseService.js';
 import { stateManagerInstance } from '../core/StateManager.js';
 import { AVATAR_FALLBACK_COLOR } from '../core/ConfigModule.js';
+import { handleError } from '../utils/ErrorHandler.js';
+import { Logger } from '../utils/Logger.js';
 class PeopleModule {
     constructor() {
         this.logLevel = 'INFO';
         this.isInitialized = false;
-        this.logger = new Logger();
+        // Logger removed as unused
     }
     async initialize() {
         if (this.isInitialized) {
@@ -33,21 +34,122 @@ class PeopleModule {
             return;
         const levels = { ERROR: 0, WARN: 1, INFO: 2, DEBUG: 3 };
         if ((levels[level] ?? 999) <= (levels[this.logLevel] ?? 999)) {
-            console.log(`[PeopleModule] [${level}] ${message}`, ...args);
+            Logger.debug(`[PeopleModule] [${level}] ${message}`, ...args, 'people');
         }
     }
 }
-/**
- * Initialize People Tab - Load real users from Supabase
- */
-export async function initializePeopleTab() {
-    console.log('👥 PEOPLE: Initializing People tab...');
-    const peopleTab = typeof document !== 'undefined' ? document.getElementById('people-tab') : null;
-    if (!peopleTab) {
-        console.error('❌ PEOPLE: People tab element not found');
-        return;
+const TABLE_NAME_VARIATIONS = ['AppUser', 'appuser', 'Appuser', 'users', 'Users'];
+const PEOPLE_SELECT_COLUMNS = 'id, email, name, handle, avatarUrl, auraColor, createdAt';
+const PEOPLE_LOG_CONTEXT = 'people';
+let peopleModuleBootstrapRequested = false;
+let peopleTabInitialized = false;
+let peopleTabInitPromise = null;
+function normalizePeopleUser(row) {
+    // UUID ONLY - no email or handle fallback for id
+    if (!row.id) {
+        Logger.warn('⚠️ PEOPLE: User row missing id (UUID)', { email: row.email }, 'people');
     }
-    // Show loading state immediately
+    return {
+        id: row.id || '', // UUID only - empty string if missing
+        email: row.email || undefined,
+        name: row.name || undefined,
+        handle: row.handle || undefined,
+        avatarUrl: row.avatarUrl || undefined,
+        auraColor: row.auraColor || undefined,
+        createdAt: row.createdAt || undefined,
+    };
+}
+async function fetchPeopleFromTables(client) {
+    let lastError = null;
+    for (const tableName of TABLE_NAME_VARIATIONS) {
+        Logger.debug(`👥 PEOPLE: Trying table name: "${tableName}"`, null, 'people');
+        try {
+            const { data, error } = await client
+                .from(tableName)
+                .select(PEOPLE_SELECT_COLUMNS)
+                .order('createdAt', { ascending: false });
+            if (error) {
+                Logger.warn(`⚠️ PEOPLE: Error with table "${tableName}":`, error, 'people');
+                lastError = error;
+                continue;
+            }
+            if (data && data.length > 0) {
+                Logger.debug(`✅ PEOPLE: Successfully fetched from table "${tableName}"`, null, 'people');
+                return { users: data.map(normalizePeopleUser), error: null };
+            }
+        }
+        catch (tableError) {
+            const formattedError = {
+                message: tableError instanceof Error ? tableError.message : String(tableError),
+            };
+            handleError(tableError, {
+                log: true,
+                logLevel: 'warn',
+                context: {
+                    operation: 'fetchPeople',
+                    component: 'People',
+                    tableName
+                }
+            });
+            ;
+            lastError = formattedError;
+        }
+    }
+    return { users: null, error: lastError };
+}
+// UUID ONLY - changed from userEmails to userIds
+async function fetchActivePresenceIds(client, userIds, sinceIso, _displayUsers) {
+    const activeUserIds = new Set();
+    if (userIds.length === 0) {
+        return activeUserIds;
+    }
+    try {
+        // UUID ONLY - query by user_id, not user_email
+        const { data, error } = await client
+            .from('user_presence')
+            .select('user_id, is_active, last_seen')
+            .in('user_id', userIds)
+            .gte('last_seen', sinceIso);
+        if (error) {
+            Logger.warn('⚠️ PEOPLE: Presence query error (non-critical):', error, 'people');
+            return activeUserIds;
+        }
+        // UUID ONLY - match by id directly
+        // Type assertion: query returns user_id even though SupabasePresenceStatusRow type doesn't include it
+        data?.forEach((record) => {
+            if (!record?.is_active || !record.user_id) {
+                return;
+            }
+            // Direct match by UUID - no email lookup needed
+            if (userIds.includes(record.user_id)) {
+                activeUserIds.add(record.user_id);
+            }
+        });
+    }
+    catch (presenceQueryError) {
+        handleError(presenceQueryError, {
+            log: true,
+            logLevel: 'warn',
+            context: {
+                operation: 'fetchActivePresenceIds',
+                component: 'PeopleModule'
+            }
+        });
+        Logger.warn('⚠️ PEOPLE: Failed to query presence', presenceQueryError, 'people');
+    }
+    return activeUserIds;
+}
+async function renderPeopleTab() {
+    if (typeof document === 'undefined') {
+        Logger.debug('ℹ️ PEOPLE: Skipping People tab render (no DOM context)', null, PEOPLE_LOG_CONTEXT);
+        return false;
+    }
+    Logger.debug('👥 PEOPLE: Initializing People tab...', null, PEOPLE_LOG_CONTEXT);
+    const peopleTab = document.getElementById('people-tab');
+    if (!peopleTab) {
+        Logger.error('❌ PEOPLE: People tab element not found', null, PEOPLE_LOG_CONTEXT);
+        return false;
+    }
     peopleTab.innerHTML = `
     <ul class="item-list">
       <li style="padding: 20px; text-align: center; color: var(--text-secondary);">
@@ -56,10 +158,9 @@ export async function initializePeopleTab() {
     </ul>
   `;
     try {
-        // Get Supabase client
         const supabase = supabaseServiceInstance.getClient();
         if (!supabase || typeof supabase.from !== 'function') {
-            console.error('❌ PEOPLE: Supabase client not available');
+            Logger.error('❌ PEOPLE: Supabase client not available', null, PEOPLE_LOG_CONTEXT);
             peopleTab.innerHTML = `
         <ul class="item-list">
           <li style="padding: 20px; text-align: center; color: var(--text-error);">
@@ -67,34 +168,12 @@ export async function initializePeopleTab() {
           </li>
         </ul>
       `;
-            return;
+            return false;
         }
-        console.log('👥 PEOPLE: Supabase client available, fetching users...');
-        // Try different table name variations (PostgreSQL/Supabase case sensitivity)
-        let users = null;
-        let error = null;
-        const tableNames = ['AppUser', 'appuser', 'Appuser', 'users', 'Users'];
-        for (const tableName of tableNames) {
-            console.log(`👥 PEOPLE: Trying table name: "${tableName}"`);
-            const fromMethod = supabase.from(tableName);
-            if (fromMethod && typeof fromMethod.select === 'function') {
-                const result = await fromMethod.select('id, email, name, handle, avatarUrl, auraColor, createdAt')
-                    .order('createdAt', { ascending: false });
-                if (result.error) {
-                    console.warn(`⚠️ PEOPLE: Error with table "${tableName}":`, result.error);
-                    error = result.error;
-                    continue;
-                }
-                if (result.data) {
-                    console.log(`✅ PEOPLE: Successfully fetched from table "${tableName}"`);
-                    users = result.data;
-                    error = null;
-                    break;
-                }
-            }
-        }
+        Logger.debug('👥 PEOPLE: Supabase client available, fetching users...', null, PEOPLE_LOG_CONTEXT);
+        const { users, error } = await fetchPeopleFromTables(supabase);
         if (error) {
-            console.error('❌ PEOPLE: Error fetching users from all table name variations:', error);
+            Logger.error('❌ PEOPLE: Error fetching users from all table name variations:', error, PEOPLE_LOG_CONTEXT);
             peopleTab.innerHTML = `
         <ul class="item-list">
           <li style="padding: 20px; text-align: center; color: var(--text-error);">
@@ -105,10 +184,10 @@ export async function initializePeopleTab() {
           </li>
         </ul>
       `;
-            return;
+            return false;
         }
         if (!users) {
-            console.error('❌ PEOPLE: No users data returned');
+            Logger.error('❌ PEOPLE: No users data returned', null, PEOPLE_LOG_CONTEXT);
             peopleTab.innerHTML = `
         <ul class="item-list">
           <li style="padding: 20px; text-align: center; color: var(--text-secondary);">
@@ -116,62 +195,29 @@ export async function initializePeopleTab() {
           </li>
         </ul>
       `;
-            return;
+            return false;
         }
-        console.log(`✅ PEOPLE: Fetched ${users.length} users from Supabase`);
-        // Filter out current user if available
+        Logger.debug(`✅ PEOPLE: Fetched ${users.length} users from Supabase`, null, PEOPLE_LOG_CONTEXT);
         const currentUser = stateManagerInstance.getState('currentUser');
         const currentUserId = currentUser?.id;
-        const currentUserEmail = currentUser?.email;
+        // UUID ONLY - filter by id only, not email
         const displayUsers = users.filter((user) => {
             if (currentUserId && user.id === currentUserId) {
                 return false;
             }
-            if (currentUserEmail && user.email && user.email === currentUserEmail) {
-                return false;
-            }
             return true;
         });
-        // Get current user's presence data to determine online status
         let activeUserIds = new Set();
         if (displayUsers.length > 0) {
-            try {
-                const userEmails = displayUsers
-                    .map((u) => u.email)
-                    .filter((email) => !!email);
-                if (userEmails.length > 0) {
-                    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
-                    try {
-                        const presenceFrom = supabase.from('user_presence');
-                        if (presenceFrom && typeof presenceFrom.select === 'function') {
-                            const { data: presenceData, error: presenceError } = await presenceFrom.select('user_email, is_active, last_seen')
-                                .in('user_email', userEmails)
-                                .gte('last_seen', fiveMinutesAgo);
-                            if (presenceError) {
-                                console.warn('⚠️ PEOPLE: Presence query error (non-critical):', presenceError);
-                            }
-                            else if (presenceData) {
-                                presenceData.forEach((p) => {
-                                    if (p.is_active) {
-                                        const user = displayUsers.find((u) => u.email === p.user_email);
-                                        if (user) {
-                                            activeUserIds.add(user.id);
-                                        }
-                                    }
-                                });
-                            }
-                        }
-                    }
-                    catch (presenceQueryError) {
-                        console.warn('⚠️ PEOPLE: Presence query exception (non-critical):', presenceQueryError);
-                    }
-                }
-            }
-            catch (presenceError) {
-                console.warn('⚠️ PEOPLE: Could not fetch presence data:', presenceError);
+            // UUID ONLY - use user IDs, not emails
+            const userIds = displayUsers
+                .map((u) => u.id)
+                .filter((id) => !!id);
+            if (userIds.length > 0) {
+                const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+                activeUserIds = await fetchActivePresenceIds(supabase, userIds, fiveMinutesAgo, displayUsers);
             }
         }
-        // Render users
         if (displayUsers.length === 0) {
             peopleTab.innerHTML = `
         <ul class="item-list">
@@ -180,10 +226,10 @@ export async function initializePeopleTab() {
           </li>
         </ul>
       `;
-            return;
+            return false;
         }
-        // Create user list HTML
-        const usersHTML = displayUsers.map((user) => {
+        const usersHTML = displayUsers
+            .map((user) => {
             const isActive = activeUserIds.has(user.id);
             const userName = user.name || user.handle || user.email || 'Unknown User';
             const avatarUrl = user.avatarUrl || '';
@@ -246,19 +292,30 @@ export async function initializePeopleTab() {
           </div>
         </li>
       `;
-        }).join('');
+        })
+            .join('');
         peopleTab.innerHTML = `
       <ul class="item-list" style="list-style: none; padding: 0; margin: 0;">
         ${usersHTML}
       </ul>
     `;
-        console.log(`✅ PEOPLE: People tab updated with ${displayUsers.length} users`);
+        Logger.debug(`✅ PEOPLE: People tab updated with ${displayUsers.length} users`, null, PEOPLE_LOG_CONTEXT);
+        return true;
     }
     catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        console.error('❌ PEOPLE: Error initializing People tab:', error);
-        if (peopleTab) {
-            peopleTab.innerHTML = `
+        handleError(error, {
+            log: true,
+            logLevel: 'error',
+            context: {
+                operation: 'renderPeopleTab',
+                component: 'People',
+            },
+        });
+        if (typeof document !== 'undefined') {
+            const fallbackTab = document.getElementById('people-tab');
+            if (fallbackTab) {
+                fallbackTab.innerHTML = `
         <ul class="item-list">
           <li style="padding: 20px; text-align: center; color: var(--text-error);">
             Error loading users: ${errorMessage || 'Unknown error'}<br>
@@ -268,11 +325,87 @@ export async function initializePeopleTab() {
           </li>
         </ul>
       `;
+            }
         }
+        Logger.warn('⚠️ PEOPLE: Failed to render People tab', error, PEOPLE_LOG_CONTEXT);
+        return false;
     }
+}
+async function ensurePeopleTabInitialized() {
+    if (peopleTabInitialized) {
+        Logger.debug('ℹ️ PEOPLE: People tab already initialized; skipping duplicate render', null, PEOPLE_LOG_CONTEXT);
+        return;
+    }
+    if (peopleTabInitPromise) {
+        Logger.debug('ℹ️ PEOPLE: People tab initialization already in progress; joining promise', null, PEOPLE_LOG_CONTEXT);
+        await peopleTabInitPromise;
+        return;
+    }
+    peopleTabInitPromise = (async () => {
+        const didRender = await renderPeopleTab();
+        if (didRender) {
+            peopleTabInitialized = true;
+        }
+    })().finally(() => {
+        peopleTabInitPromise = null;
+    });
+    await peopleTabInitPromise;
+}
+/**
+ * Initialize People Tab - Load real users from Supabase
+ */
+async function initializePeopleTab() {
+    await ensurePeopleTabInitialized();
 }
 // Create singleton instance
 const peopleModuleInstance = new PeopleModule();
+function initializePeopleModule() {
+    if (typeof window === 'undefined' || typeof document === 'undefined') {
+        Logger.debug('ℹ️ PEOPLE: Skipping PeopleModule bootstrap (no DOM context)', null, PEOPLE_LOG_CONTEXT);
+        return;
+    }
+    if (peopleModuleBootstrapRequested) {
+        Logger.debug('ℹ️ PEOPLE: initializePeopleModule already requested; skipping duplicate attach', null, PEOPLE_LOG_CONTEXT);
+        return;
+    }
+    peopleModuleBootstrapRequested = true;
+    const bootstrap = () => {
+        void (async () => {
+            try {
+                await peopleModuleInstance.initialize();
+                await ensurePeopleTabInitialized();
+            }
+            catch (error) {
+                handleError(error, {
+                    log: true,
+                    logLevel: 'error',
+                    context: {
+                        operation: 'initializePeopleModule',
+                        component: 'PeopleModule',
+                    },
+                });
+                Logger.error('❌ PEOPLE: Failed to bootstrap PeopleModule', error, PEOPLE_LOG_CONTEXT);
+            }
+        })();
+    };
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        bootstrap();
+        return;
+    }
+    document.addEventListener('DOMContentLoaded', () => {
+        bootstrap();
+    }, { once: true });
+}
+const peopleModuleApi = {
+    PeopleModule,
+    peopleModuleInstance,
+    initializePeopleModule,
+    initializePeopleTab,
+    ensurePeopleTabInitialized,
+    fetchPeopleFromTables,
+    fetchActivePresenceIds,
+    normalizePeopleUser,
+};
 // Export as ES6 module
-export { PeopleModule, peopleModuleInstance };
-export default PeopleModule;
+export { PeopleModule, peopleModuleInstance, initializePeopleModule, initializePeopleTab, ensurePeopleTabInitialized, fetchPeopleFromTables, fetchActivePresenceIds, normalizePeopleUser, peopleModuleApi, };
+export default peopleModuleApi;

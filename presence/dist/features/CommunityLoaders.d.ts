@@ -10,7 +10,7 @@ interface Community {
     owner?: string;
     admins?: string[];
     members?: string[];
-    [key: string]: any;
+    [key: string]: unknown;
 }
 /**
  * Load communities for the current user

@@ -5,7 +5,6 @@
  * Follows the .well-known/provenance pattern for discoverability
  */
 declare class ProvenanceLinkInjector {
-    private isEnabled;
     private observer;
     private injectedMessages;
     private baseUrl;

@@ -4,67 +4,100 @@
  */
 // Import stateManagerInstance (TypeScript migration - no longer using window.currentUser)
 import { stateManagerInstance } from '../core/StateManager.js';
+import { API_CONFIG } from '../core/APIConfig.js';
+import { handleError } from '../utils/ErrorHandler.js';
+import { Logger } from '../utils/Logger.js';
+import { getBackendHealthService } from './BackendHealthService.js';
 class MetaLayerAPI {
-    constructor(baseURL) {
+    constructor(baseURL = API_CONFIG.baseUrl, fallbackURL = API_CONFIG.fallbackUrl) {
         this.baseURL = baseURL;
+        this.fallbackURL = fallbackURL;
+    }
+    _buildUrl(endpoint, useFallback = false) {
+        if (endpoint.startsWith('http')) {
+            const supabaseMatch = endpoint.match(/\/rest\/v1\/(.+)/);
+            if (supabaseMatch) {
+                const redirected = `${this.baseURL}/${supabaseMatch[1]}`;
+                Logger.debug('✅ COMP_API_FIX: Redirected Supabase API call', { endpoint, finalUrl: redirected }, 'api');
+                return redirected;
+            }
+            const replaced = API_CONFIG.replaceMetalayerUrl(endpoint);
+            if (replaced !== endpoint) {
+                Logger.debug('✅ COMP_API_FIX: Redirected api.themetalayer.org call', { endpoint, finalUrl: replaced }, 'api');
+            }
+            return replaced;
+        }
+        const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+        const base = useFallback && this.fallbackURL ? this.fallbackURL : this.baseURL;
+        return `${base}${normalizedEndpoint}`;
+    }
+    _classifyNetworkError(error) {
+        const err = error instanceof Error ? error : new Error(String(error));
+        const message = err.message || '';
+        const connectionRefused = message.includes('ERR_CONNECTION_REFUSED') || message.includes('Failed to fetch');
+        const timeout = err.name === 'AbortError';
+        return { timeout, connectionRefused, error: err };
     }
     /**
      * Make API request with comprehensive endpoint redirection
      */
     async request(endpoint, options = {}) {
-        // COMP_API_FIX: Handle comprehensive API endpoint redirection
-        let finalUrl = `${this.baseURL}${endpoint}`;
-        // Check if this is a full URL that needs redirection
-        if (endpoint.startsWith('http')) {
-            if (endpoint.includes('api.themetalayer.org')) {
-                finalUrl = endpoint.replace('https://api.themetalayer.org', 'http://216.238.91.120:3002');
-                console.log('✅ COMP_API_FIX: Redirected api.themetalayer.org call:', endpoint, '->', finalUrl);
-            }
-            else if (endpoint.includes('supabase.co')) {
-                // Extract the actual endpoint path after /rest/v1/
-                const pathMatch = endpoint.match(/\/rest\/v1\/(.+)/);
-                if (pathMatch) {
-                    const actualEndpoint = pathMatch[1];
-                    finalUrl = `${this.baseURL}/${actualEndpoint}`;
-                    console.log('✅ COMP_API_FIX: Redirected Supabase API call:', endpoint, '->', finalUrl);
-                }
-            }
-        }
-        else if (endpoint.startsWith('/v1/') || endpoint.startsWith('/communities') || endpoint.startsWith('/avatars')) {
-            // Handle relative API URLs - redirect to VPS
-            finalUrl = `http://216.238.91.120:3002${endpoint}`;
-            console.log('✅ COMP_API_FIX: Redirected relative API call:', endpoint, '->', finalUrl);
-        }
+        const finalUrl = this._buildUrl(endpoint);
         // COMP METHOD: Get current user info to send in headers
         let user = null;
         try {
-            console.log('🔍 USER_IDENTITY: === API USER IDENTITY TRACE ===');
+            Logger.debug('🔍 USER_IDENTITY: === API USER IDENTITY TRACE ===', null, 'api');
             // ROOT CAUSE FIX: Use stateManagerInstance (TypeScript migration - no longer using window.currentUser)
             const currentUserRaw = stateManagerInstance?.getState?.('currentUser');
-            console.log('🔍 USER_IDENTITY: currentUser (from stateManager):', currentUserRaw);
+            Logger.debug('🔍 USER_IDENTITY: currentUser (from stateManager)', currentUserRaw, 'api');
             // First try to get from currentUser (set by authentication)
             if (currentUserRaw && currentUserRaw.id) {
+                // CRITICAL: Verify user.id is UUID before using it
+                const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+                const isUUID = uuidRegex.test(currentUserRaw.id);
+                if (!isUUID) {
+                    Logger.error('🔍 USER_IDENTITY: CRITICAL - currentUser.id is not UUID', {
+                        userId: currentUserRaw.id,
+                        email: currentUserRaw.email,
+                        message: 'API requires UUID, not Google ID. UUID conversion must happen in BootController.handleUserChange() first.',
+                        action: 'Skipping API call - UUID conversion required'
+                    }, 'api');
+                    // Don't use Google ID for API calls - return error response
+                    return {
+                        status: 400,
+                        error: 'Invalid user ID format - UUID required',
+                        data: undefined
+                    };
+                }
                 // Create a copy, handling Promise auraColor
                 user = {
-                    id: currentUserRaw.id,
+                    id: currentUserRaw.id, // Now guaranteed to be UUID
                     email: currentUserRaw.email,
                     name: currentUserRaw.name,
                     avatarUrl: currentUserRaw.avatarUrl,
                     auraColor: typeof currentUserRaw.auraColor === 'string' ? currentUserRaw.auraColor : undefined
                 };
-                console.log('🔍 USER_IDENTITY: ✅ Using currentUser for authentication:', user.id);
+                Logger.debug('🔍 USER_IDENTITY: ✅ Using currentUser for authentication', { userId: user.id, isUUID: true }, 'api');
                 // CRITICAL FIX: Handle case where auraColor is a Promise (from reactive systems)
                 if (currentUserRaw.auraColor && typeof currentUserRaw.auraColor === 'object' && typeof currentUserRaw.auraColor.then === 'function') {
-                    console.log('🔍 USER_IDENTITY: ⚠️ auraColor is a Promise, resolving...');
+                    Logger.debug('🔍 USER_IDENTITY: ⚠️ auraColor is a Promise, resolving...', 'api');
                     try {
                         const resolvedAuraColor = await currentUserRaw.auraColor;
-                        console.log('🔍 USER_IDENTITY: ✅ Resolved auraColor Promise to:', resolvedAuraColor);
+                        Logger.debug('🔍 USER_IDENTITY: ✅ Resolved auraColor Promise', { auraColor: resolvedAuraColor }, 'api');
                         if (user) {
                             user.auraColor = resolvedAuraColor;
                         }
                     }
                     catch (error) {
-                        console.warn('🔍 USER_IDENTITY: ❌ Failed to resolve auraColor Promise:', error);
+                        handleError(error, {
+                            log: true,
+                            logLevel: 'warn',
+                            context: {
+                                operation: 'catch',
+                                component: 'APIService'
+                            }
+                        });
+                        ;
                         if (user) {
                             user.auraColor = undefined;
                         }
@@ -74,28 +107,37 @@ class MetaLayerAPI {
                 // This handles cases where auraColor is set after the copy
                 if (user && !user.auraColor && currentUserRaw?.auraColor && typeof currentUserRaw.auraColor === 'string') {
                     user.auraColor = currentUserRaw.auraColor;
-                    console.log('🔍 USER_IDENTITY: ✅ Using auraColor from currentUser:', user.auraColor);
+                    Logger.debug('🔍 USER_IDENTITY: ✅ Using auraColor from currentUser', { auraColor: user.auraColor }, 'api');
                 }
                 // CRITICAL FIX: If auraColor is still missing, fetch it now to prevent delays
                 // Use direct fetch() instead of window.api.request() to break recursion chain
                 // This solves the root cause: direct fetch() doesn't call request() again
                 if (user && !user.auraColor && user.id) {
-                    console.log('🔍 USER_IDENTITY: 🎨 AuraColor missing, fetching immediately...');
+                    // CRITICAL: Verify user.id is UUID before making API call
+                    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+                    const isUUID = uuidRegex.test(user.id);
+                    if (!isUUID) {
+                        Logger.error('🔍 USER_IDENTITY: CRITICAL - Cannot fetch auraColor - user.id is not UUID', {
+                            userId: user.id,
+                            email: user.email,
+                            message: 'API requires UUID, not Google ID or email. UUID conversion must happen first.'
+                        }, 'api');
+                        // Don't make API call with Google ID - it will fail
+                        // Return user object as-is (this is not an API response, just returning the user object)
+                        return user;
+                    }
+                    Logger.debug('🔍 USER_IDENTITY: 🎨 AuraColor missing, fetching immediately...', 'api');
                     try {
                         // ROOT CAUSE FIX: Use direct fetch() instead of window.api.request() 
                         // This breaks the recursion chain - fetch() doesn't invoke request() again
-                        // ROOT CAUSE FIX: Include email in header for Google ID lookup
-                        const fetchUrl = `http://216.238.91.120:3002/v1/users/${user.id}`;
+                        // UUID ONLY - user.id is now guaranteed to be UUID (validated above)
+                        const fetchUrl = this._buildUrl(`/v1/users/${user.id}`);
                         const controller = new AbortController();
                         const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
                         const headers = {
                             'Content-Type': 'application/json'
                         };
-                        // ROOT CAUSE FIX: If user ID is numeric (Google ID), include email in header for lookup
-                        if (user.email && /^\d+$/.test(String(user.id))) {
-                            headers['x-user-email'] = user.email;
-                            console.log('🔍 USER_IDENTITY: Including email in header for Google ID lookup:', user.email);
-                        }
+                        // UUID ONLY - no email headers needed
                         const response = await fetch(fetchUrl, {
                             method: 'GET',
                             headers,
@@ -117,7 +159,7 @@ class MetaLayerAPI {
                                         stateManagerInstance.setState('currentUser', updatedUser);
                                     }
                                 }
-                                console.log('🔍 USER_IDENTITY: ✅ AuraColor fetched immediately:', auraColor);
+                                Logger.debug('🔍 USER_IDENTITY: ✅ AuraColor fetched immediately', { auraColor }, 'api');
                             }
                             if (avatarUrl && user && !user.avatarUrl) {
                                 user.avatarUrl = avatarUrl;
@@ -130,16 +172,32 @@ class MetaLayerAPI {
                             }
                         }
                         else {
-                            console.warn('🔍 USER_IDENTITY: ⚠️ Failed to fetch auraColor - HTTP', response.status);
+                            Logger.warn('🔍 USER_IDENTITY: ⚠️ Failed to fetch auraColor', { status: response.status }, 'api');
                         }
                     }
                     catch (error) {
                         // ROOT CAUSE FIX: Handle connection refused gracefully
                         if (error instanceof Error && (error.name === 'AbortError' || error.message.includes('Failed to fetch') || error.message.includes('ERR_CONNECTION_REFUSED'))) {
-                            console.warn('🔍 USER_IDENTITY: ⚠️ API unavailable, continuing without auraColor:', error.message);
+                            handleError(error, {
+                                log: true,
+                                logLevel: 'warn',
+                                context: {
+                                    operation: 'catch',
+                                    component: 'APIService'
+                                }
+                            });
+                            ;
                         }
                         else {
-                            console.warn('🔍 USER_IDENTITY: ⚠️ Failed to fetch auraColor immediately:', error);
+                            handleError(error, {
+                                log: true,
+                                logLevel: 'warn',
+                                context: {
+                                    operation: 'catch',
+                                    component: 'APIService'
+                                }
+                            });
+                            ;
                         }
                     }
                 }
@@ -149,42 +207,72 @@ class MetaLayerAPI {
                 if (authManager && typeof authManager.getCurrentUser === 'function') {
                     const authUser = await authManager.getCurrentUser();
                     if (authUser && authUser.id) {
-                        user = { id: authUser.id, email: authUser.email };
+                        // CRITICAL: Verify authUser.id is UUID before using it
+                        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+                        const isUUID = uuidRegex.test(authUser.id);
+                        if (!isUUID) {
+                            Logger.error('🔍 USER_IDENTITY: CRITICAL - authManager returned Google ID, not UUID', {
+                                userId: authUser.id,
+                                email: authUser.email,
+                                message: 'API requires UUID. UUID conversion must happen in BootController.handleUserChange() first.',
+                                action: 'Rejecting API call'
+                            }, 'api');
+                            // Reject API call with clear error
+                            return {
+                                status: 400,
+                                error: `Invalid user ID format: ${authUser.id}. UUID required, not Google ID.`,
+                                data: undefined
+                            };
+                        }
+                        user = { id: authUser.id, email: authUser.email }; // Now guaranteed to be UUID
                     }
-                    console.log('🔍 USER_IDENTITY: ✅ Using authManager for authentication:', user?.id);
+                    Logger.debug('🔍 USER_IDENTITY: ✅ Using authManager for authentication', { userId: user?.id, isUUID: true }, 'api');
                 }
             }
-            else if (typeof window !== 'undefined' && typeof window.getCurrentUserEmail === 'function') {
-                const getCurrentUserEmail = window.getCurrentUserEmail;
-                if (getCurrentUserEmail) {
-                    const email = await getCurrentUserEmail();
-                    if (email) {
-                        user = { id: email, email };
-                        console.log('🔍 USER_IDENTITY: ✅ Using getCurrentUserEmail for authentication:', email);
-                    }
-                }
-            }
+            // UUID ONLY - getCurrentUserEmail fallback removed
+            // If no user.id (UUID) is available, we cannot authenticate
+            // This ensures UUID-only policy is enforced
             else {
-                console.log('🔍 USER_IDENTITY: ❌ No user authentication available');
+                Logger.debug('🔍 USER_IDENTITY: ❌ No user authentication available', null, 'api');
             }
-            console.log('🔍 USER_IDENTITY: === END API USER IDENTITY TRACE ===');
+            Logger.debug('🔍 USER_IDENTITY: === END API USER IDENTITY TRACE ===', null, 'api');
         }
         catch (error) {
-            console.log('🔍 USER_IDENTITY: ❌ Error getting user authentication:', error);
+            Logger.debug('🔍 USER_IDENTITY: ❌ Error getting user authentication', error, 'api');
         }
         // Derive identifiers early for consistent headers
         // User data should already be normalized via setCurrentUser, but handle raw Supabase data if needed
         const currentUserForHeaders = stateManagerInstance?.getState?.('currentUser');
-        const derivedUserId = user?.id || currentUserForHeaders?.id || null;
-        const derivedEmail = user?.email || currentUserForHeaders?.email || null;
+        let derivedUserId = user?.id || currentUserForHeaders?.id || null;
+        // CRITICAL: Verify derivedUserId is UUID before using it
+        if (derivedUserId) {
+            const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+            const isUUID = uuidRegex.test(derivedUserId);
+            if (!isUUID) {
+                Logger.error('🔍 USER_IDENTITY: CRITICAL - Cannot make API call - user.id is not UUID', {
+                    userId: derivedUserId,
+                    email: user?.email || currentUserForHeaders?.email,
+                    endpoint,
+                    message: 'API requires UUID, not Google ID or email. UUID conversion must happen in BootController.handleUserChange() first.',
+                    action: 'Rejecting API call'
+                }, 'api');
+                // Reject API call with clear error
+                return {
+                    status: 400,
+                    error: `Invalid user ID format: ${derivedUserId}. UUID required, not Google ID or email.`,
+                    data: undefined
+                };
+            }
+        }
+        // Email kept for potential future use but not currently used
+        void (user?.email || currentUserForHeaders?.email || null);
         const derivedName = user?.name || currentUserForHeaders?.name || undefined;
         const derivedAvatar = user?.avatarUrl || currentUserForHeaders?.avatarUrl || undefined;
         const config = {
             method: options.method || 'GET',
             headers: {
                 'Content-Type': 'application/json',
-                // ROOT CAUSE FIX: Use lowercase headers to match backend expectations
-                ...(derivedEmail && { 'x-user-email': derivedEmail }),
+                // UUID ONLY - derivedUserId is now guaranteed to be UUID (validated above)
                 ...(derivedUserId && { 'x-user-id': derivedUserId }),
                 ...(derivedName && { 'x-user-name': derivedName }),
                 ...(derivedAvatar && { 'x-user-avatar': derivedAvatar }),
@@ -206,32 +294,92 @@ class MetaLayerAPI {
             clearTimeout(timeoutId);
             // Handle 404 specifically if allow404 is set
             if (response.status === 404 && options.allow404) {
+                // 404 is still a successful connection
+                try {
+                    const healthService = getBackendHealthService(this.baseURL);
+                    healthService.updateFromAPIRequest(true);
+                }
+                catch (healthError) {
+                    Logger.debug('⚠️ APIService: Failed to update health service', healthError, 'api');
+                }
                 return { data: null, status: 404 };
             }
             if (!response.ok) {
                 const errorText = await response.text();
-                console.warn(`⚠️ API Error: ${response.status} ${response.statusText}`, errorText);
+                Logger.warn(`⚠️ API Error: ${response.status} ${response.statusText}`, { errorText, status: response.status, statusText: response.statusText }, 'api');
+                // Server responded but with error - backend is reachable but degraded
+                try {
+                    const healthService = getBackendHealthService(this.baseURL);
+                    healthService.updateFromAPIRequest(false, `API returned ${response.status}: ${response.statusText}`);
+                }
+                catch (healthError) {
+                    Logger.debug('⚠️ APIService: Failed to update health service', healthError, 'api');
+                }
                 return {
                     error: `API request failed: ${response.status} ${response.statusText}`,
                     status: response.status
                 };
             }
             const data = await response.json();
+            // Update backend health service on success
+            try {
+                const healthService = getBackendHealthService(this.baseURL);
+                healthService.updateFromAPIRequest(true);
+            }
+            catch (healthError) {
+                // Don't fail the request if health service update fails
+                Logger.debug('⚠️ APIService: Failed to update health service', healthError, 'api');
+            }
             return { data, status: response.status };
         }
         catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            const networkMeta = this._classifyNetworkError(error);
+            // Update backend health service on failure
+            try {
+                const healthService = getBackendHealthService(this.baseURL);
+                if (networkMeta.timeout) {
+                    healthService.updateFromAPIRequest(false, 'API request timeout');
+                }
+                else if (networkMeta.connectionRefused) {
+                    healthService.updateFromAPIRequest(false, 'API server unavailable - connection refused');
+                }
+                else {
+                    healthService.updateFromAPIRequest(false, errorMessage);
+                }
+            }
+            catch (healthError) {
+                // Don't fail the request if health service update fails
+                Logger.debug('⚠️ APIService: Failed to update health service', healthError, 'api');
+            }
             // ROOT CAUSE FIX: Handle connection refused gracefully without crashing
-            if (error instanceof Error && error.name === 'AbortError') {
-                console.warn('⚠️ API Request Timeout:', finalUrl);
+            if (networkMeta.timeout) {
+                handleError(error, {
+                    log: true,
+                    logLevel: 'warn',
+                    context: {
+                        operation: 'catch',
+                        component: 'APIService'
+                    }
+                });
+                ;
                 return {
                     error: 'API request timeout - server may be unavailable',
                     status: 0,
                     timeout: true
                 };
             }
-            else if (error instanceof Error && (error.message.includes('Failed to fetch') || error.message.includes('ERR_CONNECTION_REFUSED'))) {
+            else if (networkMeta.connectionRefused) {
                 // Connection refused - server is down or unreachable
-                console.warn('⚠️ API Connection Refused:', finalUrl, '- Server may be down. Extension will continue with limited functionality.');
+                handleError(error, {
+                    log: true,
+                    logLevel: 'warn',
+                    context: {
+                        operation: 'catch',
+                        component: 'APIService'
+                    }
+                });
+                ;
                 return {
                     error: 'API server unavailable - connection refused',
                     status: 0,
@@ -239,28 +387,34 @@ class MetaLayerAPI {
                 };
             }
             else {
-                console.warn('⚠️ API Request Error:', error instanceof Error ? error.message : 'Unknown error');
+                handleError(error, {
+                    log: true,
+                    logLevel: 'warn',
+                    context: {
+                        operation: 'catch',
+                        component: 'APIService'
+                    }
+                });
+                ;
                 return {
-                    error: error instanceof Error ? error.message : 'Unknown error',
+                    error: errorMessage,
                     status: 0
                 };
             }
         }
     }
 }
-// Maintain global api instance and store in stateManager (TypeScript migration)
+// Create singleton API instance (TypeScript migration - no window globals)
+export const apiServiceInstance = new MetaLayerAPI(API_CONFIG.baseUrl);
+// Maintain backward compatibility during migration (will be removed)
 if (typeof window !== 'undefined') {
-    const apiInstance = new MetaLayerAPI('http://216.238.91.120:3002');
-    // Set on window for backward compatibility during migration
-    // Cast to any to avoid type mismatch with global.d.ts definition
     const win = window;
     if (!win.api) {
-        win.api = apiInstance;
+        win.api = apiServiceInstance;
     }
-    // Store in stateManager (TypeScript migration) - store as unknown to avoid type mismatch
-    // The stateManager accepts unknown, so this is safe
+    // Store in stateManager for legacy access
     if (stateManagerInstance?.setState) {
-        stateManagerInstance.setState('api', apiInstance);
+        stateManagerInstance.setState('api', apiServiceInstance);
     }
 }
 export { MetaLayerAPI };

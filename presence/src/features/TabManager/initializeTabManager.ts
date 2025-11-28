@@ -6,6 +6,7 @@
 import { getTabManager } from './TabManager.js';
 import { Logger } from '../../utils/Logger.js';
 import { handleError } from '../../utils/ErrorHandler.js';
+import { userPreferencesManager } from '../../utils/UserPreferencesManager.js';
 
 let tabManagerInitialized = false;
 
@@ -39,48 +40,24 @@ async function initializeTabManager() {
 
 /**
  * Wait for UserPreferencesManager to be ready
- * Returns a promise that resolves when UserPreferencesManager is available and initialized
+ * Returns a promise that resolves when UserPreferencesManager is initialized
+ * Since we're using ES6 imports, the module is always available, we just need to wait for initialization
  */
-function waitForPreferencesManager(): Promise<typeof window.userPreferencesManager | null> {
+function waitForPreferencesManager(): Promise<typeof userPreferencesManager | null> {
   return new Promise((resolve) => {
-    let resolved = false;
-    let eventHandler: ((e: Event) => void) | null = null;
-    let checkInterval: ReturnType<typeof setInterval> | null = null;
-
-    const doResolve = (value: typeof window.userPreferencesManager | null) => {
-      if (resolved) return;
-      resolved = true;
-      if (eventHandler) {
-        window.removeEventListener('preferenceLoaded', eventHandler);
-      }
-      if (checkInterval) {
-        clearInterval(checkInterval);
-      }
-      resolve(value);
-    };
-
-    // Check if already available and initialized
-    const checkInitialized = (): boolean => {
-      const prefsMgr = window.userPreferencesManager;
-      if (prefsMgr && prefsMgr.isInitialized) {
-        Logger.debug?.('✅ TabManager: UserPreferencesManager already ready');
-        doResolve(prefsMgr);
-        return true;
-      }
-      return false;
-    };
-
-    // Immediate check
-    if (checkInitialized()) {
+    // Check if already initialized
+    if (userPreferencesManager.isInitialized) {
+      Logger.debug?.('✅ TabManager: UserPreferencesManager already ready');
+      resolve(userPreferencesManager);
       return;
     }
 
-    // Set up event handler
-    eventHandler = () => {
-      const prefsMgr = window.userPreferencesManager;
-      if (prefsMgr && prefsMgr.isInitialized) {
+    // Set up event handler for initialization
+    const eventHandler = () => {
+      if (userPreferencesManager.isInitialized) {
         Logger.debug?.('✅ TabManager: UserPreferencesManager ready (from event)');
-        doResolve(prefsMgr);
+        window.removeEventListener('preferenceLoaded', eventHandler);
+        resolve(userPreferencesManager);
       }
     };
 
@@ -89,16 +66,19 @@ function waitForPreferencesManager(): Promise<typeof window.userPreferencesManag
     // Also check periodically as fallback (max 5 seconds)
     let attempts = 0;
     const maxAttempts = 10; // 10 * 500ms = 5 seconds
-    checkInterval = setInterval(() => {
+    const checkInterval = setInterval(() => {
       attempts++;
-      if (checkInitialized()) {
+      if (userPreferencesManager.isInitialized) {
+        clearInterval(checkInterval);
+        window.removeEventListener('preferenceLoaded', eventHandler);
+        resolve(userPreferencesManager);
         return;
       }
       if (attempts >= maxAttempts) {
+        clearInterval(checkInterval);
+        window.removeEventListener('preferenceLoaded', eventHandler);
         Logger.warn?.('⚠️ TabManager: UserPreferencesManager timeout, proceeding anyway');
-        // Proceed with whatever is available (may be null)
-        const prefsMgr = window.userPreferencesManager || null;
-        doResolve(prefsMgr);
+        resolve(userPreferencesManager); // Return instance even if not initialized
       }
     }, 500);
   });
@@ -112,6 +92,10 @@ async function doInitialize() {
     const tabManager = getTabManager();
     await tabManager.initialize();
     tabManagerInitialized = true;
+    
+    // ES6 pattern: TabManager is available via getTabManager() export, no window exposure needed
+    // Removed window.tabContextManager assignment - use ES6 imports instead
+    
     Logger.debug?.('✅ TabManager: Initialized successfully');
     
     // Dispatch event to notify other modules

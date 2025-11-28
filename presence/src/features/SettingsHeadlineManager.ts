@@ -223,12 +223,14 @@ class SettingsHeadlineManager {
       }
 
       // If UserPreferencesManager wasn't ready, retry when it becomes available
-      const { userPreferencesManager } = getSettingContracts();
+      const contracts = getSettingContracts();
+      const userPreferencesManager = contracts.userPreferencesManager as { isInitialized?: boolean } | null | undefined;
       if (!userPreferencesManager?.isInitialized) {
         Logger.debug('🔄 SETTINGS_HEADLINE: UserPreferencesManager not ready, will retry when available', 'settings');
         const retryHandler = async (): Promise<void> => {
-          const contracts = getSettingContracts();
-          if (contracts.userPreferencesManager?.isInitialized) {
+        const contracts = getSettingContracts();
+        const prefsMgr = contracts.userPreferencesManager as { isInitialized?: boolean } | null | undefined;
+        if (prefsMgr?.isInitialized) {
             window.removeEventListener('preferenceLoaded', retryHandler);
             Logger.debug('🔄 SETTINGS_HEADLINE: UserPreferencesManager now ready, re-reading headline', 'settings');
             await this.readHeadline();

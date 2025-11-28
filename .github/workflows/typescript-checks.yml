@@ -92,6 +92,10 @@ jobs:
           npx tsc --noEmit
         continue-on-error: false
       
+      - name: Supabase realtime bridge guard
+        run: npm run check:supabase-bridge
+        continue-on-error: false
+      
       - name: TypeScript compilation check
         run: |
           cd presence

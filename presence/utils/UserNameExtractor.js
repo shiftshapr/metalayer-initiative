@@ -85,5 +85,5 @@ export class UserNameExtractor {
 }
 // Attach to window if available (for browser environment)
 if (typeof window !== 'undefined') {
-    window.UserNameExtractor = UserNameExtractor;
+    // Export removed - use ES6 imports
 }

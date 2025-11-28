@@ -4,56 +4,95 @@
  * Integrates with existing CanopiModule and message display code
  */
 import { messageStore } from '../services/MessageStore.js';
+import { initializeSupabaseRealtimeServices } from '../services/SupabaseRealtimeClientFix.js';
+import { handleError } from '../utils/ErrorHandler.js';
+import { Logger } from '../utils/Logger.js';
 export class MessageSystemIntegration {
     constructor() {
         this.currentPageId = null;
         this.currentParentId = null;
         this.realtimeService = null;
-        // MessageLoader will be injected via config
+        this.initialized = false;
+        this.messageStoreListenersAttached = false;
+        this.cleanupStoreListeners = [];
+        this.handleMessageStoreUpdate = (data) => {
+            if (!this.onMessageUpdateCallback) {
+                return;
+            }
+            const typedData = data;
+            if (!typedData.key) {
+                return;
+            }
+            const [pageId, parentIdStr] = typedData.key.split('|');
+            const parentId = parentIdStr === 'null' ? null : parentIdStr;
+            if (pageId === this.currentPageId && parentId === this.currentParentId) {
+                this.onMessageUpdateCallback(typedData.data?.items || []);
+            }
+        };
+        this.handleMessageStoreError = (data) => {
+            if (!this.onErrorCallback) {
+                return;
+            }
+            const typedData = data;
+            this.onErrorCallback(new Error(typedData.error?.message || 'Unknown error'));
+        };
         this.messageLoader = {};
     }
+    attachMessageStoreListeners() {
+        if (this.messageStoreListenersAttached) {
+            return;
+        }
+        this.messageStoreListenersAttached = true;
+        this.cleanupStoreListeners.push(messageStore.on('update', this.handleMessageStoreUpdate), messageStore.on('error', this.handleMessageStoreError));
+    }
     async initialize(config) {
+        if (this.initialized) {
+            Logger.debug('ℹ️ MessageSystemIntegration: initialize() skipped (already initialized)', null, 'general');
+            return true;
+        }
         try {
-            // Initialize real-time subscription service
             if (config.initializeRealtimeSubscriptionService) {
                 this.realtimeService = config.initializeRealtimeSubscriptionService(config.supabaseClient);
                 await this.realtimeService.initialize();
             }
-            // Set error notification callback
+            else {
+                const realtimeService = await initializeSupabaseRealtimeServices({
+                    supabaseClient: config.supabaseClient
+                });
+                if (realtimeService) {
+                    this.realtimeService = realtimeService;
+                }
+                else {
+                    Logger.warn('⚠️ MessageSystemIntegration: Supabase realtime service unavailable; skipping realtime subscriptions', null, 'general');
+                }
+            }
             if (config.showNotification && this.realtimeService) {
                 this.realtimeService.setErrorNotificationCallback(config.showNotification);
             }
-            // Store callbacks
             this.onMessageUpdateCallback = config.onMessageUpdate;
             this.onErrorCallback = config.onError;
-            // Store messageLoader if provided
             if (config.messageLoader) {
                 this.messageLoader = config.messageLoader;
             }
-            // Subscribe to MessageStore updates
-            messageStore.on('update', (data) => {
-                const typedData = data;
-                if (typedData.key && this.onMessageUpdateCallback) {
-                    const [pageId, parentIdStr] = typedData.key.split('|');
-                    const parentId = parentIdStr === 'null' ? null : parentIdStr;
-                    if (pageId === this.currentPageId && parentId === this.currentParentId) {
-                        this.onMessageUpdateCallback(typedData.data?.items || []);
-                    }
-                }
-            });
-            messageStore.on('error', (data) => {
-                const typedData = data;
-                if (this.onErrorCallback) {
-                    this.onErrorCallback(new Error(typedData.error?.message || 'Unknown error'));
-                }
-            });
-            console.log('✅ MessageSystemIntegration: Initialized');
+            this.attachMessageStoreListeners();
+            Logger.debug('✅ MessageSystemIntegration: Initialized', null, 'general');
+            this.initialized = true;
             return true;
         }
         catch (error) {
-            console.error('❌ MessageSystemIntegration: Initialization failed:', error);
+            handleError(error, {
+                log: true,
+                logLevel: 'error',
+                context: {
+                    operation: 'initialize',
+                    component: 'MessageSystemIntegration'
+                }
+            });
             return false;
         }
+    }
+    isReady() {
+        return this.initialized;
     }
     async loadDefaultView(pageId, options = {}) {
         this.currentPageId = pageId;
@@ -92,7 +131,16 @@ export class MessageSystemIntegration {
             return messages;
         }
         catch (error) {
-            console.error('MessageSystemIntegration: Error loading default view:', error);
+            handleError(error, {
+                log: true,
+                logLevel: 'error',
+                context: {
+                    operation: 'loadDefaultView',
+                    component: 'MessageSystemIntegration',
+                    pageId,
+                    communityId: options.communityId
+                }
+            });
             if (this.onErrorCallback) {
                 this.onErrorCallback(error instanceof Error ? error : new Error(String(error)));
             }
@@ -124,7 +172,16 @@ export class MessageSystemIntegration {
             return result;
         }
         catch (error) {
-            console.error('MessageSystemIntegration: Error loading focus mode:', error);
+            handleError(error, {
+                log: true,
+                logLevel: 'error',
+                context: {
+                    operation: 'loadFocusMode',
+                    component: 'MessageSystemIntegration',
+                    pageId,
+                    focusParentId
+                }
+            });
             if (this.onErrorCallback) {
                 this.onErrorCallback(error instanceof Error ? error : new Error(String(error)));
             }
@@ -132,21 +189,52 @@ export class MessageSystemIntegration {
         }
     }
     async handlePageChange(newPageId, communityId = 'abe5ec85-4ba6-456f-adaf-03d7d51cecf4') {
-        // Unsubscribe from old page
-        if (this.currentPageId && this.currentPageId !== newPageId && this.realtimeService) {
-            this.realtimeService.unsubscribeFromPage(this.currentPageId);
-            this.messageLoader.cleanupLazyLoading();
+        try {
+            // Unsubscribe from old page
+            if (this.currentPageId && this.currentPageId !== newPageId && this.realtimeService) {
+                this.realtimeService.unsubscribeFromPage(this.currentPageId);
+                this.messageLoader.cleanupLazyLoading();
+            }
+            // Update current page
+            this.currentPageId = newPageId;
+            this.currentParentId = null;
+            // Load new page messages
+            await this.loadDefaultView(newPageId, { communityId });
         }
-        // Update current page
-        this.currentPageId = newPageId;
-        this.currentParentId = null;
-        // Load new page messages
-        await this.loadDefaultView(newPageId, { communityId });
+        catch (error) {
+            handleError(error, {
+                log: true,
+                logLevel: 'error',
+                context: {
+                    operation: 'handlePageChange',
+                    component: 'MessageSystemIntegration',
+                    newPageId,
+                    communityId
+                }
+            });
+        }
     }
     destroy() {
         if (this.realtimeService) {
             this.realtimeService.unsubscribeAll();
         }
+        this.cleanupStoreListeners.splice(0).forEach(unsubscribe => {
+            try {
+                unsubscribe();
+            }
+            catch (error) {
+                handleError(error, {
+                    log: true,
+                    logLevel: 'error',
+                    context: {
+                        operation: 'destroyCleanup',
+                        component: 'MessageSystemIntegration'
+                    }
+                });
+            }
+        });
+        this.messageStoreListenersAttached = false;
+        this.initialized = false;
         this.messageLoader.destroy();
         this.currentPageId = null;
         this.currentParentId = null;
@@ -158,9 +246,39 @@ export function getMessageSystemIntegration() {
     return messageSystemIntegration;
 }
 export async function initializeMessageSystemIntegration(config) {
-    if (!messageSystemIntegration) {
-        messageSystemIntegration = new MessageSystemIntegration();
+    try {
+        if (!messageSystemIntegration) {
+            messageSystemIntegration = new MessageSystemIntegration();
+        }
+        if (!messageSystemIntegration.isReady()) {
+            await messageSystemIntegration.initialize(config);
+        }
+        return messageSystemIntegration;
     }
-    await messageSystemIntegration.initialize(config);
-    return messageSystemIntegration;
+    catch (error) {
+        handleError(error, {
+            log: true,
+            logLevel: 'error',
+            context: {
+                operation: 'initializeMessageSystemIntegration',
+                component: 'MessageSystemIntegration'
+            }
+        });
+        throw error;
+    }
 }
+export function destroyMessageSystemIntegration() {
+    if (!messageSystemIntegration) {
+        return;
+    }
+    messageSystemIntegration.destroy();
+    messageSystemIntegration = null;
+    Logger.debug('🧹 MessageSystemIntegration: Destroyed singleton instance', null, 'general');
+}
+const messageSystemIntegrationApi = {
+    getMessageSystemIntegration,
+    initializeMessageSystemIntegration,
+    destroyMessageSystemIntegration
+};
+export { messageSystemIntegrationApi };
+export default messageSystemIntegrationApi;

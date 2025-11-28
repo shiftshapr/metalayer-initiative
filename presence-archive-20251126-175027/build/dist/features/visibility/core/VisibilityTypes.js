@@ -1,0 +1,8 @@
+/**
+ * VISIBILITY TYPES - Type Definitions
+ *
+ * Centralized type definitions for the visibility module.
+ * Phase 1: Foundation - Type Definitions
+ */
+export {};
+//# sourceMappingURL=VisibilityTypes.js.map

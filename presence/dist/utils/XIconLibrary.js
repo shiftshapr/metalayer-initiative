@@ -297,7 +297,7 @@ export const XIcons = {
     bookmarkFilled: BookmarkFilledIcon,
     view: ViewIcon,
     quote: QuoteIcon,
-    more: MoreIcon,
+    more: MoreIcon
 };
 /**
  * Get icon by name
@@ -307,7 +307,7 @@ export function getIcon(name, props) {
 }
 // Export to window for global access
 if (typeof window !== 'undefined') {
-    window.XIcons = XIcons;
-    console.log('✅ X_ICON_LIBRARY: Exported to window');
+    const win = window;
+    win.XIcons = XIcons;
 }
 export default XIcons;

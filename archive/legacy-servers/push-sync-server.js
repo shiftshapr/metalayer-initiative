@@ -13,7 +13,7 @@ const app = express();
 const PORT = 3003;
 
 // Configuration
-const PRESENCE_PATH = '/home/ubuntu/metalayer-initiative/presence';
+const PRESENCE_PATH = '/home/ubuntu/canopi/presence';
 const MACBOOK_IP = 'YOUR_MACBOOK_IP'; // You'll need to set this
 const MACBOOK_USER = 'daveed'; // Your MacBook username
 const MACBOOK_PATH = '/path/to/your/project/presence'; // Path on your MacBook

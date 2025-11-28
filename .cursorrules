@@ -1,4 +1,33 @@
-# Cursor Rules for Metalayer Initiative
+# Cursor Rules for Canopi
+
+## Window Object Usage Policy (RED-LINE) - CRITICAL
+
+**⚠️ READ THIS FIRST**: **NEVER use `window` object for application state, module exports, or global variables**. This is a RED-LINE policy. Use ES6 exports/imports or StateManager instead. Only use `window` for documented browser APIs (location, getComputedStyle, addEventListener, etc.). See full details below in "Window Object Usage Policy (RED-LINE)" section.
+
+## Documentation Organization (RED-LINE)
+
+**CRITICAL**: All new markdown files MUST be created in `docs/current/` directory, NOT in the project root.
+
+### Required Pattern:
+- ✅ **DO** create markdown files in `docs/current/`
+- ✅ **DO** use descriptive filenames (e.g., `FEATURE_PLAN.md`, `BUG_FIX_REPORT.md`)
+- ❌ **DO NOT** create markdown files in the project root directory
+- ❌ **DO NOT** scatter documentation across different directories
+
+### Examples:
+```bash
+# ✅ CORRECT: Create in docs/current/
+docs/current/NEW_FEATURE_PLAN.md
+docs/current/BUG_FIX_REPORT.md
+
+# ❌ WRONG: Creating in root
+NEW_FEATURE_PLAN.md  # ❌ RED-LINE VIOLATION
+```
+
+### Enforcement:
+- This is a **RED-LINE** policy - violations create organizational problems
+- All documentation should be organized in `docs/` subdirectories
+- See `docs/README.md` for full documentation organization guidelines
 
 ## Field Naming Standardization (RED-LINE)
 
@@ -8,6 +37,8 @@
 - **Use camelCase for ALL interface/JavaScript code** (e.g., `createdAt`, `parentId`, `pageId`, `userId`, `communityId`, `auraColor`)
 - **Convert snake_case to camelCase immediately upon receipt from backend/Supabase**
 - **Delete snake_case fields after conversion** - do NOT maintain both
+- **Type definitions MUST use camelCase only** - no snake_case fields in TypeScript interfaces/types
+- **API boundary code MUST convert** snake_case (database/API) → camelCase (TypeScript types)
 
 ### Prohibited Patterns:
 - ❌ **DO NOT** maintain both `createdAt` and `created_at`
@@ -45,6 +76,10 @@ formatMessageTime(message.createdAt || message.created_at)
 - This is a **RED-LINE** policy - violations block release
 - All field name conversions must happen at the **interface boundary** (API/Supabase → JavaScript)
 - Once converted to camelCase, use **ONLY camelCase** throughout the codebase
+- **Diagnostic script**: Run `npx tsx presence/src/scripts/diagnose-snake-case-types.ts` before commits
+- **CI/CD**: Diagnostic runs automatically in GitHub Actions
+- **ESLint**: Configured to detect snake_case in type definitions
+- **Helper function**: Use `convertSnakeToCamel()` from `src/utils/ApiBoundaryHelpers.ts` for API conversions
 
 ## Extension Distribution Cleanliness (RED-LINE)
 
@@ -107,13 +142,12 @@ presence/
 
 ### Codebase Architecture
 - **122 TypeScript files** - Large codebase, always check related files before making changes
-- **Window Globals**: Heavy reliance on `window` object for global state (temporary during migration)
-  - `window.currentUser`: Current authenticated user (User | null) - **ALWAYS null-check before access**
-  - `window.currentVisibilityData`: Active users on current page (User[]) - **May be undefined on init**
-  - `window.currentVisibilityDataUnfiltered`: All visibility data (unfiltered)
-  - `window.api`: API client instance - **May be undefined if not initialized**
-  - **Pattern**: Always check: `if (window.currentUser) { /* use it */ }`
-  - **Future**: Will migrate to proper state management (Redux/Zustand)
+- **State Management**: Use `StateManager` for application state, ES6 exports for modules
+  - **DO NOT use window globals** - See "Window Object Usage Policy (RED-LINE)" section
+  - Current user: `stateManagerInstance.getState('currentUser')` or `authManagerInstance.getCurrentUser()`
+  - Visibility data: `stateManagerInstance.getState('currentVisibilityData')`
+  - API client: Import `api` from `APIModule.ts` via ES6 import
+  - **Pattern**: Always use ES6 imports: `import { api } from './APIModule.js';`
 
 ### Common Runtime Error Categories (TypeScript Won't Catch)
 
@@ -188,17 +222,24 @@ presence/
   });
   ```
 
-#### 5. **Window Global Null Checks**
-- **Pattern**: Window globals may be undefined during initialization
-- **Required**: Always check before accessing
+#### 5. **State Manager Null Checks**
+- **Pattern**: State may be undefined during initialization
+- **Required**: Always check before accessing, use StateManager or ES6 imports
   ```typescript
-  // ✅ CORRECT
-  if (window.currentUser && window.currentUser.id) {
-    updateUI(window.currentUser);
+  // ✅ CORRECT: Use StateManager
+  const currentUser = stateManagerInstance.getState('currentUser');
+  if (currentUser && currentUser.id) {
+    updateUI(currentUser);
   }
   
-  // ❌ WRONG - Crashes if currentUser is null
-  updateUI(window.currentUser); // May be null!
+  // ✅ CORRECT: Use ES6 imports
+  import { api } from './APIModule.js';
+  await api.request(...);
+  
+  // ❌ WRONG - Using window globals (FORBIDDEN)
+  if (window.currentUser && window.currentUser.id) {
+    updateUI(window.currentUser); // FORBIDDEN - Use StateManager instead
+  }
   ```
 
 #### 6. **Promise Rejection Handling**
@@ -264,70 +305,82 @@ Before submitting code:
 - [ ] All `document.getElementById()` calls have null checks
 - [ ] Event handlers are stored and properly cleaned up
 - [ ] Async functions have try/catch error handling
-- [ ] Window globals are null-checked before access
+- [ ] State is accessed via StateManager or ES6 imports (NO window globals)
 - [ ] Type assertions use type guards, not `as` casts
 - [ ] No `any` types (use `unknown` + guards)
 - [ ] Event targets are properly narrowed with `instanceof`
 - [ ] Promise rejections are handled with `.catch()` or try/catch
+- [ ] No `window.* =` assignments or `window.*` reads for application code
 
 ### Context Loading Strategy
 
 When fixing errors or adding features:
 1. **Read related files first**: Understand the module's dependencies
-2. **Check window globals**: See what global state is used (`grep -r "window\." src/`)
+2. **Check ES6 exports**: See what modules export (`grep -r "export" src/`)
 3. **Review event handlers**: Check for cleanup patterns
 4. **Examine async flows**: Trace promise chains and async/await
 5. **Check type definitions**: Review `src/types/index.ts` for available types
+6. **Use StateManager**: For application state, use `stateManagerInstance` instead of window globals
 
 ### Memory Storage (JAUmemory)
 
 Store important learnings:
 - Common error patterns and their fixes
-- Window global initialization order (what depends on what)
+- Module initialization order (what depends on what)
 - Event handler cleanup patterns that work
 - Type guard patterns for common types
 - API response shapes and normalization points
 - DOM element IDs and their purposes
-- Module dependencies and initialization order
+- ES6 module dependencies and import patterns
 
 See `TYPESCRIPT_MIGRATION_INSIGHTS.md` for detailed analysis of remaining error categories.
 
-## Backend Server Startup Policy (RED-LINE)
+## Backend Server Startup & Restart Policy (RED-LINE)
 
-**CRITICAL**: Backend server MUST ONLY be started using `start_backend.sh` script. NEVER start the backend manually with `node app.js`, `npm start`, or any other method.
+**CRITICAL**: Backend server MUST ONLY be started or restarted using `start_backend.sh` script. NEVER start or restart the backend manually with `node app.js`, `npm start`, `pm2 restart`, `pm2 stop`, `pm2 start`, or any other method.
 
 ### Required Workflow:
-- ✅ **ONLY use**: `bash start_backend.sh` or `./start_backend.sh`
+- ✅ **ONLY use**: `bash start_backend.sh` or `./start_backend.sh` from `/home/ubuntu/canopi`
 - ✅ The script handles: port cleanup, Prisma generate, PM2 process management, environment loading, and persistence
 - ✅ Server runs under PM2 as `metalayer-api` for proper process management
+- ✅ **Use for BOTH starting AND restarting**: The same script handles both scenarios
 
 ### Prohibited:
 - ❌ **DO NOT** run `node app.js` directly
 - ❌ **DO NOT** run `npm start` in server directory
 - ❌ **DO NOT** manually start with `PORT=3002 node app.js`
+- ❌ **DO NOT** use `pm2 restart metalayer-api` or `pm2 restart metalayer-api --update-env`
+- ❌ **DO NOT** use `pm2 stop` / `pm2 start` separately
 - ❌ **DO NOT** bypass PM2 process management
+- ❌ **DO NOT** use any other restart method
 
 ### Why This Matters:
-- Manual starts bypass critical setup steps (Prisma generate, port cleanup)
-- Manual starts don't use PM2 (no auto-restart, no persistence)
-- Manual starts can cause port conflicts and dependency issues
+- Manual starts/restarts bypass critical setup steps (Prisma generate, port cleanup)
+- Manual starts/restarts don't use PM2 properly (no auto-restart, no persistence)
+- Manual starts/restarts can cause port conflicts and dependency issues
 - PM2 management ensures server survives crashes and reboots
+- `start_backend.sh` ensures consistent environment loading and process state
 
 ### Build Process:
 ```bash
-# ✅ CORRECT: Use start_backend.sh
-cd /home/ubuntu/metalayer-initiative
-bash start_backend.sh
+# ✅ CORRECT: Use start_backend.sh for starting AND restarting
+cd /home/ubuntu/canopi
+./start_backend.sh
 
 # ❌ WRONG: Manual start
-cd /home/ubuntu/metalayer-initiative
+cd /home/ubuntu/canopi
 node app.js  # ❌ RED-LINE VIOLATION
+
+# ❌ WRONG: Manual restart
+pm2 restart metalayer-api  # ❌ RED-LINE VIOLATION
+pm2 restart metalayer-api --update-env  # ❌ RED-LINE VIOLATION
 ```
 
 ### Enforcement:
 - This is a **RED-LINE** policy - violations cause server management issues and deployment problems
-- If you find yourself starting the server manually, stop immediately and use `start_backend.sh`
+- If you find yourself starting or restarting the server manually, stop immediately and use `start_backend.sh`
 - PM2 ensures the server auto-restarts on crashes and persists across reboots
+- **ONLY `start_backend.sh` is the authorized method** - no exceptions
 
 ## Source-Only Editing Policy (RED-LINE)
 
@@ -365,6 +418,62 @@ node app.js  # ❌ RED-LINE VIOLATION
 - **Hand-authored JS files**: Some files like `real-google-auth.js` are intentionally JavaScript (not TypeScript). These are listed in `scripts/sync-extension-from-dist.sh` and are copied directly. Only edit these if they are explicitly marked as hand-authored.
 - **If unsure**: Check if a file exists in `src/` - if it does, edit that. If it doesn't, check `scripts/sync-extension-from-dist.sh` to see if it's hand-authored.
 
+## UUID-Only Identification Policy (RED-LINE)
+
+**CRITICAL**: This project uses **UUIDs exclusively** for all user identification, matching, and lookups. Email, Google ID, or any other identifier is **FORBIDDEN** for matching/lookup operations.
+
+### Required Pattern:
+- ✅ **ALWAYS use UUID** for user identification: `user.id`, `message.authorId`, `currentUser.id`
+- ✅ **ALWAYS lookup by UUID**: `findUnique({ where: { id: userId } })`
+- ✅ **ALWAYS match by UUID**: `currentUser.id === message.authorId`
+- ✅ **ALWAYS send UUID in headers**: `x-user-id: <uuid>` (never `x-user-email`)
+
+### Prohibited Patterns:
+- ❌ **DO NOT** use email for lookups: `WHERE email = ...` or `findUnique({ where: { email: ... } })`
+- ❌ **DO NOT** use email for matching: `user.email === currentUser.email`
+- ❌ **DO NOT** send email in headers: `x-user-email` header is FORBIDDEN
+- ❌ **DO NOT** use Google ID for lookups: No `googleId` column, no Google ID lookups
+- ❌ **DO NOT** use email as foreign key: Email is PII, not an identifier
+- ❌ **DO NOT** convert Google ID → Email → UUID: Frontend must get UUID from backend
+
+### Frontend Requirements:
+- ✅ **MUST get AppUser UUID** on authentication (via `GET /v1/users/me` or similar)
+- ✅ **MUST store UUID** in `currentUser.id`
+- ✅ **MUST send UUID** in all API requests via `x-user-id` header
+- ✅ **MUST match by UUID only**: `currentUser.id === message.authorId` (no email matching)
+
+### Backend Requirements:
+- ✅ **MUST require UUID** in `x-user-id` header for all authenticated routes
+- ✅ **MUST lookup by UUID only**: `findUnique({ where: { id: userId } })`
+- ✅ **MUST reject** requests without valid UUID (400/401 error)
+- ✅ **MUST NOT** accept email in headers or query parameters for lookups
+
+### Privacy & Security:
+- **Email is PII** - Using it for lookups violates data minimization principles
+- **Email exposure** - Sending email in headers increases attack surface
+- **GDPR/CCPA compliance** - Unnecessary email processing may violate regulations
+- **Architecture principle** - UUID for identification, email for communication only
+
+### Enforcement:
+- This is a **RED-LINE** policy - violations are security/privacy issues
+- **Code review**: Flag any `WHERE email =`, `x-user-email`, or `user.email ===` patterns
+- **ESLint rule**: Detect email-based lookups and matching (TODO: implement)
+- **Pre-commit hook**: Reject commits with email lookups/matching
+- **ETHICS agent**: Must flag email-based identification as privacy violation
+
+### Examples:
+```typescript
+// ✅ CORRECT: UUID only
+const isOwner = currentUser?.id === message.authorId;
+const user = await prisma.appUser.findUnique({ where: { id: userId } });
+headers['x-user-id'] = currentUser.id;
+
+// ❌ WRONG: Email matching/lookup
+const isOwner = currentUser?.email === message.authorEmail; // FORBIDDEN
+const user = await prisma.appUser.findUnique({ where: { email: userEmail } }); // FORBIDDEN
+headers['x-user-email'] = currentUser.email; // FORBIDDEN
+```
+
 ## Architecture & Collaboration Guardrails (RED-LINE)
 
 - **ES Modules only**: Use TypeScript + ES6 module syntax (`import`/`export`). No CommonJS or implicit globals.
@@ -377,6 +486,87 @@ node app.js  # ❌ RED-LINE VIOLATION
 - **Commit on resolution**: Once BLUE approves and verification passes, produce a final commit tagged/annotated with the JAUmemory problem ID.
 - **Unify repeated logic**: When you see duplicated code paths, extract shared helpers/modules instead of copy-pasting. Document the reuse decision in JAUmemory.
 
+## Window Object Usage Policy (RED-LINE)
+
+**CRITICAL**: **NEVER use `window` object for application state, module exports, or global variables**. This codebase has been extensively refactored to remove window globals. Using `window` for application code causes regressions and violates the ES6 module architecture.
+
+### Prohibited Patterns:
+- ❌ **DO NOT** assign to `window`: `window.currentUser = ...`, `window.api = ...`, `window.someModule = ...`
+- ❌ **DO NOT** read from `window` for application state: `window.currentUser`, `window.api`, `window.someModule`
+- ❌ **DO NOT** use `window` as a module export mechanism: `window.initializeSomething = ...`
+- ❌ **DO NOT** store module instances on `window`: `window.realtimeManager = ...`
+- ❌ **DO NOT** use `window` for dependency injection: `window.getSomeService()`
+
+### Required Pattern (ES6 Modules):
+```typescript
+// ✅ CORRECT: Use ES6 exports/imports
+// In module file:
+export const api = new APIClient();
+export function initializeSomething() { /* ... */ }
+export class SomeManager { /* ... */ }
+
+// In consuming file:
+import { api } from './APIModule.js';
+import { initializeSomething } from './SomeModule.js';
+import { SomeManager } from './ManagerModule.js';
+
+// ✅ CORRECT: Use StateManager for application state
+import { stateManagerInstance } from '../core/StateManager.js';
+stateManagerInstance.setState('currentUser', user);
+const currentUser = stateManagerInstance.getState('currentUser');
+```
+
+### Allowed Browser APIs Only:
+These are **standard browser APIs** and are the ONLY allowed `window` usage:
+- ✅ `window.location` - URL navigation
+- ✅ `window.getComputedStyle()` - CSS computed styles
+- ✅ `window.addEventListener()` / `window.removeEventListener()` - Event handling
+- ✅ `window.dispatchEvent()` - Custom events
+- ✅ `window.navigator` - Browser information
+- ✅ `window.document` - DOM access
+- ✅ `window.localStorage` / `window.sessionStorage` - Browser storage
+- ✅ `typeof window !== 'undefined'` - SSR safety checks
+
+### Migration Pattern:
+```typescript
+// ❌ WRONG: Window globals (FORBIDDEN)
+window.currentUser = user;
+window.api.request(...);
+if (window.loadChatHistory) {
+  await window.loadChatHistory();
+}
+
+// ✅ CORRECT: ES6 imports
+import { stateManagerInstance } from '../core/StateManager.js';
+import { api } from './APIModule.js';
+import { loadChatHistory } from './MessagesModule.js';
+
+stateManagerInstance.setState('currentUser', user);
+await api.request(...);
+await loadChatHistory();
+```
+
+### Exception Process:
+If you believe you need to use `window` for application code (NOT browser APIs):
+1. **STOP** - This is almost certainly wrong
+2. **Search** for existing ES6 exports that provide the same functionality
+3. **Check** `src/core/StateManager.ts` for state management patterns
+4. **Review** `WINDOW_REFACTORING_COMPLETE.md` for migration examples
+5. **If absolutely necessary**: Document the exception in JAUmemory with justification and get PM + BLUE approval before proceeding
+
+### Enforcement:
+- This is a **RED-LINE** policy - violations cause architectural regressions
+- **Code review**: Flag any `window.* =` assignments or `window.*` reads for application code
+- **ESLint**: Should detect window assignments (TODO: implement rule)
+- **Pre-commit hook**: Should reject commits with window globals (TODO: implement)
+- **BLUE cannot approve** code that uses window for application state
+
+### Context:
+- This codebase has undergone extensive window refactoring (see `WINDOW_REFACTORING_COMPLETE.md`)
+- Window globals keep getting re-added by agents during edits - this rule prevents that
+- All application state should use `StateManager` or ES6 module exports
+- All module communication should use ES6 imports/exports
+
 ## Parallel Orchestration Policy
 
 - When a task is **time-consuming yet partitionable** (typical low-to-medium difficulty refactors, documentation cleanup, diagnostic conversions, etc.), the orchestrator must ask the user whether to spin up **8–10 parallel Orch sessions**.
@@ -385,3 +575,43 @@ node app.js  # ❌ RED-LINE VIOLATION
   - Clear ownership of files/modules
   - Shared references to diagnostics, JAUmemory entries, and guardrails
 - Never over-parallelize tasks that depend on strict sequencing or single-owner context.
+
+## Console Logging Policy
+
+**CRITICAL**: Production code MUST use the centralized Logger system. Console.* statements are prohibited in production code.
+
+### Required Pattern:
+- ✅ **Use Logger in production code**: `Logger.debug/warn/error(message, data, context)`
+- ✅ **Import Logger**: `import { Logger } from '../utils/Logger.js';`
+- ✅ **Use appropriate context**: 'profile', 'messages', 'realtime', 'api', 'auth', etc.
+
+### Prohibited in Production Code:
+- ❌ **DO NOT** use `console.log`, `console.warn`, `console.error`, `console.info`, `console.debug` in production code
+- ❌ **DO NOT** add console.* statements to files in `src/features/`, `src/services/`, `src/core/`, `src/components/`
+
+### Exception: Diagnostic Files
+- ✅ **Diagnostic files ARE ALLOWED** to use console.* for user feedback:
+  - Files matching `**/DIAGNOSTIC_*.ts`
+  - Files matching `**/diagnose-*.ts`
+  - Files matching `**/migrate-*.ts`
+  - Files matching `**/security-audit-*.ts`
+  - `src/utils/Logger.ts` (the Logger utility itself)
+
+### Enforcement:
+- **ESLint**: Configured to error on console.* in production code (excludes diagnostic files)
+- **Pre-commit hook**: Checks for console.* in staged production files
+- **CI/CD**: ESLint runs automatically in build pipeline
+- **Diagnostic script**: `presence/scripts/diagnose-slice2-console-logging.ts` tracks console usage
+
+### Migration Pattern:
+```typescript
+// ❌ WRONG: Direct console usage
+console.log('Message', data);
+console.warn('Warning', error);
+console.error('Error', error);
+
+// ✅ CORRECT: Use Logger
+Logger.debug('Message', data, 'context');
+Logger.warn('Warning', error, 'context');
+Logger.error('Error', error, 'context');
+```

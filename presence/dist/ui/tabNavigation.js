@@ -25,9 +25,17 @@ export function attachTabNavigation(options = {}) {
             }
             logger.debug?.(`🔗 TAB_NAVIGATION: Switching to main tab ${targetTabId}`);
             // COMP: Ensure nav tabs are visible before switching
+            // CRITICAL FIX: Tabs must NEVER be hidden - always ensure visibility
             const navMain = doc.querySelector('.sidebar-nav-main');
             if (navMain) {
                 navMain.style.display = 'flex';
+                navMain.style.visibility = 'visible';
+                navMain.style.opacity = '1';
+                navMain.style.height = 'auto';
+                navMain.style.overflow = 'visible';
+                // CRITICAL: Remove any inline styles that might hide tabs
+                navMain.removeAttribute('hidden');
+                navMain.classList.remove('hidden');
             }
             mainTabs.forEach(t => t.classList.remove('active'));
             mainTabContents.forEach(content => content.classList.remove('active'));
@@ -56,6 +64,15 @@ export function attachTabNavigation(options = {}) {
                     }
                     catch (error) {
                         logger.error?.('❌ TAB_NAVIGATION: People tab initialization failed', error);
+                    }
+                }
+                else if (targetTabId === 'settings-tab' && handlers.onSettingsTab) {
+                    try {
+                        await handlers.onSettingsTab();
+                        logger.debug?.('✅ TAB_NAVIGATION: Settings tab initialized');
+                    }
+                    catch (error) {
+                        logger.error?.('❌ TAB_NAVIGATION: Settings tab initialization failed', error);
                     }
                 }
             }

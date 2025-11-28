@@ -5,6 +5,7 @@
 
 import type { ActivityType } from '../types';
 import type { TimelineManager } from '../modules/TimelineManager';
+import { MultiSelect, type MultiSelectOption } from '../utils/MultiSelect.js';
 
 interface Community {
   id: string;
@@ -14,25 +15,54 @@ interface Community {
 
 interface FilterValues {
   search: string | null;
-  community: string | null;
+  communities: string[];  // Changed to array for multi-select
   activityTypes: ActivityType[];
 }
 
 export class TimelineFilters {
   private container: HTMLElement;
   private timelineManager: TimelineManager;
+  private communityMultiSelect: MultiSelect | null = null;
+  private activityTypeMultiSelect: MultiSelect | null = null;
+  private getAuthHeaders: (() => Record<string, string>) | null = null;
 
-  constructor(container: HTMLElement | null, timelineManager: TimelineManager) {
+  constructor(container: HTMLElement | null, timelineManager: TimelineManager, getAuthHeaders?: () => Record<string, string>) {
     if (!container) {
       throw new Error('TimelineFilters: Container element is required');
     }
     this.container = container;
     this.timelineManager = timelineManager;
+    this.getAuthHeaders = getAuthHeaders || null;
   }
 
-  render(communities: Community[] = []): void {
+  async render(communities: Community[] = []): Promise<void> {
+    // Fetch communities from API if not provided
+    if (communities.length === 0) {
+      try {
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json'
+        };
+        
+        // Add auth headers if available
+        if (this.getAuthHeaders) {
+          Object.assign(headers, this.getAuthHeaders());
+        }
+        
+        const response = await fetch('/communities', {
+          headers
+        });
+        if (response.ok) {
+          const data = await response.json();
+          communities = data.communities || data || [];
+        }
+      } catch (error) {
+        console.warn('TimelineFilters: Failed to fetch communities', error);
+        communities = [];
+      }
+    }
+
     const activityTypes: Array<{ value: ActivityType; label: string }> = [
-      { value: 'message', label: 'Messages' },
+      { value: 'message', label: 'Posts' },  // UI shows "Posts", database uses "message"
       { value: 'reaction', label: 'Reactions' },
       { value: 'bookmark', label: 'Bookmarks' },
       { value: 'profileUpdate', label: 'Profile Updates' },
@@ -41,35 +71,61 @@ export class TimelineFilters {
       { value: 'auraChange', label: 'Aura Changes' }
     ];
 
-    const communitiesHtml = communities.map(comm => 
-      `<option value="${comm.id}">${this.escapeHtml(comm.name || comm.id)}</option>`
-    ).join('');
+    // Convert communities to MultiSelect options
+    const communityOptions: MultiSelectOption[] = communities.map(comm => ({
+      value: comm.id,
+      label: comm.name || comm.id
+    }));
 
-    const activityTypesHtml = activityTypes.map(type =>
-      `<option value="${type.value}">${type.label}</option>`
-    ).join('');
+    // Convert activity types to MultiSelect options
+    // Default to "Posts" (message) selected
+    const activityTypeOptions: MultiSelectOption[] = activityTypes.map(type => ({
+      value: type.value,
+      label: type.label,
+      selected: type.value === 'message'  // Default to Posts selected
+    }));
 
     this.container.innerHTML = `
       <div class="filter-group">
         <input type="text" id="search-filter" placeholder="Search timeline..." class="input-field">
-        <select id="community-filter" class="select-input">
-          <option value="">All Communities</option>
-          ${communitiesHtml}
-        </select>
-        <select id="activity-type-filter" class="select-input" multiple>
-          ${activityTypesHtml}
-        </select>
+        <div id="community-filter-container"></div>
+        <div id="activity-type-filter-container"></div>
         <button id="clear-filters" class="btn-secondary">Clear Filters</button>
       </div>
     `;
+
+    // Initialize multi-selects
+    const communityContainer = this.container.querySelector('#community-filter-container') as HTMLElement | null;
+    const activityTypeContainer = this.container.querySelector('#activity-type-filter-container') as HTMLElement | null;
+
+    if (communityContainer) {
+      this.communityMultiSelect = new MultiSelect(communityContainer, communityOptions, {
+        placeholder: 'All Communities',
+        showCount: true
+      });
+      this.communityMultiSelect.render();
+      communityContainer.addEventListener('multiselect:change', () => {
+        this.applyFilters();
+      });
+    }
+
+    if (activityTypeContainer) {
+      this.activityTypeMultiSelect = new MultiSelect(activityTypeContainer, activityTypeOptions, {
+        placeholder: 'All Activity Types',
+        showCount: true
+      });
+      this.activityTypeMultiSelect.render();
+      activityTypeContainer.addEventListener('multiselect:change', () => {
+        this.applyFilters();
+      });
+    }
+
     this.setupEventListeners();
   }
 
   private setupEventListeners(): void {
     let searchTimeout: ReturnType<typeof setTimeout> | null = null;
     const searchInput = this.container.querySelector('#search-filter') as HTMLInputElement | null;
-    const communityFilter = this.container.querySelector('#community-filter') as HTMLSelectElement | null;
-    const activityTypeFilter = this.container.querySelector('#activity-type-filter') as HTMLSelectElement | null;
     const clearBtn = this.container.querySelector('#clear-filters') as HTMLButtonElement | null;
 
     // Search with debounce
@@ -84,27 +140,15 @@ export class TimelineFilters {
       });
     }
 
-    // Community filter
-    if (communityFilter) {
-      communityFilter.addEventListener('change', () => {
-        this.applyFilters();
-      });
-    }
-
-    // Activity type filter
-    if (activityTypeFilter) {
-      activityTypeFilter.addEventListener('change', () => {
-        this.applyFilters();
-      });
-    }
-
     // Clear filters
     if (clearBtn) {
       clearBtn.addEventListener('click', () => {
         if (searchInput) searchInput.value = '';
-        if (communityFilter) communityFilter.value = '';
-        if (activityTypeFilter) {
-          Array.from(activityTypeFilter.options).forEach(opt => opt.selected = false);
+        if (this.communityMultiSelect) {
+          this.communityMultiSelect.setSelectedValues([]);
+        }
+        if (this.activityTypeMultiSelect) {
+          this.activityTypeMultiSelect.setSelectedValues([]);
         }
         this.applyFilters();
       });
@@ -113,14 +157,11 @@ export class TimelineFilters {
 
   private applyFilters(): void {
     const searchInput = this.container.querySelector('#search-filter') as HTMLInputElement | null;
-    const communityFilter = this.container.querySelector('#community-filter') as HTMLSelectElement | null;
-    const activityTypeFilter = this.container.querySelector('#activity-type-filter') as HTMLSelectElement | null;
 
     const filters: FilterValues = {
       search: searchInput?.value.trim() || null,
-      community: communityFilter?.value || null,
-      activityTypes: Array.from(activityTypeFilter?.selectedOptions || [])
-        .map(opt => opt.value as ActivityType)
+      communities: this.communityMultiSelect?.getSelectedValues() || [],
+      activityTypes: (this.activityTypeMultiSelect?.getSelectedValues() || []) as ActivityType[]
     };
 
     // Emit filter change event
@@ -141,6 +182,7 @@ export class TimelineFilters {
     return div.innerHTML;
   }
 }
+
 
 
 

@@ -2,6 +2,8 @@
  * COMPREHENSIVE DIAGNOSTIC TOOL
  * Root Cause Analysis for Messages and Visibility Tab Issues
  */
+import { handleError } from './ErrorHandler.js';
+import { Logger } from './Logger.js';
 class ComprehensiveDiagnostic {
     constructor() {
         this.results = {
@@ -16,7 +18,7 @@ class ComprehensiveDiagnostic {
         };
     }
     async runFullDiagnostic() {
-        console.log('🔍 === COMPREHENSIVE DIAGNOSTIC STARTING ===');
+        Logger.debug('🔍 === COMPREHENSIVE DIAGNOSTIC STARTING ===', null, 'general');
         try {
             await this.diagnoseUrlNormalization();
             await this.diagnoseMessageLoading();
@@ -27,7 +29,15 @@ class ComprehensiveDiagnostic {
             this.generateReport();
         }
         catch (error) {
-            console.error('❌ DIAGNOSTIC: Error during diagnostic:', error);
+            handleError(error, {
+                log: true,
+                logLevel: 'error',
+                context: {
+                    operation: 'catch',
+                    component: 'ComprehensiveDiagnostic'
+                }
+            });
+            ;
             if (Array.isArray(this.results.errors)) {
                 this.results.errors.push({
                     type: 'diagnostic_error',
@@ -39,58 +49,68 @@ class ComprehensiveDiagnostic {
         return this.results;
     }
     async diagnoseUrlNormalization() {
-        console.log('🔍 DIAGNOSTIC: Checking URL normalization...');
+        Logger.debug('🔍 DIAGNOSTIC: Checking URL normalization...', null, 'general');
         const section = this.results.urlNormalization;
         try {
             // Get current page URI
             const rawUri = await window.getCurrentPageUri?.() || window.location?.href || 'unknown';
             section.rawUri = rawUri;
-            console.log('🔍 DIAGNOSTIC: Raw URI:', rawUri);
+            Logger.debug('🔍 DIAGNOSTIC: Raw URI:', { rawUri }, 'general');
             // Test normalization
             if (typeof window.normalizeUrl === 'function') {
                 const normalized = await window.normalizeUrl(rawUri);
                 section.normalizedUrl = normalized.normalizedUrl;
                 section.pageId = normalized.pageId;
                 section.normalizationWorking = true;
-                console.log('✅ DIAGNOSTIC: URL normalization working');
-                console.log('🔍 DIAGNOSTIC: Normalized URL:', normalized.normalizedUrl);
-                console.log('🔍 DIAGNOSTIC: Page ID:', normalized.pageId);
+                Logger.debug('✅ DIAGNOSTIC: URL normalization working', null, 'general');
+                Logger.debug('🔍 DIAGNOSTIC: Normalized URL:', { normalizedUrl: normalized.normalizedUrl }, 'general');
+                Logger.debug('🔍 DIAGNOSTIC: Page ID:', { pageId: normalized.pageId }, 'general');
             }
             else {
                 section.normalizationWorking = false;
                 section.error = 'window.normalizeUrl not available';
-                console.error('❌ DIAGNOSTIC: window.normalizeUrl not available');
+                Logger.error('❌ DIAGNOSTIC: window.normalizeUrl not available', null, 'general');
             }
             // Check normalizeCurrentUrl
             if (typeof window.normalizeCurrentUrl === 'function') {
                 const currentUrlData = await window.normalizeCurrentUrl();
                 section.currentUrlData = currentUrlData;
                 section.normalizeCurrentUrlWorking = true;
-                console.log('✅ DIAGNOSTIC: normalizeCurrentUrl working');
-                console.log('🔍 DIAGNOSTIC: Current URL data:', currentUrlData);
+                Logger.debug('✅ DIAGNOSTIC: normalizeCurrentUrl working', null, 'general');
+                Logger.debug('🔍 DIAGNOSTIC: Current URL data:', currentUrlData, 'general');
             }
             else {
                 section.normalizeCurrentUrlWorking = false;
                 section.error = 'window.normalizeCurrentUrl not available';
-                console.error('❌ DIAGNOSTIC: window.normalizeCurrentUrl not available');
+                Logger.error('❌ DIAGNOSTIC: window.normalizeCurrentUrl not available', null, 'general');
             }
             // Check window.currentUrlData
             section.windowCurrentUrlData = window.currentUrlData;
-            console.log('🔍 DIAGNOSTIC: window.currentUrlData:', window.currentUrlData);
+            Logger.debug('🔍 DIAGNOSTIC: window.currentUrlData:', window.currentUrlData, 'general');
         }
         catch (error) {
             section.error = error instanceof Error ? error.message : String(error);
             section.stack = error instanceof Error ? error.stack : undefined;
-            console.error('❌ DIAGNOSTIC: URL normalization error:', error);
+            const pageId = (typeof section.pageId === 'string' ? section.pageId : undefined) || window.currentUrlData?.pageId || undefined;
+            handleError(error, {
+                log: true,
+                logLevel: 'error',
+                context: {
+                    operation: 'catch',
+                    component: 'ComprehensiveDiagnostic',
+                    pageId
+                }
+            });
+            ;
         }
     }
     async diagnoseMessageLoading() {
-        console.log('🔍 DIAGNOSTIC: Checking message loading...');
+        Logger.debug('🔍 DIAGNOSTIC: Checking message loading...', null, 'general');
         const section = this.results.messageLoading;
         try {
             // Check loadChatHistory availability
             section.loadChatHistoryAvailable = typeof window.loadChatHistory === 'function';
-            console.log('🔍 DIAGNOSTIC: loadChatHistory available:', section.loadChatHistoryAvailable);
+            Logger.debug('🔍 DIAGNOSTIC: loadChatHistory available:', section.loadChatHistoryAvailable, 'general');
             // Check active communities
             const communitiesRaw = await window.stateManager?.get('communities');
             const communities = Array.isArray(communitiesRaw) ? communitiesRaw : [];
@@ -99,17 +119,19 @@ class ComprehensiveDiagnostic {
             section.communities = communities.length;
             section.activeCommunities = activeCommunities;
             section.activeCommunitiesCount = activeCommunities.length;
-            console.log('🔍 DIAGNOSTIC: Communities:', communities.length);
-            console.log('🔍 DIAGNOSTIC: Active communities:', activeCommunities);
+            Logger.debug('🔍 DIAGNOSTIC: Communities:', communities.length, 'general');
+            Logger.debug('🔍 DIAGNOSTIC: Active communities:', activeCommunities, 'general');
             // Check API availability
             section.apiAvailable = typeof window.api !== 'undefined' && typeof window.api.getChatHistory === 'function';
-            console.log('🔍 DIAGNOSTIC: API available:', section.apiAvailable);
+            Logger.debug('🔍 DIAGNOSTIC: API available:', section.apiAvailable, 'general');
             // Test API call with current URL
             if (section.apiAvailable && activeCommunities.length > 0) {
                 try {
-                    const urlData = await window.normalizeCurrentUrl?.() || {};
-                    const testUri = urlData.rawUrl || urlData.normalizedUrl || 'https://www.google.com/';
-                    console.log('🔍 DIAGNOSTIC: Testing API call with URI:', testUri);
+                    const urlData = await window.normalizeCurrentUrl?.();
+                    const rawUrl = (urlData && 'rawUrl' in urlData ? urlData.rawUrl : undefined);
+                    const normalizedUrl = urlData?.normalizedUrl;
+                    const testUri = (rawUrl || normalizedUrl || 'https://www.google.com/');
+                    Logger.debug('🔍 DIAGNOSTIC: Testing API call with URI:', testUri, 'general');
                     const testResponse = await window.api.getChatHistory(activeCommunities[0], null, testUri);
                     section.testApiCall = {
                         success: true,
@@ -117,10 +139,10 @@ class ComprehensiveDiagnostic {
                         messages: testResponse?.messages?.length || 0,
                         response: testResponse
                     };
-                    console.log('✅ DIAGNOSTIC: API call successful');
+                    Logger.debug('✅ DIAGNOSTIC: API call successful', null, 'general');
                     const testApiCall = section.testApiCall;
-                    console.log('🔍 DIAGNOSTIC: Conversations found:', testApiCall?.conversations);
-                    console.log('🔍 DIAGNOSTIC: Messages found:', testApiCall?.messages);
+                    Logger.debug('🔍 DIAGNOSTIC: Conversations found:', testApiCall?.conversations, 'general');
+                    Logger.debug('🔍 DIAGNOSTIC: Messages found:', testApiCall?.messages, 'general');
                 }
                 catch (apiError) {
                     section.testApiCall = {
@@ -128,14 +150,22 @@ class ComprehensiveDiagnostic {
                         error: apiError instanceof Error ? apiError.message : String(apiError),
                         stack: apiError instanceof Error ? apiError.stack : undefined
                     };
-                    console.error('❌ DIAGNOSTIC: API call failed:', apiError);
+                    handleError(apiError, {
+                        log: true,
+                        logLevel: 'error',
+                        context: {
+                            operation: 'catch',
+                            component: 'ComprehensiveDiagnostic'
+                        }
+                    });
+                    ;
                 }
             }
             // Check Supabase client
             section.supabaseAvailable = typeof window.supabase !== 'undefined' && window.supabase !== null;
             section.supabaseFromAvailable = section.supabaseAvailable && window.supabase && typeof window.supabase.from === 'function';
-            console.log('🔍 DIAGNOSTIC: Supabase available:', section.supabaseAvailable);
-            console.log('🔍 DIAGNOSTIC: Supabase.from available:', section.supabaseFromAvailable);
+            Logger.debug('🔍 DIAGNOSTIC: Supabase available:', section.supabaseAvailable, 'general');
+            Logger.debug('🔍 DIAGNOSTIC: Supabase.from available:', section.supabaseFromAvailable, 'general');
             // Check DOM elements
             const chatMessages = document.querySelector('.chat-messages');
             section.chatMessagesElement = !!chatMessages;
@@ -144,17 +174,25 @@ class ComprehensiveDiagnostic {
                 section.chatMessagesContent = chatMessages.innerHTML.substring(0, 200);
                 const messageElements = chatMessages.querySelectorAll('.message');
                 section.messageElementsCount = messageElements.length;
-                console.log('🔍 DIAGNOSTIC: Message elements in DOM:', messageElements.length);
+                Logger.debug('🔍 DIAGNOSTIC: Message elements in DOM:', messageElements.length, 'general');
             }
         }
         catch (error) {
             section.error = error instanceof Error ? error.message : String(error);
             section.stack = error instanceof Error ? error.stack : undefined;
-            console.error('❌ DIAGNOSTIC: Message loading error:', error);
+            handleError(error, {
+                log: true,
+                logLevel: 'error',
+                context: {
+                    operation: 'catch',
+                    component: 'ComprehensiveDiagnostic'
+                }
+            });
+            ;
         }
     }
     async diagnoseVisibilityTab() {
-        console.log('🔍 DIAGNOSTIC: Checking visibility tab...');
+        Logger.debug('🔍 DIAGNOSTIC: Checking visibility tab...', null, 'general');
         const section = this.results.visibilityTab;
         try {
             // Check DOM elements
@@ -162,38 +200,38 @@ class ComprehensiveDiagnostic {
             section.visibilityTabElement = !!visibilityTab;
             section.visibilityTabActive = visibilityTab?.classList.contains('active') || false;
             section.visibilityTabDisplay = visibilityTab ? window.getComputedStyle(visibilityTab).display : 'not found';
-            console.log('🔍 DIAGNOSTIC: Visibility tab element:', section.visibilityTabElement);
-            console.log('🔍 DIAGNOSTIC: Visibility tab active:', section.visibilityTabActive);
-            console.log('🔍 DIAGNOSTIC: Visibility tab display:', section.visibilityTabDisplay);
+            Logger.debug('🔍 DIAGNOSTIC: Visibility tab element:', section.visibilityTabElement, 'general');
+            Logger.debug('🔍 DIAGNOSTIC: Visibility tab active:', section.visibilityTabActive, 'general');
+            Logger.debug('🔍 DIAGNOSTIC: Visibility tab display:', section.visibilityTabDisplay, 'general');
             // Check updateVisibleTab function
             section.updateVisibleTabAvailable = typeof window.updateVisibleTab === 'function';
-            console.log('🔍 DIAGNOSTIC: updateVisibleTab available:', section.updateVisibleTabAvailable);
+            Logger.debug('🔍 DIAGNOSTIC: updateVisibleTab available:', section.updateVisibleTabAvailable, 'general');
             // Check VisibilityManager registration via update hook
             section.visibilityManagerAvailable = section.updateVisibleTabAvailable;
-            console.log('🔍 DIAGNOSTIC: VisibilityManager hook available:', section.visibilityManagerAvailable);
+            Logger.debug('🔍 DIAGNOSTIC: VisibilityManager hook available:', section.visibilityManagerAvailable, 'general');
             // Check visibility data
             section.currentVisibilityData = window.currentVisibilityData;
             section.currentVisibilityDataUnfiltered = window.currentVisibilityDataUnfiltered;
-            console.log('🔍 DIAGNOSTIC: Current visibility data:', window.currentVisibilityData);
-            console.log('🔍 DIAGNOSTIC: Unfiltered visibility data:', window.currentVisibilityDataUnfiltered);
+            Logger.debug('🔍 DIAGNOSTIC: Current visibility data:', window.currentVisibilityData, 'general');
+            Logger.debug('🔍 DIAGNOSTIC: Unfiltered visibility data:', window.currentVisibilityDataUnfiltered, 'general');
             // Check current user
             section.currentUser = window.currentUser;
             section.currentUserId = window.currentUser?.id;
-            console.log('🔍 DIAGNOSTIC: Current user:', window.currentUser);
-            console.log('🔍 DIAGNOSTIC: Current user ID:', section.currentUserId);
+            Logger.debug('🔍 DIAGNOSTIC: Current user:', window.currentUser, 'general');
+            Logger.debug('🔍 DIAGNOSTIC: Current user ID:', section.currentUserId, 'general');
             // Check visibility modal
             const visibilityModal = document.getElementById('visibility-access-modal');
             section.visibilityModalElement = !!visibilityModal;
             section.visibilityModalDisplay = visibilityModal ? window.getComputedStyle(visibilityModal).display : 'not found';
             section.visibilityModalZIndex = visibilityModal ? window.getComputedStyle(visibilityModal).zIndex : 'not found';
-            console.log('🔍 DIAGNOSTIC: Visibility modal element:', section.visibilityModalElement);
-            console.log('🔍 DIAGNOSTIC: Visibility modal display:', section.visibilityModalDisplay);
-            console.log('🔍 DIAGNOSTIC: Visibility modal z-index:', section.visibilityModalZIndex);
+            Logger.debug('🔍 DIAGNOSTIC: Visibility modal element:', section.visibilityModalElement, 'general');
+            Logger.debug('🔍 DIAGNOSTIC: Visibility modal display:', section.visibilityModalDisplay, 'general');
+            Logger.debug('🔍 DIAGNOSTIC: Visibility modal z-index:', section.visibilityModalZIndex, 'general');
             // Check VisibilityModalHandler
             section.visibilityModalHandlerAvailable = typeof window.visibilityModalHandler !== 'undefined';
             section.visibilityModalHandlerInitialized = window.visibilityModalHandler?.isInitialized || false;
-            console.log('🔍 DIAGNOSTIC: VisibilityModalHandler available:', section.visibilityModalHandlerAvailable);
-            console.log('🔍 DIAGNOSTIC: VisibilityModalHandler initialized:', section.visibilityModalHandlerInitialized);
+            Logger.debug('🔍 DIAGNOSTIC: VisibilityModalHandler available:', section.visibilityModalHandlerAvailable, 'general');
+            Logger.debug('🔍 DIAGNOSTIC: VisibilityModalHandler initialized:', section.visibilityModalHandlerInitialized, 'general');
             // Test visibility check
             if (window.visibilityModalHandler) {
                 try {
@@ -202,57 +240,84 @@ class ComprehensiveDiagnostic {
                         isVisible: isVisible,
                         working: true
                     };
-                    console.log('🔍 DIAGNOSTIC: User visibility check:', isVisible);
+                    Logger.debug('🔍 DIAGNOSTIC: User visibility check:', isVisible, 'general');
                 }
                 catch (error) {
                     section.visibilityCheck = {
                         error: error instanceof Error ? error.message : String(error),
                         working: false
                     };
-                    console.error('❌ DIAGNOSTIC: Visibility check failed:', error);
+                    handleError(error, {
+                        log: true,
+                        logLevel: 'error',
+                        context: {
+                            operation: 'catch',
+                            component: 'ComprehensiveDiagnostic'
+                        }
+                    });
+                    ;
                 }
             }
             // Check visibility users
             if (window.supabaseRealtimeClient && typeof window.supabaseRealtimeClient.getPageUsers === 'function') {
+                let urlData;
                 try {
-                    const urlData = await window.normalizeCurrentUrl?.() || {};
-                    const pageId = urlData.pageId || 'google_com_';
-                    console.log('🔍 DIAGNOSTIC: Testing getPageUsers with pageId:', pageId);
+                    urlData = await window.normalizeCurrentUrl?.();
+                    const pageId = urlData?.pageId || 'google_com_';
+                    Logger.debug('🔍 DIAGNOSTIC: Testing getPageUsers with pageId:', pageId, 'general');
                     const users = await window.supabaseRealtimeClient.getPageUsers(pageId);
                     section.pageUsers = {
                         count: users?.length || 0,
                         users: users ? users.map(u => ({ ...u })) : [],
                         working: true
                     };
-                    console.log('✅ DIAGNOSTIC: getPageUsers working, found users:', users?.length || 0);
+                    Logger.debug('✅ DIAGNOSTIC: getPageUsers working', { foundUsers: users?.length || 0 }, 'general');
                 }
                 catch (error) {
                     section.pageUsers = {
                         error: error instanceof Error ? error.message : String(error),
                         working: false
                     };
-                    console.error('❌ DIAGNOSTIC: getPageUsers failed:', error);
+                    const pageId = urlData?.pageId || window.currentUrlData?.pageId || undefined;
+                    handleError(error, {
+                        log: true,
+                        logLevel: 'error',
+                        context: {
+                            operation: 'catch',
+                            component: 'ComprehensiveDiagnostic',
+                            pageId
+                        }
+                    });
+                    ;
                 }
             }
         }
         catch (error) {
             section.error = error instanceof Error ? error.message : String(error);
             section.stack = error instanceof Error ? error.stack : undefined;
-            console.error('❌ DIAGNOSTIC: Visibility tab error:', error);
+            handleError(error, {
+                log: true,
+                logLevel: 'error',
+                context: {
+                    operation: 'catch',
+                    component: 'ComprehensiveDiagnostic'
+                }
+            });
+            ;
         }
     }
     async diagnoseApiConnectivity() {
-        console.log('🔍 DIAGNOSTIC: Checking API connectivity...');
+        Logger.debug('🔍 DIAGNOSTIC: Checking API connectivity...', null, 'general');
         const section = this.results.apiConnectivity;
         try {
             // Check API module
             section.apiModuleAvailable = typeof window.api !== 'undefined';
             section.apiGetChatHistoryAvailable = typeof window.api?.getChatHistory === 'function';
-            console.log('🔍 DIAGNOSTIC: API module available:', section.apiModuleAvailable);
-            console.log('🔍 DIAGNOSTIC: api.getChatHistory available:', section.apiGetChatHistoryAvailable);
+            Logger.debug('🔍 DIAGNOSTIC: API module available:', section.apiModuleAvailable, 'general');
+            Logger.debug('🔍 DIAGNOSTIC: api.getChatHistory available:', section.apiGetChatHistoryAvailable, 'general');
             // Check API base URL
             section.apiBaseUrl = window.API_BASE_URL || 'not set';
-            console.log('🔍 DIAGNOSTIC: API base URL:', section.apiBaseUrl);
+            Logger.debug('🔍 DIAGNOSTIC: API base URL:', section.apiBaseUrl, 'general');
             // Test API endpoint
             if (section.apiModuleAvailable) {
                 try {
@@ -263,36 +328,52 @@ class ComprehensiveDiagnostic {
                         status: response.status,
                         statusText: response.statusText
                     };
-                    console.log('🔍 DIAGNOSTIC: API health check:', section.healthCheck);
+                    Logger.debug('🔍 DIAGNOSTIC: API health check:', section.healthCheck, 'general');
                 }
                 catch (error) {
                     section.healthCheck = {
                         success: false,
                         error: error instanceof Error ? error.message : String(error)
                     };
-                    console.error('❌ DIAGNOSTIC: API health check failed:', error);
+                    handleError(error, {
+                        log: true,
+                        logLevel: 'error',
+                        context: {
+                            operation: 'catch',
+                            component: 'ComprehensiveDiagnostic'
+                        }
+                    });
+                    ;
                 }
             }
         }
         catch (error) {
             section.error = error instanceof Error ? error.message : String(error);
             section.stack = error instanceof Error ? error.stack : undefined;
-            console.error('❌ DIAGNOSTIC: API connectivity error:', error);
+            handleError(error, {
+                log: true,
+                logLevel: 'error',
+                context: {
+                    operation: 'catch',
+                    component: 'ComprehensiveDiagnostic'
+                }
+            });
+            ;
         }
     }
     async diagnoseDatabaseQueries() {
-        console.log('🔍 DIAGNOSTIC: Checking database queries...');
+        Logger.debug('🔍 DIAGNOSTIC: Checking database queries...', null, 'general');
         const section = this.results.databaseQueries;
         try {
             // Check Supabase connection
             section.supabaseAvailable = typeof window.supabase !== 'undefined' && window.supabase !== null;
-            console.log('🔍 DIAGNOSTIC: Supabase available:', section.supabaseAvailable);
+            Logger.debug('🔍 DIAGNOSTIC: Supabase available:', section.supabaseAvailable, 'general');
             if (section.supabaseAvailable) {
                 // Test messages query
                 try {
-                    const urlData = await window.normalizeCurrentUrl?.() || {};
-                    const pageId = urlData.pageId || 'google_com_';
-                    console.log('🔍 DIAGNOSTIC: Testing messages query with pageId:', pageId);
+                    const urlData = await window.normalizeCurrentUrl?.();
+                    const pageId = urlData?.pageId || 'google_com_';
+                    Logger.debug('🔍 DIAGNOSTIC: Testing messages query with pageId:', pageId, 'general');
                     if (!window.supabase)
                         return;
                     const supabaseQuery = window.supabase;
@@ -304,20 +385,28 @@ class ComprehensiveDiagnostic {
                         error: messagesError?.message,
                         sample: messages?.slice(0, 3)
                     };
-                    console.log('🔍 DIAGNOSTIC: Messages query result:', section.messagesQuery);
+                    Logger.debug('🔍 DIAGNOSTIC: Messages query result:', section.messagesQuery, 'general');
                 }
                 catch (error) {
                     section.messagesQuery = {
                         success: false,
                         error: error instanceof Error ? error.message : String(error)
                     };
-                    console.error('❌ DIAGNOSTIC: Messages query failed:', error);
+                    handleError(error, {
+                        log: true,
+                        logLevel: 'error',
+                        context: {
+                            operation: 'catch',
+                            component: 'ComprehensiveDiagnostic'
+                        }
+                    });
+                    ;
                 }
                 // Test presence query
                 try {
-                    const urlData = await window.normalizeCurrentUrl?.() || {};
-                    const pageId = urlData.pageId || 'google_com_';
-                    console.log('🔍 DIAGNOSTIC: Testing presence query with pageId:', pageId);
+                    const urlData = await window.normalizeCurrentUrl?.();
+                    const pageId = urlData?.pageId || 'google_com_';
+                    Logger.debug('🔍 DIAGNOSTIC: Testing presence query with pageId:', pageId, 'general');
                     if (!window.supabase)
                         return;
                     const supabaseQuery = window.supabase;
@@ -329,25 +418,41 @@ class ComprehensiveDiagnostic {
                         error: presenceError?.message,
                         sample: presence?.slice(0, 3)
                     };
-                    console.log('🔍 DIAGNOSTIC: Presence query result:', section.presenceQuery);
+                    Logger.debug('🔍 DIAGNOSTIC: Presence query result:', section.presenceQuery, 'general');
                 }
                 catch (error) {
                     section.presenceQuery = {
                         success: false,
                         error: error instanceof Error ? error.message : String(error)
                     };
-                    console.error('❌ DIAGNOSTIC: Presence query failed:', error);
+                    handleError(error, {
+                        log: true,
+                        logLevel: 'error',
+                        context: {
+                            operation: 'catch',
+                            component: 'ComprehensiveDiagnostic'
+                        }
+                    });
+                    ;
                 }
             }
         }
         catch (error) {
             section.error = error instanceof Error ? error.message : String(error);
             section.stack = error instanceof Error ? error.stack : undefined;
-            console.error('❌ DIAGNOSTIC: Database queries error:', error);
+            handleError(error, {
+                log: true,
+                logLevel: 'error',
+                context: {
+                    operation: 'catch',
+                    component: 'ComprehensiveDiagnostic'
+                }
+            });
+            ;
         }
     }
     async runModuleDiagnostics() {
-        console.log('🔍 DIAGNOSTIC: Running TypeScript module diagnostics (if available)...');
+        Logger.debug('🔍 DIAGNOSTIC: Running TypeScript module diagnostics (if available)...', null, 'general');
         const section = this.results.moduleDiagnostics;
         const runners = [
             {
@@ -369,7 +474,7 @@ class ComprehensiveDiagnostic {
         for (const { key, fn, label } of runners) {
             if (typeof fn === 'function') {
                 try {
-                    console.log(`🔧 Running ${label}...`);
+                    Logger.debug(`🔧 Running ${label}...`, null, 'general');
                     const result = await fn();
                     section[key] = {
                         success: true,
@@ -378,7 +483,15 @@ class ComprehensiveDiagnostic {
                     };
                 }
                 catch (error) {
-                    console.error(`❌ ${label} failed:`, error);
+                    handleError(error, {
+                        log: true,
+                        logLevel: 'error',
+                        context: {
+                            operation: 'catch',
+                            component: 'ComprehensiveDiagnostic'
+                        }
+                    });
+                    ;
                     section[key] = {
                         success: false,
                         error: error instanceof Error ? error.message : String(error)
@@ -394,104 +507,104 @@ class ComprehensiveDiagnostic {
         }
     }
     generateReport() {
-        console.log('\n\n');
-        console.log('═══════════════════════════════════════════════════════════');
-        console.log('📊 COMPREHENSIVE DIAGNOSTIC REPORT');
-        console.log('═══════════════════════════════════════════════════════════');
-        console.log('Timestamp:', this.results.timestamp);
-        console.log('\n');
+        Logger.debug('Generating diagnostic report', null, 'general');
+        Logger.debug('═══════════════════════════════════════════════════════════', null, 'general');
+        Logger.debug('📊 COMPREHENSIVE DIAGNOSTIC REPORT', null, 'general');
+        Logger.debug('═══════════════════════════════════════════════════════════', null, 'general');
+        Logger.debug('Timestamp:', this.results.timestamp, 'general');
+        Logger.debug('\n', null, 'general');
         // Module Diagnostics Summary
-        console.log('🧩 MODULE DIAGNOSTICS:');
+        Logger.debug('🧩 MODULE DIAGNOSTICS:', null, 'general');
         const moduleDiagnostics = this.results.moduleDiagnostics || {};
         Object.entries(moduleDiagnostics).forEach(([name, data]) => {
-            console.log(`  ${name}: ${data.success ? '✅' : '❌'}`);
+            Logger.debug(`  ${name}: ${data.success ? '✅' : '❌'}`, null, 'general');
             if (!data.success && data.error) {
-                console.log(`    ❌ ERROR: ${data.error}`);
+                Logger.debug(`    ❌ ERROR: ${data.error}`, null, 'general');
             }
         });
-        console.log('\n');
+        Logger.debug('\n', null, 'general');
         // URL Normalization Report
-        console.log('🔍 URL NORMALIZATION:');
-        console.log('  Raw URI:', this.results.urlNormalization.rawUri);
-        console.log('  Normalized URL:', this.results.urlNormalization.normalizedUrl);
-        console.log('  Page ID:', this.results.urlNormalization.pageId);
-        console.log('  Normalization Working:', this.results.urlNormalization.normalizationWorking ? '✅' : '❌');
-        console.log('  normalizeCurrentUrl Working:', this.results.urlNormalization.normalizeCurrentUrlWorking ? '✅' : '❌');
+        Logger.debug('🔍 URL NORMALIZATION:', null, 'general');
+        Logger.debug('  Raw URI:', { rawUri: this.results.urlNormalization.rawUri }, 'general');
+        Logger.debug('  Normalized URL:', this.results.urlNormalization.normalizedUrl, 'general');
+        Logger.debug('  Page ID:', this.results.urlNormalization.pageId, 'general');
+        Logger.debug('  Normalization Working:', this.results.urlNormalization.normalizationWorking ? '✅' : '❌', 'general');
+        Logger.debug('  normalizeCurrentUrl Working:', this.results.urlNormalization.normalizeCurrentUrlWorking ? '✅' : '❌', 'general');
         if (this.results.urlNormalization.error) {
-            console.log('  ❌ ERROR:', this.results.urlNormalization.error);
+            Logger.debug('  ❌ ERROR:', this.results.urlNormalization.error, 'general');
         }
-        console.log('\n');
+        Logger.debug('\n', null, 'general');
         // Message Loading Report
-        console.log('💬 MESSAGE LOADING:');
-        console.log('  loadChatHistory Available:', this.results.messageLoading.loadChatHistoryAvailable ? '✅' : '❌');
-        console.log('  Active Communities:', this.results.messageLoading.activeCommunitiesCount || 0);
-        console.log('  API Available:', this.results.messageLoading.apiAvailable ? '✅' : '❌');
-        console.log('  Supabase Available:', this.results.messageLoading.supabaseAvailable ? '✅' : '❌');
+        Logger.debug('💬 MESSAGE LOADING:', null, 'general');
+        Logger.debug('  loadChatHistory Available:', this.results.messageLoading.loadChatHistoryAvailable ? '✅' : '❌', 'general');
+        Logger.debug('  Active Communities:', this.results.messageLoading.activeCommunitiesCount || 0, 'general');
+        Logger.debug('  API Available:', this.results.messageLoading.apiAvailable ? '✅' : '❌', 'general');
+        Logger.debug('  Supabase Available:', this.results.messageLoading.supabaseAvailable ? '✅' : '❌', 'general');
         const testApiCall = this.results.messageLoading.testApiCall;
         if (testApiCall) {
-            console.log('  Test API Call:', testApiCall.success ? '✅' : '❌');
-            console.log('    Conversations Found:', testApiCall.conversations || 0);
-            console.log('    Messages Found:', testApiCall.messages || 0);
+            Logger.debug('  Test API Call:', testApiCall.success ? '✅' : '❌', 'general');
+            Logger.debug('    Conversations Found:', testApiCall.conversations || 0, 'general');
+            Logger.debug('    Messages Found:', testApiCall.messages || 0, 'general');
             if (testApiCall.error) {
-                console.log('    ❌ ERROR:', testApiCall.error);
+                Logger.debug('    ❌ ERROR:', testApiCall.error, 'general');
             }
         }
-        console.log('  Message Elements in DOM:', this.results.messageLoading.messageElementsCount || 0);
+        Logger.debug('  Message Elements in DOM:', this.results.messageLoading.messageElementsCount || 0, 'general');
         if (this.results.messageLoading.error) {
-            console.log('  ❌ ERROR:', this.results.messageLoading.error);
+            Logger.debug('  ❌ ERROR:', this.results.messageLoading.error, 'general');
         }
-        console.log('\n');
+        Logger.debug('\n', null, 'general');
         // Visibility Tab Report
-        console.log('👁️ VISIBILITY TAB:');
-        console.log('  Visibility Tab Element:', this.results.visibilityTab.visibilityTabElement ? '✅' : '❌');
-        console.log('  Visibility Tab Active:', this.results.visibilityTab.visibilityTabActive ? '✅' : '❌');
-        console.log('  Visibility Tab Display:', this.results.visibilityTab.visibilityTabDisplay);
-        console.log('  updateVisibleTab Available:', this.results.visibilityTab.updateVisibleTabAvailable ? '✅' : '❌');
-        console.log('  VisibilityModalHandler Initialized:', this.results.visibilityTab.visibilityModalHandlerInitialized ? '✅' : '❌');
-        console.log('  Visibility Modal Element:', this.results.visibilityTab.visibilityModalElement ? '✅' : '❌');
-        console.log('  Visibility Modal Display:', this.results.visibilityTab.visibilityModalDisplay);
-        console.log('  Visibility Modal Z-Index:', this.results.visibilityTab.visibilityModalZIndex);
+        Logger.debug('👁️ VISIBILITY TAB:', null, 'general');
+        Logger.debug('  Visibility Tab Element:', this.results.visibilityTab.visibilityTabElement ? '✅' : '❌', 'general');
+        Logger.debug('  Visibility Tab Active:', this.results.visibilityTab.visibilityTabActive ? '✅' : '❌', 'general');
+        Logger.debug('  Visibility Tab Display:', this.results.visibilityTab.visibilityTabDisplay, 'general');
+        Logger.debug('  updateVisibleTab Available:', this.results.visibilityTab.updateVisibleTabAvailable ? '✅' : '❌', 'general');
+        Logger.debug('  VisibilityModalHandler Initialized:', this.results.visibilityTab.visibilityModalHandlerInitialized ? '✅' : '❌', 'general');
+        Logger.debug('  Visibility Modal Element:', this.results.visibilityTab.visibilityModalElement ? '✅' : '❌', 'general');
+        Logger.debug('  Visibility Modal Display:', this.results.visibilityTab.visibilityModalDisplay, 'general');
+        Logger.debug('  Visibility Modal Z-Index:', this.results.visibilityTab.visibilityModalZIndex, 'general');
         const pageUsers = this.results.visibilityTab.pageUsers;
         if (pageUsers) {
-            console.log('  Page Users Found:', pageUsers.count || 0);
-            console.log('  getPageUsers Working:', pageUsers.working ? '✅' : '❌');
+            Logger.debug('  Page Users Found:', pageUsers.count || 0, 'general');
+            Logger.debug('  getPageUsers Working:', pageUsers.working ? '✅' : '❌', 'general');
         }
         if (this.results.visibilityTab.error) {
-            console.log('  ❌ ERROR:', this.results.visibilityTab.error);
+            Logger.debug('  ❌ ERROR:', this.results.visibilityTab.error, 'general');
         }
-        console.log('\n');
+        Logger.debug('\n', null, 'general');
         // API Connectivity Report
-        console.log('🌐 API CONNECTIVITY:');
-        console.log('  API Module Available:', this.results.apiConnectivity.apiModuleAvailable ? '✅' : '❌');
-        console.log('  API Base URL:', this.results.apiConnectivity.apiBaseUrl);
+        Logger.debug('🌐 API CONNECTIVITY:', null, 'general');
+        Logger.debug('  API Module Available:', this.results.apiConnectivity.apiModuleAvailable ? '✅' : '❌', 'general');
+        Logger.debug('  API Base URL:', this.results.apiConnectivity.apiBaseUrl, 'general');
         const healthCheck = this.results.apiConnectivity.healthCheck;
         if (healthCheck) {
-            console.log('  Health Check:', healthCheck.success ? '✅' : '❌');
-            console.log('    Status:', healthCheck.status);
+            Logger.debug('  Health Check:', healthCheck.success ? '✅' : '❌', 'general');
+            Logger.debug('    Status:', healthCheck.status, 'general');
         }
-        console.log('\n');
+        Logger.debug('\n', null, 'general');
         // Database Queries Report
-        console.log('🗄️ DATABASE QUERIES:');
-        console.log('  Supabase Available:', this.results.databaseQueries.supabaseAvailable ? '✅' : '❌');
+        Logger.debug('🗄️ DATABASE QUERIES:', null, 'general');
+        Logger.debug('  Supabase Available:', this.results.databaseQueries.supabaseAvailable ? '✅' : '❌', 'general');
         const messagesQuery = this.results.databaseQueries.messagesQuery;
         if (messagesQuery) {
-            console.log('  Messages Query:', messagesQuery.success ? '✅' : '❌');
-            console.log('    Messages Found:', messagesQuery.count || 0);
+            Logger.debug('  Messages Query:', messagesQuery.success ? '✅' : '❌', 'general');
+            Logger.debug('    Messages Found:', messagesQuery.count || 0, 'general');
             if (messagesQuery.error) {
-                console.log('    ❌ ERROR:', messagesQuery.error);
+                Logger.debug('    ❌ ERROR:', messagesQuery.error, 'general');
             }
         }
         const presenceQuery = this.results.databaseQueries.presenceQuery;
         if (presenceQuery) {
-            console.log('  Presence Query:', presenceQuery.success ? '✅' : '❌');
-            console.log('    Presence Records Found:', presenceQuery.count || 0);
+            Logger.debug('  Presence Query:', presenceQuery.success ? '✅' : '❌', 'general');
+            Logger.debug('    Presence Records Found:', presenceQuery.count || 0, 'general');
             if (presenceQuery.error) {
-                console.log('    ❌ ERROR:', presenceQuery.error);
+                Logger.debug('    ❌ ERROR:', presenceQuery.error, 'general');
             }
         }
-        console.log('\n');
+        Logger.debug('\n', null, 'general');
         // Root Cause Analysis
-        console.log('🔍 ROOT CAUSE ANALYSIS:');
+        Logger.debug('🔍 ROOT CAUSE ANALYSIS:', null, 'general');
         const issues = [];
         if (!this.results.urlNormalization.normalizationWorking) {
             issues.push('❌ URL normalization is not working');
@@ -522,15 +635,15 @@ class ComprehensiveDiagnostic {
             issues.push('⚠️ Visibility modal is hidden (display: none)');
         }
         if (issues.length === 0) {
-            console.log('  ✅ No critical issues found');
+            Logger.debug('  ✅ No critical issues found', null, 'general');
         }
         else {
-            issues.forEach(issue => console.log('  ' + issue));
+            issues.forEach(issue => Logger.debug('  ' + issue, null, 'general'));
         }
-        console.log('\n');
-        console.log('═══════════════════════════════════════════════════════════');
-        console.log('📋 Full diagnostic data available in window.comprehensiveDiagnosticResults');
-        console.log('═══════════════════════════════════════════════════════════');
+        Logger.debug('\n', null, 'general');
+        Logger.debug('═══════════════════════════════════════════════════════════', null, 'general');
+        Logger.debug('📋 Full diagnostic data available in window.comprehensiveDiagnosticResults', null, 'general');
+        Logger.debug('═══════════════════════════════════════════════════════════', null, 'general');
         // Store results globally
         window.comprehensiveDiagnosticResults = this.results;
         return this.results;
@@ -545,5 +658,5 @@ if (typeof window !== 'undefined') {
         const diagnostic = new ComprehensiveDiagnostic();
         return await diagnostic.runFullDiagnostic();
     };
-    console.log('✅ ComprehensiveDiagnostic loaded. Call runComprehensiveDiagnostic() to run full diagnostic.');
+    Logger.debug('✅ ComprehensiveDiagnostic loaded. Call runComprehensiveDiagnostic() to run full diagnostic.', null, 'general');
 }

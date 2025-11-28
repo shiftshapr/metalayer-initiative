@@ -205,6 +205,8 @@ export class UnifiedMessageRenderer {
     }
 
     // Generate action menu - CRITICAL FIX: await Promise if getMessageActionsMenu returns one
+    // ACCEPTABLE: Optional check for window.getMessageActionsMenu - graceful degradation pattern
+    // If the function is not available, falls back to default action buttons
     let messageActionButtons = '';
     if (window.getMessageActionsMenu && typeof window.getMessageActionsMenu === 'function') {
       const actionMenuResult = window.getMessageActionsMenu(message, canEdit, canDelete);

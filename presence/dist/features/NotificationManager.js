@@ -3,6 +3,7 @@
  * Handles all notification functionality with priority, offline queue, and content anchoring
  */
 import { Logger } from '../utils/Logger.js';
+import { handleError } from '../utils/ErrorHandler.js';
 /**
  * NotificationManager class
  * Manages notifications, permissions, settings, and content anchoring
@@ -339,8 +340,20 @@ export class NotificationManager {
             });
             // Handle click
             desktopNotification.onclick = async () => {
-                desktopNotification.close();
-                await this.handleNotificationClick(notification);
+                try {
+                    desktopNotification.close();
+                    await this.handleNotificationClick(notification);
+                }
+                catch (error) {
+                    handleError(error, {
+                        log: true,
+                        logLevel: 'error',
+                        context: {
+                            operation: 'handleNotificationClick',
+                            component: 'NotificationManager'
+                        }
+                    });
+                }
             };
             // Auto-close after duration based on priority
             const duration = notification.priority === 'high' ? 10000 : 5000;
@@ -382,10 +395,12 @@ export class NotificationManager {
             if (url) {
                 // Check if URL is already open in a tab
                 const tabs = await chrome.tabs.query({ url });
-                if (tabs.length > 0 && tabs[0].id) {
+                if (tabs.length > 0 && tabs[0] && tabs[0].id) {
                     // Focus existing tab
                     await chrome.tabs.update(tabs[0].id, { active: true });
-                    await chrome.windows.update(tabs[0].windowId, { focused: true });
+                    if (tabs[0].windowId) {
+                        await chrome.windows.update(tabs[0].windowId, { focused: true });
+                    }
                 }
                 else {
                     // Open new tab
@@ -396,7 +411,7 @@ export class NotificationManager {
             }
             // Send message to content script to handle anchoring
             const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-            if (tab.id) {
+            if (tab && tab.id) {
                 await chrome.tabs.sendMessage(tab.id, {
                     type: 'NAVIGATE_TO_ANCHOR',
                     anchor
@@ -445,10 +460,23 @@ export class NotificationManager {
      * Get current settings
      */
     async getSettings() {
-        if (!this.settings) {
-            await this.loadSettings();
+        try {
+            if (!this.settings) {
+                await this.loadSettings();
+            }
+            return this.settings || this.getDefaultSettings();
         }
-        return this.settings || this.getDefaultSettings();
+        catch (error) {
+            handleError(error, {
+                log: true,
+                logLevel: 'error',
+                context: {
+                    operation: 'getSettings',
+                    component: 'NotificationManager'
+                }
+            });
+            return this.getDefaultSettings();
+        }
     }
     /**
      * Update settings
@@ -646,7 +674,7 @@ export class NotificationManager {
     /**
      * Play notification sound
      */
-    playNotificationSound(type) {
+    playNotificationSound(_type) {
         try {
             // Use browser's default notification sound
             // In future, can add custom sounds per type
@@ -895,10 +923,13 @@ export class NotificationManager {
     async checkSubscription(notification) {
         try {
             // If no subscription manager available, allow notification
-            if (typeof window === 'undefined' || !window.subscriptionManager) {
+            // ES6 pattern: Optional check for subscriptionManager (for backward compatibility)
+            // TODO: Export subscriptionManager from a module instead of window
+            const win = window;
+            if (typeof window === 'undefined' || !win.subscriptionManager) {
                 return true;
             }
-            const subscriptionManager = window.subscriptionManager;
+            const subscriptionManager = win.subscriptionManager;
             const source = notification.source;
             if (!source || !source.subscriptionId) {
                 // No subscription info, check by target

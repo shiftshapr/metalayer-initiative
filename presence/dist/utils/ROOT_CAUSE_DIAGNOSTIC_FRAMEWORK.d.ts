@@ -10,12 +10,9 @@
  *   - Call diagnoseAll() to run all available diagnostics
  *   - Check console for detailed diagnostic output
  */
+import type { DiagnosticResult } from './diagnostic-result-types';
 type DiagnosticFunction = () => Promise<DiagnosticResult>;
 type DiagnosticStatus = 'success' | 'failed' | 'error';
-interface DiagnosticResult {
-    error?: string;
-    [key: string]: any;
-}
 interface DiagnosticRunResult {
     name: string;
     description: string;
@@ -59,7 +56,7 @@ declare const diagnosticFramework: RootCauseDiagnosticFramework;
 /**
  * Run all diagnostics
  */
-export declare function diagnoseAll(): Promise<Record<string, DiagnosticResult | null>>;
+export declare function diagnoseAll(): Promise<Record<string, DiagnosticResult>>;
 /**
  * Run a specific diagnostic
  */

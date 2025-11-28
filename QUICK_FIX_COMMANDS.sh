@@ -4,10 +4,10 @@
 echo "🔧 Fixing nginx configuration..."
 
 # Update share.canopi.live config (already done in file, just copy it)
-sudo cp /home/ubuntu/metalayer-initiative/share.canopi.live.conf /etc/nginx/sites-available/share.canopi.live
+sudo cp /home/ubuntu/canopi/share.canopi.live.conf /etc/nginx/sites-available/share.canopi.live
 
 # Enable app.canopi.live
-sudo cp /home/ubuntu/metalayer-initiative/app.canopi.live.conf /etc/nginx/sites-available/app.canopi.live
+sudo cp /home/ubuntu/canopi/app.canopi.live.conf /etc/nginx/sites-available/app.canopi.live
 sudo ln -sf /etc/nginx/sites-available/app.canopi.live /etc/nginx/sites-enabled/app.canopi.live
 
 # Test and reload

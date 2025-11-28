@@ -1,26 +1,212 @@
-import { stateManagerInstance } from '../core/StateManager.js';
-import { EventBus } from '../core/EventBus.js';
-import { authManagerInstance } from '../features/AuthManager.js';
-import { CommunitiesModule } from '../features/CommunitiesModule.js';
+/**
+ * Module Graph Builder
+ *
+ * Constructs the module dependency graph for dependency injection
+ * This is the single source of truth for module initialization order
+ */
+import { getMessageLoadingService, initializeMessageLoadingService } from '../services/MessageLoadingService.js';
 import { Logger } from '../utils/Logger.js';
-import { supabaseServiceInstance } from '../services/SupabaseService.js';
-import uiManagerInstance from '../features/UIManager.js';
-export function buildModuleGraph() {
-    const logger = new Logger();
-    const eventBus = new EventBus();
-    const communitiesModule = new CommunitiesModule();
-    const lifecycleManager = typeof window !== 'undefined'
-        ? window.lifecycleManager ?? null
-        : null;
-    return {
-        stateManager: stateManagerInstance,
-        eventBus,
-        authManager: authManagerInstance,
-        visibilityManager: null,
+// Note: Optional modules are loaded dynamically in buildModuleGraph
+// This avoids circular dependencies and allows modules to be optional
+/**
+ * Helper to safely import optional modules
+ */
+async function safeImport(modulePath) {
+    try {
+        // Dynamic import path may not exist at compile time - this is intentional for optional modules
+        return await import(modulePath);
+    }
+    catch {
+        return null;
+    }
+}
+/**
+ * Build the module graph
+ *
+ * Initializes all modules in the correct order and returns the dependency graph
+ */
+export async function buildModuleGraph() {
+    Logger.debug('Building module graph...', null, 'module-graph');
+    // Import StateManager dynamically
+    let stateManager;
+    try {
+        const stateManagerModule = await import('../core/StateManager.js');
+        stateManager = stateManagerModule.stateManagerInstance;
+        if (!stateManager) {
+            throw new Error('stateManagerInstance not exported from StateManager');
+        }
+        Logger.debug('StateManager imported successfully', null, 'module-graph');
+    }
+    catch (error) {
+        Logger.error('Failed to import StateManager', error, 'module-graph');
+        throw new Error('StateManager is required but could not be imported');
+    }
+    // Import loadChatHistory dynamically - MessagesModule may export as default or named export
+    let loadChatHistory;
+    try {
+        const messagesModule = await import('../features/MessagesModule.js');
+        // Try named export first
+        if (messagesModule.loadChatHistory && typeof messagesModule.loadChatHistory === 'function') {
+            // Wrap to handle type mismatch - original expects string, but we need to accept null/undefined
+            const originalFn = messagesModule.loadChatHistory;
+            loadChatHistory = async (pageIdOrRawUrl, activeCommunities) => {
+                if (pageIdOrRawUrl) {
+                    return originalFn(pageIdOrRawUrl, activeCommunities);
+                }
+                // If null/undefined, call with empty string or handle gracefully
+                return originalFn('', activeCommunities);
+            };
+            Logger.debug('loadChatHistory imported as named export', null, 'module-graph');
+        }
+        else if (messagesModule.default && messagesModule.default.loadChatHistory) {
+            // Try default export with loadChatHistory property
+            const originalFn = messagesModule.default.loadChatHistory;
+            loadChatHistory = async (pageIdOrRawUrl, activeCommunities) => {
+                if (pageIdOrRawUrl) {
+                    return originalFn(pageIdOrRawUrl, activeCommunities);
+                }
+                return originalFn('', activeCommunities);
+            };
+            Logger.debug('loadChatHistory imported from default export', null, 'module-graph');
+        }
+        else {
+            throw new Error('loadChatHistory not found in MessagesModule');
+        }
+    }
+    catch (error) {
+        Logger.error('Failed to import loadChatHistory from MessagesModule', error, 'module-graph');
+        throw new Error('loadChatHistory is required but could not be imported');
+    }
+    // Initialize MessageLoadingService
+    let messageLoadingService;
+    try {
+        // Check if already initialized
+        try {
+            messageLoadingService = getMessageLoadingService();
+            Logger.debug('MessageLoadingService already initialized', null, 'module-graph');
+        }
+        catch {
+            // Not initialized, create it
+            messageLoadingService = initializeMessageLoadingService({
+                loadChatHistory: loadChatHistory
+            });
+            Logger.debug('MessageLoadingService initialized', null, 'module-graph');
+        }
+    }
+    catch (error) {
+        Logger.warn('Failed to initialize MessageLoadingService', error, 'module-graph');
+    }
+    // Initialize optional modules
+    let visibilityManager;
+    let supabaseService;
+    let communitiesModule;
+    let authManager;
+    let lifecycleManager;
+    let eventBus;
+    let uiManager;
+    // Try to load optional modules dynamically
+    // These are optional and may not exist, so we catch errors gracefully
+    // Initialize SupabaseService if available
+    // CRITICAL FIX: Must call initialize() to create Supabase client with auth property
+    // ROOT CAUSE FIX: SupabaseService.js is in root services/, not src/services/
+    const supabaseModule = await safeImport('../../services/SupabaseService.js');
+    if (supabaseModule?.supabaseServiceInstance) {
+        supabaseService = supabaseModule.supabaseServiceInstance;
+        // CRITICAL: Initialize SupabaseService to create client with auth property
+        try {
+            await supabaseService.initialize();
+            Logger.debug('SupabaseService initialized and client created', null, 'module-graph');
+        }
+        catch (error) {
+            Logger.warn('SupabaseService initialization failed', error, 'module-graph');
+        }
+    }
+    else {
+        Logger.debug('SupabaseService not available (optional)', null, 'module-graph');
+    }
+    // CommunitiesModule - CommunityLoaders.ts doesn't export a class, it's just functions
+    // BootController uses graph.communitiesModule?.initialize() which suggests it might be a module with initialize method
+    // For now, we'll leave it undefined and let BootController handle it
+    try {
+        const communitiesModuleImport = await import('../features/CommunityLoaders.js').catch(() => null);
+        // Check if there's an initialize function or module instance
+        if (communitiesModuleImport && typeof communitiesModuleImport.initialize === 'function') {
+            communitiesModule = communitiesModuleImport;
+            Logger.debug('CommunitiesModule available', null, 'module-graph');
+        }
+    }
+    catch (error) {
+        Logger.debug('CommunitiesModule not available (optional)', null, 'module-graph');
+    }
+    // Initialize AuthManager if available
+    // CRITICAL FIX: AuthManager is in features/, not core/auth/
+    const authModule = await safeImport('../features/AuthManager.js');
+    if (authModule?.authManagerInstance) {
+        authManager = authModule.authManagerInstance;
+        Logger.debug('AuthManager initialized', null, 'module-graph');
+    }
+    else {
+        Logger.debug('AuthManager not available (optional)', null, 'module-graph');
+    }
+    // Initialize LifecycleManager if available
+    const lifecycleModule = await safeImport('../core/LifecycleManager.js');
+    if (lifecycleModule?.lifecycleManagerInstance) {
+        lifecycleManager = lifecycleModule.lifecycleManagerInstance;
+        Logger.debug('LifecycleManager initialized', null, 'module-graph');
+    }
+    else {
+        Logger.debug('LifecycleManager not available (optional)', null, 'module-graph');
+    }
+    // Initialize EventBus if available
+    const eventBusModule = await safeImport('../core/EventBus.js');
+    if (eventBusModule?.eventBusInstance) {
+        eventBus = eventBusModule.eventBusInstance;
+        Logger.debug('EventBus initialized', null, 'module-graph');
+    }
+    else {
+        Logger.debug('EventBus not available (optional)', null, 'module-graph');
+    }
+    // Initialize UIManager if available
+    const uiModule = await safeImport('../features/UIManager.js');
+    if (uiModule?.uiManagerInstance) {
+        uiManager = uiModule.uiManagerInstance;
+        Logger.debug('UIManager initialized', null, 'module-graph');
+    }
+    else {
+        Logger.debug('UIManager not available (optional)', null, 'module-graph');
+    }
+    // VisibilityManager - create instance with realtime service
+    // Realtime service is provided by SupabaseService (has getPageUsers method)
+    const visibilityModule = await safeImport('../features/visibility/core/VisibilityManager.js');
+    const visibilityStateModule = await safeImport('../features/visibility/core/VisibilityState.js');
+    if (visibilityModule?.VisibilityManager && visibilityStateModule?.VisibilityState && supabaseService) {
+        // Create VisibilityState instance
+        const VisibilityState = visibilityStateModule.VisibilityState;
+        const visibilityState = new VisibilityState();
+        // SupabaseService implements IVisibilityRealtime interface (has getPageUsers, getUserProfile, on methods)
+        // Create VisibilityManager instance - it will be initialized later in BootController when user is authenticated
+        visibilityManager = new visibilityModule.VisibilityManager(supabaseService, // SupabaseService implements IVisibilityRealtime
+        Logger, visibilityState);
+        Logger.debug('VisibilityManager instance created (will be initialized in BootController)', null, 'module-graph');
+    }
+    else {
+        Logger.debug('VisibilityManager not available - missing VisibilityManager class or SupabaseService', null, 'module-graph');
+    }
+    // Build and return the graph
+    const graph = {
+        stateManager,
+        messageLoadingService,
+        visibilityManager: visibilityManager, // Will be set later in BootController
+        supabaseService,
+        logger: Logger,
         communitiesModule,
-        supabaseService: supabaseServiceInstance,
-        logger,
+        authManager,
         lifecycleManager,
-        uiManager: uiManagerInstance
+        eventBus,
+        uiManager
     };
+    Logger.debug('Module graph built successfully', {
+        modules: Object.keys(graph).filter(key => graph[key] !== undefined)
+    }, 'module-graph');
+    return graph;
 }

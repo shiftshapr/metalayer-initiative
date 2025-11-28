@@ -11,8 +11,11 @@ interface Community {
 export declare class TimelineFilters {
     private container;
     private timelineManager;
-    constructor(container: HTMLElement | null, timelineManager: TimelineManager);
-    render(communities?: Community[]): void;
+    private communityMultiSelect;
+    private activityTypeMultiSelect;
+    private getAuthHeaders;
+    constructor(container: HTMLElement | null, timelineManager: TimelineManager, getAuthHeaders?: () => Record<string, string>);
+    render(communities?: Community[]): Promise<void>;
     private setupEventListeners;
     private applyFilters;
     private escapeHtml;

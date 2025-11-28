@@ -6,7 +6,6 @@
  */
 declare class ProvenanceDiagnostic {
     private isVisible;
-    private currentMessageId;
     private overlay;
     /**
      * Initialize diagnostic overlay

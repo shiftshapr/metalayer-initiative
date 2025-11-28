@@ -100,14 +100,20 @@ class CommunitiesModule {
                 this.log('DEBUG', 'Community dropdown trigger clicked');
                 e.stopPropagation();
                 e.preventDefault();
-                const isVisible = panel.style.display === 'block' ||
-                    (panel.style.display === '' && getComputedStyle(panel).display === 'block');
+                const computedStyle = getComputedStyle(panel);
+                const isVisible = panel.style.display === 'block' || 
+                                 panel.style.display === 'flex' ||
+                                 computedStyle.display === 'block' ||
+                                 computedStyle.display === 'flex' ||
+                                 panel.classList.contains('show');
                 if (isVisible) {
                     panel.style.display = 'none';
+                    panel.classList.remove('show');
                     this.log('DEBUG', 'Community dropdown hidden');
                 }
                 else {
                     panel.style.display = 'block';
+                    panel.classList.add('show');
                     this.log('DEBUG', 'Community dropdown shown');
                 }
             });
@@ -129,6 +135,7 @@ class CommunitiesModule {
                 closeBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
                     panel.style.display = 'none';
+                    panel.classList.remove('show');
                     this.log('DEBUG', 'Community dropdown closed via close button');
                 });
             }
@@ -136,10 +143,16 @@ class CommunitiesModule {
             document.addEventListener('click', (e) => {
                 const panelEl = panel;
                 const panelStyle = panelEl.style;
-                if (panelStyle.display === 'block' ||
-                    getComputedStyle(panelEl).display === 'block') {
+                const computedStyle = getComputedStyle(panelEl);
+                const isVisible = panelStyle.display === 'block' ||
+                                 panelStyle.display === 'flex' ||
+                                 computedStyle.display === 'block' ||
+                                 computedStyle.display === 'flex' ||
+                                 panelEl.classList.contains('show');
+                if (isVisible) {
                     if (!panelEl.contains(e.target) && !newTrigger.contains(e.target)) {
                         panelStyle.display = 'none';
+                        panelEl.classList.remove('show');
                         this.log('DEBUG', 'Community dropdown closed via outside click');
                     }
                 }

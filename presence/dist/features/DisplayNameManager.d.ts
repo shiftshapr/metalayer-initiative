@@ -1,7 +1,3 @@
-/**
- * DISPLAY NAME MANAGER - CRUD Operations for Display Name
- * Handles Create, Read, Update, Delete operations for user display name
- */
 declare class DisplayNameManager {
     private minLength;
     private maxLength;
@@ -9,6 +5,7 @@ declare class DisplayNameManager {
     private originalDisplayName;
     private isInitialized;
     private isEditing;
+    private readonly storage;
     private displayNameInput;
     private charCount;
     private charMax;
@@ -69,10 +66,6 @@ declare class DisplayNameManager {
      * Show status message
      */
     private showStatus;
-    /**
-     * Get auth token for API calls
-     */
-    private getAuthToken;
 }
 export { DisplayNameManager };
 //# sourceMappingURL=DisplayNameManager.d.ts.map

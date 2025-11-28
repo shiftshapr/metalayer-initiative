@@ -1,7 +1,9 @@
 {
-  "buildNumber": 193,
-  "firstBuild": "2025-11-21T02:08:44Z",
-  "lastBuild": "2025-11-22T19:21:26Z",
-  "gitCommit": "c3907c3",
-  "gitBranch": "new"
+  "buildNumber": 373,
+  "timestamp": "2025-11-27T17:58:21.043Z",
+  "gitCommit": "25d9016",
+  "gitBranch": "new",
+  "buildTime": "2025-11-27T17:58:21.061Z",
+  "firstBuild": "2025-11-27T17:58:21.061Z",
+  "lastBuild": "2025-11-28T18:45:41Z"
 }

@@ -3,6 +3,9 @@
  * Handles all authentication functionality
  */
 import { stateManagerInstance } from '../core/StateManager.js';
+import { handleError } from '../utils/ErrorHandler.js';
+import { Logger } from '../utils/Logger.js';
+import { getCurrentUserAvatarBgColor as profileGetCurrentUserAvatarBgColor, getCurrentUserAvatarColor as profileGetCurrentUserAvatarColor, resetCustomAvatarColor as profileResetCustomAvatarColor } from './ProfileManager.js';
 // COMP METHOD: Track initialization state to prevent premature auth prompts
 let isInitializing = true;
 class AuthModule {
@@ -37,65 +40,87 @@ class AuthModule {
             return;
         const levels = { ERROR: 0, WARN: 1, INFO: 2, DEBUG: 3, SILENT: -1 };
         if (levels[level] <= levels[this.logLevel]) {
-            console.log(`[AuthModule] [${level}] ${message}`, ...args);
+            const data = args.length > 0 ? args.length === 1 ? args[0] : args : null;
+            if (level === 'ERROR') {
+                Logger.error(`[AuthModule] ${message}`, data, 'auth');
+            }
+            else if (level === 'WARN') {
+                Logger.warn(`[AuthModule] ${message}`, data, 'auth');
+            }
+            else {
+                Logger.debug(`[AuthModule] [${level}] ${message}`, data, 'auth');
+            }
         }
     }
 }
 // ===== AUTHENTICATION FUNCTIONS =====
 async function authenticateWithSupabase(user) {
     try {
-        console.log('🔧 SUPABASE AUTH: Authenticating user with Supabase...');
-        console.log('🔧 SUPABASE AUTH: User id:', user.id || user.userId);
-        const supabase = window.supabase;
+        Logger.debug('🔧 SUPABASE AUTH: Authenticating user with Supabase...', null, 'auth');
+        Logger.debug('🔧 SUPABASE AUTH: User id:', user.id || user.userId, 'auth');
+        // ROOT CAUSE FIX: Map user_metadata.avatar_url to avatarUrl before processing
+        const userWithMetadata = user;
+        const avatarUrl = userWithMetadata.user_metadata?.avatar_url;
+        if (avatarUrl && !user.avatarUrl) {
+            user.avatarUrl = avatarUrl;
+            Logger.debug('[AUTH] Mapped user_metadata.avatar_url to avatarUrl in authenticateWithSupabase:', avatarUrl, 'auth');
+        }
+        // TODO: Replace with ES6 SupabaseService import when available
+        // ACCEPTABLE: Using window.supabase for now as it's a runtime dependency
+        const win = window;
+        const supabase = win.supabase;
         if (!supabase) {
-            console.error('❌ SUPABASE AUTH: Supabase client not available');
+            Logger.error('❌ SUPABASE AUTH: Supabase client not available', null, 'auth');
             return;
         }
         // Check if user is already authenticated
         // Type assertion needed because getSession may not be in the type definition
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        const { data: { session }, error: _sessionError } = await supabase.auth.getSession();
         if (session && session.user && session.user.email === user.email) {
-            console.log('✅ SUPABASE AUTH: User already authenticated with Supabase');
-            console.log('✅ SUPABASE AUTH: Session expires at:', new Date(session.expires_at * 1000));
+            Logger.debug('✅ SUPABASE AUTH: User already authenticated with Supabase', null, 'auth');
+            Logger.debug('✅ SUPABASE AUTH: Session expires at:', new Date(session.expires_at * 1000), 'auth');
             return;
         }
         // CRITICAL FIX: Use unified authentication system for real-time
-        console.log('🔧 SUPABASE AUTH: Authenticating user with unified auth system...');
+        Logger.debug('🔧 SUPABASE AUTH: Authenticating user with unified auth system...', null, 'auth');
         // Initialize unified auth if not already done
         const unifiedAuth = window.unifiedAuth;
         if (!unifiedAuth) {
-            console.error('❌ SUPABASE AUTH: Unified auth system not available');
+            Logger.error('❌ SUPABASE AUTH: Unified auth system not available', null, 'auth');
             return;
         }
         // Authenticate user with unified system
         const authenticateUserForRealtime = window.authenticateUserForRealtime;
         if (!authenticateUserForRealtime) {
-            console.error('❌ SUPABASE AUTH: authenticateUserForRealtime not available');
+            Logger.error('❌ SUPABASE AUTH: authenticateUserForRealtime not available', null, 'auth');
             return;
         }
         const authSuccess = await authenticateUserForRealtime(user, user.email);
         if (authSuccess) {
-            console.log('✅ SUPABASE AUTH: User authenticated for real-time');
+            Logger.debug('✅ SUPABASE AUTH: User authenticated for real-time', null, 'auth');
             // Test real-time connection
             const testRealtimeWithUnifiedAuth = window.testRealtimeWithUnifiedAuth;
             if (testRealtimeWithUnifiedAuth) {
                 const testResult = await testRealtimeWithUnifiedAuth('test-page-123');
                 if (testResult) {
-                    console.log('🎉 SUPABASE AUTH: Real-time is working!');
+                    Logger.debug('🎉 SUPABASE AUTH: Real-time is working!', null, 'auth');
                 }
                 else {
-                    console.warn('⚠️ SUPABASE AUTH: Real-time test failed');
+                    Logger.warn('⚠️ SUPABASE AUTH: Real-time test failed', null, 'auth');
                 }
             }
         }
         else {
-            console.warn('⚠️ SUPABASE AUTH: Authentication failed, real-time may not work');
+            Logger.warn('⚠️ SUPABASE AUTH: Authentication failed, real-time may not work', 'auth');
         }
         // Set the current user in the real-time client for context
         const supabaseRealtimeClient = window.supabaseRealtimeClient;
         if (supabaseRealtimeClient && supabaseRealtimeClient.setCurrentUser) {
-            await supabaseRealtimeClient.setCurrentUser(user.email, user.id, 'abe5ec85-4ba6-456f-adaf-03d7d51cecf4');
-            console.log('✅ SUPABASE AUTH: Real-time client user set');
+            // Get primary community from state or fallback to Public Square
+            const { PUBLIC_SQUARE_UUID } = await import('../core/ConfigModule.js');
+            const primaryCommunity = stateManagerInstance.getState('primaryCommunity');
+            await supabaseRealtimeClient.setCurrentUser(user.email, user.id, primaryCommunity || PUBLIC_SQUARE_UUID);
+            Logger.debug('✅ SUPABASE AUTH: Real-time client user set', null, 'auth');
         }
         // ROOT CAUSE FIX: Fetch AppUser UUID from backend (AppUser table always has UUIDs)
         // Supabase auth user.id is NOT a UUID - it's a Google ID like "116467399993975200419"
@@ -105,7 +130,7 @@ async function authenticateWithSupabase(user) {
             try {
                 const api = window.api;
                 if (!api || !api.request) {
-                    console.warn('⚠️ AUTH: API not available');
+                    Logger.warn('⚠️ AUTH: API not available', null, 'auth');
                     return;
                 }
                 // Get or create AppUser - backend will return UUID
@@ -122,7 +147,7 @@ async function authenticateWithSupabase(user) {
                     // AppUser.id is ALWAYS a UUID (from userService.getOrCreateUser)
                     const updatedUser = { ...currentUser, id: appUser.id };
                     stateManagerInstance.setState('currentUser', updatedUser);
-                    console.log('✅ AUTH: Set currentUser.id to AppUser UUID:', appUser.id);
+                    Logger.debug('✅ AUTH: Set currentUser.id to AppUser UUID:', appUser.id, 'auth');
                     // CRITICAL FIX: Fetch complete user data including auraColor using the UUID we just got
                     // POST /v1/users/:email may not return auraColor, so do GET /v1/users/:id for complete data
                     try {
@@ -136,17 +161,17 @@ async function authenticateWithSupabase(user) {
                             const auraColor = completeUserData.auraColor;
                             if (auraColor) {
                                 userWithData.auraColor = auraColor;
-                                console.log('✅ AUTH: Set currentUser.auraColor from complete user data:', auraColor);
+                                Logger.debug('✅ AUTH: Set currentUser.auraColor from complete user data:', auraColor, 'auth');
                             }
                             else {
-                                console.log('ℹ️ AUTH: No auraColor in complete user data (user may not have set one yet)');
+                                Logger.debug('ℹ️ AUTH: No auraColor in complete user data (user may not have set one yet)', null, 'auth');
                                 userWithData.auraColor = undefined;
                             }
                             // Also update avatarUrl if it differs from Google OAuth avatar
                             const dbAvatarUrl = completeUserData.avatarUrl;
                             if (dbAvatarUrl && dbAvatarUrl !== userWithData.avatarUrl) {
                                 userWithData.avatarUrl = dbAvatarUrl;
-                                console.log('✅ AUTH: Updated currentUser.avatarUrl from database:', dbAvatarUrl);
+                                Logger.debug('✅ AUTH: Updated currentUser.avatarUrl from database:', dbAvatarUrl, 'auth');
                             }
                             // ROOT CAUSE FIX: Update stateManager with complete user data
                             stateManagerInstance.setState('currentUser', userWithData);
@@ -158,12 +183,20 @@ async function authenticateWithSupabase(user) {
                                     avatarUrl: userWithData.avatarUrl,
                                     // auraColor already set above (camelCase only - RED-LINE compliance)
                                 });
-                                console.log('✅ AUTH: Updated AuthManager with complete user data');
+                                Logger.debug('✅ AUTH: Updated AuthManager with complete user data', null, 'auth');
                             }
                         }
                     }
                     catch (error) {
-                        console.warn('⚠️ AUTH: Could not fetch complete user data for auraColor:', error);
+                        handleError(error, {
+                            log: true,
+                            logLevel: 'warn',
+                            context: {
+                                operation: 'catch',
+                                component: 'Auth'
+                            }
+                        });
+                        ;
                         const currentUserForError = stateManagerInstance.getState('currentUser');
                         if (currentUserForError) {
                             stateManagerInstance.setState('currentUser', { ...currentUserForError, auraColor: undefined });
@@ -172,19 +205,38 @@ async function authenticateWithSupabase(user) {
                 }
             }
             catch (error) {
-                console.warn('⚠️ AUTH: Could not fetch AppUser UUID, will be set on next API call:', error);
+                handleError(error, {
+                    log: true,
+                    logLevel: 'warn',
+                    context: {
+                        operation: 'catch',
+                        component: 'Auth'
+                    }
+                });
+                ;
                 // Leave as null - will be set when backend returns UUID in reaction/user API response
             }
             const currentUserForCommunity = stateManagerInstance.getState('currentUser');
             if (currentUserForCommunity) {
-                stateManagerInstance.setState('currentUser', { ...currentUserForCommunity, communityId: 'abe5ec85-4ba6-456f-adaf-03d7d51cecf4' });
+                // Get primary community from state or fallback to Public Square
+                const { PUBLIC_SQUARE_UUID } = await import('../core/ConfigModule.js');
+                const primaryCommunity = stateManagerInstance.getState('primaryCommunity');
+                stateManagerInstance.setState('currentUser', { ...currentUserForCommunity, communityId: primaryCommunity || PUBLIC_SQUARE_UUID });
             }
         }
-        console.log('✅ SUPABASE AUTH: User context set globally');
-        console.log('✅ SUPABASE AUTH: Authentication process completed');
+        Logger.debug('✅ SUPABASE AUTH: User context set globally', null, 'auth');
+        Logger.debug('✅ SUPABASE AUTH: Authentication process completed', null, 'auth');
     }
     catch (error) {
-        console.error('❌ SUPABASE AUTH: Exception during authentication:', error);
+        handleError(error, {
+            log: true,
+            logLevel: 'error',
+            context: {
+                operation: 'catch',
+                component: 'Auth'
+            }
+        });
+        ;
     }
 }
 // --- Authentication Check Functions ---
@@ -192,29 +244,28 @@ async function requireAuth(action, callback) {
     try {
         // ROOT CAUSE FIX: Use stateManager (TypeScript migration - no window.currentUser)
         const currentUser = stateManagerInstance.getState('currentUser');
-        console.log('[AUTH] requireAuth called for:', action, 'currentUser:', currentUser);
-        console.log(`requireAuth called for: ${action}, currentUser: ${currentUser ? 'exists' : 'null'}`);
+        Logger.debug('[AUTH] requireAuth called for:', { action, currentUser: currentUser ? 'exists' : 'null' }, 'auth');
         if (!currentUser) {
-            console.log('No user found, showing auth prompt');
+            Logger.debug('No user found, showing auth prompt', 'auth');
             showAuthPrompt(action);
             return false;
         }
-        console.log('User found, executing callback');
+        Logger.debug('User found, executing callback', 'auth');
         if (callback)
             callback();
         return true;
     }
     catch (error) {
-        console.log('Error checking auth, showing auth prompt');
+        Logger.debug('Error checking auth, showing auth prompt', 'auth');
         showAuthPrompt(action);
         return false;
     }
 }
 function showAuthPrompt(action) {
-    console.log('showAuthPrompt called for:', action);
+    Logger.debug('showAuthPrompt called for:', action, 'auth');
     const authPrompt = document.getElementById('auth-prompt-modal');
     if (!authPrompt) {
-        console.log('Creating auth prompt modal');
+        Logger.debug('Creating auth prompt modal', null, 'auth');
         createAuthPromptModal();
     }
     const actionText = document.getElementById('auth-prompt-action');
@@ -231,12 +282,12 @@ function showAuthPrompt(action) {
     const modal = document.getElementById('auth-prompt-modal');
     if (modal) {
         modal.style.display = 'block';
-        console.log('Auth prompt modal displayed');
+        Logger.debug('Auth prompt modal displayed', null, 'auth');
     }
     else {
-        console.error('Auth prompt modal not found!');
+        Logger.error('Auth prompt modal not found!', null, 'auth');
     }
-    console.log(`Auth required for: ${action} (provider: ${providerName})`);
+    Logger.debug(`Auth required for: ${action} (provider: ${providerName})`, null, 'auth');
 }
 function createAuthPromptModal() {
     const modal = document.createElement('div');
@@ -278,9 +329,14 @@ function createAuthPromptModal() {
     if (googleBtn) {
         googleBtn.addEventListener('click', () => {
             modal.style.display = 'none';
-            const signInWithGoogle = window.signInWithGoogle;
-            if (signInWithGoogle) {
-                signInWithGoogle();
+            // ES6 pattern: Dispatch DOM event instead of calling window function
+            window.dispatchEvent(new CustomEvent('signInWithGoogle', {
+                detail: { source: 'AuthModule' }
+            }));
+            // Optional: Try direct call if available (graceful degradation)
+            const win = window;
+            if (typeof win.signInWithGoogle === 'function') {
+                win.signInWithGoogle();
             }
         });
     }
@@ -303,107 +359,149 @@ function createAuthPromptModal() {
 }
 function initializeRealGoogleAuth() {
     try {
-        console.log('🚀 REAL_GOOGLE_AUTH: Initializing for actual Google profile pictures...');
+        Logger.debug('🚀 REAL_GOOGLE_AUTH: Initializing for actual Google profile pictures...', null, 'auth');
         // Initialize real Google auth
-        const RealGoogleAuth = window.RealGoogleAuth;
+        // TODO: Export RealGoogleAuth from a module instead of window
+        // ACCEPTABLE: RealGoogleAuth may be loaded from external script
+        const win2 = window;
+        const RealGoogleAuth = win2.RealGoogleAuth;
         if (typeof RealGoogleAuth !== 'undefined' && typeof RealGoogleAuth === 'function') {
             const realGoogleAuth = new RealGoogleAuth();
             realGoogleAuth.initialize().then((success) => {
                 if (success) {
-                    console.log('✅ REAL_GOOGLE_AUTH: Real Google Auth initialized successfully');
-                    console.log('✅ REAL_GOOGLE_AUTH: Will now use actual Google profile pictures');
+                    Logger.debug('✅ REAL_GOOGLE_AUTH: Real Google Auth initialized successfully', null, 'auth');
+                    Logger.debug('✅ REAL_GOOGLE_AUTH: Will now use actual Google profile pictures', null, 'auth');
                 }
                 else {
-                    console.error('❌ REAL_GOOGLE_AUTH: Failed to initialize');
+                    Logger.error('❌ REAL_GOOGLE_AUTH: Failed to initialize', null, 'auth');
                 }
             });
         }
         else {
-            console.warn('⚠️ REAL_GOOGLE_AUTH: RealGoogleAuth not available - check if script is loaded');
+            Logger.warn('⚠️ REAL_GOOGLE_AUTH: RealGoogleAuth not available - check if script is loaded', null, 'auth');
         }
     }
     catch (error) {
-        console.error('❌ REAL_GOOGLE_AUTH: Error initializing:', error);
+        handleError(error, {
+            log: true,
+            logLevel: 'error',
+            context: {
+                operation: 'catch',
+                component: 'Auth'
+            }
+        });
+        ;
     }
 }
 // CRITICAL FIX: Test real-time with authenticated user
 async function testRealtimeAfterAuth(pageId) {
-    console.log('🧪 REALTIME TEST: Testing real-time with authenticated user...');
+    Logger.debug('🧪 REALTIME TEST: Testing real-time with authenticated user...', null, 'auth');
     const supabase = window.supabase;
     if (!supabase) {
-        console.error('❌ REALTIME TEST: Supabase client not available');
+        Logger.error('❌ REALTIME TEST: Supabase client not available', null, 'auth');
         return false;
     }
     try {
         const testRealtimeWithAuth = window.testRealtimeWithAuth;
         if (!testRealtimeWithAuth) {
-            console.error('❌ REALTIME TEST: testRealtimeWithAuth not available');
+            Logger.error('❌ REALTIME TEST: testRealtimeWithAuth not available', null, 'auth');
             return false;
         }
         const result = await testRealtimeWithAuth(supabase, pageId);
         if (result.success) {
-            console.log('🎉 REALTIME TEST: Real-time is working with authenticated user!');
+            Logger.debug('🎉 REALTIME TEST: Real-time is working with authenticated user!', null, 'auth');
             if ('eventReceived' in result) {
-                console.log('🎉 REALTIME TEST: Events received:', result.eventReceived);
+                Logger.debug('🎉 REALTIME TEST: Events received:', result.eventReceived, 'auth');
             }
             return true;
         }
         else {
-            console.error('❌ REALTIME TEST: Real-time still not working');
+            Logger.error('❌ REALTIME TEST: Real-time still not working', null, 'auth');
             if ('status' in result) {
-                console.error('❌ REALTIME TEST: Status:', result.status);
+                Logger.error('❌ REALTIME TEST: Status:', result.status, 'auth');
             }
             return false;
         }
     }
     catch (error) {
-        console.error('❌ REALTIME TEST: Exception during test:', error);
+        handleError(error, {
+            log: true,
+            logLevel: 'error',
+            context: {
+                operation: 'catch',
+                component: 'Auth'
+            }
+        });
+        ;
         return false;
     }
 }
 async function signInWithGoogle() {
     try {
-        console.log('Attempting Google sign-in for REAL profile pictures...');
+        Logger.debug('Attempting Google sign-in for REAL profile pictures...', null, 'auth');
         const realGoogleAuth = window.realGoogleAuth;
         const authManager = window.authManager;
         // Use real Google auth for actual profile pictures
         if (realGoogleAuth && realGoogleAuth.signInWithGoogle) {
             const result = await realGoogleAuth.signInWithGoogle();
-            console.log('Real Google sign-in successful:', result);
+            Logger.debug('Real Google sign-in successful:', result, 'auth');
             // Update UI with the authenticated user
             if (result && result.user) {
+                // ROOT CAUSE FIX: Map user_metadata.avatar_url to avatarUrl (camelCase conversion)
+                const userWithMetadata = result.user;
+                const avatarUrl = userWithMetadata.user_metadata?.avatar_url;
+                if (avatarUrl && !result.user.avatarUrl) {
+                    result.user.avatarUrl = avatarUrl;
+                    Logger.debug('[AUTH] Mapped user_metadata.avatar_url to avatarUrl in signInWithGoogle:', avatarUrl, 'auth');
+                }
                 // CRITICAL FIX: Authenticate with Supabase after Google auth
                 await authenticateWithSupabase(result.user);
-                const updateUI = window.updateUI;
-                if (updateUI) {
-                    await updateUI(result.user);
+                // ES6 pattern: Dispatch DOM event instead of calling window function
+                window.dispatchEvent(new CustomEvent('updateUI', {
+                    detail: { user: result.user, source: 'AuthModule' }
+                }));
+                // Optional: Try direct call if available (graceful degradation)
+                const win3 = window;
+                if (typeof win3.updateUI === 'function') {
+                    await win3.updateUI(result.user);
                 }
-                console.log(`User authenticated with REAL profile picture: ${result.user.email}`);
-                console.log('🔍 REAL_GOOGLE_AUTH: Real avatar URL:', result.user.user_metadata?.avatar_url);
+                Logger.debug(`User authenticated with REAL profile picture: ${result.user.email}`, null, 'auth');
+                Logger.debug('🔍 REAL_GOOGLE_AUTH: Real avatar URL:', avatarUrl || result.user.avatarUrl, 'auth');
             }
         }
         else if (authManager && authManager.signIn) {
             // Fallback to AuthManager
             const result = await authManager.signIn('google');
-            console.log('Google sign-in successful (fallback):', result);
+            Logger.debug('Google sign-in successful (fallback):', result, 'auth');
             // Update UI with the authenticated user
             if (result && result.user) {
                 // CRITICAL FIX: Authenticate with Supabase after Google auth
                 await authenticateWithSupabase(result.user);
-                const updateUI = window.updateUI;
-                if (updateUI) {
-                    if (updateUI && typeof updateUI === 'function') {
-                        await updateUI(result.user);
-                    }
+                // ES6 pattern: Dispatch DOM event instead of calling window function
+                window.dispatchEvent(new CustomEvent('updateUI', {
+                    detail: { user: result.user, source: 'AuthModule' }
+                }));
+                // Optional: Try direct call if available (graceful degradation)
+                const win4 = window;
+                if (typeof win4.updateUI === 'function') {
+                    await win4.updateUI(result.user);
                 }
-                console.log(`User authenticated (fallback): ${result.user.email}`);
+                Logger.debug(`User authenticated (fallback): ${result.user.email}`, null, 'auth');
             }
         }
     }
     catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        console.error('Google sign-in failed:', error);
-        console.log(`Google sign-in error: ${errorMessage}`);
+        handleError(error, {
+            log: true,
+            logLevel: 'error',
+            context: {
+                operation: 'catch',
+                component: 'Auth'
+            }
+        });
+        ;
+        Logger.debug(`Google sign-in error: ${errorMessage}`, null, 'auth');
         // Show error to user
         const statusElement = document.getElementById('magic-link-status');
         if (statusElement) {
@@ -416,7 +514,7 @@ async function sendMagicLink() {
     try {
         const emailInput = document.getElementById('magic-link-email');
         if (!emailInput) {
-            console.error('Magic link email input not found');
+            Logger.error('Magic link email input not found', null, 'auth');
             return;
         }
         const email = emailInput.value;
@@ -431,7 +529,7 @@ async function sendMagicLink() {
         if (statusElement) {
             statusElement.textContent = 'Sending magic link...';
         }
-        console.log(`Attempting magic link sign-in for: ${email}`);
+        Logger.debug(`Attempting magic link sign-in for: ${email}`, null, 'auth');
         const authManager = window.authManager;
         if (!authManager || !authManager.signIn) {
             throw new Error('AuthManager not available');
@@ -446,7 +544,7 @@ async function sendMagicLink() {
                 await updateUI(result.user);
             }
             if (result.user) {
-                console.log(`Magic link successful: ${result.user.email}`);
+                Logger.debug(`Magic link successful: ${result.user.email}`, null, 'auth');
             }
         }
         else {
@@ -461,66 +559,93 @@ async function sendMagicLink() {
     }
     catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        console.error('Magic link sign-in failed:', error);
+        handleError(error, {
+            log: true,
+            logLevel: 'error',
+            context: {
+                operation: 'catch',
+                component: 'Auth'
+            }
+        });
+        ;
         const statusElement = document.getElementById('magic-link-status');
         if (statusElement) {
             statusElement.textContent = `Error: ${errorMessage}`;
         }
-        console.log(`Magic link error: ${errorMessage}`);
+        Logger.debug(`Magic link error: ${errorMessage}`, null, 'auth');
     }
 }
 async function signOut() {
     try {
-        console.log('Attempting sign-out...');
+        Logger.debug('Attempting sign-out...', null, 'auth');
         const authManager = window.authManager;
         if (authManager && authManager.signOut) {
             await authManager.signOut();
-            console.log('Sign-out successful');
+            Logger.debug('Sign-out successful', null, 'auth');
         }
     }
     catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        console.error('Sign-out failed:', error);
-        console.log(`Sign-out error: ${errorMessage}`);
+        handleError(error, {
+            log: true,
+            logLevel: 'error',
+            context: {
+                operation: 'catch',
+                component: 'Auth'
+            }
+        });
+        ;
+        Logger.debug(`Sign-out error: ${errorMessage}`, null, 'auth');
     }
 }
 // CRITICAL FIX: Complete OTP verification for real-time
 async function completeOTPForRealtime(otpCode) {
-    console.log('🔐 OTP VERIFICATION: Completing OTP verification for real-time...');
+    Logger.debug('🔐 OTP VERIFICATION: Completing OTP verification for real-time...', null, 'auth');
     const supabase = window.supabase;
     if (!supabase) {
-        console.error('❌ OTP VERIFICATION: Supabase client not available');
+        Logger.error('❌ OTP VERIFICATION: Supabase client not available', null, 'auth');
         return false;
     }
     try {
-        const completeOTPVerification = window.completeOTPVerification;
+        // TODO: Export completeOTPVerification from a module instead of window
+        // ACCEPTABLE: Optional check for backward compatibility
+        const win5 = window;
+        const completeOTPVerification = win5.completeOTPVerification;
         if (!completeOTPVerification) {
-            console.error('❌ OTP VERIFICATION: completeOTPVerification not available');
+            Logger.error('❌ OTP VERIFICATION: completeOTPVerification not available', null, 'auth');
             return false;
         }
         const result = await completeOTPVerification(supabase, otpCode);
         if (result && typeof result === 'object' && 'success' in result && result.success && 'user' in result && result.user) {
             const typedResult = result;
-            console.log('✅ OTP VERIFICATION: OTP verified successfully');
-            console.log('✅ OTP VERIFICATION: User authenticated:', typedResult.user.email);
+            Logger.debug('✅ OTP VERIFICATION: OTP verified successfully', null, 'auth');
+            Logger.debug('✅ OTP VERIFICATION: User authenticated:', typedResult.user.email, 'auth');
             if (typedResult.session && typeof typedResult.session === 'object' && 'expires_at' in typedResult.session && typeof typedResult.session.expires_at === 'number') {
-                console.log('✅ OTP VERIFICATION: Session expires at:', new Date(typedResult.session.expires_at * 1000));
+                Logger.debug('✅ OTP VERIFICATION: Session expires at:', new Date(typedResult.session.expires_at * 1000), 'auth');
             }
             // Now test real-time with authenticated user
             const testResult = await testRealtimeAfterAuth('00000000-0000-0000-0000-000000000001');
             if (testResult) {
-                console.log('🎉 OTP VERIFICATION: Real-time is now working!');
+                Logger.debug('🎉 OTP VERIFICATION: Real-time is now working!', null, 'auth');
             }
             return true;
         }
         else {
             const errorMessage = (result && typeof result === 'object' && 'error' in result) ? result.error : 'Unknown error';
-            console.error('❌ OTP VERIFICATION: OTP verification failed:', errorMessage);
+            Logger.error('❌ OTP VERIFICATION: OTP verification failed:', errorMessage, 'auth');
             return false;
         }
     }
     catch (error) {
-        console.error('❌ OTP VERIFICATION: Exception during OTP verification:', error);
+        handleError(error, {
+            log: true,
+            logLevel: 'error',
+            context: {
+                operation: 'catch',
+                component: 'Auth'
+            }
+        });
+        ;
         return false;
     }
 }
@@ -539,7 +664,17 @@ async function getCurrentUserId() {
         }
     }
     catch (error) {
-        console.error('Error getting user ID:', error);
+        // user is not in scope here, get it again if needed
+        const userInCatch = stateManagerInstance.getState('currentUser');
+        handleError(error, {
+            log: true,
+            logLevel: 'error',
+            context: {
+                operation: 'getCurrentUserId',
+                component: 'Auth',
+                userId: userInCatch?.id
+            }
+        });
         // Fallback to email
         const email = await getCurrentUserEmail();
         return email;
@@ -553,12 +688,12 @@ async function getCurrentUserEmail() {
     // ROOT CAUSE FIX: Check stateManager first (TypeScript migration - no window.currentUser)
     const currentUserFromState = stateManagerInstance.getState('currentUser');
     if (currentUserFromState?.email) {
-        console.log('[AUTH] Using existing stateManager.currentUser:', currentUserFromState?.email);
+        Logger.debug('[AUTH] Using existing stateManager.currentUser:', currentUserFromState?.email, 'auth');
         return currentUserFromState?.email || null;
     }
     // CRITICAL FIX: Guard against multiple simultaneous calls
     if (isGettingCurrentUserEmail && currentUserEmailPromise) {
-        console.log('[AUTH] getCurrentUserEmail() already in progress, returning existing promise');
+        Logger.debug('[AUTH] getCurrentUserEmail() already in progress, returning existing promise', null, 'auth');
         return currentUserEmailPromise;
     }
     isGettingCurrentUserEmail = true;
@@ -568,53 +703,66 @@ async function getCurrentUserEmail() {
             // COMP METHOD: Check if realGoogleAuth is available and initialized
             const realGoogleAuth = window.realGoogleAuth;
             if (realGoogleAuth && typeof realGoogleAuth.getCurrentUser === 'function') {
-                console.log('[AUTH] Calling realGoogleAuth.getCurrentUser()...');
+                Logger.debug('[AUTH] Calling realGoogleAuth.getCurrentUser()...', null, 'auth');
                 const user = await realGoogleAuth.getCurrentUser();
-                console.log('[AUTH] Real Google Auth returned user:', user);
+                Logger.debug('[AUTH] Real Google Auth returned user:', user, 'auth');
                 if (user && user.email) {
-                    console.log('[AUTH] Found authenticated user with REAL profile picture:', user.email);
+                    Logger.debug('[AUTH] Found authenticated user with REAL profile picture:', user.email, 'auth');
+                    // ROOT CAUSE FIX: Map user_metadata.avatar_url to avatarUrl (camelCase conversion)
+                    const userWithMetadata = user;
+                    const avatarUrl = userWithMetadata.user_metadata?.avatar_url;
+                    if (avatarUrl && !user.avatarUrl) {
+                        user.avatarUrl = avatarUrl;
+                        Logger.debug('[AUTH] Mapped user_metadata.avatar_url to avatarUrl:', avatarUrl, 'auth');
+                    }
+                    Logger.debug('[AUTH] Real avatar URL:', avatarUrl || user.avatarUrl, 'auth');
                     // ROOT CAUSE FIX: Update stateManager (TypeScript migration - no window.currentUser)
                     stateManagerInstance.setState('currentUser', user);
-                    console.log('[AUTH] Set stateManager.currentUser from getCurrentUserEmail():', user.email);
-                    const userWithMetadata = user;
-                    console.log('[AUTH] Real avatar URL:', userWithMetadata.user_metadata?.avatar_url);
+                    Logger.debug('[AUTH] Set stateManager.currentUser from getCurrentUserEmail():', user.email, 'auth');
                     return user.email;
                 }
                 else {
-                    console.log('[AUTH] Real Google Auth returned null or no email');
+                    Logger.debug('[AUTH] Real Google Auth returned null or no email', null, 'auth');
                 }
             }
             else {
-                console.log('[AUTH] realGoogleAuth not available or not initialized');
+                Logger.debug('[AUTH] realGoogleAuth not available or not initialized', null, 'auth');
             }
             // SECOND: Fallback to AuthManager
             const authManager = window.authManager;
             if (authManager && authManager.getCurrentUser) {
                 const user = await authManager.getCurrentUser();
-                console.log('[AUTH] AuthManager returned user:', user);
+                Logger.debug('[AUTH] AuthManager returned user:', user, 'auth');
                 if (user && user.email) {
-                    console.log('[AUTH] Found authenticated user (fallback):', user.email);
+                    Logger.debug('[AUTH] Found authenticated user (fallback):', user.email, 'auth');
                     // ROOT CAUSE FIX: Update stateManager (TypeScript migration - no window.currentUser)
                     stateManagerInstance.setState('currentUser', user);
-                    console.log('[AUTH] Set stateManager.currentUser from AuthManager:', user.email);
+                    Logger.debug('[AUTH] Set stateManager.currentUser from AuthManager:', user.email, 'auth');
                     return user.email;
                 }
             }
-            console.error('[AUTH] No authenticated user found via any method');
+            Logger.error('[AUTH] No authenticated user found via any method', null, 'auth');
             // COMP METHOD: Only show auth prompt after initialization is complete
             if (!isInitializing) {
-                console.log('[AUTH] No user found, showing authentication prompt...');
+                Logger.debug('[AUTH] No user found, showing authentication prompt...', 'auth');
                 showAuthPrompt('access presence features');
             }
             else {
-                console.log('[AUTH] No user found, but not showing auth prompt during initialization');
+                Logger.debug('[AUTH] No user found, but not showing auth prompt during initialization', 'auth');
             }
             // Return null instead of throwing error to allow graceful handling
             return null;
         }
         catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            console.error('[AUTH] Error getting current user email:', errorMessage);
+            handleError(error, {
+                log: true,
+                logLevel: 'error',
+                context: {
+                    operation: 'catch',
+                    component: 'Auth'
+                }
+            });
+            ;
             return null;
         }
         finally {
@@ -625,96 +773,17 @@ async function getCurrentUserEmail() {
     })();
     return currentUserEmailPromise;
 }
-// Get the avatar color for the current user (custom or default)
-function getCurrentUserAvatarColor() {
-    return new Promise((resolve) => {
-        // Modernized: Use StateManager instead of Chrome Storage
-        const getState = window.getState;
-        if (getState) {
-            const stateValue = getState('customAvatarColor');
-            if (stateValue && typeof stateValue === 'object' && 'customAvatarColor' in stateValue) {
-                const colorResult = stateValue;
-                if (colorResult.customAvatarColor) {
-                    resolve(colorResult.customAvatarColor);
-                    return;
-                }
-            }
-            // Use the same color system as message avatars
-            getCurrentUserEmail().then(email => {
-                if (email) {
-                    const getAvatarColor = window.getAvatarColor;
-                    if (getAvatarColor && typeof getAvatarColor === 'function') {
-                        resolve(getAvatarColor(email));
-                    }
-                    else {
-                        resolve(window.AVATAR_FALLBACK_COLOR || '#ffffff');
-                    }
-                }
-                else {
-                    resolve(window.AVATAR_FALLBACK_COLOR || '#ffffff');
-                }
-            }).catch(() => {
-                resolve(window.AVATAR_FALLBACK_COLOR || '#ffffff'); // Default white
-            });
-        }
-        else {
-            resolve(window.AVATAR_FALLBACK_COLOR || '#ffffff');
-        }
-    });
-}
-function getUserAvatarBgColor() {
-    // Get the user's custom background color for their profile avatar
-    // ROOT CAUSE FIX: Use stateManager (TypeScript migration - no window.currentUser)
-    const currentUser = stateManagerInstance.getState('currentUser');
-    if (currentUser && currentUser.auraColor) {
-        return currentUser.auraColor;
-    }
-    return window.AVATAR_FALLBACK_COLOR || '#ffffff'; // Default white
-}
-function getCurrentUserAvatarBgColor() {
-    // ROOT CAUSE FIX: Use stateManager (TypeScript migration - no window.currentUser)
-    const currentUser = stateManagerInstance.getState('currentUser');
-    if (currentUser && currentUser.auraColor) {
-        return currentUser.auraColor;
-    }
-    return window.AVATAR_FALLBACK_COLOR || '#ffffff'; // Default white
-}
-// Global function to reset to default avatar color
-function resetCustomAvatarColor() {
-    // Modernized: Use StateManager instead of Chrome Storage
-    const setState = window.setState;
-    if (setState) {
-        setState('customAvatarColor', null);
-        // Refresh the profile avatar
-        const refreshUserAvatar = window.refreshUserAvatar;
-        if (refreshUserAvatar) {
-            refreshUserAvatar();
-        }
-    }
-}
+// Avatar helper shims routed through ProfileManager singletons
+const getCurrentUserAvatarColor = profileGetCurrentUserAvatarColor;
+const getCurrentUserAvatarBgColor = () => profileGetCurrentUserAvatarBgColor();
+const getUserAvatarBgColor = () => profileGetCurrentUserAvatarBgColor();
+const resetCustomAvatarColor = () => {
+    profileResetCustomAvatarColor();
+};
 // COMP METHOD: Mark initialization as complete
 function markInitializationComplete() {
     isInitializing = false;
-    console.log('[AUTH] Initialization complete - auth prompts will now be shown when needed');
+    Logger.debug('[AUTH] Initialization complete - auth prompts will now be shown when needed', null, 'auth');
 }
-// Export for global access
-window.AuthModule = AuthModule;
-window.getCurrentUserEmail = getCurrentUserEmail;
-window.authenticateWithSupabase = authenticateWithSupabase;
-window.requireAuth = requireAuth;
-window.showAuthPrompt = showAuthPrompt;
-window.createAuthPromptModal = createAuthPromptModal;
-window.initializeRealGoogleAuth = initializeRealGoogleAuth;
-window.markInitializationComplete = markInitializationComplete;
-window.signOut = signOut;
-window.logout = signOut; // Alias for compatibility
-window.signInWithGoogle = signInWithGoogle;
-window.sendMagicLink = sendMagicLink;
-window.getCurrentUserId = getCurrentUserId;
-window.getCurrentUserAvatarColor = getCurrentUserAvatarColor;
-window.getUserAvatarBgColor = getUserAvatarBgColor;
-window.getCurrentUserAvatarBgColor = getCurrentUserAvatarBgColor;
-window.resetCustomAvatarColor = resetCustomAvatarColor;
-window.testRealtimeAfterAuth = testRealtimeAfterAuth;
-window.completeOTPForRealtime = completeOTPForRealtime;
+// ES6 exports only - no window assignments (backward compatibility removed)
 export { AuthModule, authenticateWithSupabase, requireAuth, showAuthPrompt, createAuthPromptModal, initializeRealGoogleAuth, markInitializationComplete, signOut, signInWithGoogle, sendMagicLink, getCurrentUserId, getCurrentUserEmail, getCurrentUserAvatarColor, getUserAvatarBgColor, getCurrentUserAvatarBgColor, resetCustomAvatarColor, testRealtimeAfterAuth, completeOTPForRealtime };

@@ -10,6 +10,7 @@
  * - Interaction patterns
  */
 import { XIcons as XIconsModule } from './XIconLibrary.js';
+import { Logger } from './Logger.js';
 // Use imported XIcons, fallback to window if needed
 let XIcons = XIconsModule;
 /**
@@ -289,7 +290,7 @@ export function generateXStyles() {
 /**
  * Apply X pattern to a component
  */
-export function applyXPattern(component, options) {
+export function applyXPattern(component, _options) {
     // This will be expanded to apply patterns to different component types
     return component;
 }
@@ -309,7 +310,7 @@ export function getXIcon(name, props) {
         }
     }
     // Fallback: return empty string if icon not found
-    console.warn(`X icon "${name}" not found`);
+    Logger.warn(`X icon "${name}" not found`, null, 'general');
     return '';
 }
 /**

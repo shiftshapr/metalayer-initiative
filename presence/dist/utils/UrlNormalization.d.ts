@@ -1,8 +1,9 @@
 export interface NormalizationResult {
     normalizedUrl: string;
     pageId: string;
+    canonicalUrl?: string;
 }
-export default class UrlNormalization {
+declare class UrlNormalization {
     private readonly defaultRules;
     constructor();
     normalizeUrl(url: string): NormalizationResult;
@@ -15,4 +16,6 @@ export default class UrlNormalization {
     private preserveHash;
     private generatePageId;
 }
+export declare function normalizeUrl(rawUrl: string): Promise<NormalizationResult>;
+export { UrlNormalization };
 //# sourceMappingURL=UrlNormalization.d.ts.map

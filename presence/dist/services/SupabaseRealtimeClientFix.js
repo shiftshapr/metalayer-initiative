@@ -1,4 +1,3 @@
-"use strict";
 /**
  * SUPABASE REALTIME CLIENT FIX
  *
@@ -11,143 +10,299 @@
  * 3. Filter by is_active = true instead of 24-hour time window
  */
 // Auto-apply patch when module loads
-function applySupabaseRealtimeClientFix() {
+import { handleError } from '../utils/ErrorHandler.js';
+import { Logger } from '../utils/Logger.js';
+import { initializeRealtimeSubscriptionService } from './RealtimeSubscriptionService.js';
+const mapServerPresenceUser = (user, pageId) => {
+    const isActive = user.isActive ?? user.is_active ?? true;
+    const lastSeen = user.lastSeen ?? user.last_seen ?? null;
+    return {
+        id: user.id ?? user.userId ?? user.user_id ?? '',
+        email: user.email ?? user.user_email ?? 'unknown@unknown',
+        handle: user.handle,
+        name: user.name,
+        avatarUrl: user.avatarUrl ?? user.avatar_url ?? undefined,
+        auraColor: user.auraColor ?? user.aura_color ?? '#ffffff',
+        isActive,
+        status: user.status ?? (isActive ? 'online' : lastSeen ? 'recently_seen' : 'offline'),
+        lastSeen: lastSeen || undefined,
+        pageId
+    };
+};
+const mapPresenceRecord = (record, fallbackPageId) => {
+    const isActive = record.is_active ?? false;
+    const lastSeen = record.last_seen ?? null;
+    return {
+        id: record.user_id ?? '',
+        email: record.AppUser?.email ?? '',
+        handle: record.AppUser?.handle ?? undefined,
+        name: record.AppUser?.name ?? undefined,
+        avatarUrl: record.AppUser?.avatar_url ?? record.AppUser?.avatarUrl ?? undefined,
+        auraColor: record.AppUser?.aura_color ?? record.AppUser?.auraColor ?? '#ffffff',
+        isActive,
+        status: isActive ? 'online' : 'offline',
+        lastSeen: lastSeen || undefined,
+        pageId: record.page_id ?? fallbackPageId
+    };
+};
+/**
+ * Fallback query helper for SupabaseRealtimeClientFix
+ * Checks for presence records with similar pageIds (normalization issues)
+ */
+async function getPageUsersFallback(querySource, pageId) {
+    try {
+        Logger.debug('🔍 SUPABASE_CLIENT: Running fallback query for pageId:', pageId, 'general');
+        // Check for similar pageIds (normalization issues)
+        // Extract base domain from pageId (e.g., "google_com_" from "developers_google_com_profile_u_104661641557936501987")
+        const baseDomainMatch = pageId.match(/^([a-z]+_[a-z]+_)/);
+        if (baseDomainMatch) {
+            const baseDomain = baseDomainMatch[1];
+            Logger.debug('🔍 SUPABASE_CLIENT: Checking for similar pageIds with base domain:', baseDomain, 'general');
+            const { data: similarData } = await querySource
+                .from('user_presence')
+                .select('user_id, page_id, last_seen, is_active, AppUser(email, name, handle, avatarUrl, auraColor)')
+                .like('page_id', `${baseDomain}%`)
+                .eq('is_active', true)
+                .limit(20);
+            if (similarData && similarData.length > 0) {
+                Logger.warn('⚠️ SUPABASE_CLIENT: Found presence records with similar pageIds', {
+                    current: pageId,
+                    found: similarData.map(r => r.page_id)
+                }, 'general');
+                // Return users from similar pageIds (they're on the same domain)
+                const records = similarData;
+                return records.map((record) => mapPresenceRecord(record, pageId));
+            }
+        }
+        return [];
+    }
+    catch (fallbackError) {
+        Logger.error('❌ SUPABASE_CLIENT: Fallback query also failed', fallbackError instanceof Error ? fallbackError : { error: String(fallbackError) }, 'general');
+        return [];
+    }
+}
+let supabaseRealtimePatchScheduled = false;
+let supabaseRealtimePatchApplied = false;
+const createPatchedGetPageUsers = () => {
+    return async function patchedGetPageUsers(pageId) {
+        try {
+            Logger.debug('👁️ SUPABASE_CLIENT: Getting users for page:', pageId, 'general');
+            if (!this.supabase) {
+                Logger.error('❌ SUPABASE_CLIENT: Client not initialized', null, 'general');
+                return [];
+            }
+            const supabaseClient = this.supabase;
+            const querySource = supabaseClient;
+            try {
+                const win = window;
+                const rawUrl = win.currentUrlData?.rawUrl || window.location?.href || '';
+                const params = new URLSearchParams({ url: rawUrl });
+                const currentUser = win.currentUser || {};
+                // UUID ONLY - no email headers
+                const headers = {
+                    'Content-Type': 'application/json',
+                    ...(currentUser.id ? { 'X-User-Id': currentUser.id, 'x-user-id': currentUser.id } : {})
+                };
+                const apiUrl = win.METALAYER_API_URL;
+                if (apiUrl) {
+                    const resp = await fetch(`${apiUrl}/v1/presence/url?${params}`, { headers });
+                    if (resp.ok) {
+                        const j = await resp.json();
+                        const active = Array.isArray(j?.active) ? j.active : [];
+                        const serverUsers = active.map((user) => mapServerPresenceUser(user, pageId));
+                        Logger.debug('✅ SUPABASE_CLIENT: Using server-enriched presence users:', serverUsers.length, 'general');
+                        return serverUsers;
+                    }
+                    if (resp.status === 401) {
+                        Logger.warn('⚠️ SUPABASE_CLIENT: presence/url failed with 401 (Unauthorized), using direct database query', null, 'general');
+                    }
+                    else {
+                        Logger.warn('⚠️ SUPABASE_CLIENT: presence/url failed', { status: resp.status }, 'general');
+                    }
+                }
+            }
+            catch (serverErr) {
+                handleError(serverErr, {
+                    log: true,
+                    logLevel: 'warn',
+                    context: {
+                        operation: 'handleRealtimeError',
+                        component: 'SupabaseRealtimeClientFix'
+                    }
+                });
+            }
+            // ROOT CAUSE FIX: Use explicit foreign key syntax AppUser:user_id(*) like messages query
+            // ROOT CAUSE FIX: Two-step query approach - avoids AppUser relation syntax issues
+            // Step 1: Query user_presence (user_id/UUID is always present)
+            const { data: presenceData, error: presenceError } = await querySource
+                .from('user_presence')
+                .select('user_id, page_id, last_seen, is_active')
+                .eq('page_id', pageId)
+                .eq('is_active', true)
+                .order('last_seen', { ascending: false });
+            if (presenceError) {
+                Logger.error('❌ SUPABASE_CLIENT: Failed to get page users:', presenceError, 'general');
+                return await getPageUsersFallback(querySource, pageId);
+            }
+            if (!presenceData || presenceData.length === 0) {
+                Logger.debug('ℹ️ SUPABASE_CLIENT: No active users found for pageId:', pageId, 'general');
+                return await getPageUsersFallback(querySource, pageId);
+            }
+            // Step 2: Batch fetch AppUser data using user_ids (UUIDs are always present)
+            const presenceRecords = presenceData;
+            const userIds = presenceRecords
+                .map((r) => r.user_id)
+                .filter((id) => !!id);
+            if (userIds.length === 0) {
+                return [];
+            }
+            const { data: appUserData, error: appUserError } = await querySource
+                .from('AppUser')
+                .select('id, email, name, handle, avatarUrl, auraColor')
+                .in('id', userIds);
+            if (appUserError) {
+                Logger.warn('⚠️ SUPABASE_CLIENT: Failed to fetch AppUser data, continuing without it', appUserError, 'general');
+                // Continue without AppUser data - users will show as "Unknown" but at least they'll be visible
+            }
+            // Create a map of user_id -> AppUser data for quick lookup
+            const appUserMap = new Map();
+            (appUserData || []).forEach((u) => {
+                if (u.id) {
+                    appUserMap.set(u.id, u);
+                }
+            });
+            // Combine presence data with AppUser data
+            const combinedRecords = presenceRecords.map((presence) => ({
+                ...presence,
+                AppUser: appUserMap.get(presence.user_id || '') || null
+            }));
+            Logger.debug('✅ SUPABASE_CLIENT: Found active users for page', {
+                presenceCount: combinedRecords.length,
+                appUserCount: appUserMap.size,
+                pageId
+            }, 'general');
+            return combinedRecords.map((record) => mapPresenceRecord(record, pageId));
+        }
+        catch (error) {
+            handleError(error, {
+                log: true,
+                logLevel: 'error',
+                context: {
+                    operation: 'catch',
+                    component: 'SupabaseRealtimeClientFix'
+                }
+            });
+            return [];
+        }
+    };
+};
+export function applySupabaseRealtimeClientFix() {
+    if (supabaseRealtimePatchApplied || supabaseRealtimePatchScheduled) {
+        return;
+    }
     if (typeof window === 'undefined') {
         return;
     }
-    // Wait for SupabaseRealtimeClient to be available
+    supabaseRealtimePatchScheduled = true;
     const checkAndPatch = () => {
         const win = window;
-        if (!win.SupabaseRealtimeClient?.prototype) {
-            // Not loaded yet, try again in 100ms
+        const proto = win.SupabaseRealtimeClient?.prototype;
+        if (!proto) {
             setTimeout(checkAndPatch, 100);
             return;
         }
-        const proto = win.SupabaseRealtimeClient.prototype;
-        if (!proto.getPageUsers) {
-            // Method not available yet, try again
-            setTimeout(checkAndPatch, 100);
+        const currentImpl = proto.getPageUsers;
+        if (currentImpl?.__supabasePatched) {
+            supabaseRealtimePatchApplied = true;
             return;
         }
-        // Patch the method
-        const originalMethod = proto.getPageUsers;
-        proto.getPageUsers = async function (pageId) {
-            try {
-                console.log('👁️ SUPABASE_CLIENT: Getting users for page:', pageId);
-                if (!this.supabase) {
-                    console.error('❌ SUPABASE_CLIENT: Client not initialized');
-                    return [];
-                }
-                // ROOT CAUSE FIX: Skip API endpoint if it's failing (401), go straight to database query
-                let useApiEndpoint = true;
-                try {
-                    const rawUrl = window.currentUrlData?.rawUrl || window.location?.href || '';
-                    const params = new URLSearchParams({ url: rawUrl });
-                    const currentUser = window.currentUser || {};
-                    const headers = {
-                        'Content-Type': 'application/json',
-                        ...(currentUser.id ? { 'X-User-Id': currentUser.id, 'x-user-id': currentUser.id } : {}),
-                        ...(currentUser.email ? { 'X-User-Email': currentUser.email, 'x-user-email': currentUser.email } : {})
-                    };
-                    const apiUrl = window.METALAYER_API_URL;
-                    if (apiUrl) {
-                        const resp = await fetch(`${apiUrl}/v1/presence/url?${params}`, { headers });
-                        if (resp.ok) {
-                            const j = await resp.json();
-                            const active = Array.isArray(j?.active) ? j.active : [];
-                            const serverUsers = active.map((u) => {
-                                const user = u;
-                                return {
-                                    user_email: user.email || user.handle || 'unknown@unknown',
-                                    user_id: user.id || user.userId,
-                                    is_active: user.isActive !== undefined ? user.isActive : (user.isActive !== false),
-                                    last_seen: user.lastSeen || null,
-                                    enter_time: user.enterTime || user.lastSeen || null,
-                                    aura_color: user.auraColor || '#ffffff',
-                                    name: user.name,
-                                    avatar_url: user.avatarUrl,
-                                    status: user.status || (user.isActive ? 'online' : (user.lastSeen ? 'recently_seen' : 'offline')),
-                                    isActive: user.isActive,
-                                    enterTime: user.enterTime || user.lastSeen,
-                                    lastSeen: user.lastSeen
-                                };
-                            });
-                            console.log('✅ SUPABASE_CLIENT: Using server-enriched presence users:', serverUsers.length);
-                            return serverUsers;
-                        }
-                        else if (resp.status === 401) {
-                            console.warn('⚠️ SUPABASE_CLIENT: presence/url failed with 401 (Unauthorized), using direct database query');
-                            useApiEndpoint = false;
-                        }
-                        else {
-                            console.warn('⚠️ SUPABASE_CLIENT: presence/url failed with', resp.status);
-                            useApiEndpoint = false;
-                        }
-                    }
-                }
-                catch (serverErr) {
-                    console.warn('⚠️ SUPABASE_CLIENT: presence/url error:', serverErr?.message || serverErr);
-                    useApiEndpoint = false;
-                }
-                // ROOT CAUSE FIX: Use direct database query with AppUser relation (like SupabaseService does)
-                // ROOT CAUSE FIX: Filter by is_active = true instead of 24-hour time window
-                const supabaseClient = this.supabase;
-                // ROOT CAUSE FIX: Query with AppUser relation and filter by is_active (not time-based)
-                if (!supabaseClient) {
-                    throw new Error('Supabase client not available');
-                }
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const queryBuilder = supabaseClient
-                    .from('user_presence')
-                    .select('user_id, page_id, last_seen, is_active, AppUser(email, name, handle, avatar_url, aura_color)')
-                    .eq('page_id', pageId)
-                    .eq('is_active', true); // ROOT CAUSE FIX: Only get active users, not time-filtered
-                // Type-safe order call - Supabase query builder always has order method after eq()
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const { data, error } = await queryBuilder.order('last_seen', { ascending: false });
-                if (error) {
-                    console.error('❌ SUPABASE_CLIENT: Failed to get page users:', error);
-                    return [];
-                }
-                if (!data || data.length === 0) {
-                    console.log('ℹ️ SUPABASE_CLIENT: No active users found for pageId:', pageId);
-                    return [];
-                }
-                console.log('✅ SUPABASE_CLIENT: Found', data.length, 'active users for page:', pageId);
-                // ROOT CAUSE FIX: Transform to match expected format with AppUser data
-                return data.map((record) => ({
-                    user_email: record.AppUser?.email || '',
-                    user_id: record.user_id || '',
-                    is_active: record.is_active || false,
-                    last_seen: record.last_seen || null,
-                    enter_time: record.last_seen || null,
-                    aura_color: record.AppUser?.aura_color || '#ffffff',
-                    name: record.AppUser?.name,
-                    avatar_url: record.AppUser?.avatar_url,
-                    handle: record.AppUser?.handle,
-                    status: record.is_active ? 'online' : 'offline',
-                    isActive: record.is_active,
-                    enterTime: record.last_seen,
-                    lastSeen: record.last_seen,
-                    // Also include camelCase fields for compatibility
-                    id: record.user_id,
-                    email: record.AppUser?.email,
-                    avatarUrl: record.AppUser?.avatar_url,
-                    auraColor: record.AppUser?.aura_color,
-                    page_id: record.page_id
-                }));
-            }
-            catch (error) {
-                console.error('❌ SUPABASE_CLIENT: getPageUsers error:', error);
-                return [];
-            }
-        };
-        console.log('✅ SUPABASE_REALTIME_CLIENT_FIX: Patched getPageUsers to use AppUser relation and proper filtering');
+        const patched = createPatchedGetPageUsers();
+        patched.__supabasePatched = true;
+        proto.getPageUsers = patched;
+        supabaseRealtimePatchApplied = true;
+        Logger.debug('✅ SUPABASE_REALTIME_CLIENT_FIX: Patched getPageUsers to use AppUser relation and proper filtering', null, 'general');
     };
-    // Start checking immediately and retry if needed
     checkAndPatch();
 }
-// Auto-apply on module load
+let supabaseRealtimeInitPromise = null;
+let supabaseRealtimeDomGuardsAttached = false;
+const supabaseRealtimeSubscribedPages = new Set();
+const getSupabaseClient = (options) => {
+    if (options.supabaseClient) {
+        return options.supabaseClient;
+    }
+    if (typeof window === 'undefined') {
+        return null;
+    }
+    return window.supabase ?? null;
+};
+const attachRealtimeDomGuards = (service) => {
+    if (supabaseRealtimeDomGuardsAttached || typeof window === 'undefined') {
+        return;
+    }
+    window.addEventListener('beforeunload', () => service.unsubscribeAll());
+    window.addEventListener('metalayer:unsubscribe-realtime', () => service.unsubscribeAll());
+    supabaseRealtimeDomGuardsAttached = true;
+};
+export async function initializeSupabaseRealtimeServices(options = {}) {
+    if (typeof window === 'undefined') {
+        Logger.debug('ℹ️ SupabaseRealtimeServices: Skipping initialization (no window)', null, 'general');
+        return null;
+    }
+    applySupabaseRealtimeClientFix();
+    const supabaseClient = getSupabaseClient(options);
+    if (!supabaseClient) {
+        Logger.warn('⚠️ SupabaseRealtimeServices: Supabase client missing, cannot initialize realtime services', null, 'general');
+        supabaseRealtimeInitPromise = null;
+        return null;
+    }
+    if (!supabaseRealtimeInitPromise) {
+        supabaseRealtimeInitPromise = (async () => {
+            const service = initializeRealtimeSubscriptionService(supabaseClient);
+            const ready = await service.initialize();
+            if (!ready) {
+                Logger.error('❌ SupabaseRealtimeServices: Realtime subscription service failed to initialize', null, 'general');
+                return null;
+            }
+            attachRealtimeDomGuards(service);
+            return service;
+        })().catch((error) => {
+            supabaseRealtimeInitPromise = null;
+            handleError(error, {
+                log: true,
+                logLevel: 'error',
+                context: {
+                    operation: 'initializeSupabaseRealtimeServices',
+                    component: 'SupabaseRealtimeClientFix'
+                }
+            });
+            return null;
+        });
+    }
+    const service = await supabaseRealtimeInitPromise;
+    if (!service) {
+        supabaseRealtimeInitPromise = null;
+        return null;
+    }
+    const subscribeConfig = options.subscribeConfig;
+    if (subscribeConfig?.pageId) {
+        if (supabaseRealtimeSubscribedPages.has(subscribeConfig.pageId)) {
+            Logger.debug('ℹ️ SupabaseRealtimeServices: Page already subscribed, skipping duplicate wiring', { pageId: subscribeConfig.pageId }, 'general');
+        }
+        else {
+            const subscribed = await service.subscribeToPage(subscribeConfig);
+            if (subscribed) {
+                supabaseRealtimeSubscribedPages.add(subscribeConfig.pageId);
+            }
+        }
+    }
+    return service;
+}
+export const supabaseRealtimeApi = {
+    applySupabaseRealtimeClientFix,
+    initializeSupabaseRealtimeServices
+};
+export default supabaseRealtimeApi;
 if (typeof window !== 'undefined') {
     applySupabaseRealtimeClientFix();
 }

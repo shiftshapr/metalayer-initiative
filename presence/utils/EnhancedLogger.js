@@ -192,7 +192,7 @@ EnhancedLogger.logHistory = [];
 EnhancedLogger.maxHistorySize = 1000;
 // Make available globally for backward compatibility
 if (typeof window !== 'undefined') {
-    window.Logger = EnhancedLogger;
+    // Export removed - use ES6 imports
 }
 // Initialize with default settings
 EnhancedLogger.setLevel('debug');

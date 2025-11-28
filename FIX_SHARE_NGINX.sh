@@ -4,7 +4,7 @@
 echo "🔧 Fixing nginx config for share.canopi.live..."
 
 # Copy updated config
-sudo cp /home/ubuntu/metalayer-initiative/share.canopi.live.conf /etc/nginx/sites-available/share.canopi.live
+sudo cp /home/ubuntu/canopi/share.canopi.live.conf /etc/nginx/sites-available/share.canopi.live
 
 # Test nginx config
 echo "🧪 Testing nginx config..."

@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start canopi2-server.js
 
-cd /home/ubuntu/metalayer-initiative
+cd /home/ubuntu/canopi
 
 # Check if already running
 if lsof -Pi :3003 -sTCP:LISTEN -t >/dev/null ; then

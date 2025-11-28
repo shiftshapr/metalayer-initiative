@@ -6,7 +6,6 @@
  */
 import type { ProvenanceArtifact, VerificationResult } from '../../types/provenance';
 declare class ProvenanceVerifier {
-    private publicKeys;
     /**
      * Verify a provenance artifact signature
      * @param artifact - The provenance artifact to verify

@@ -9,6 +9,7 @@
 import { AvatarUtils } from './AvatarUtils.js';
 import { AVATAR_FALLBACK_COLOR } from '../core/ConfigModule.js';
 import { XIcons } from './XIconLibrary.js';
+import { convertUrlsToLinksSafely } from './HtmlSanitizer.js';
 export class UnifiedMessageRenderer {
     /**
      * Generate HTML for a message
@@ -37,26 +38,41 @@ export class UnifiedMessageRenderer {
         const senderName = displayName && displayName !== name
             ? `[${displayName} | ${name}]`
             : name;
-        const messageUserId = message.author?.id || message.authorId;
         // Convert URLs to clickable links
         const contentWithLinks = this.convertUrlsToLinks(message.content || '');
-        // Generate avatar HTML
+        // ROOT CAUSE FIX: Generate avatar HTML - ensure it's always generated, even for replies
         let avatarHTML = '';
-        try {
-            const avatarUser = author || message.author;
-            if (avatarUser) {
+        const avatarUser = author || message.author;
+        if (avatarUser) {
+            try {
                 avatarHTML = await AvatarUtils.createUnifiedAvatar(avatarUser, 'message', {
                     size: 32,
                     showAura: true,
                     showStatus: false
                 });
+                // ROOT CAUSE FIX: Verify avatar was generated (not empty)
+                if (!avatarHTML || avatarHTML.trim().length === 0) {
+                    throw new Error('Avatar generation returned empty string');
+                }
+            }
+            catch (error) {
+                console.error('❌ UnifiedMessageRenderer: Error creating avatar, using fallback:', error);
+                // ROOT CAUSE FIX: Always provide fallback avatar
+                const resolvedAvatarUrl = avatarUser.avatarUrl || '';
+                const auraColor = avatarUser.auraColor || AVATAR_FALLBACK_COLOR || '#ccc';
+                const userInitial = (avatarUser.name || avatarUser.displayName || '?')[0].toUpperCase();
+                avatarHTML = `<div class="avatar-container">
+          ${resolvedAvatarUrl ? `<img src="${resolvedAvatarUrl}" alt="${senderName}" class="avatar-img" style="border-color: ${auraColor};" referrerpolicy="no-referrer" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+          <div class="avatar-initial" style="display: none; background-color: ${auraColor}; border-color: ${auraColor};">${userInitial}</div>` :
+                    `<div class="avatar-initial" style="background-color: ${auraColor}; border-color: ${auraColor};">${userInitial}</div>`}
+        </div>`;
             }
         }
-        catch (error) {
-            console.error('❌ UnifiedMessageRenderer: Error creating avatar:', error);
-            const resolvedAvatarUrl = (author || message.author)?.avatarUrl || '';
-            const auraColor = (author || message.author)?.auraColor || AVATAR_FALLBACK_COLOR || '#ccc';
-            avatarHTML = `<div class="avatar-container"><img src="${resolvedAvatarUrl}" alt="${senderName}" class="avatar-img" style="border-color: ${auraColor};" referrerpolicy="no-referrer"></div>`;
+        else {
+            // ROOT CAUSE FIX: Even if no author, provide placeholder avatar
+            avatarHTML = `<div class="avatar-container">
+        <div class="avatar-initial" style="background-color: ${AVATAR_FALLBACK_COLOR || '#ccc'}; border-color: ${AVATAR_FALLBACK_COLOR || '#ccc'};">?</div>
+      </div>`;
         }
         // CRITICAL FIX: Generate action buttons using X icons - ensure XIcons is available
         if (!XIcons || typeof XIcons.reply !== 'function') {
@@ -78,7 +94,6 @@ export class UnifiedMessageRenderer {
         const likeIcon = reactionCount > 0 ? XIcons.likeFilled({ width: 18, height: 18 }) : XIcons.like({ width: 18, height: 18 });
         const shareIcon = XIcons.share({ width: 18, height: 18 });
         const bookmarkIcon = isBookmarked ? XIcons.bookmarkFilled({ width: 18, height: 18 }) : XIcons.bookmark({ width: 18, height: 18 });
-        const viewIcon = XIcons.view({ width: 18, height: 18 });
         // DEBUG: Log generated icons
         console.log('🔍 UnifiedMessageRenderer: Icons generated', {
             replyIconLength: replyIcon?.length || 0,
@@ -101,7 +116,8 @@ export class UnifiedMessageRenderer {
             });
             throw new Error('Icon generation failed - XIcons functions returned empty or invalid');
         }
-        const replyCountDisplay = replyCount > 0 ? `<span class="icon-count">${replyCount}</span>` : '';
+        // ROOT CAUSE FIX: Always show reply count if > 0, ensure it's visible
+        const replyCountDisplay = replyCount > 0 ? `<span class="icon-count reply-count">${replyCount}</span>` : '';
         const bookmarkCountDisplay = bookmarkCount > 0 ? `<span class="icon-count bookmark-count">${bookmarkCount}</span>` : '';
         const reactionCountDisplay = reactionCount > 0 ? `<span class="icon-count">${reactionCount}</span>` : '';
         const replyButtonClass = hasUserReplied ? 'inline-reply-btn active' : 'inline-reply-btn';
@@ -135,6 +151,8 @@ export class UnifiedMessageRenderer {
             throw new Error('Button generation failed');
         }
         // Generate action menu - CRITICAL FIX: await Promise if getMessageActionsMenu returns one
+        // ACCEPTABLE: Optional check for window.getMessageActionsMenu - graceful degradation pattern
+        // If the function is not available, falls back to default action buttons
         let messageActionButtons = '';
         if (window.getMessageActionsMenu && typeof window.getMessageActionsMenu === 'function') {
             const actionMenuResult = window.getMessageActionsMenu(message, canEdit, canDelete);
@@ -147,14 +165,15 @@ export class UnifiedMessageRenderer {
             }
         }
         else {
+            // ROOT CAUSE FIX: Ensure edit/delete buttons are always rendered when canEdit/canDelete is true
             messageActionButtons = `
         <div class="message-actions-menu">
           <button class="action-dots-btn" data-message-id="${message.id}" title="Message actions">
             <span class="action-dots">⋯</span>
           </button>
           <div class="action-dropdown">
-            ${canEdit ? `<button class="action-item edit-btn" data-message-id="${message.id}">✏️ Edit</button>` : ''}
-            ${canDelete ? `<button class="action-item delete-btn" data-message-id="${message.id}">🗑️ Delete</button>` : ''}
+            ${canEdit ? `<button class="action-item edit-btn" data-message-id="${message.id}" style="display: block !important; visibility: visible !important; opacity: 1 !important;">✏️ Edit</button>` : ''}
+            ${canDelete ? `<button class="action-item delete-btn" data-message-id="${message.id}" style="display: block !important; visibility: visible !important; opacity: 1 !important;">🗑️ Delete</button>` : ''}
             <button class="action-item flag-btn" data-message-id="${message.id}" disabled>🚩 Flag</button>
           </div>
         </div>
@@ -163,8 +182,6 @@ export class UnifiedMessageRenderer {
         // Date formatting - in focus mode, replies show date in header (like default mode)
         const isReplyMessage = isReply || !!message.parentId;
         const showHeaderDate = !isFocusMode || (isFocusMode && isReplyMessage);
-        const dateInHeader = showHeaderDate && formattedTime ? `<span class="message-time-new">${formattedTime}</span>` : '';
-        const dateInFooter = !showHeaderDate && formattedTime && isFocusMode ? `<div class="focus-date-row"><span class="message-time-new focus-date">${formattedTime}</span></div>` : '';
         // CRITICAL: Always render full HTML structure - never hide content
         // CSS classes control visibility, not display:none
         // CRITICAL FIX: Ensure formattedTime is a string before using in template
@@ -202,10 +219,8 @@ export class UnifiedMessageRenderer {
      * Convert URLs in text to clickable links
      */
     static convertUrlsToLinks(text) {
-        if (!text)
-            return '';
-        const urlRegex = /(https?:\/\/[^\s]+)/g;
-        return text.replace(urlRegex, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
+        // SECURITY FIX: Use sanitized version to prevent XSS attacks
+        return convertUrlsToLinksSafely(text);
     }
     /**
      * Render a complete message element
@@ -273,7 +288,7 @@ export class UnifiedMessageRenderer {
     /**
      * Format message time
      */
-    static formatMessageTime(timestamp, isFocusMode = false) {
+    static formatMessageTime(timestamp, _isFocusMode = false) {
         if (!timestamp)
             return '';
         const date = new Date(timestamp);

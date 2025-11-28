@@ -22,10 +22,10 @@ declare class UserHoverModal {
     private currentUserId;
     private hoverTimeout;
     private hideTimeout;
-    private isVisible;
-    private currentTarget;
-    private logger;
     constructor();
+    private resolveViewerUserId;
+    private createErrorContext;
+    getViewerUserId(): string | null;
     /**
      * Initialize the hover modal system
      */
@@ -55,11 +55,11 @@ declare class UserHoverModal {
     /**
      * Handle hover enter event
      */
-    handleHover(event: Event, userId: string, targetElement: HTMLElement | null): void;
+    handleHover(_event: Event, userId: string, targetElement: HTMLElement | null): void;
     /**
      * Handle hover leave event
      */
-    handleHoverOut(event: MouseEvent, targetElement: HTMLElement): void;
+    handleHoverOut(event: MouseEvent, _targetElement: HTMLElement): void;
     /**
      * Show the modal with user data
      */

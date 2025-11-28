@@ -1,13 +1,5 @@
-/**
- * UNIFIED MESSAGE RENDERER - TypeScript Version
- *
- * Single source of truth for message rendering in both default and focus modes.
- * Ensures consistent HTML structure and prevents zero-height issues.
- *
- * Key Principle: Always render content, use CSS classes for visibility control.
- */
 import type { Message, User } from '../types/index.js';
-export interface MessageRenderOptions {
+interface MessageOptions {
     isReply?: boolean;
     isFocusMode?: boolean;
     author?: User | null;
@@ -23,11 +15,16 @@ export interface MessageRenderOptions {
     canEdit?: boolean;
     canDelete?: boolean;
 }
+declare global {
+    interface Window {
+        getMessageActionsMenu?: (message: Message, canEdit: boolean, canDelete: boolean) => Promise<string> | string;
+    }
+}
 export declare class UnifiedMessageRenderer {
     /**
      * Generate HTML for a message
      */
-    static generateMessageHTML(message: Message, options?: MessageRenderOptions): Promise<string>;
+    static generateMessageHTML(message: Message, options?: MessageOptions): Promise<string>;
     /**
      * Convert URLs in text to clickable links
      */
@@ -35,11 +32,21 @@ export declare class UnifiedMessageRenderer {
     /**
      * Render a complete message element
      */
-    static renderMessage(message: Message, options?: MessageRenderOptions): Promise<HTMLElement>;
+    static renderMessage(message: Message, options?: MessageOptions): Promise<HTMLElement>;
     /**
      * Format message time
      */
-    static formatMessageTime(timestamp: string | Date | undefined, isFocusMode?: boolean): string;
+    static formatMessageTime(timestamp: string | Date | undefined, _isFocusMode?: boolean): string;
 }
-export default UnifiedMessageRenderer;
+interface UnifiedMessageRendererApi {
+    renderer: typeof UnifiedMessageRenderer;
+    renderMessage: typeof UnifiedMessageRenderer.renderMessage;
+    generateMessageHTML: typeof UnifiedMessageRenderer.generateMessageHTML;
+    convertUrlsToLinks: typeof UnifiedMessageRenderer.convertUrlsToLinks;
+    formatMessageTime: typeof UnifiedMessageRenderer.formatMessageTime;
+    initialize: () => UnifiedMessageRendererApi | null;
+}
+export declare const unifiedMessageRendererApi: UnifiedMessageRendererApi;
+export declare function initializeUnifiedMessageRenderer(): UnifiedMessageRendererApi | null;
+export default unifiedMessageRendererApi;
 //# sourceMappingURL=UnifiedMessageRenderer.d.ts.map

@@ -88,10 +88,10 @@ declare global {
     
     // API and services
     api?: {
-      request: <T = unknown>(endpoint: string, options?: unknown) => Promise<ApiResponse<T>>;
+      request: <T = unknown>(endpoint: string, options?: any) => Promise<ApiResponse<T> | null>;
       getChatHistory?: (communityId: string, conversationId: string | null, uri: string) => Promise<unknown>;
       getReactions?: (messageId: string) => Promise<unknown>;
-      [key: string]: unknown;
+      [key: string]: any;
     };
     supabase?: SupabaseClient;
     
@@ -441,7 +441,7 @@ declare global {
       [key: string]: unknown;
     };
     supabaseUser?: User;
-    updateVisibleTab?: () => void;
+    updateVisibleTab?: (avatars?: Array<{ id: string; [key: string]: unknown }>) => Promise<void>;
     userPref?: {
       get?: (key: string) => Promise<unknown>;
       set?: (key: string, value: unknown) => Promise<void>;

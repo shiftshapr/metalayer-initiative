@@ -108,9 +108,12 @@ export function createProfileSettingChannel(setting: ProfileSettingKey): Profile
 
   const read = async (): Promise<string> => {
     try {
-      const { userPreferencesManager, unifiedSettingsStorage, getSetting } = getSettingContracts();
+      const contracts = getSettingContracts();
+      const userPreferencesManager = contracts.userPreferencesManager as { isInitialized?: boolean; getPreference?: (key: string) => Promise<unknown> } | null | undefined;
+      const unifiedSettingsStorage = contracts.unifiedSettingsStorage as { getSetting?: (key: string, defaultValue?: unknown, options?: unknown) => Promise<unknown> } | null | undefined;
+      const getSetting = contracts.getSetting as ((key: string) => unknown) | null | undefined;
 
-      if (userPreferencesManager?.isInitialized) {
+      if (userPreferencesManager?.isInitialized && userPreferencesManager.getPreference) {
         const pref = await userPreferencesManager.getPreference(config.preferenceKey);
         if (typeof pref === 'string') {
           return pref;
@@ -127,9 +130,7 @@ export function createProfileSettingChannel(setting: ProfileSettingKey): Profile
       }
 
       if (getSetting) {
-        const fallbackValue = await getSetting(config.unifiedKey, null, {
-          apiKey: config.preferenceKey
-        });
+        const fallbackValue = getSetting(config.unifiedKey);
         if (typeof fallbackValue === 'string') {
           return fallbackValue;
         }
@@ -151,7 +152,7 @@ export function createProfileSettingChannel(setting: ProfileSettingKey): Profile
         context: {
           operation: 'read',
           component: 'ProfileSettingChannel',
-          setting
+          setting: config.preferenceKey
         }
       });
       return '';
@@ -162,18 +163,19 @@ export function createProfileSettingChannel(setting: ProfileSettingKey): Profile
     try {
       const { userPreferencesManager, saveSetting } = getSettingContracts();
 
-      if (userPreferencesManager?.isInitialized) {
+      const prefsMgr = userPreferencesManager as { isInitialized?: boolean; savePreference?: (key: string, value: unknown, options?: unknown) => Promise<unknown> } | null | undefined;
+      if (prefsMgr?.isInitialized && prefsMgr.savePreference) {
         if (value === null) {
-          await userPreferencesManager.savePreference(config.preferenceKey, '', STORAGE_OPTIONS);
+          await prefsMgr.savePreference(config.preferenceKey, '', STORAGE_OPTIONS);
         } else {
-          await userPreferencesManager.savePreference(config.preferenceKey, value, STORAGE_OPTIONS);
+          await prefsMgr.savePreference(config.preferenceKey, value, STORAGE_OPTIONS);
         }
         updateWindowState(value);
         return;
       }
 
       if (saveSetting) {
-        await saveSetting(config.unifiedKey, value, { apiKey: config.preferenceKey });
+        await saveSetting(config.unifiedKey, value);
         updateWindowState(value);
         return;
       }

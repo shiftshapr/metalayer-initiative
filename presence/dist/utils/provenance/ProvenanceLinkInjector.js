@@ -1,3 +1,4 @@
+import { Logger } from '../Logger.js';
 /**
  * PROVENANCE LINK INJECTOR
  *
@@ -6,7 +7,6 @@
  */
 class ProvenanceLinkInjector {
     constructor() {
-        this.isEnabled = false;
         this.observer = null;
         this.injectedMessages = new Set();
         this.baseUrl = 'https://app.canopi.live';
@@ -17,22 +17,21 @@ class ProvenanceLinkInjector {
     async initialize() {
         const service = window.provenanceService;
         if (!service) {
-            console.warn('[ProvenanceLinkInjector] ProvenanceService not available');
+            Logger.warn('[ProvenanceLinkInjector] ProvenanceService not available', null, 'provenance');
             return;
         }
         // Check if enabled
         const enabled = localStorage.getItem('provenance_enabled') === 'true';
         if (!enabled) {
-            console.log('[ProvenanceLinkInjector] Disabled (provenance not enabled)');
+            Logger.debug('[ProvenanceLinkInjector] Disabled (provenance not enabled)', null, 'provenance');
             return;
         }
-        this.isEnabled = true;
         this.baseUrl = localStorage.getItem('provenance_base_url') || this.baseUrl;
         // Inject links for existing messages
         this.injectLinksForExistingMessages();
         // Watch for new messages
         this.observeNewMessages();
-        console.log('[ProvenanceLinkInjector] Initialized');
+        Logger.debug('[ProvenanceLinkInjector] Initialized', null, 'provenance');
     }
     /**
      * Inject provenance links for messages already in the DOM
@@ -99,9 +98,9 @@ class ProvenanceLinkInjector {
             return idElement.dataset.messageId;
         }
         // Try to extract from message object if stored
-        const messageObj = element.message;
-        if (messageObj?.id) {
-            return messageObj.id;
+        const elementWithMessage = element;
+        if (elementWithMessage.message?.id) {
+            return elementWithMessage.message.id;
         }
         return null;
     }
@@ -137,7 +136,7 @@ class ProvenanceLinkInjector {
             if (!existingHeadLink) {
                 head.appendChild(link);
                 this.injectedMessages.add(messageId);
-                console.log('[ProvenanceLinkInjector] Injected link in <head> for message', messageId);
+                Logger.debug('[ProvenanceLinkInjector] Injected link in <head> for message', messageId, 'provenance');
                 return;
             }
         }
@@ -155,7 +154,7 @@ class ProvenanceLinkInjector {
             messageElement.appendChild(meta);
         }
         this.injectedMessages.add(messageId);
-        console.log('[ProvenanceLinkInjector] Injected provenance link for message', messageId);
+        Logger.debug('[ProvenanceLinkInjector] Injected provenance link for message', messageId, 'provenance');
     }
     /**
      * Manually inject link for a specific message
@@ -165,7 +164,7 @@ class ProvenanceLinkInjector {
             // Find message element by ID
             messageElement = document.querySelector(`[data-message-id="${messageId}"]`);
             if (!messageElement) {
-                console.warn('[ProvenanceLinkInjector] Message element not found for', messageId);
+                Logger.warn('[ProvenanceLinkInjector] Message element not found for', messageId, 'provenance');
                 return;
             }
         }
@@ -195,6 +194,6 @@ class ProvenanceLinkInjector {
 // Export for browser use
 if (typeof window !== 'undefined') {
     Object.assign(window, { provenanceLinkInjector: new ProvenanceLinkInjector() });
-    console.log('[ProvenanceLinkInjector] Available at window.provenanceLinkInjector');
+    Logger.debug('[ProvenanceLinkInjector] Available at window.provenanceLinkInjector', null, 'provenance');
 }
 export default ProvenanceLinkInjector;

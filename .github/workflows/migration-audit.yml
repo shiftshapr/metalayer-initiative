@@ -1,0 +1,53 @@
+name: Migration Issue Audit
+
+on:
+  schedule:
+    # Run weekly on Monday
+    - cron: '0 0 * * 1'
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'presence/src/**/*.ts'
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Run Migration Audit
+        run: |
+          chmod +x scripts/audit-typescript-migration.sh
+          scripts/audit-typescript-migration.sh > audit-results.txt
+          
+      - name: Check Critical Issues
+        run: |
+          # Fail if critical issues found
+          EMAIL_MATCHING=$(grep "EMAIL-BASED MATCHING" audit-results.txt | grep -oP '\d+' | head -1)
+          EMAIL_HEADERS=$(grep "EMAIL HEADERS" audit-results.txt | grep -oP '\d+' | head -1)
+          
+          if [ "$EMAIL_MATCHING" -gt 0 ] || [ "$EMAIL_HEADERS" -gt 0 ]; then
+            echo "❌ CRITICAL: Email-based matching or headers found!"
+            exit 1
+          fi
+          
+      - name: Upload Audit Results
+        uses: actions/upload-artifact@v3
+        with:
+          name: migration-audit-results
+          path: audit-results.txt
+          
+      - name: Comment on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs');
+            const audit = fs.readFileSync('audit-results.txt', 'utf8');
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## Migration Audit Results\n\n\`\`\`\n${audit}\n\`\`\``
+            });
+

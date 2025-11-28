@@ -2,17 +2,45 @@
  * Timeline Filters Component
  * Handles filter controls
  */
+import { MultiSelect } from '../utils/MultiSelect.js';
 export class TimelineFilters {
-    constructor(container, timelineManager) {
+    constructor(container, timelineManager, getAuthHeaders) {
+        this.communityMultiSelect = null;
+        this.activityTypeMultiSelect = null;
+        this.getAuthHeaders = null;
         if (!container) {
             throw new Error('TimelineFilters: Container element is required');
         }
         this.container = container;
         this.timelineManager = timelineManager;
+        this.getAuthHeaders = getAuthHeaders || null;
     }
-    render(communities = []) {
+    async render(communities = []) {
+        // Fetch communities from API if not provided
+        if (communities.length === 0) {
+            try {
+                const headers = {
+                    'Content-Type': 'application/json'
+                };
+                // Add auth headers if available
+                if (this.getAuthHeaders) {
+                    Object.assign(headers, this.getAuthHeaders());
+                }
+                const response = await fetch('/communities', {
+                    headers
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    communities = data.communities || data || [];
+                }
+            }
+            catch (error) {
+                console.warn('TimelineFilters: Failed to fetch communities', error);
+                communities = [];
+            }
+        }
         const activityTypes = [
-            { value: 'message', label: 'Messages' },
+            { value: 'message', label: 'Posts' }, // UI shows "Posts", database uses "message"
             { value: 'reaction', label: 'Reactions' },
             { value: 'bookmark', label: 'Bookmarks' },
             { value: 'profileUpdate', label: 'Profile Updates' },
@@ -20,28 +48,54 @@ export class TimelineFilters {
             { value: 'statusChange', label: 'Status Changes' },
             { value: 'auraChange', label: 'Aura Changes' }
         ];
-        const communitiesHtml = communities.map(comm => `<option value="${comm.id}">${this.escapeHtml(comm.name || comm.id)}</option>`).join('');
-        const activityTypesHtml = activityTypes.map(type => `<option value="${type.value}">${type.label}</option>`).join('');
+        // Convert communities to MultiSelect options
+        const communityOptions = communities.map(comm => ({
+            value: comm.id,
+            label: comm.name || comm.id
+        }));
+        // Convert activity types to MultiSelect options
+        // Default to "Posts" (message) selected
+        const activityTypeOptions = activityTypes.map(type => ({
+            value: type.value,
+            label: type.label,
+            selected: type.value === 'message' // Default to Posts selected
+        }));
         this.container.innerHTML = `
       <div class="filter-group">
         <input type="text" id="search-filter" placeholder="Search timeline..." class="input-field">
-        <select id="community-filter" class="select-input">
-          <option value="">All Communities</option>
-          ${communitiesHtml}
-        </select>
-        <select id="activity-type-filter" class="select-input" multiple>
-          ${activityTypesHtml}
-        </select>
+        <div id="community-filter-container"></div>
+        <div id="activity-type-filter-container"></div>
         <button id="clear-filters" class="btn-secondary">Clear Filters</button>
       </div>
     `;
+        // Initialize multi-selects
+        const communityContainer = this.container.querySelector('#community-filter-container');
+        const activityTypeContainer = this.container.querySelector('#activity-type-filter-container');
+        if (communityContainer) {
+            this.communityMultiSelect = new MultiSelect(communityContainer, communityOptions, {
+                placeholder: 'All Communities',
+                showCount: true
+            });
+            this.communityMultiSelect.render();
+            communityContainer.addEventListener('multiselect:change', () => {
+                this.applyFilters();
+            });
+        }
+        if (activityTypeContainer) {
+            this.activityTypeMultiSelect = new MultiSelect(activityTypeContainer, activityTypeOptions, {
+                placeholder: 'All Activity Types',
+                showCount: true
+            });
+            this.activityTypeMultiSelect.render();
+            activityTypeContainer.addEventListener('multiselect:change', () => {
+                this.applyFilters();
+            });
+        }
         this.setupEventListeners();
     }
     setupEventListeners() {
         let searchTimeout = null;
         const searchInput = this.container.querySelector('#search-filter');
-        const communityFilter = this.container.querySelector('#community-filter');
-        const activityTypeFilter = this.container.querySelector('#activity-type-filter');
         const clearBtn = this.container.querySelector('#clear-filters');
         // Search with debounce
         if (searchInput) {
@@ -54,27 +108,16 @@ export class TimelineFilters {
                 }, 300);
             });
         }
-        // Community filter
-        if (communityFilter) {
-            communityFilter.addEventListener('change', () => {
-                this.applyFilters();
-            });
-        }
-        // Activity type filter
-        if (activityTypeFilter) {
-            activityTypeFilter.addEventListener('change', () => {
-                this.applyFilters();
-            });
-        }
         // Clear filters
         if (clearBtn) {
             clearBtn.addEventListener('click', () => {
                 if (searchInput)
                     searchInput.value = '';
-                if (communityFilter)
-                    communityFilter.value = '';
-                if (activityTypeFilter) {
-                    Array.from(activityTypeFilter.options).forEach(opt => opt.selected = false);
+                if (this.communityMultiSelect) {
+                    this.communityMultiSelect.setSelectedValues([]);
+                }
+                if (this.activityTypeMultiSelect) {
+                    this.activityTypeMultiSelect.setSelectedValues([]);
                 }
                 this.applyFilters();
             });
@@ -82,13 +125,10 @@ export class TimelineFilters {
     }
     applyFilters() {
         const searchInput = this.container.querySelector('#search-filter');
-        const communityFilter = this.container.querySelector('#community-filter');
-        const activityTypeFilter = this.container.querySelector('#activity-type-filter');
         const filters = {
             search: searchInput?.value.trim() || null,
-            community: communityFilter?.value || null,
-            activityTypes: Array.from(activityTypeFilter?.selectedOptions || [])
-                .map(opt => opt.value)
+            communities: this.communityMultiSelect?.getSelectedValues() || [],
+            activityTypes: (this.activityTypeMultiSelect?.getSelectedValues() || [])
         };
         // Emit filter change event
         if (this.timelineManager && typeof this.timelineManager.applyFilters === 'function') {

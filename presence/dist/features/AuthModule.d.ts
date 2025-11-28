@@ -2,6 +2,7 @@
  * AUTH MODULE - Authentication and User Management
  * Handles all authentication functionality
  */
+import { getCurrentUserAvatarColor as profileGetCurrentUserAvatarColor } from './ProfileManager.js';
 interface User {
     id?: string;
     userId?: string;
@@ -37,10 +38,10 @@ declare function signOut(): Promise<void>;
 declare function completeOTPForRealtime(otpCode: string): Promise<boolean>;
 declare function getCurrentUserId(): Promise<string | null>;
 declare function getCurrentUserEmail(): Promise<string | null>;
-declare function getCurrentUserAvatarColor(): Promise<string>;
-declare function getUserAvatarBgColor(): string;
-declare function getCurrentUserAvatarBgColor(): string;
-declare function resetCustomAvatarColor(): void;
+declare const getCurrentUserAvatarColor: typeof profileGetCurrentUserAvatarColor;
+declare const getCurrentUserAvatarBgColor: () => string;
+declare const getUserAvatarBgColor: () => string;
+declare const resetCustomAvatarColor: () => void;
 declare function markInitializationComplete(): void;
 export { AuthModule, authenticateWithSupabase, requireAuth, showAuthPrompt, createAuthPromptModal, initializeRealGoogleAuth, markInitializationComplete, signOut, signInWithGoogle, sendMagicLink, getCurrentUserId, getCurrentUserEmail, getCurrentUserAvatarColor, getUserAvatarBgColor, getCurrentUserAvatarBgColor, resetCustomAvatarColor, testRealtimeAfterAuth, completeOTPForRealtime };
 //# sourceMappingURL=AuthModule.d.ts.map

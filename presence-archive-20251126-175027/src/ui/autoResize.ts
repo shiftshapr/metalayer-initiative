@@ -1,0 +1,24 @@
+/**
+ * Auto-resize helper for textarea inputs.
+ * Keeps COMP-parity behaviour with max height caps and scrollbar toggling.
+ */
+
+interface AutoResizeOptions {
+  maxHeight?: number;
+  [key: string]: unknown;
+}
+
+export function autoResize(textarea: HTMLTextAreaElement | null, options: AutoResizeOptions = {}): void {
+  if (!textarea) {
+    return;
+  }
+  const { maxHeight = 120 } = options;
+  const target = textarea;
+  target.style.height = 'auto';
+  const newHeight = Math.min(target.scrollHeight, maxHeight);
+  target.style.height = `${newHeight}px`;
+  target.style.overflowY = target.scrollHeight > maxHeight ? 'auto' : 'hidden';
+}
+
+export default autoResize;
+

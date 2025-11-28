@@ -1,4 +1,1 @@
-/**
- * Provenance Type Definitions
- */
 export {};

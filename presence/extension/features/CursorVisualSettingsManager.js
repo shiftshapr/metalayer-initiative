@@ -7,6 +7,8 @@
  * - Avatar
  * - Uploaded custom image
  */
+import { handleError } from '../utils/ErrorHandler.js';
+import { Logger } from '../utils/Logger.js';
 class CursorVisualSettingsManager {
     constructor() {
         this.visualStyle = 'regular';
@@ -16,14 +18,26 @@ class CursorVisualSettingsManager {
      * Initialize the settings manager
      */
     async initialize() {
-        if (this.isInitialized)
-            return;
-        // Load saved settings
-        await this.loadSettings();
-        // Setup UI if settings tab is available
-        this.setupSettingsUI();
-        this.isInitialized = true;
-        console.log('✅ CURSOR_VISUAL_SETTINGS: Initialized');
+        try {
+            if (this.isInitialized)
+                return;
+            // Load saved settings
+            await this.loadSettings();
+            // Setup UI if settings tab is available
+            this.setupSettingsUI();
+            this.isInitialized = true;
+            Logger.debug('✅ CURSOR_VISUAL_SETTINGS: Initialized', null, 'cursor');
+        }
+        catch (error) {
+            handleError(error, {
+                log: true,
+                logLevel: 'error',
+                context: {
+                    operation: 'initialize',
+                    component: 'CursorVisualSettingsManager'
+                }
+            });
+        }
     }
     /**
      * Load settings from storage
@@ -40,7 +54,15 @@ class CursorVisualSettingsManager {
             }
         }
         catch (error) {
-            console.error('❌ CURSOR_VISUAL_SETTINGS: Failed to load settings:', error);
+            handleError(error, {
+                log: true,
+                logLevel: 'error',
+                context: {
+                    operation: 'catch',
+                    component: 'CursorVisualSettings'
+                }
+            });
+            ;
         }
     }
     /**
@@ -57,10 +79,18 @@ class CursorVisualSettingsManager {
             if (win.cursorParkManager) {
                 win.cursorParkManager.setVisualStyle(this.visualStyle, this.customImageUrl);
             }
-            console.log('✅ CURSOR_VISUAL_SETTINGS: Settings saved');
+            Logger.debug('✅ CURSOR_VISUAL_SETTINGS: Settings saved', null, 'cursor');
         }
         catch (error) {
-            console.error('❌ CURSOR_VISUAL_SETTINGS: Failed to save settings:', error);
+            handleError(error, {
+                log: true,
+                logLevel: 'error',
+                context: {
+                    operation: 'catch',
+                    component: 'CursorVisualSettings'
+                }
+            });
+            ;
         }
     }
     /**
@@ -106,7 +136,7 @@ class CursorVisualSettingsManager {
         if (auraPreview || avatarPreview) {
             // Get aura color from settings
             chrome.storage.local.get(['auraColor'], (result) => {
-                const auraColor = result.auraColor || '#98d416';
+                const auraColor = typeof result.auraColor === 'string' ? result.auraColor : '#98d416';
                 if (auraPreview) {
                     auraPreview.style.background = auraColor;
                 }
@@ -196,30 +226,24 @@ class CursorVisualSettingsManager {
     getCustomImageUrl() {
         return this.customImageUrl;
     }
-    /**
-     * Escape HTML
-     */
-    escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
 }
 // Create singleton instance
 const cursorVisualSettingsManagerInstance = new CursorVisualSettingsManager();
 // Initialize when DOM is ready
-if (typeof window !== 'undefined') {
+const bootstrapCursorVisualSettingsManager = () => {
+    const win = window;
+    win.cursorVisualSettingsManager = cursorVisualSettingsManagerInstance;
+    void cursorVisualSettingsManagerInstance.initialize();
+};
+if (typeof window !== 'undefined' && typeof document !== 'undefined') {
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => {
-            cursorVisualSettingsManagerInstance.initialize();
-        });
+        document.addEventListener('DOMContentLoaded', bootstrapCursorVisualSettingsManager);
     }
     else {
-        cursorVisualSettingsManagerInstance.initialize();
+        bootstrapCursorVisualSettingsManager();
     }
-    // Export to window
-    window.cursorVisualSettingsManager = cursorVisualSettingsManagerInstance;
-    console.log('✅ CURSOR_VISUAL_SETTINGS: Exported to window');
+    window.CursorVisualSettingsManager = CursorVisualSettingsManager;
+    Logger.debug('✅ CURSOR_VISUAL_SETTINGS: Exported to window', null, 'cursor');
 }
 export { CursorVisualSettingsManager, cursorVisualSettingsManagerInstance };
 export default CursorVisualSettingsManager;

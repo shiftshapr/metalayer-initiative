@@ -7,7 +7,7 @@
 interface DiagnosticLogEntry {
     time: string;
     event: string;
-    [key: string]: any;
+    [key: string]: unknown;
 }
 interface DiagnosticSummary {
     totalEvents: number;

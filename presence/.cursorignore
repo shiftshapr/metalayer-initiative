@@ -1,0 +1,22 @@
+# CURSOR IGNORE - DO NOT EDIT FILES IN THESE DIRECTORIES
+# These are BUILD OUTPUTS - edit src/ files instead
+
+# CRITICAL: Extension directory is COMPILED OUTPUT
+# NEVER edit files here - they are generated from src/
+extension/
+
+# Build output directories
+dist/
+build/
+
+# Exception: Allow reading extension/ for reference, but block editing
+# Files in extension/ are READ-ONLY for Cursor
+
+# If you need to edit code:
+# 1. Find the source file in src/
+# 2. Edit the TypeScript source
+# 3. Run: npx tsc && bash scripts/sync-extension-from-dist.sh
+
+
+
+

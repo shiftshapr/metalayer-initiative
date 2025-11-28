@@ -9,38 +9,37 @@
  * - API request handling
  * - Authentication integration
  */
-interface APIRequestOptions {
-    method?: string;
-    headers?: Record<string, string>;
-    body?: any;
-    allow404?: boolean;
+import { Message, User } from '../types/index.js';
+import type { APIRequestOptions, ApiResponse } from '../types/api.js';
+interface ExtendedAPIRequestOptions extends APIRequestOptions {
     allow401?: boolean;
     allow500?: boolean;
-    user?: any;
+    user?: User;
 }
-interface APIResponse<T = any> {
-    data?: T;
-    error?: string;
-    status?: number;
-    [key: string]: any;
-}
-type APIResponseOrNull<T = any> = APIResponse<T> | null;
+type APIResponseOrNull<T = unknown> = ApiResponse<T> | null;
 declare class MetaLayerAPI {
     private baseURL;
     constructor(baseURL: string);
-    request(endpoint: string, options?: APIRequestOptions): Promise<APIResponseOrNull>;
+    request<T = unknown>(endpoint: string, options?: ExtendedAPIRequestOptions): Promise<APIResponseOrNull<T>>;
     getCommunities(): Promise<APIResponseOrNull<{
-        communities?: any[];
+        communities?: Array<{
+            id: string;
+            name: string;
+            [key: string]: unknown;
+        }>;
     }>>;
     getAvatars(communityId: string): Promise<APIResponseOrNull>;
     getPresenceByUrl(url: string, communityIds?: string[] | null): Promise<APIResponseOrNull>;
     getPresenceByCommunities(communityIds: string[]): Promise<APIResponseOrNull>;
     login(): Promise<APIResponseOrNull>;
     getMe(): Promise<APIResponseOrNull>;
-    sendMessage(userId: string, communityId: string, content: string, uri?: string | null, parentId?: string | null, threadId?: string | null, optionalContent?: any): Promise<APIResponseOrNull>;
+    sendMessage(userId: string, communityId: string, content: string, uri?: string | null, parentId?: string | null, threadId?: string | null, optionalContent?: Record<string, unknown> | null): Promise<APIResponseOrNull<Message>>;
     getChatHistory(communityId: string, threadId?: string | null, uri?: string | null): Promise<{
-        conversations: any[];
-        messages: any[];
+        conversations: Array<{
+            id: string;
+            [key: string]: unknown;
+        }>;
+        messages: Message[];
     }>;
     deleteMessage(messageId: string): Promise<APIResponseOrNull>;
     editMessage(messageId: string, newContent: string): Promise<APIResponseOrNull>;

@@ -8,15 +8,18 @@
  * - Real-time event merging
  */
 import { stateManagerInstance } from '../core/StateManager.js';
+import { API_CONFIG } from '../core/APIConfig.js';
+import { handleError } from '../utils/ErrorHandler.js';
+import { Logger } from '../utils/Logger.js';
 const DEFAULT_MESSAGES_PATH = '/api/messages';
-const FALLBACK_API_BASE = 'http://216.238.91.120:3002';
+const FALLBACK_API_BASE = API_CONFIG.baseUrl;
 function resolveApiBaseUrl() {
     const apiState = stateManagerInstance.getState('api');
     const baseFromState = apiState?.baseURL;
     const win = typeof window !== 'undefined'
         ? window
         : undefined;
-    const baseFromWindow = win?.API_URL || win?.apiBaseURL || win?.config?.API_URL;
+    const baseFromWindow = win?.API_URL || win?.API_BASE_URL || win?.apiBaseURL || win?.config?.API_URL;
     const baseUrl = baseFromState || baseFromWindow || FALLBACK_API_BASE;
     return baseUrl.replace(/\/$/, '');
 }
@@ -52,7 +55,15 @@ class MessageStore {
                 listener(data);
             }
             catch (error) {
-                console.error(`Error in store event listener:`, error);
+                handleError(error, {
+                    log: true,
+                    logLevel: 'error',
+                    context: {
+                        operation: 'catch',
+                        component: 'MessageStore'
+                    }
+                });
+                ;
             }
         });
     }
@@ -120,7 +131,15 @@ class MessageStore {
             return data;
         }
         catch (error) {
-            console.error('MessageStore.load error:', error);
+            handleError(error, {
+                log: true,
+                logLevel: 'error',
+                context: {
+                    operation: 'catch',
+                    component: 'MessageStore'
+                }
+            });
+            ;
             if (existingEntry) {
                 existingEntry.status = 'error';
                 this.emit('statusChange', { key, status: 'error' });
@@ -140,14 +159,14 @@ class MessageStore {
         const pageId = message.page_id || message.pageId;
         const parentId = message.parent_id || message.parentId || null;
         if (!pageId) {
-            console.warn('⚠️ MessageStore.handleRealtimeMessage: Missing pageId', message);
+            Logger.warn('⚠️ MessageStore.handleRealtimeMessage: Missing pageId', message, 'general');
             return;
         }
         const key = this.getCacheKey(pageId, parentId);
         let entry = this.cache.get(key);
         // If cache entry doesn't exist, create it
         if (!entry) {
-            console.log(`📝 MessageStore: Creating new cache entry for ${key}`);
+            Logger.debug(`📝 MessageStore: Creating new cache entry for ${key}`, null, 'general');
             entry = {
                 items: [],
                 nextCursor: null,
@@ -161,14 +180,14 @@ class MessageStore {
         // Check if message already exists (prevent duplicates)
         const existingIndex = entry.items.findIndex(m => m.id === normalized.id);
         if (existingIndex >= 0) {
-            console.log(`📝 MessageStore: Message ${normalized.id} already in cache, updating`);
+            Logger.debug(`📝 MessageStore: Message ${normalized.id} already in cache, updating`, 'general');
             entry.items[existingIndex] = normalized;
         }
         else {
-            console.log(`📝 MessageStore: Adding new message ${normalized.id} to cache (key: ${key})`);
+            Logger.debug(`📝 MessageStore: Adding new message ${normalized.id} to cache (key: ${key})`, null, 'general');
             entry.items.unshift(normalized);
         }
-        console.log(`📝 MessageStore: Emitting update event for key ${key} with ${entry.items.length} messages`);
+        Logger.debug(`📝 MessageStore: Emitting update event for key ${key} with ${entry.items.length} messages`, null, 'general');
         this.emit('update', { key, data: entry });
     }
     handleRealtimeUpdate(message) {
@@ -196,7 +215,7 @@ class MessageStore {
         };
         // If author is missing but we have authorId, log a warning
         if (!normalized.author && authorId) {
-            console.warn(`⚠️ MessageStore.normalizeMessage: Message ${normalized.id} missing author info (authorId: ${authorId})`);
+            Logger.warn(`⚠️ MessageStore.normalizeMessage: Message ${normalized.id} missing author info (authorId: ${authorId})`, null, 'general');
         }
         return normalized;
     }

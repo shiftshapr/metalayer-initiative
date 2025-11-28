@@ -79,7 +79,7 @@ export class AnchorHighlighter {
      * Remove all active highlights
      */
     removeAllHighlights() {
-        this.activeHighlights.forEach((state, element) => {
+        this.activeHighlights.forEach((_state, element) => {
             this.removeHighlight(element);
         });
     }
@@ -94,7 +94,8 @@ export class AnchorHighlighter {
             flash: 'anchor-highlight-flash',
             border: 'anchor-highlight-border'
         };
-        return classes[styleStr] || classes.pulse;
+        const className = classes[styleStr];
+        return className ?? 'anchor-highlight-pulse';
     }
     /**
      * Get all available highlight styles

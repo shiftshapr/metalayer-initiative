@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Presence</title>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="sidepanel.css">
+  <link rel="stylesheet" href="tab-manager.css">
+  
+  <!-- ===== CORE SYSTEM LOADING ===== -->
+  <!-- Load Configuration FIRST (sets window.SUPABASE_URL, etc.) -->
+  <script type="module" src="config.js"></script>
+  <script type="module" src="security.js"></script>
+  <script type="module" src="performance-optimizer.js"></script>
+  <!-- Load LOCAL Supabase JS Library (CDN blocked by CSP) -->
+  <script type="module" src="lib/supabase.min.js"></script>
+  
+  <!-- ===== PRE-RENDER INITIALIZATION ===== -->
+  <!-- CRITICAL: Load PreRenderInitializer BEFORE UserPreferencesManager -->
+  <script type="module" src="PreRenderInitializer.js"></script>
+  
+  <!-- ===== MODULAR ARCHITECTURE ===== -->
+  <!-- TypeScript Modules - Load as ES6 modules from src/ -->
+  <!-- CRITICAL: Load ConfigModule FIRST (sets constants) -->
+  <script type="module" src="core/ConfigModule.js"></script>
+  <!-- Load Error Handler (TypeScript) -->
+  <script type="module" src="utils/ErrorHandler.js"></script>
+  <!-- Logger is loaded via ES6 imports in modules that need it (CanopiModule, etc.) -->
+  <!-- <script type="module" src="utils/Logger.js"></script> -->
+  <!-- Load Avatar Utilities (TypeScript) -->
+  <script type="module" src="utils/AvatarUtils.js"></script>
+  <!-- CRITICAL: Load StateManager (TypeScript) FIRST (core dependency) -->
+  <script type="module" src="core/StateManager.js"></script>
+  <!-- Load EventBus (TypeScript) -->
+  <script type="module" src="core/EventBus.js"></script>
+  <!-- Load UserModule (TypeScript) -->
+  <script type="module" src="core/UserModule.js"></script>
+  <!-- Legacy: Keep old StateManager for now (will remove after testing) -->
+  <!-- <script src="StateManager.js"></script> -->
+  <!-- Legacy: Keep old ErrorHandler for now (will remove after testing) -->
+  <!-- <script src="utils/ErrorHandler.js"></script> -->
+  <!-- Load Tab Context Manager (Architecture-First Approach) -->
+  <script type="module" src="TabContextManager.js"></script>
+  <!-- Load Robust Message Operations Manager -->
+  <script type="module" src="RobustMessageOperationsManager.js"></script>
+  
+  <!-- Load Supabase Service (TypeScript) -->
+  <script type="module" src="services/SupabaseService.js"></script>
+  <!-- Load API Service (TypeScript) -->
+  <script type="module" src="services/APIService.js"></script>
+  <!-- Legacy: Keep old SupabaseService for now (will remove after testing) -->
+  <!-- <script src="services/SupabaseService.js"></script> -->
+  <!-- Load Supabase Realtime Client -->
+  <script type="module" src="SupabaseRealtimeClient.js"></script>
+  <!-- Load Unified Authentication System -->
+  <script type="module" src="unified-auth.js"></script>
+  <!-- Visibility Manager is now loaded via buildGraph.js in Sidepanel.js -->
+  <!-- Legacy VisibilityManager.js removed - using refactored visibility module -->
+  <!-- Load Sidepanel Core -->
+  <script type="module" src="core/SidepanelCore.js"></script>
+  
+  <!-- Load Authentication Systems FIRST -->
+  
+  <!-- Load Feature Modules in dependency order (APIModule must be loaded first for redirection) -->
+  <!-- Load APIModule (TypeScript) -->
+  <script type="module" src="features/APIModule.js"></script>
+  <!-- Load ProfileManager (TypeScript build output) -->
+  <script type="module" src="features/ProfileManager.js"></script>
+  <!-- Load UIManager (TypeScript build output) -->
+  <script type="module" src="features/UIManager.js"></script>
+  <!-- AvatarConfig.js - legacy utility, will convert later -->
+  <script type="module" src="utils/AvatarConfig.js"></script>
+  <!-- UNIFIED RENDERING: Load unified message renderer BEFORE CanopiModule -->
+  <!-- TypeScript build output -->
+  <script type="module" src="utils/UnifiedMessageRenderer.js"></script>
+  <!-- MODULAR ARCHITECTURE: Load utility modules BEFORE CanopiModule -->
+  <!-- TypeScript build outputs -->
+  <script type="module" src="utils/MessageRenderer.js"></script>
+  <script type="module" src="utils/ReplyLoader.js"></script>
+  <!-- Message Visibility Manager - handles CSS class management and visibility (TypeScript build output) -->
+  <script type="module" src="utils/MessageVisibilityManager.js"></script>
+  <!-- BuildTracker loads build metadata dynamically -->
+  <script type="module" src="core/BuildTracker.js"></script>
+  
+  <!-- Load X Icon Library BEFORE UnifiedMessageModal -->
+  <script type="module" src="utils/XIconLibrary.js"></script>
+  <!-- Load UnifiedMessageModal BEFORE CanopiModule -->
+  <script type="module" src="components/UnifiedMessageModal.js"></script>
+  <!-- Load MessagesModule (ES6 Module) - CRITICAL: Must export to window immediately -->
+  <!-- REFACTOR: Switched from CanopiModule.js to MessagesModule.js -->
+  <script type="module" src="features/MessagesModule.js"></script>
+  <!-- Load Cursor Visibility Module -->
+  <script type="module" src="features/CursorVisibilityModule.js"></script>
+  <!-- Load Cursor Visibility UI Handler (TypeScript build output) -->
+  <script type="module" src="utils/ui/CursorVisibilityUI.js"></script>
+  <!-- Diagnostic scripts removed - files not found, causing ERR_FILE_NOT_FOUND errors -->
+  <!-- CRITICAL FIX: Patch loading overlay for persistent indicator -->
+  <script type="module" src="utils/patches/ChatLoadingOverlayPatch.js"></script>
+  <!-- CRITICAL FIX: Verify CanopiModule loaded after script tag (TypeScript build output) -->
+  <script type="module" src="utils/patches/LoadChatHistoryVerifier.js"></script>
+  <!-- Cursor Park Manager -->
+  <script type="module" src="core/CursorParkManager.js"></script>
+  <!-- Cursor Visual Settings Manager -->
+  <script type="module" src="features/CursorVisualSettingsManager.js"></script>
+  <!-- Go Visible Modal -->
+  <script type="module" src="components/GoVisibleModal.js"></script>
+  <!-- Unified Context Menu System -->
+  <script type="module" src="core/UnifiedContextMenu.js"></script>
+  <!-- Diagnostic scripts removed - files not found, causing ERR_FILE_NOT_FOUND errors -->
+  <script type="module" src="features/AuthModule.js"></script>
+  <script type="module" src="features/AgentModule.js"></script>
+  <!-- Load AuthManager (TypeScript) -->
+  <script type="module" src="features/AuthManager.js"></script>
+  <!-- Legacy: Keep old AuthManager for now (will remove after testing) -->
+  <!-- <script src="features/AuthManager.js"></script> -->
+  <script type="module" src="features/AuraColorModal.js"></script>
+  <!-- Load CommunitiesModule (TypeScript) -->
+  <script type="module" src="features/CommunitiesModule.js"></script>
+  <!-- Load NavigationManager (TypeScript build output) -->
+  <script type="module" src="features/NavigationManager.js"></script>
+  <!-- Load TabManager (TypeScript build output) -->
+  <script type="module" src="features/TabManager/TabManager.js"></script>
+  <script type="module" src="features/TabManager/initializeTabManager.js"></script>
+  <!-- Load NotificationManager as ES6 module (has imports) -->
+  <script type="module" src="features/NotificationManager.js"></script>
+  <script type="module" src="features/PeopleModule.js"></script>
+  <!-- Load RoomsModule (TypeScript build output) -->
+  <script type="module" src="features/RoomsModule.js"></script>
+  <!-- Load SettingsModule (TypeScript build output) -->
+  <script type="module" src="features/SettingsModule.js"></script>
+  <script type="module" src="real-google-auth.js"></script>
+  
+  <!-- Load Notification Manager -->
+  <!-- Load URL Normalization Utility -->
+  <script type="module" src="urlNormalization.js"></script>
+  
+  <!-- Legacy SimpleRealtimeManager removed - using RobustRealtimeManager -->
+  
+        <!-- Removed conflicting fix files - they were causing system conflicts -->
+  
+  <script type="module" src="CleanRealtimeManager.js"></script>
+  <script type="module" src="features/RealtimeManager.js"></script>
+</head>
+<body>
+  <!-- Main Sidebar Container -->
+  <div class="sidebar-container">
+    <!-- Header with logo and actions -->
+    <header class="sidebar-header-main">
+      <div class="logo-container">
+        <span class="logo-text">Canopi<span class="logo-beta">BETA</span></span>
+      </div>
+      <div class="header-actions">
+        <div class="community-dropdown-trigger">
+          <span id="current-community-name">Main Community</span>
+          <span id="community-options-btn">▼</span>
+        </div>
+        <div id="community-dropdown-panel" class="dropdown-panel" style="display: none;">
+          <div class="dropdown-header">
+            <h4>Your Communities</h4>
+            <button id="close-community-dropdown">&times;</button>
+          </div>
+          <ul class="community-list">
+            <li>
+              <img src="/images/community1.png" alt="Community">
+              <span>Main Community</span>
+              <span class="primary-tag">Primary</span>
+            </li>
+            <li>
+              <img src="/images/community2.png" alt="Community">
+              <span>Other Community</span>
+            </li>
+          </ul>
+        </div>
+        <!-- Auth buttons removed - auth will be triggered on-demand -->
+        <div id="user-info" style="display: none; margin-left: 10px; align-items: center; gap: 5px; position: relative;">
+          <div id="notification-icon" class="notification-icon" style="position: relative; cursor: pointer; padding: 4px;">
+            <span style="font-size: 16px;">🔔</span>
+            <div id="notification-badge" class="notification-badge" style="display: none; position: absolute; top: 0; right: 0; background: #ff4444; color: white; border-radius: 50%; width: 12px; height: 12px; font-size: 8px; text-align: center; line-height: 12px;">1</div>
+          </div>
+          <div id="user-avatar-container" style="position: relative; width: 24px; height: 24px; cursor: pointer;"></div>
+          <div id="user-menu" class="user-menu" style="display: none; position: absolute; top: 100%; right: 0; z-index: 1000; min-width: 200px;">
+            <div style="padding: 8px 12px; border-bottom: 1px solid #eee; font-size: 0.9em; color: #666;">Signed in as <span id="user-menu-name" style="font-weight: bold;"></span></div>
+            <div style="padding: 4px 0; border-top: 1px solid #eee;">
+              <button id="aura-btn" style="width: 100%; padding: 8px 12px; border: none; background: none; text-align: left; cursor: pointer; font-size: 0.9em; display: flex; align-items: center; gap: 8px;">
+                <span>🎨</span>
+                <span>Change Aura Color</span>
+              </button>
+              <button id="theme-toggle-btn" style="width: 100%; padding: 8px 12px; border: none; background: none; text-align: left; cursor: pointer; font-size: 0.9em; display: flex; align-items: center; gap: 8px;">
+                <span id="theme-icon"></span>
+                <span id="theme-text"></span>
+              </button>
+              <button id="visibility-settings-btn" style="width: 100%; padding: 8px 12px; border: none; background: none; text-align: left; cursor: pointer; font-size: 0.9em; display: flex; align-items: center; gap: 8px;">
+                <span>Visibility Settings</span>
+              </button>
+              <button id="logout-btn" style="width: 100%; padding: 8px 12px; border: none; background: none; text-align: left; cursor: pointer; font-size: 0.9em;">Sign out</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
+    
+    <!-- Main Navigation Tabs -->
+    <!-- PURPLE HAT: Accessibility - Add tablist role and tab roles -->
+    <!-- Tabs are dynamically rendered by TabManager -->
+    <div class="sidebar-nav-main" role="tablist" aria-label="Main navigation">
+      <!-- TabManager will render tabs here -->
+    </div>
+    
+    <!-- Main Tab Contents -->
+    <div class="sidebar-content">
+      <!-- Discuss Tab Content (formerly Conversations in Canopi tab) -->
+      <div id="discuss-tab" class="main-tab-content active">
+        <!-- Chat Input Area - Moved to top (UI UPGRADE) -->
+        <div class="chat-input-area">
+          <!-- PURPLE HAT: Accessibility - Add label for screen readers -->
+          <label for="chat-textarea" class="sr-only">Message input</label>
+          <textarea id="chat-textarea" 
+                    aria-label="Start thread in Public Square"
+                    placeholder="Start thread in Public Square"
+                    readonly
+                    rows="1"
+                    style="width: 100%; padding: 8px 12px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 14px; resize: none; height: 38px; min-height: 38px; max-height: 38px; overflow: hidden; font-family: inherit; box-sizing: border-box; background: var(--background-primary); color: var(--text-primary); line-height: 1.4; cursor: pointer;"
+                    style="width: 100%; padding: 8px 12px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 14px; resize: none; height: 38px; min-height: 38px; max-height: 38px; overflow: hidden; font-family: inherit; box-sizing: border-box; background: var(--background-primary); color: var(--text-primary); line-height: 1.4; cursor: pointer;"
+                    style="width: 100%; padding: 8px 12px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 14px; resize: none; height: auto; min-height: 38px; max-height: 38px; overflow: hidden; font-family: inherit; box-sizing: border-box; background: var(--background-primary); color: var(--text-primary); line-height: 1.4;"></textarea>
+        </div>
+        <!-- Context Bar for Reply/Edit - UI UPGRADE: Positioned below input area -->
+        <!-- PURPLE HAT: Accessibility - Add aria-live for screen reader announcements -->
+        <div id="context-bar" 
+             role="status"
+             aria-live="polite"
+             aria-atomic="true"
+             style="display: none; position: relative; background: #e8f4fd; padding: 2px 8px; border-bottom: 1px solid #b3d9ff; font-size: 10px; color: #0066cc; line-height: 1.2; height: 18px; overflow: hidden; flex-shrink: 0;">
+          <span id="context-text" style="font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: calc(100% - 20px); display: inline-block;"></span>
+          <button id="cancel-context" 
+                  aria-label="Cancel reply or edit"
+                  style="float: right; background: none; border: none; color: #0066cc; cursor: pointer; font-size: 10px; padding: 0; margin-left: 4px; width: 12px; height: 12px; line-height: 1;">✕</button>
+        </div>
+        <!-- Messages Container - Latest messages at top (UI UPGRADE) -->
+        <div class="chat-messages">
+        </div>
+      </div>
+      
+      <!-- Visibility Tab Content (formerly Visible in Canopi tab) -->
+      <div id="visibility-tab" class="main-tab-content">
+        <!-- Content will be populated by updateVisibleTab() -->
+      </div>
+      
+      <!-- Rooms Tab Content -->
+      <div id="rooms-tab" class="main-tab-content">
+        <h3>Rooms</h3>
+        <p>Room list or content goes here.</p>
+      </div>
+      
+      <!-- People Tab Content -->
+      <div id="people-tab" class="main-tab-content">
+        <ul class="item-list">
+          <li>
+            <div class="item-avatar"></div>
+            <div class="item-info">
+              <div class="item-name">John Doe</div>
+              <div class="item-status">Online</div>
+            </div>
+          </li>
+          <li>
+            <div class="item-avatar"></div>
+            <div class="item-info">
+              <div class="item-name">Jane Smith</div>
+              <div class="item-status">Away</div>
+            </div>
+          </li>
+        </ul>
+      </div>
+      
+      <!-- Agent Tab Content -->
+      <div id="agent-tab" class="main-tab-content">
+        <div class="agent-header">
+          <h3>AI Agent</h3>
+          <div class="agent-actions">
+            <button id="agent-clear-btn">Clear</button>
+            <button id="agent-refresh-btn">Refresh</button>
+          </div>
+        </div>
+        <div class="agent-input-area">
+          <input type="text" placeholder="Ask the agent something..." id="agent-input">
+          <button id="agent-send-btn">✈</button>
+        </div>
+        <div class="agent-output" id="agent-output">
+          <!-- Agent responses will appear here -->
+        </div>
+      </div>
+      
+      <!-- Manage Tab Content -->
+      <div id="manage-tab" class="main-tab-content">
+        <!-- Tab Manager content will be rendered here by TabManagerModal -->
+      </div>
+      
+      <!-- Settings Tab Content -->
+      <div id="settings-tab" class="main-tab-content">
+        
+        <!-- Live Cursor Settings -->
+        <div class="settings-section">
+          <h4 title="When live, your cursor will be visible to subscribers.">Live Cursor</h4>
+          
+          <!-- Live Status Indicator - Status and controls on same line -->
+          <div class="setting-item" style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+            <label style="margin: 0; flex-shrink: 0;">Status</label>
+            <div style="display: flex; align-items: center; gap: 12px; flex: 1; justify-content: flex-end;">
+              <span id="cursor-live-indicator" data-live-indicator data-live="false" style="font-size: 0.9em; color: var(--text-secondary);">⚪ Offline</span>
+              <button id="cursor-live-button" data-live-button data-live="false" 
+                      style="padding: 6px 12px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85em;">
+                Go Live
+              </button>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Visibility Settings -->
+        <div class="settings-section">
+          <h4>Visibility</h4>
+          
+          <!-- Visible Toggle -->
+          <div class="setting-item">
+            <label style="display: block; margin-bottom: 8px;">Visible</label>
+            <div style="display: flex; align-items: center; gap: 12px; justify-content: flex-start;">
+              <span style="font-size: 0.9em; color: var(--text-secondary);">No</span>
+              <label style="position: relative; display: inline-block; width: 50px; height: 26px; cursor: pointer;">
+                <input type="checkbox" id="visibility-toggle" style="opacity: 0; width: 0; height: 0;">
+                <span id="visibility-toggle-slider" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; border-radius: 26px; transition: 0.3s;">
+                  <span style="position: absolute; content: ''; height: 20px; width: 20px; left: 3px; bottom: 3px; background-color: white; border-radius: 50%; transition: 0.3s;"></span>
+                </span>
+              </label>
+              <span id="visibility-status-text" style="font-size: 0.9em; color: var(--text-secondary);">Yes</span>
+            </div>
+          </div>
+          
+          <!-- Status -->
+          <div class="setting-item">
+            <label for="status-select" style="display: block; margin-bottom: 8px;">Status</label>
+            <select id="status-select" style="width: 30%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.9em;">
+              <option value="AVAILABLE">Available</option>
+              <option value="BUSY">Busy</option>
+              <option value="AWAY">Away</option>
+              <option value="OFFLINE">Offline</option>
+            </select>
+          </div>
+          
+          <!-- Aura - ROOT CAUSE FIX: Right align fields, keep title left -->
+          <div class="setting-item">
+            <label for="aura-color-picker" style="display: block; margin-bottom: 8px;">Aura</label>
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; width: 100%; justify-content: flex-end;">
+              <input type="color" id="aura-color-picker" value="#98d416" style="width: 40px; height: 40px; border: 1px solid #ccc; border-radius: 4px; cursor: pointer; flex-shrink: 0;">
+              <div style="display: flex; align-items: center; gap: 4px; flex-shrink: 0;">
+                <span style="font-size: 0.9em; color: var(--text-secondary);">#</span>
+                <input type="text" id="aura-color-hex" value="98d416" maxlength="6" pattern="[0-9A-Fa-f]{6}" style="width: 8.8ch; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-family: monospace; font-size: 0.9em;">
+              </div>
+              <div style="display: flex; align-items: center; gap: 4px; flex-shrink: 0; margin-left: 8px;">
+                <input type="range" id="aura-intensity-slider" min="0" max="1" step="0.1" value="0.5" style="width: 50px;">
+                <span id="aura-intensity-value" style="font-size: 0.85em; color: var(--text-secondary); min-width: 25px;">0.5</span>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Theme (Toggle with Dark label on right) -->
+          <div class="setting-item">
+            <label style="display: block; margin-bottom: 8px;">Theme</label>
+            <div style="display: flex; align-items: center; gap: 12px; justify-content: flex-start;">
+              <label style="position: relative; display: inline-block; width: 50px; height: 26px; cursor: pointer;">
+                <input type="checkbox" id="theme-toggle" style="opacity: 0; width: 0; height: 0;">
+                <span id="theme-toggle-slider" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; border-radius: 26px; transition: 0.3s;">
+                  <span style="position: absolute; content: ''; height: 20px; width: 20px; left: 3px; bottom: 3px; background-color: white; border-radius: 50%; transition: 0.3s;"></span>
+                </span>
+              </label>
+              <span id="theme-dark-label" style="font-size: 0.9em; color: var(--text-secondary);">Dark</span>
+            </div>
+          </div>
+          
+          <!-- Headline -->
+          <div class="setting-item" style="display: flex; flex-direction: column;">
+            <!-- Row 1: Label, Char Count, and Action Icons -->
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <label for="settings-headline-input" style="margin: 0;">Headline</label>
+                <span class="headline-char-count" style="font-size: 0.85em; color: #666;">
+                  <span id="headline-char-count">0</span> of <span id="headline-char-max">1000</span> chars
+                </span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <div id="headline-actions" class="headline-actions" style="display: none; gap: 4px;">
+                  <button id="headline-save-btn" class="headline-btn save-btn" style="padding: 4px 8px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85em;" title="Save">💾</button>
+                  <button id="headline-cancel-btn" class="headline-btn cancel-btn" style="padding: 4px 8px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85em;" title="Cancel">❌</button>
+                </div>
+                <div id="headline-menu-container" style="position: relative; display: none;">
+                  <button id="headline-menu-btn" class="headline-menu-btn" style="background: none; border: none; cursor: pointer; padding: 4px; font-size: 16px; color: var(--text-secondary);" title="Headline options">⋮</button>
+                  <div id="headline-menu-dropdown" class="headline-menu-dropdown" style="display: none; position: absolute; right: 0; top: 100%; background: white; border: 1px solid #ccc; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); z-index: 1000; min-width: 120px; margin-top: 4px;">
+                    <button id="headline-menu-edit" class="headline-menu-item" style="width: 100%; padding: 8px 12px; text-align: left; background: none; border: none; cursor: pointer; font-size: 0.9em;">✏️ Edit</button>
+                    <button id="headline-menu-delete" class="headline-menu-item" style="width: 100%; padding: 8px 12px; text-align: left; background: none; border: none; cursor: pointer; font-size: 0.9em; color: #dc3545;">🗑️ Delete</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <!-- Row 2: Textarea (on its own line) -->
+            <textarea 
+                id="settings-headline-input" 
+                class="settings-headline-textarea"
+                maxlength="1000"
+                rows="3"
+                placeholder="Enter your headline here (min 20 characters)..."
+                style="width: 100%; padding: 8px; margin: 0; border: 1px solid #ccc; border-radius: 4px; font-family: inherit; resize: vertical; min-height: 60px; display: block; box-sizing: border-box;"
+              ></textarea>
+            <div id="headline-status" class="headline-status" style="margin-top: 8px; padding: 8px; border-radius: 4px; display: none; font-size: 0.9em;"></div>
+          </div>
+          
+          <!-- Display Name -->
+          <div class="setting-item" style="display: flex; flex-direction: column;">
+            <!-- Row 1: Label, Char Count, and Action Icons -->
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <label for="display-name-input" style="margin: 0;">Display name</label>
+                <span class="display-name-char-count" style="font-size: 0.85em; color: #666;">
+                  <span id="display-name-char-count">0</span> of <span id="display-name-char-max">16</span> chars
+                </span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <div id="display-name-actions" class="display-name-actions" style="display: none; gap: 4px;">
+                  <button id="display-name-save-btn" style="padding: 4px 8px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85em;" title="Save">💾</button>
+                  <button id="display-name-cancel-btn" style="padding: 4px 8px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85em;" title="Cancel">❌</button>
+                </div>
+                <div id="display-name-menu-container" style="position: relative; display: none;">
+                  <button id="display-name-menu-btn" class="display-name-menu-btn" style="background: none; border: none; cursor: pointer; padding: 4px; font-size: 16px; color: var(--text-secondary);" title="Display name options">⋮</button>
+                  <div id="display-name-menu-dropdown" class="display-name-menu-dropdown" style="display: none; position: absolute; right: 0; top: 100%; background: white; border: 1px solid #ccc; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); z-index: 1000; min-width: 120px; margin-top: 4px;">
+                    <button id="display-name-menu-edit" class="display-name-menu-item" style="width: 100%; padding: 8px 12px; text-align: left; background: none; border: none; cursor: pointer; font-size: 0.9em;">✏️ Edit</button>
+                    <button id="display-name-menu-delete" class="display-name-menu-item" style="width: 100%; padding: 8px 12px; text-align: left; background: none; border: none; cursor: pointer; font-size: 0.9em; color: #dc3545;">🗑️ Delete</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <!-- Row 2: Input Field (on its own line) -->
+            <input 
+              type="text" 
+              id="display-name-input" 
+              minlength="4"
+              maxlength="16"
+              placeholder="Enter your display name (min 4 characters)..."
+              style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.9em; display: block; box-sizing: border-box;"
+            >
+            <div id="display-name-status" class="display-name-status" style="margin-top: 8px; padding: 8px; border-radius: 4px; display: none; font-size: 0.9em;"></div>
+          </div>
+        </div>
+        
+        <!-- Notification Settings -->
+        <div class="settings-section">
+          <h4>🔔 Notifications</h4>
+          <div id="notification-settings" class="notification-settings">
+            <!-- Notification settings will be populated by JavaScript -->
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Mini Profile Modal -->
+  <div id="mini-profile-modal" class="modal" style="display: none;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="modal-name">User Name</h3>
+        <button class="close-button">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="modal-status">Status</div>
+        <div class="modal-actions">
+          <button class="action-button">Message</button>
+          <button class="action-button">View Profile</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Visibility Access Modal -->
+  <div id="visibility-access-modal" class="modal" style="display: none;">
+    <div class="modal-content" style="max-width: 320px;">
+      <div class="modal-header">
+        <h3>Go Visible</h3>
+        <button id="close-visibility-access-modal" class="close-button">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size: 0.9em;">Enable visibility to see and be seen by others in your communities.</p>
+        <div style="display: flex; gap: 8px; justify-content: flex-end;">
+          <button id="go-visible-btn" style="padding: 6px 12px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9em;">Go Visible</button>
+          <button id="cancel-visibility-btn" style="padding: 6px 12px; background: #6c757d; color: var(--text-primary, #333); border: none; border-radius: 4px; cursor: pointer; font-size: 0.9em;">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Notifications Modal -->
+  <div id="notifications-modal" class="modal" style="display: none;">
+    <div class="modal-content" style="max-width: 500px; max-height: 600px;">
+      <div class="modal-header">
+        <h3>🔔 Notifications</h3>
+        <div style="display: flex; gap: 10px; align-items: center;">
+          <button id="mark-all-read-btn" style="padding: 4px 8px; font-size: 0.8em; background: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer;">Mark All Read</button>
+          <button id="clear-all-btn" style="padding: 4px 8px; font-size: 0.8em; background: #dc3545; color: white; border: none; border-radius: 3px; cursor: pointer;">Clear All</button>
+          <button class="close-button">&times;</button>
+        </div>
+      </div>
+      <div class="modal-body" style="padding: 0; max-height: 500px; overflow-y: auto;">
+        <div id="notifications-list" class="notifications-list">
+          <!-- Notifications will be populated here -->
+        </div>
+        <div id="no-notifications" style="text-align: center; padding: 40px; color: #666; display: none;">
+          <div style="font-size: 48px; margin-bottom: 16px;">🔔</div>
+          <div>No notifications yet</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Load Modern Systems -->
+  <!-- Load Modernization Classes -->
+  <script type="module" src="LifecycleManager.js"></script>
+  
+  <!-- Unified Preference Management -->
+  <!-- User Preferences Manager (TypeScript build output) -->
+  <script type="module" src="utils/UserPreferencesManager.js"></script>
+  
+  <!-- Load Preference Managers (must load before sidepanel.js initializes them) -->
+  <script type="module" src="features/SettingsHeadlineManager.js"></script>
+  <script type="module" src="features/DisplayNameManager.js"></script>
+  <!-- LEGACY: VisibilitySettingsManager.js removed - now using VisibilitySettings from buildModuleGraph -->
+  <!-- <script type="module" src="features/VisibilitySettingsManager.js"></script> -->
+  <!-- Load VisibilityModalHandler (TypeScript) -->
+  <script type="module" src="features/VisibilityModalHandler.js"></script>
+  <script type="module" src="features/UserHoverModal.js"></script>
+  
+  <!-- Include the new TypeScript orchestration layer -->
+  <script type="module" src="sidepanel/Sidepanel.js"></script>
+  <!-- Legacy sidepanel.js disabled - TypeScript Sidepanel.ts handles initialization -->
+  <!-- <script type="module" src="sidepanel.js"></script> -->
+  
+  <!-- Diagnostic scripts removed - no longer needed for production -->
+  
+  <!-- Comprehensive Test Suites -->
+  <!-- CRITICAL FIX: Test files removed from production - they cause console errors -->
+  <!-- Test files should only run in test environment, not in production -->
+  <!-- <script src="utils/UserPreferencesManager.test.js"></script> -->
+  <!-- <script src="utils/PreRenderInitializer.test.js"></script> -->
+  <!-- <script src="utils/INTEGRATION_TEST_USER_PREFERENCES.js"></script> -->
+
+  <!-- ARCHIVED: Context Bar - Moved inside discuss-tab (see discuss-tab section) -->
+  <!-- ARCHIVED: Chat Input Area - Fixed at bottom (moved to top inside discuss-tab) -->
+
+
+  <!-- Magic Link Modal -->
+  <div id="magic-link-modal" class="modal" style="display: none;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Sign in with Magic Link</h3>
+        <button id="close-magic-link-modal" class="close-button">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p>Enter your email address and we'll send you a magic link to sign in.</p>
+        <input type="email" id="magic-link-email" placeholder="your@email.com" style="width: 100%; padding: 8px; margin: 10px 0; border: 1px solid #ccc; border-radius: 4px;">
+        <button id="send-magic-link" style="width: 100%; padding: 10px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">Send Magic Link</button>
+        <div id="magic-link-status" style="margin-top: 10px; font-size: 0.9em;"></div>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    .modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 1000;
+    }
+    .modal-content {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      min-width: 300px;
+    }
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 15px;
+    }
+    .close-button {
+      background: none;
+      border: none;
+      font-size: 20px;
+      cursor: pointer;
+    }
+    
+    /* Auth Prompt Modal Styles */
+    .auth-prompt-buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin: 15px 0;
+    }
+    
+    .auth-button {
+      padding: 10px 15px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-weight: 500;
+      transition: background-color 0.2s;
+    }
+    
+    .auth-button.google {
+      background-color: #4285f4;
+      color: white;
+    }
+    
+    .auth-button.google:hover {
+      background-color: #3367d6;
+    }
+    
+    .auth-button.magic {
+      background-color: #6c757d;
+      color: white;
+    }
+    
+    .auth-button.magic:hover {
+      background-color: #5a6268;
+    }
+    
+    .cancel-button {
+      background: none;
+      border: 1px solid #ccc;
+      padding: 8px 15px;
+      border-radius: 5px;
+      cursor: pointer;
+      color: #666;
+    }
+    
+    .cancel-button:hover {
+      background-color: #f8f9fa;
+    }
+    
+    /* Add Friend Button Styles */
+    .add-friend-btn {
+      background-color: #28a745;
+      color: white;
+      border: none;
+      padding: 5px 10px;
+      border-radius: 3px;
+      cursor: pointer;
+      font-size: 0.8em;
+      margin-left: auto;
+    }
+    
+    .add-friend-btn:hover {
+      background-color: #218838;
+    }
+    
+    .add-friend-btn:disabled {
+      background-color: #6c757d;
+      cursor: not-allowed;
+    }
+  </style>
+  
+  <!-- ROBUST REAL-TIME SYSTEM (Loaded after main system to prevent conflicts) -->
+  <!-- Load Logger first -->
+  
+  <!-- Load Robust Modules (Architecture-First Approach) -->
+  <!-- Load Unified Initialization Manager -->
+  <script type="module" src="UnifiedInitializationManager.js"></script>
+  <!-- Load Robust Modules -->
+  <!-- Removed RobustAuthManager.js - using CleanRealtimeManager instead -->
+  <!-- Removed RobustRealtimeManager.js - using CleanRealtimeManager.js instead -->
+  <script type="module" src="RobustIntegration.js"></script>
+  
+  <!-- Load Rate Limiting Modules -->
+  <script type="module" src="APIRateLimiter.js"></script>
+  <script type="module" src="SupabaseWrapper.js"></script>
+  <script type="module" src="APIMonitor.js"></script>
+  
+        <!-- Load Unified Modules -->
+        
+        <!-- Load Real-time Foundation -->
+        <script type="module" src="RealtimeFoundation.js"></script>
+  
+  <!-- Load Visibility Real-time System -->
+  <script type="module" src="VisibilityRealtimeManager.js"></script>
+  <script type="module" src="ui-visibility-bindings.js"></script>
+  <script type="module" src="VisibilityIntegration.js"></script>
+  
+  <!-- Load Reactions Real-time System -->
+  <script type="module" src="ReactionsRealtimeManager.js"></script>
+  <script type="module" src="ui-reactions-bindings.js"></script>
+  <script type="module" src="ReactionsIntegration.js"></script>
+  
+  <!-- Load Auras Real-time System -->
+  <script type="module" src="ui-auras-bindings.js"></script>
+  <script type="module" src="AurasIntegration.js"></script>
+  
+  <!-- Load Architecture Tests -->
+  
+  <!-- Load Real-time Diagnostic Tools -->
+  <!-- Bind robust realtime events to UI refresh -->
+  <script type="module" src="ui-realtime-bindings.js"></script>
+  
+  <!-- Diagnostic scripts removed - files not found, causing ERR_FILE_NOT_FOUND errors -->
+        </body>
+        </html>

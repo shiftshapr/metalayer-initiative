@@ -4,8 +4,8 @@
 echo "🔧 Setting up nginx configuration for Canopi domains..."
 
 # Copy configs to sites-available
-sudo cp /home/ubuntu/metalayer-initiative/app.canopi.live.conf /etc/nginx/sites-available/app.canopi.live
-sudo cp /home/ubuntu/metalayer-initiative/share.canopi.live.conf /etc/nginx/sites-available/share.canopi.live
+sudo cp /home/ubuntu/canopi/app.canopi.live.conf /etc/nginx/sites-available/app.canopi.live
+sudo cp /home/ubuntu/canopi/share.canopi.live.conf /etc/nginx/sites-available/share.canopi.live
 
 # Enable sites
 sudo ln -sf /etc/nginx/sites-available/app.canopi.live /etc/nginx/sites-enabled/app.canopi.live

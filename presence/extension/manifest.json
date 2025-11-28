@@ -2,6 +2,7 @@
   "manifest_version": 3,
   "name": "Canopi",
   "version": "0.1.0",
+  "id": "bnbghmbiikibpkllpeehcmpjmbcnhhcb",
   "description": "Adds a sidebar for collaboration and agent interaction on web pages.",
   "permissions": [
     "sidePanel",
@@ -12,8 +13,7 @@
     "identity",
     "identity.email",
     "notifications",
-    "webRequest",
-    "windows"
+    "webRequest"
   ],
   "host_permissions": [
     "https://app.themetalayer.org/*",
@@ -53,6 +53,6 @@
     }
   ],
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' https://*.supabase.co wss://*.supabase.co http://216.238.91.120:3001 ws://216.238.91.120:3001 http://216.238.91.120:3002 ws://216.238.91.120:3002 https://app.themetalayer.org https://api.themetalayer.org https://www.googleapis.com wss://echo.websocket.org https://www.youtube.com;"
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' https://*.supabase.co wss://*.supabase.co http://216.238.91.120:3001 ws://216.238.91.120:3001 http://216.238.91.120:3002 ws://216.238.91.120:3002 https://app.themetalayer.org https://api.themetalayer.org https://www.googleapis.com wss://echo.websocket.org https://www.youtube.com https://*.web3auth.io https://*.web3auth.com wss://*.web3auth.io wss://*.web3auth.com https://rpc.ankr.com;"
   }
 } 

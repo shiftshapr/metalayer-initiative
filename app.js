@@ -57,6 +57,81 @@ app.get('/timelines/index.html', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'timelines', 'index.html'));
 });
 
+// Serve Web3Auth test page with Client ID injected server-side (BEFORE static file serving)
+app.get('/web3auth-test', (req, res) => {
+  const htmlPath = path.join(__dirname, 'public', 'web3auth-test', 'index.html');
+  const fs = require('fs');
+  
+  if (!fs.existsSync(htmlPath)) {
+    return res.status(404).send('Web3Auth test page not found');
+  }
+  
+  // Read HTML file
+  let html = fs.readFileSync(htmlPath, 'utf8');
+  
+  // Determine network from query parameter (default: mainnet)
+  const networkParam = req.query.network || 'mainnet';
+  const useTestnet = networkParam === 'devnet' || networkParam === 'testnet';
+  const network = useTestnet ? 'sapphire_devnet' : 'sapphire_mainnet';
+  
+  // Get appropriate Client ID based on network
+  const clientId = useTestnet 
+    ? (process.env.WEB3AUTH_CLIENT_ID_DEVNET || process.env.WEB3AUTH_CLIENT_ID || '')
+    : (process.env.WEB3AUTH_CLIENT_ID || '');
+  
+  // Log for debugging (first few chars only for security)
+  if (clientId) {
+    console.log(`[Web3Auth] Injecting ${network} Client ID: ${clientId.substring(0, 10)}... (length: ${clientId.length})`);
+  } else {
+    const envVar = useTestnet ? 'WEB3AUTH_CLIENT_ID_DEVNET' : 'WEB3AUTH_CLIENT_ID';
+    console.warn(`[Web3Auth] WARNING: ${envVar} not found in environment variables`);
+    console.warn(`[Web3Auth] Check .env file or set ${envVar} environment variable`);
+  }
+  
+  if (clientId) {
+    // Replace the variable declaration - handle both old pattern and new pattern with window global
+    html = html.replace(
+      /let\s+WEB3AUTH_CLIENT_ID\s*=\s*(?:null|\(typeof window !== 'undefined' && window\.CANOPI_WEB3AUTH_CLIENT_ID\) \|\| null)\s*;/,
+      `let WEB3AUTH_CLIENT_ID = '${clientId.replace(/'/g, "\\'").replace(/\\/g, "\\\\")}';`
+    );
+    
+    // Inject network configuration
+    html = html.replace(
+      /const\s+WEB3AUTH_NETWORK\s*=\s*['"](?:sapphire_mainnet|sapphire_devnet)['"];.*\/\/.*/,
+      `const WEB3AUTH_NETWORK = '${network}'; // ${useTestnet ? 'Testnet' : 'Mainnet'} (set via ?network=devnet or ?network=mainnet)`
+    );
+    
+    // Also set as window global for fallback - inject right after the opening body tag or in head
+    // Try to inject before the first script that uses it
+    if (html.includes('</head>')) {
+      html = html.replace(
+        /<\/head>/,
+        `<script>window.CANOPI_WEB3AUTH_CLIENT_ID = '${clientId.replace(/'/g, "\\'").replace(/\\/g, "\\\\")}'; window.CANOPI_WEB3AUTH_NETWORK = '${network}';</script></head>`
+      );
+    } else {
+      // Fallback: inject at the very beginning of the first script tag
+      html = html.replace(
+        /(<script[^>]*>)/,
+        `$1window.CANOPI_WEB3AUTH_CLIENT_ID = '${clientId.replace(/'/g, "\\'").replace(/\\/g, "\\\\")}'; window.CANOPI_WEB3AUTH_NETWORK = '${network}';`
+      );
+    }
+  } else {
+    // If no Client ID, inject a console error
+    const envVar = useTestnet ? 'WEB3AUTH_CLIENT_ID_DEVNET' : 'WEB3AUTH_CLIENT_ID';
+    html = html.replace(
+      /let\s+WEB3AUTH_CLIENT_ID\s*=\s*(?:null|\(typeof window !== 'undefined' && window\.CANOPI_WEB3AUTH_CLIENT_ID\) \|\| null)\s*;/,
+      `let WEB3AUTH_CLIENT_ID = null; // ERROR: ${envVar} not set in server .env file`
+    );
+  }
+  
+  res.setHeader('Content-Type', 'text/html');
+  res.send(html);
+});
+
+app.get('/web3auth-test/', (req, res) => {
+  res.redirect('/web3auth-test');
+});
+
 // Serve static files from public directory (AFTER specific routes)
 app.use(express.static('public'));
 

@@ -1,11 +1,9 @@
-import { Message } from '../types/index.js';
-export interface LegacyMessagingResult {
-    success?: boolean;
-    data?: Message | any;
-}
-export declare function sendLegacyMessage(content: string, options?: {
-    parentId?: string | null;
-    conversationId?: string | null;
-}): Promise<LegacyMessagingResult | null>;
-export declare function reloadLegacyChatHistory(): Promise<void>;
+/**
+ * Messaging bridge for module communication
+ *
+ * This file previously contained messaging bridge functions.
+ * All functions have been removed. Direct window API calls should be used instead.
+ * - sendMessageViaSupabase: Use window.sendMessageViaSupabase directly
+ * - loadChatHistory: Use window.loadChatHistory directly
+ */
 //# sourceMappingURL=messagingBridge.d.ts.map

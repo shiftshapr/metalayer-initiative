@@ -19,6 +19,8 @@ declare namespace Canopi {
     title: string;
     /** Icon identifier */
     icon: string;
+    /** Sidebar position (default: 'right') */
+    position?: 'left' | 'right';
     /** Render function called when tab is displayed */
     render: (container: HTMLElement, context: TabContext) => void | Promise<void>;
     /** Called when tab is activated */
@@ -507,6 +509,10 @@ declare global {
 
 export = Canopi;
 export as namespace Canopi;
+
+
+
+
 
 
 

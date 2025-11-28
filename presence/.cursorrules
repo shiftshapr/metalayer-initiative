@@ -1,0 +1,255 @@
+# Cursor Rules for Metalayer Initiative
+
+## 🚨 ABSOLUTE PROHIBITION - READ THIS FIRST 🚨
+
+**IF YOU ARE AN AI AGENT READING THIS: STOP AND READ CAREFULLY**
+
+**YOU ARE FORBIDDEN FROM EDITING ANY FILE IN THESE DIRECTORIES:**
+- `extension/` - COMPILED OUTPUT - DO NOT TOUCH
+- `dist/` - COMPILED OUTPUT - DO NOT TOUCH  
+- `build/` - COMPILED OUTPUT - DO NOT TOUCH
+
+**BEFORE YOU EDIT ANY FILE:**
+1. Check if the path starts with `extension/`, `dist/`, or `build/`
+2. If YES → STOP IMMEDIATELY
+3. Find the source file in `src/` directory
+4. Edit the TypeScript source file instead
+5. Run build: `npx tsc && bash scripts/sync-extension-from-dist.sh`
+
+**VIOLATION = IMMEDIATE REJECTION**
+
+## ⚠️ CRITICAL RED-LINE: Source vs Build Directories
+
+**NEVER edit files in `extension/`, `dist/`, or `build/` directories.**
+
+These are BUILD OUTPUTS generated from `src/`. Editing them directly is a RED-LINE violation.
+
+**THE `.cursorignore` FILE BLOCKS THESE DIRECTORIES - RESPECT IT**
+
+### Rules:
+1. ❌ **NEVER** edit `extension/`, `dist/`, `build/` files
+2. ✅ **ALWAYS** edit `src/` files (TypeScript source)
+3. ✅ **ALWAYS** build after editing `src/` files
+4. ✅ If file only exists in `extension/`, create source in `src/` first
+
+### Workflow:
+```
+Edit src/ → Build → extension/ generated
+```
+
+### If You See a File Only in extension/:
+1. **STOP** - Don't edit it
+2. **CHECK** - Look for source in `src/`
+3. **CREATE** - If no source, create TypeScript version in `src/`
+4. **MIGRATE** - Move logic to TypeScript source
+5. **BUILD** - Generate `extension/` version
+
+### Prevention & Enforcement:
+- ✅ **`.cursorignore`** - Blocks Cursor from seeing/editing `extension/` files
+- ✅ **Validation script** - `scripts/validate-no-extension-edits.sh` detects violations
+- ✅ **Pre-edit check** - `scripts/pre-edit-check.sh` validates before editing
+- ✅ **`.cursorrules`** - This file (AI guidance)
+- ⏳ Pre-commit hook (to be added) - Blocks commits to `extension/`
+- ⏳ `.gitattributes` (to be added) - Marks as generated
+
+**VIOLATIONS ARE BLOCKED - DO NOT ATTEMPT TO EDIT extension/ FILES**
+
+**Before editing any file, check: `bash scripts/pre-edit-check.sh <file-path>`**
+
+## TypeScript File Editing - CRITICAL RULE
+
+**BEFORE editing ANY file, you MUST validate the path:**
+
+### Pre-Edit Validation (MANDATORY):
+
+1. **Check File Path**:
+   - ✅ **ALLOW**: Files in `src/` directory (TypeScript source)
+   - ✅ **ALLOW**: Hand-authored files explicitly documented
+   - ✅ **ALLOW**: Configuration files (`.json`, `.md`, `.sh`, `.html`, `.css`)
+   - ❌ **REJECT**: Files in `extension/`, `dist/`, `build/` directories
+   - ❌ **REJECT**: Compiled `.js` files if `.ts` source exists
+
+2. **If Edit Target is Compiled JS**:
+   - **STOP** - Do not edit the compiled file
+   - **FIND** - Locate TypeScript source: `src/{same-path}.ts`
+   - **EDIT** - Edit TypeScript source instead
+   - **LOG** - "Redirected edit from {jsPath} to {tsPath}"
+   - **BUILD** - Run `npx tsc` and `sync-extension-from-dist.sh` after edit
+
+3. **If TypeScript Source Not Found**:
+   - **WARN** - "No TypeScript source found for {jsPath}"
+   - **ASK** - "Is this hand-authored JS? Should it be migrated?"
+   - **WAIT** - Do not proceed without user confirmation
+
+### Violation Handling:
+- ❌ **STOP** immediately if compiled JS edit attempted
+- 🔍 **FIND** TypeScript source
+- ✅ **REDIRECT** edit to TypeScript source
+- 📝 **LOG** the redirection
+- 🔨 **BUILD** after TypeScript edit
+
+## Diagnostic Scripts - CRITICAL RULE
+
+**NEVER create diagnostic scripts in TypeScript or with ES6 imports.**
+
+### ABSOLUTE REQUIREMENTS:
+1. **File extension MUST be `.js`** (NOT `.ts`)
+2. **NO TypeScript syntax:**
+   - ❌ NO type annotations: `const x: string = ''`
+   - ❌ NO 'as' assertions: `(window as any)`
+   - ❌ NO interface/type imports
+3. **NO ES6 `import` or `export` statements**
+4. **Use `window.*` functions for dependencies**
+5. **Must run directly in browser console**
+
+### File Naming Convention:
+- `diagnose-*.js` = Browser console scripts (PURE JAVASCRIPT ONLY)
+- `test-*.js` = Browser console test scripts (PURE JAVASCRIPT ONLY)  
+- `*.ts` = Build-time scripts only (NOT for browser console)
+
+### Before Creating Diagnostic Scripts:
+1. **READ `src/scripts/README.md` FIRST** - Contains full rules and template
+2. Use the diagnostic script template from README.md
+3. Ensure file ends in `.js` (NOT `.ts`)
+4. Use `window.*` functions, not imports
+5. Test in browser console before committing
+
+### Common Mistakes (DON'T DO THIS):
+- ❌ `const results: any = {}` → ✅ `const results = {}`
+- ❌ `(window as any).stateManager` → ✅ `window.stateManager`
+- ❌ `import { Logger } from '...'` → ✅ Use `window.*` or inline code
+- ❌ `export function diagnose() {}` → ✅ No exports needed
+
+### Validation:
+- Pre-commit hooks validate .js files for TypeScript syntax
+- Linters flag TypeScript syntax in .js files
+- Code review rejects diagnostic scripts with TypeScript syntax
+
+## Async Coordination - CRITICAL RULE
+
+**NEVER use setTimeout delays to coordinate async operations. This is an anti-pattern.**
+
+### ❌ ANTI-PATTERN (DON'T DO THIS):
+```typescript
+// BAD: Using setTimeout as a workaround for race conditions
+setTimeout(async () => {
+  await this.doSomething();
+}, 1000); // Arbitrary delay - race condition workaround
+```
+
+### ✅ BEST PRACTICE (DO THIS INSTEAD):
+
+#### 1. Use Event-Based Coordination:
+```typescript
+// GOOD: Wait for event
+await this.waitForEvent('tabManager:initialized', { timeout: 5000 });
+await this.processUrl();
+```
+
+#### 2. Use Promise-Based Dependencies:
+```typescript
+// GOOD: Wait for promise to resolve
+await this.ensureDependencyReady();
+await this.doSomething();
+```
+
+#### 3. Use Proper Initialization Order:
+```typescript
+// GOOD: Sequential await ensures proper order
+await bootController.initialize();  // Must complete first
+await tabController.initialize();   // Depends on bootController
+```
+
+#### 4. Use Dependency Injection:
+```typescript
+// GOOD: Pass dependencies explicitly
+constructor(
+  private readonly tabManager: TabManager,
+  private readonly communities: CommunitiesModule
+) {}
+```
+
+### When setTimeout IS Acceptable:
+- ✅ Animation delays (UI transitions)
+- ✅ Debouncing/throttling user input
+- ✅ Polling with exponential backoff (when no event-based alternative exists)
+- ✅ Cleanup timeouts (not for coordination)
+
+### When setTimeout IS NOT Acceptable:
+- ❌ Waiting for module initialization
+- ❌ Coordinating async operations
+- ❌ Fixing race conditions
+- ❌ Waiting for dependencies to be ready
+- ❌ "Ensuring X happens before Y" scenarios
+
+### ESLint Enforcement:
+- ESLint rule `no-restricted-syntax` blocks setTimeout with delays >= 100ms
+- Pre-commit hooks will reject code with setTimeout coordination patterns
+- Code review will flag setTimeout in async contexts
+
+### Helper Utilities:
+Use these instead of setTimeout:
+- `waitForEvent(eventName, options)` - Wait for DOM/global events
+- `waitForCondition(checkFn, options)` - Wait for condition to be true
+- `ensureDependencyReady(dependency)` - Wait for dependency initialization
+- `coordinateInitialization(dependencies)` - Coordinate multiple dependencies
+
+### Examples of Proper Async Coordination:
+
+**Waiting for TabManager:**
+```typescript
+// ❌ BAD
+setTimeout(async () => {
+  await this.captureActiveTab();
+}, 1000);
+
+// ✅ GOOD
+await this.waitForTabManager();  // Uses event listener
+await this.captureActiveTab();
+```
+
+**Waiting for Communities:**
+```typescript
+// ❌ BAD
+setTimeout(async () => {
+  await this.loadMessages();
+}, 500);
+
+// ✅ GOOD
+await this.ensureCommunitiesReady();  // Uses promise/await
+await this.loadMessages();
+```
+
+**Initialization Order:**
+```typescript
+// ❌ BAD
+bootController.initialize();
+setTimeout(() => {
+  tabController.initialize();
+}, 1000);
+
+// ✅ GOOD
+await bootController.initialize();
+await tabController.initialize();
+```
+
+### Detection & Prevention:
+1. **ESLint Rule**: Blocks `setTimeout` with delays >= 100ms in async contexts
+2. **Pre-commit Hook**: `scripts/pre-commit-check-async-coordination.sh` scans for setTimeout patterns
+3. **Code Review**: Flags setTimeout in coordination scenarios
+4. **Documentation**: This section in .cursorrules
+5. **Helper Utilities**: `src/utils/AsyncCoordination.ts` provides proper alternatives
+
+### Setup Pre-commit Hook:
+```bash
+# Add to existing pre-commit hook or create new one:
+bash presence/scripts/pre-commit-check-async-coordination.sh
+```
+
+### If You Think You Need setTimeout:
+1. **STOP** - Question why you need a delay
+2. **IDENTIFY** - What are you waiting for?
+3. **FIND** - Is there an event/promise you can await?
+4. **REFACTOR** - Use proper async coordination
+5. **DOCUMENT** - If setTimeout is truly needed, document why (rare)
+

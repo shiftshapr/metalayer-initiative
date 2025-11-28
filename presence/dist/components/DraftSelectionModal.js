@@ -7,6 +7,7 @@
  * - See draft preview
  */
 import { getXIcon } from '../utils/XPatternSystem.js';
+import { handleError } from '../utils/ErrorHandler.js';
 export class DraftSelectionModal {
     constructor() {
         this.modal = null;
@@ -28,11 +29,25 @@ export class DraftSelectionModal {
      * Open the draft selection modal
      */
     async open(options) {
-        this.options = options;
-        this.isOpen = true;
-        await this.loadDrafts();
-        this.renderModal();
-        this.attachEventListeners();
+        try {
+            this.options = options;
+            this.isOpen = true;
+            await this.loadDrafts();
+            this.renderModal();
+            this.attachEventListeners();
+        }
+        catch (error) {
+            handleError(error, {
+                log: true,
+                logLevel: 'error',
+                context: {
+                    operation: 'open',
+                    component: 'DraftSelectionModal',
+                    pageId: options.pageId,
+                    userId: options.userId
+                }
+            });
+        }
     }
     /**
      * Close the modal
@@ -63,7 +78,16 @@ export class DraftSelectionModal {
             this.drafts = data.messages || [];
         }
         catch (error) {
-            console.error('❌ DRAFT_SELECTION: Error loading drafts:', error);
+            handleError(error, {
+                log: true,
+                logLevel: 'error',
+                context: {
+                    operation: 'loadDrafts',
+                    component: 'DraftSelectionModal',
+                    pageId: this.options.pageId,
+                    userId: this.options.userId
+                }
+            });
             this.drafts = [];
         }
     }
@@ -171,11 +195,23 @@ export class DraftSelectionModal {
         const deleteButtons = this.modal.querySelectorAll('[data-action="delete"]');
         deleteButtons.forEach(btn => {
             btn.addEventListener('click', async (e) => {
-                e.stopPropagation();
-                const draftItem = e.currentTarget.closest('.draft-item');
-                const draftId = draftItem?.getAttribute('data-draft-id');
-                if (draftId) {
-                    await this.deleteDraft(draftId);
+                try {
+                    e.stopPropagation();
+                    const draftItem = e.currentTarget.closest('.draft-item');
+                    const draftId = draftItem?.getAttribute('data-draft-id');
+                    if (draftId) {
+                        await this.deleteDraft(draftId);
+                    }
+                }
+                catch (error) {
+                    handleError(error, {
+                        log: true,
+                        logLevel: 'error',
+                        context: {
+                            operation: 'deleteDraft',
+                            component: 'DraftSelectionModal'
+                        }
+                    });
                 }
             });
         });
@@ -203,7 +239,15 @@ export class DraftSelectionModal {
             this.attachEventListeners();
         }
         catch (error) {
-            console.error('❌ DRAFT_SELECTION: Error deleting draft:', error);
+            handleError(error, {
+                log: true,
+                logLevel: 'error',
+                context: {
+                    operation: 'deleteDraft',
+                    component: 'DraftSelectionModal',
+                    draftId
+                }
+            });
         }
     }
     /**

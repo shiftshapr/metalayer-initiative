@@ -6,7 +6,7 @@ echo ""
 
 # First, ensure HTTP config is correct
 echo "1. Updating nginx HTTP config..."
-sudo cp /home/ubuntu/metalayer-initiative/share.canopi.live.conf /etc/nginx/sites-available/share.canopi.live
+sudo cp /home/ubuntu/canopi/share.canopi.live.conf /etc/nginx/sites-available/share.canopi.live
 sudo nginx -t
 
 if [ $? -ne 0 ]; then

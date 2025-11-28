@@ -1,5 +1,5 @@
 #!/bin/bash
-cd /home/ubuntu/metalayer-initiative
+cd /home/ubuntu/canopi
 
 echo "=== TypeScript Migration Verification ==="
 echo ""

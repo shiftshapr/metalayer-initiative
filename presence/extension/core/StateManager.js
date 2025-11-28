@@ -2,6 +2,9 @@
  * STATEMANAGER - Centralized State Management
  * TypeScript + ES6 Module
  */
+import { handleError } from '../utils/ErrorHandler.js';
+import { Logger } from '../utils/Logger.js';
+import { API_CONFIG } from './APIConfig.js';
 class StateManager {
     constructor() {
         this.maxHistorySize = 100;
@@ -40,7 +43,7 @@ class StateManager {
                 retryCount: 0
             },
             api: {
-                baseUrl: 'http://216.238.91.120:3002',
+                baseUrl: API_CONFIG.baseUrl,
                 isOnline: true,
                 lastRequestTime: null,
                 requestCount: 0,
@@ -58,14 +61,26 @@ class StateManager {
         this.initialize();
     }
     async initialize(initialState) {
-        console.log('🏗️ StateManager: Initializing...');
-        if (initialState) {
-            this.mergeState(initialState);
+        try {
+            Logger.debug('🏗️ StateManager: Initializing...', null, 'state');
+            if (initialState) {
+                this.mergeState(initialState);
+            }
+            this.setState('extension.reloadTimestamp', new Date().toISOString());
+            this.setState('extension.isInitialized', true);
+            await this.loadPersistedState();
+            Logger.debug('✅ StateManager: Initialized successfully', null, 'state');
         }
-        this.setState('extension.reloadTimestamp', new Date().toISOString());
-        this.setState('extension.isInitialized', true);
-        await this.loadPersistedState();
-        console.log('✅ StateManager: Initialized successfully');
+        catch (error) {
+            handleError(error, {
+                log: true,
+                logLevel: 'error',
+                context: {
+                    operation: 'initialize',
+                    component: 'StateManager'
+                }
+            });
+        }
     }
     async get(key) {
         const keys = key.split('.');
@@ -90,6 +105,15 @@ class StateManager {
         return { ...this.state };
     }
     getState(path) {
+        // If no path provided, return entire state
+        if (!path) {
+            return { ...this.state };
+        }
+        // Validate path is a string
+        if (typeof path !== 'string') {
+            Logger.warn?.('⚠️ StateManager.getState: path must be a string', { path });
+            return undefined;
+        }
         const keys = path.split('.');
         let current = this.state;
         for (const key of keys) {
@@ -121,7 +145,7 @@ class StateManager {
         if (persist) {
             this.persistState(path, value);
         }
-        console.log(`🔄 StateManager: ${path} = ${JSON.stringify(value)}`);
+        Logger.debug(`🔄 StateManager: ${path} = ${JSON.stringify(value)}`, null, 'state');
     }
     subscribe(path, callback) {
         if (!this.subscribers.has(path)) {
@@ -154,24 +178,29 @@ class StateManager {
     resetState(path) {
         if (path) {
             const keys = path.split('.');
+            if (keys.length === 0)
+                return;
             let current = this.state;
+            const lastKey = keys[keys.length - 1];
+            if (!lastKey)
+                return;
             for (const key of keys.slice(0, -1)) {
                 current = current[key];
             }
-            delete current[keys[keys.length - 1]];
+            delete current[lastKey];
         }
         else {
             this.state = this.getInitialState();
         }
     }
     cleanup() {
-        console.log('🧹 StateManager: Cleaning up...');
+        Logger.debug('🧹 StateManager: Cleaning up...', null, 'state');
         this.subscribers.clear();
         this.history = [];
         this.state = this.getInitialState();
-        console.log('✅ StateManager: Cleanup complete');
+        Logger.debug('✅ StateManager: Cleanup complete', null, 'state');
     }
-    async persistState(path, value) {
+    async persistState(_path, _value) {
         if (typeof chrome === 'undefined' || !chrome.storage?.local) {
             return;
         }
@@ -184,7 +213,14 @@ class StateManager {
             });
         }
         catch (error) {
-            console.error('❌ StateManager: Failed to persist state:', error);
+            handleError(error, {
+                log: true,
+                logLevel: 'error',
+                context: {
+                    operation: 'catch',
+                    component: 'State'
+                }
+            });
         }
     }
     mergeState(newState) {
@@ -202,11 +238,18 @@ class StateManager {
             });
             if (result.stateManager) {
                 this.mergeState(result.stateManager);
-                console.log('✅ StateManager: Persisted state loaded');
+                Logger.debug('✅ StateManager: Persisted state loaded', null, 'state');
             }
         }
         catch (error) {
-            console.error('❌ StateManager: Failed to load persisted state:', error);
+            handleError(error, {
+                log: true,
+                logLevel: 'error',
+                context: {
+                    operation: 'catch',
+                    component: 'State'
+                }
+            });
         }
     }
     notifySubscribers(path, newValue, oldValue) {
@@ -217,7 +260,14 @@ class StateManager {
                     callback(newValue, oldValue, path);
                 }
                 catch (error) {
-                    console.error(`❌ StateManager: Subscriber error for ${path}:`, error);
+                    handleError(error, {
+                        log: true,
+                        logLevel: 'error',
+                        context: {
+                            operation: 'catch',
+                            component: 'State'
+                        }
+                    });
                 }
             });
         }
@@ -228,7 +278,14 @@ class StateManager {
                     callback(newValue, oldValue, path);
                 }
                 catch (error) {
-                    console.error('❌ StateManager: Wildcard subscriber error:', error);
+                    handleError(error, {
+                        log: true,
+                        logLevel: 'error',
+                        context: {
+                            operation: 'catch',
+                            component: 'State'
+                        }
+                    });
                 }
             });
         }
@@ -280,7 +337,7 @@ class StateManager {
                 retryCount: 0
             },
             api: {
-                baseUrl: 'http://216.238.91.120:3002',
+                baseUrl: API_CONFIG.baseUrl,
                 isOnline: true,
                 lastRequestTime: null,
                 requestCount: 0,
@@ -302,17 +359,44 @@ export { stateManagerInstance };
 // Export class for type definitions
 export { StateManager };
 export default StateManager;
+const normalizeCommunityIds = (value) => {
+    if (!Array.isArray(value)) {
+        return [];
+    }
+    const unique = new Set();
+    value.forEach(id => {
+        if (typeof id === 'string') {
+            const trimmed = id.trim();
+            if (trimmed.length > 0) {
+                unique.add(trimmed);
+            }
+        }
+    });
+    return Array.from(unique);
+};
 // Export convenience functions that use the singleton
 export const getState = (key) => stateManagerInstance.getState(key);
 export const setState = (key, value, persist = false) => stateManagerInstance.setState(key, value, persist);
+export const setActiveCommunitiesState = (communities, persist = false) => {
+    const normalized = normalizeCommunityIds(communities);
+    stateManagerInstance.setState('ui.activeCommunities', normalized, persist);
+    stateManagerInstance.setState('activeCommunities', normalized, persist);
+    if (typeof window !== 'undefined') {
+        window.activeCommunities = [...normalized];
+    }
+};
 // Export stateManagerInstance to window for diagnostic scripts and module access
 if (typeof window !== 'undefined') {
-    window.stateManagerInstance = stateManagerInstance;
+    const win = window;
+    win.stateManagerInstance = stateManagerInstance;
     Object.defineProperty(window, 'stateManagerInstance', {
         value: stateManagerInstance,
         writable: true,
         configurable: true,
         enumerable: true
     });
-    console.log('✅ StateManager: stateManagerInstance exported to window');
+    win.getState = getState;
+    win.setState = setState;
+    win.activeCommunities = normalizeCommunityIds(stateManagerInstance.getState('ui.activeCommunities'));
+    Logger.debug('✅ StateManager: stateManagerInstance exported to window', null, 'state');
 }

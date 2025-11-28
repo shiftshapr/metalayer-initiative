@@ -6,20 +6,14 @@
 import { TabManagerState, TabConfig, DEFAULT_STATE } from './types.js';
 import { Logger } from '../../utils/Logger.js';
 import { handleError } from '../../utils/ErrorHandler.js';
+import { userPreferencesManager, UserPreferencesManager } from '../../utils/UserPreferencesManager.js';
 
 export class TabConfiguration {
   private state: TabManagerState;
   private logger: typeof Logger;
   private storageKey = 'tabManagerConfig';
   private eventListeners: Map<string, Set<(data: unknown) => void>> = new Map();
-  private preferencesManager: {
-    initialize: (userId: string) => Promise<boolean>;
-    getPreference: (key: string) => Promise<string | number | boolean | null>;
-    savePreference: (key: string, value: string | number | boolean, options?: { skipDatabase?: boolean; batch?: boolean }) => Promise<boolean>;
-    savePreferences: (preferences: Record<string, string | number | boolean>, options?: { skipDatabase?: boolean; batch?: boolean }) => Promise<Record<string, boolean>>;
-    isInitialized: boolean;
-    [key: string]: unknown;
-  } | null = null;
+  private preferencesManager: UserPreferencesManager | null = null;
 
   constructor(logger: typeof Logger = Logger) {
     this.logger = logger;
@@ -29,14 +23,7 @@ export class TabConfiguration {
   /**
    * Set preferences manager instance
    */
-  setPreferencesManager(manager: {
-    initialize: (userId: string) => Promise<boolean>;
-    getPreference: (key: string) => Promise<string | number | boolean | null>;
-    savePreference: (key: string, value: string | number | boolean, options?: { skipDatabase?: boolean; batch?: boolean }) => Promise<boolean>;
-    savePreferences: (preferences: Record<string, string | number | boolean>, options?: { skipDatabase?: boolean; batch?: boolean }) => Promise<Record<string, boolean>>;
-    isInitialized: boolean;
-    [key: string]: unknown;
-  }): void {
+  setPreferencesManager(manager: UserPreferencesManager): void {
     this.preferencesManager = manager;
   }
 
@@ -45,9 +32,9 @@ export class TabConfiguration {
    */
   async initialize(): Promise<void> {
     try {
-      // Try to get preferences manager from window
-      if (!this.preferencesManager && typeof window !== 'undefined' && window.userPreferencesManager) {
-        this.preferencesManager = window.userPreferencesManager;
+      // Set preferences manager from ES6 import
+      if (!this.preferencesManager) {
+        this.preferencesManager = userPreferencesManager;
       }
 
       const stored = await this.loadFromStorage();
@@ -116,11 +103,12 @@ export class TabConfiguration {
 
   /**
    * Get visible tabs (sorted by order)
+   * Excludes manage-tab since it's permanent and always shown separately
    */
   getVisibleTabs(): TabConfig[] {
     return this.state.tabs
-      .filter(tab => tab.visible)
-      .sort((a, b) => a.order - b.order)
+      .filter((tab: TabConfig) => tab.visible && tab.id !== 'manage-tab')
+      .sort((a: TabConfig, b: TabConfig) => (a.order || 0) - (b.order || 0))
       .slice(0, this.state.visibleTabCount);
   }
 
@@ -128,7 +116,7 @@ export class TabConfiguration {
    * Get tab by ID
    */
   getTabById(tabId: string): TabConfig | undefined {
-    return this.state.tabs.find(tab => tab.id === tabId);
+    return this.state.tabs.find((tab: TabConfig) => tab.id === tabId);
   }
 
   /**
@@ -143,19 +131,19 @@ export class TabConfiguration {
       }
 
       // Get all tabs sorted by current order
-      const sortedTabs = [...this.state.tabs].sort((a, b) => a.order - b.order);
+      const sortedTabs = [...this.state.tabs].sort((a: TabConfig, b: TabConfig) => (a.order || 0) - (b.order || 0));
       
       // Remove the dragged tab from its current position
       const draggedTab = sortedTabs.find(t => t.id === tabId);
       if (!draggedTab) return;
       
-      const filteredTabs = sortedTabs.filter(t => t.id !== tabId);
+      const filteredTabs = sortedTabs.filter((t: TabConfig) => t.id !== tabId);
       
       // Insert at new position
       filteredTabs.splice(newOrder, 0, draggedTab);
       
       // Update order values
-      filteredTabs.forEach((t, index) => {
+      filteredTabs.forEach((t: TabConfig, index: number) => {
         t.order = index;
       });
       
@@ -250,9 +238,9 @@ export class TabConfiguration {
         return;
       }
 
-      this.state.tabs = this.state.tabs.filter(t => t.id !== tabId);
+      this.state.tabs = this.state.tabs.filter((t: TabConfig) => t.id !== tabId);
       // Reorder remaining tabs
-      this.state.tabs.forEach((t, index) => {
+      this.state.tabs.forEach((t: TabConfig, index: number) => {
         t.order = index;
       });
 
@@ -320,6 +308,7 @@ export class TabConfiguration {
 
   /**
    * Validate and merge loaded state with defaults
+   * CRITICAL FIX: Merge missing default tabs into stored state to ensure all tabs are present
    */
   private validateAndMergeState(stored: unknown): TabManagerState {
     if (!stored || typeof stored !== 'object') {
@@ -329,10 +318,54 @@ export class TabConfiguration {
     const storedObj = stored as Record<string, unknown>;
 
     // Merge with defaults to ensure all required fields exist
+    const storedTabs = storedObj.tabs && Array.isArray(storedObj.tabs) ? storedObj.tabs as TabManagerState['tabs'] : null;
+    
+    // CRITICAL FIX: Merge stored tabs with default tabs to ensure all default tabs are present
+    // This fixes the issue where stored state might be missing Rooms, People, Timelines, Settings
+    let mergedTabs: TabConfig[] = DEFAULT_STATE.tabs;
+    if (storedTabs && storedTabs.length > 0) {
+      // Start with default tabs
+      mergedTabs = [...DEFAULT_STATE.tabs];
+      
+      // Create a map of stored tabs by ID for quick lookup
+      const storedTabsMap = new Map<string, TabConfig>();
+      storedTabs.forEach(tab => {
+        if (tab && typeof tab === 'object' && 'id' in tab) {
+          storedTabsMap.set(tab.id, tab as TabConfig);
+        }
+      });
+      
+      // Merge: update default tabs with stored values, preserve stored tabs not in defaults
+      mergedTabs = mergedTabs.map(defaultTab => {
+        const storedTab = storedTabsMap.get(defaultTab.id);
+        if (storedTab) {
+          // Merge stored tab with default (stored values take precedence, but keep default structure)
+          return {
+            ...defaultTab,
+            ...storedTab,
+            id: defaultTab.id, // Ensure ID matches
+            tabContentId: storedTab.tabContentId || defaultTab.tabContentId,
+            label: storedTab.label || defaultTab.label
+          };
+        }
+        return defaultTab;
+      });
+      
+      // Add any stored tabs that aren't in defaults (e.g., SDK apps)
+      storedTabs.forEach(storedTab => {
+        if (storedTab && typeof storedTab === 'object' && 'id' in storedTab) {
+          const tabId = (storedTab as TabConfig).id;
+          if (!DEFAULT_STATE.tabs.find(t => t.id === tabId)) {
+            mergedTabs.push(storedTab as TabConfig);
+          }
+        }
+      });
+    }
+    
     const merged: TabManagerState = {
       ...DEFAULT_STATE,
       ...storedObj,
-      tabs: storedObj.tabs && Array.isArray(storedObj.tabs) ? storedObj.tabs as TabManagerState['tabs'] : DEFAULT_STATE.tabs,
+      tabs: mergedTabs,
       currentTab: (storedObj.currentTab && typeof storedObj.currentTab === 'string') ? storedObj.currentTab : DEFAULT_STATE.currentTab,
       previousTab: (storedObj.previousTab !== undefined && (storedObj.previousTab === null || typeof storedObj.previousTab === 'string')) ? storedObj.previousTab : DEFAULT_STATE.previousTab,
       visibleTabCount: (typeof storedObj.visibleTabCount === 'number') ? storedObj.visibleTabCount : DEFAULT_STATE.visibleTabCount,

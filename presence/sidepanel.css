@@ -428,11 +428,34 @@ body {
     padding: 0 4px;
 }
 
-.logo-container {
+/* Header left section - logo and community dropdown */
+.header-left {
     display: flex;
     align-items: center;
-    gap: 4px;
-    flex-grow: 1; /* Takes up space to push actions right */
+    gap: 8px;
+    flex: 1; /* Take available space, push header-actions to right */
+    min-width: 0; /* Allow shrinking if needed */
+    position: relative; /* CRITICAL: Positioning context for dropdown panel */
+}
+
+.logo-container {
+    display: flex !important;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0; /* Don't shrink, keep logo on far left */
+    visibility: visible !important;
+}
+
+.logo-container img,
+#primary-community-logo {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    width: 24px !important;
+    height: 24px !important;
+    max-width: 24px !important;
+    max-height: 24px !important;
+    position: relative !important;
 }
 
 .logo-img {
@@ -458,6 +481,7 @@ body {
     gap: 8px;
     position: relative;
     margin-left: auto;
+    flex-shrink: 0; /* Prevent shrinking */
 }
 
 .header-actions button {
@@ -476,25 +500,58 @@ body {
     color: var(--text-primary);
 }
 
-/* CRITICAL FIX: Ensure community dropdown trigger is always clickable */
+/* CRITICAL FIX: Ensure community dropdown trigger is always clickable and left-aligned */
 .community-dropdown-trigger {
   pointer-events: auto !important;
   cursor: pointer !important;
   user-select: none;
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    cursor: pointer !important;
-    font-weight: 500;
-    user-select: none;
-    pointer-events: auto !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  font-weight: 500;
+  justify-content: flex-start !important; /* Align content to left */
+  text-align: left !important; /* Force text alignment */
+  flex-shrink: 0; /* Don't shrink */
+  position: relative; /* CRITICAL: Positioning context for dropdown panel */
 }
 
 #current-community-name {
-    max-width: 100px; /* Prevent long names pushing icons */
-    overflow: hidden;
-    text-overflow: ellipsis;
+    /* Display entire name - removed max-width restriction */
     white-space: nowrap;
+    text-align: left !important; /* Align text to left */
+    flex: 0 1 auto; /* Don't grow, allow shrink */
+    margin: 0 !important;
+    padding: 0 !important;
+    display: block !important;
+    width: auto !important;
+    max-width: none !important;
+}
+
+/* CRITICAL: Force left alignment of community name container - REMOVED DUPLICATE */
+
+.primary-community-logo {
+    width: 24px !important;
+    height: 24px !important;
+    border-radius: 4px;
+    object-fit: cover;
+    flex-shrink: 0;
+    display: block !important; /* Ensure logo displays */
+    visibility: visible !important; /* Ensure logo is visible */
+    opacity: 1 !important;
+    position: relative !important;
+    max-width: 24px !important;
+    max-height: 24px !important;
+}
+
+.community-chevron {
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    font-size: 12px;
+    margin-left: 4px;
+}
+
+.community-dropdown-trigger:hover .community-chevron {
+    opacity: 1;
 }
 
 #community-options-btn {
@@ -704,7 +761,7 @@ body {
 }
 
 /* --- Community Dropdown Panel --- */
-.dropdown-panel {
+#community-dropdown-panel.dropdown-panel {
     position: absolute;
     top: calc(100% + 5px);
     left: auto;
@@ -713,12 +770,28 @@ body {
     border: 1px solid var(--border-color);
     border-radius: 6px;
     box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    z-index: 1000;
+    z-index: 10002 !important; /* CRITICAL: Above tabs (10001) to prevent being hidden behind tab background */
     padding: 10px;
     min-width: 200px;
     max-width: 280px;
     max-height: 400px;
     overflow-y: auto;
+    display: none !important; /* Default hidden */
+}
+
+#community-dropdown-panel.dropdown-panel[style*="display: block"],
+#community-dropdown-panel.dropdown-panel.show {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+}
+
+/* CRITICAL: Ensure dropdown is visible when shown */
+#community-dropdown-panel.dropdown-panel[style*="display: block"] {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
 }
 
 .dropdown-panel h4 {
@@ -760,6 +833,24 @@ body {
     padding: 8px 12px;
     cursor: pointer;
     position: relative;
+    width: 100%;
+    box-sizing: border-box;
+    flex-wrap: nowrap; /* Prevent wrapping */
+}
+
+.community-item .community-icon {
+    width: 20px;
+    height: 20px;
+    border-radius: 3px;
+    flex-shrink: 0;
+}
+
+.community-item .community-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .community-item:hover {
@@ -770,6 +861,7 @@ body {
     margin-left: auto;
     display: flex;
     align-items: center;
+    flex-shrink: 0;
 }
 
 .community-checkbox {
@@ -780,17 +872,25 @@ body {
 }
 
 .community-menu-btn {
-    background: none;
-    border: none;
-    cursor: pointer;
-    padding: 4px 8px;
-    font-size: 18px;
-    color: #666;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 24px;
-    position: relative; /* ROOT CAUSE FIX: Enable positioning for menu */
+    background: none !important;
+    border: none !important;
+    cursor: pointer !important;
+    padding: 4px 8px !important;
+    font-size: 18px !important;
+    color: #666 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    min-width: 24px !important;
+    width: 24px !important;
+    height: 24px !important;
+    position: relative !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    margin-left: 8px !important; /* Space after checkbox */
+    margin-right: 0 !important; /* Push to far right edge */
+    flex-shrink: 0 !important;
+    z-index: 10 !important;
 }
 
 /* ROOT CAUSE FIX: Style action dots to match message action dots - vertical ellipsis (⋮) */
@@ -798,17 +898,39 @@ body {
     opacity: 1 !important;
     display: inline-block !important;
     visibility: visible !important;
-    font-size: 16px !important;
-    color: var(--text-secondary) !important;
+    font-size: 20px !important;
+    color: var(--text-secondary, #666) !important;
     background: none !important;
-    line-height: 1;
+    line-height: 1 !important;
     pointer-events: auto !important;
     cursor: pointer !important;
+    font-weight: bold !important;
+    user-select: none !important;
+    width: auto !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    transform: none !important; /* Ensure vertical ellipses (⋮) - no rotation */
+    writing-mode: horizontal-tb !important; /* Keep vertical orientation */
 }
 
 .community-menu-btn:hover {
     background-color: var(--background-hover, #f0f0f0);
     border-radius: 4px;
+}
+
+.community-menu-dropdown {
+    position: absolute;
+    right: 0;
+    top: 100%;
+    background: var(--background-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    z-index: 1000;
+    min-width: 150px;
+    margin-top: 4px;
+    display: none;
 }
 
 .community-menu {
@@ -822,6 +944,34 @@ body {
     z-index: 1000;
     min-width: 150px;
     margin-top: 4px;
+}
+
+.community-menu-item {
+    width: 100%;
+    padding: 8px 12px;
+    background: none;
+    border: none;
+    text-align: left;
+    cursor: pointer;
+    font-size: 14px;
+    color: var(--text-primary);
+    display: block;
+}
+
+.community-menu-item:hover {
+    background-color: var(--background-hover, #f5f5f5);
+}
+
+.community-menu-item.set-primary-btn {
+    font-weight: 500;
+}
+
+.community-menu-item.leave-community-btn {
+    color: #dc3545;
+}
+
+.community-menu-item.leave-community-btn:hover {
+    background-color: #fee;
 }
 
 .community-menu .menu-item {
@@ -903,35 +1053,39 @@ body {
 /* --- Main Navigation --- */
 /* X PATTERN: Tab navigation matching X's design */
 .sidebar-nav-main {
-    display: flex;
+    display: flex !important; /* CRITICAL: Force display - tabs must NEVER be hidden */
     flex-wrap: nowrap;
     align-items: stretch; /* Full height tabs */
-    border-bottom: 1px solid #2F3336; /* X's border color */
+    /* ROOT CAUSE FIX: Remove border-bottom - it interferes with tab selector line positioning */
+    /* The tab selector lines (4px border-bottom) will serve as the visual separator */
+    border-bottom: none; /* Removed to prevent misalignment with selector lines */
     background-color: #000000; /* X's black background */
     padding: 0; /* Remove padding for full-width */
     overflow-x: auto;
     overflow-y: hidden;
     -webkit-overflow-scrolling: touch;
-    scrollbar-width: thin;
-    scrollbar-color: #2F3336 transparent;
+    /* UX IMPROVEMENT: Hide scrollbar - using navigation buttons instead */
+    scrollbar-width: none; /* Firefox - hide scrollbar */
+    -ms-overflow-style: none; /* IE/Edge - hide scrollbar */
+    position: relative; /* Create stacking context */
+    z-index: 10001 !important; /* CRITICAL: Always above loading overlay (10000) - tabs must NEVER be hidden */
+    visibility: visible !important; /* CRITICAL: Force visibility - tabs must NEVER be hidden */
+    opacity: 1 !important; /* CRITICAL: Force opacity - tabs must NEVER be hidden */
+    height: auto !important; /* CRITICAL: Force height - tabs must NEVER be hidden */
 }
 
+/* UX IMPROVEMENT: Hide scrollbar in WebKit browsers */
 .sidebar-nav-main::-webkit-scrollbar {
-    height: 4px;
+    display: none; /* Hide scrollbar but keep scrolling functionality */
 }
 
-.sidebar-nav-main::-webkit-scrollbar-track {
-    background: transparent;
-}
-
-.sidebar-nav-main::-webkit-scrollbar-thumb {
-    background: #2F3336; /* X's border color */
-    border-radius: 2px;
-}
+/* Scrollbar styles removed - using navigation buttons instead */
 
 .main-nav-tab {
     flex: 1; /* Equal width tabs */
     padding: 16px; /* X's spacing */
+    padding-top: 16px !important; /* REFACTOR: Ensure consistent top padding */
+    padding-bottom: 16px !important; /* REFACTOR: Ensure consistent bottom padding */
     border: none;
     background: none;
     cursor: pointer;
@@ -945,6 +1099,12 @@ body {
     white-space: nowrap;
     min-width: fit-content;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    /* REFACTOR: Ensure consistent height calculation */
+    box-sizing: border-box !important;
+    min-height: calc(16px + 21px + 16px + 4px); /* top padding + line-height + bottom padding + border */
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .main-nav-tab:hover {
@@ -955,7 +1115,32 @@ body {
 .main-nav-tab.active {
     color: #1D9BF0; /* X's neon blue */
     font-weight: 700; /* Bold for active */
-    border-bottom-color: #1D9BF0; /* X's neon blue underline */
+    /* ROOT CAUSE FIX: Explicitly set complete border-bottom property for consistent selector line */
+    border-bottom: 4px solid #1D9BF0 !important; /* X's neon blue underline - explicit width, style, and color */
+    /* REFACTOR: Set explicit line-height to match computed value when bold */
+    /* When font-weight changes to 700, computed line-height becomes 21px (not "normal") */
+    /* This ensures consistent text positioning across all active tabs */
+    line-height: 21px !important; /* Match computed line-height for bold text */
+    /* REFACTOR: Ensure consistent padding for all active tabs */
+    padding-top: 16px !important;
+    padding-bottom: 16px !important;
+    /* REFACTOR: Ensure selector line is positioned at container bottom */
+    /* Remove any margin that might push selector line up */
+    margin-bottom: 0 !important;
+    margin-top: 0 !important;
+    /* REFACTOR: Ensure box-sizing includes border in height calculation */
+    box-sizing: border-box !important;
+    /* REFACTOR: Ensure consistent height for all active tabs */
+    min-height: calc(16px + 21px + 16px + 4px) !important; /* top padding + line-height + bottom padding + border */
+    height: auto !important; /* Allow content to determine height, but min-height ensures consistency */
+}
+
+/* ROOT CAUSE FIX: Ensure .tab-label has consistent positioning across all tabs */
+.main-nav-tab .tab-label {
+    display: inline-block; /* Prevent baseline shift when font-weight changes */
+    vertical-align: baseline; /* Align to baseline for consistent positioning */
+    /* ROOT CAUSE FIX: Inherit line-height from parent, but when parent is active (21px), use that */
+    line-height: inherit; /* Inherit from parent (.main-nav-tab.active has 21px) */
 }
 
 /* Light mode support */
@@ -1067,6 +1252,115 @@ body {
     display: flex !important; /* ARCHITECTURE FIX: Force show active main tab */
     padding: 0 !important; /* UI UPGRADE: Remove padding for top alignment */
     margin: 0 !important;
+}
+
+/* ROOT CAUSE FIX: Add padding to manage tab content */
+/* Override zero padding for manage tab to prevent content touching container sides */
+#manage-tab.main-tab-content.active {
+    padding: 16px !important; /* Add padding to manage tab content */
+}
+
+/* FIX: Add spacing for Settings tab to match other tabs */
+#settings-tab.active {
+    /* Removed padding-top override - using consistent padding-bottom instead */
+}
+
+/* ROOT CAUSE FIX: Settings tab inherits from .main-nav-tab.active - no override needed */
+/* The base .main-nav-tab.active rule now explicitly sets border-bottom, so Settings tab will inherit correctly */
+
+/* ===== TAB NAVIGATION VARIANTS ===== */
+/* REFACTOR: Consolidated from tab-manager.css for better maintainability */
+
+/* SDK App Tab Styling */
+.main-nav-tab.sdk-app-tab {
+    position: relative;
+}
+
+.main-nav-tab.sdk-app-tab::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, #71767A, transparent);
+}
+
+.main-nav-tab.developer-mode-tab::after {
+    background: linear-gradient(90deg, transparent, #FFD700, transparent);
+}
+
+/* Manage Button */
+/* REFACTOR: Ensure manage-tab is always at far right and permanent */
+.main-nav-tab.manage-button {
+    margin-left: auto;
+    flex: 0 0 auto;
+    min-width: fit-content;
+    /* REFACTOR: Ensure consistent height with other tabs */
+    padding-top: 16px !important;
+    padding-bottom: 16px !important;
+    box-sizing: border-box !important;
+    min-height: calc(16px + 21px + 16px + 4px) !important; /* Match other tabs */
+    /* Ensure selector line displays when active */
+    position: relative;
+}
+
+/* ROOT CAUSE FIX: Manage tab inherits from .main-nav-tab.active - no override needed */
+/* The base .main-nav-tab.active rule now explicitly sets border-bottom, so Manage tab will inherit correctly */
+
+/* UX IMPROVEMENT: Tab Navigation Buttons (< and >) */
+.tab-nav-button {
+    display: none; /* Hidden by default, shown on hover when needed */
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 32px;
+    background: rgba(0, 0, 0, 0.7);
+    border: none;
+    color: #FFFFFF;
+    font-size: 18px;
+    font-weight: 700;
+    cursor: pointer;
+    z-index: 10002;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s ease, opacity 0.2s ease;
+    opacity: 0.8;
+}
+
+.tab-nav-button:hover {
+    background: rgba(0, 0, 0, 0.9);
+    opacity: 1;
+}
+
+.tab-nav-button:active {
+    background: rgba(0, 0, 0, 1);
+}
+
+.tab-nav-left {
+    left: 0;
+    border-radius: 0 4px 4px 0;
+}
+
+.tab-nav-right {
+    right: 0;
+    border-radius: 4px 0 0 4px;
+}
+
+/* Show navigation buttons on container hover */
+.sidebar-nav-main:hover .tab-nav-button {
+    display: flex;
+}
+
+/* Light mode support for navigation buttons */
+[data-theme="light"] .tab-nav-button {
+    background: rgba(255, 255, 255, 0.9);
+    color: #212529;
+    border: 1px solid var(--border-color, #dee2e6);
+}
+
+[data-theme="light"] .tab-nav-button:hover {
+    background: rgba(255, 255, 255, 1);
 }
 
 /* ARCHITECTURE FIX: Explicitly enforce tab visibility rules */
@@ -1975,13 +2269,21 @@ html[data-theme="dark"] .focus-message-input-container {
 }
 
 /* Avatar container - keep dynamic background-color inline but move other styles */
+/* CRITICAL FIX: Removed border to allow inline styles to control border (regression fix) */
 .avatar-container img,
-.avatar-container .avatar-img {
+.avatar-container .avatar-img,
+.avatar-image {
   width: 32px !important;
   height: 32px !important;
   border-radius: 50% !important;
   object-fit: cover !important;
-  border: 2px solid !important;
+  border: none !important; /* No border - allow inline styles to control */
+}
+
+/* CRITICAL FIX: Ensure avatar aura glow effect is not overridden (regression fix) */
+/* ROOT CAUSE FIX: Changed from inherit to unset - inherit was inheriting box-shadow: none from parent elements */
+.avatar-aura {
+  box-shadow: unset !important; /* Allow inline box-shadow to work - unset removes inherited values */
 }
 
 /* Avatar fallback - keep dynamic background-color inline */
@@ -3414,8 +3716,8 @@ div.message.message-reply.visible div.message-content-wrapper div.message-header
   flex-direction: column !important; /* CRITICAL: Stack date row and actions row vertically */
   align-items: flex-start !important;
   justify-content: flex-start !important;
-  margin-top: 4px !important; /* Reduced spacing */
-  padding-top: 4px !important; /* Reduced padding */
+  margin-top: 1px !important; /* ROOT CAUSE FIX: Minimal spacing to prevent excessive white space */
+  padding-top: 1px !important; /* ROOT CAUSE FIX: Minimal padding to prevent excessive white space */
   border-top: none !important;
   font-size: 11px !important;
   color: #666 !important;
@@ -4538,11 +4840,151 @@ body.dark #visibility-access-modal #go-visible-btn,
   color: #ffffff;
 }
 
+/* Go Visible modal cancel button - ensure dark color for light theme */
+#visibility-access-modal #cancel-visibility-btn {
+  color: #212529; /* Dark color for light theme */
+}
+
 body.dark #visibility-access-modal #cancel-visibility-btn,
 [data-theme="dark"] #visibility-access-modal #cancel-visibility-btn {
   background: var(--background-tertiary, #2d2d2d);
   color: var(--text-primary, #ffffff);
   border: 1px solid var(--border-color, #333);
+}
+
+/* --- Leave Community Modal (X-style) --- */
+.leave-community-modal {
+  position: fixed;
+  z-index: 10000;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  padding-top: 80px;
+  padding-left: 0;
+}
+
+.leave-community-modal-content {
+  position: relative;
+  background-color: var(--background-primary, #ffffff);
+  margin: 0;
+  padding: 20px;
+  border: 1px solid var(--border-color, #ccc);
+  width: 600px;
+  max-width: 600px;
+  border-radius: 16px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  margin-left: 0;
+  margin-top: 0;
+}
+
+.leave-community-modal .modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-color, #e0e0e0);
+}
+
+.leave-community-modal .modal-header h3 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary, #000000);
+}
+
+.leave-community-modal .modal-body {
+  color: var(--text-primary, #000000);
+}
+
+.leave-community-modal .modal-body p {
+  color: var(--text-secondary, #666666);
+  line-height: 1.5;
+}
+
+.leave-community-modal #confirm-leave-community-btn {
+  background: #dc3545;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9em;
+  font-weight: 600;
+  transition: background-color 0.2s;
+}
+
+.leave-community-modal #confirm-leave-community-btn:hover {
+  background: #c82333;
+}
+
+.leave-community-modal #cancel-leave-community-btn {
+  background: var(--background-secondary, #f5f5f5);
+  color: var(--text-primary, #333);
+  border: 1px solid var(--border-color, #ccc);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9em;
+  transition: background-color 0.2s;
+}
+
+.leave-community-modal #cancel-leave-community-btn:hover {
+  background: var(--background-hover, #e9ecef);
+}
+
+/* Dark theme for Leave Community Modal */
+body.dark .leave-community-modal-content,
+[data-theme="dark"] .leave-community-modal-content {
+  background: var(--background-secondary, #1e1e1e);
+  color: var(--text-primary, #ffffff);
+  border: 1px solid var(--border-color, #333);
+}
+
+body.dark .leave-community-modal .modal-header,
+[data-theme="dark"] .leave-community-modal .modal-header {
+  border-bottom: 1px solid var(--border-color, #333);
+}
+
+body.dark .leave-community-modal .modal-header h3,
+[data-theme="dark"] .leave-community-modal .modal-header h3 {
+  color: var(--text-primary, #ffffff);
+}
+
+body.dark .leave-community-modal .modal-body,
+[data-theme="dark"] .leave-community-modal .modal-body {
+  color: var(--text-primary, #ffffff);
+}
+
+body.dark .leave-community-modal .modal-body p,
+[data-theme="dark"] .leave-community-modal .modal-body p {
+  color: var(--text-secondary, #cccccc);
+}
+
+body.dark .leave-community-modal #confirm-leave-community-btn,
+[data-theme="dark"] .leave-community-modal #confirm-leave-community-btn {
+  background: #dc3545;
+  color: #ffffff;
+}
+
+body.dark .leave-community-modal #confirm-leave-community-btn:hover,
+[data-theme="dark"] .leave-community-modal #confirm-leave-community-btn:hover {
+  background: #c82333;
+}
+
+body.dark .leave-community-modal #cancel-leave-community-btn,
+[data-theme="dark"] .leave-community-modal #cancel-leave-community-btn {
+  background: var(--background-tertiary, #2d2d2d);
+  color: var(--text-primary, #ffffff);
+  border: 1px solid var(--border-color, #333);
+}
+
+body.dark .leave-community-modal #cancel-leave-community-btn:hover,
+[data-theme="dark"] .leave-community-modal #cancel-leave-community-btn:hover {
+  background: var(--background-hover, #3d3d3d);
 }
 
 .modal {
@@ -4771,6 +5213,8 @@ body.dark #visibility-access-modal #cancel-visibility-btn,
   opacity: 0;
   transition: opacity 0.3s ease;
   pointer-events: none;
+  /* CRITICAL FIX: Exclude tabs area from overlay coverage */
+  /* Tabs must remain visible - they are at z-index 10001 */
 }
 
 .message-loading-overlay.visible {

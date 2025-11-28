@@ -30,7 +30,18 @@ export declare class ReplyLoader {
     /**
      * Convert Supabase reply data to API format
      */
-    static formatReply(replyData: any, parentMessage: Message, pageId: string, communityId: string): Promise<FormattedReply>;
+    static formatReply(replyData: {
+        id: string;
+        user_id?: string;
+        userId?: string;
+        author?: User;
+        body?: string;
+        content?: string;
+        created_at?: string;
+        createdAt?: string;
+        parent_id?: string;
+        [key: string]: unknown;
+    }, parentMessage: Message, pageId: string, communityId: string): Promise<FormattedReply>;
 }
 export default ReplyLoader;
 //# sourceMappingURL=ReplyLoader.d.ts.map

@@ -88,8 +88,14 @@ exports.getMessages = async (req, res) => {
       includeTopReply: shouldIncludeTopReply
     });
 
+    // Public Square community UUID - default community for all users
+    const PUBLIC_SQUARE_UUID = 'abe5ec85-4ba6-456f-adaf-03d7d51cecf4';
+    
     // Build query with conditional WHERE clauses
-    const communityId = req.query.communityId || 'comm-001';
+    const communityId = req.query.communityId || PUBLIC_SQUARE_UUID;
+    if (!communityId) {
+      return res.status(400).json({ error: 'communityId is required' });
+    }
     const messageStatus = status || 'published';
     
     let statusFilter;
@@ -460,7 +466,7 @@ exports.createMessage = async (req, res) => {
       pageId,
       parentId,
       quoteId,
-      communityId = 'comm-001',
+      communityId = 'abe5ec85-4ba6-456f-adaf-03d7d51cecf4', // Public Square UUID
       messageKind = 'TEXT',
       attachments = [],
       emojiMetadata = null,
@@ -473,29 +479,26 @@ exports.createMessage = async (req, res) => {
       return res.status(400).json({ error: 'content and pageId are required' });
     }
 
-    // Get user email from header (frontend sends Google ID, we need to look up by email)
-    const userEmail = req.headers['x-user-email'] || req.body.userEmail;
-    const googleId = req.body.userId || req.headers['x-user-id']; // For debugging
+    // Get user UUID from header - UUID ONLY, no email lookups
+    const userId = req.headers['x-user-id'];
     
-    console.log('📝 CREATE_MESSAGE_DEBUG:', { 
-      userEmail, 
-      googleId, 
-      headers: Object.keys(req.headers).filter(k => k.toLowerCase().includes('user')),
-      bodyUserId: req.body.userId 
-    });
-    
-    if (!userEmail) {
+    if (!userId) {
       return res.status(401).json({ 
-        error: 'User email required (X-User-Email header)',
-        received: { 
-          emailHeader: req.headers['x-user-email'],
-          emailBody: req.body.userEmail,
-          googleId 
-        }
+        error: 'User UUID required (X-User-Id header)',
+        details: 'Frontend must send AppUser UUID in x-user-id header'
       });
     }
 
-    // Look up AppUser by email to get UUID
+    // Validate UUID format
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(userId)) {
+      return res.status(400).json({ 
+        error: 'Invalid user ID format',
+        details: 'x-user-id must be a valid UUID'
+      });
+    }
+
+    // Look up AppUser by UUID
     const userResult = await prisma.$queryRaw`
       SELECT 
         id,
@@ -504,40 +507,29 @@ exports.createMessage = async (req, res) => {
         "avatarUrl",
         "auraColor"
       FROM "AppUser"
-      WHERE email = ${userEmail}
+      WHERE id = ${userId}::uuid
       LIMIT 1
     `;
 
-    console.log('📝 CREATE_MESSAGE_USER_LOOKUP:', { 
-      userEmail, 
-      found: userResult?.length > 0,
-      userId: userResult?.[0]?.id,
-      userResult 
-    });
-
     if (!userResult || userResult.length === 0) {
       return res.status(404).json({ 
-        error: 'User not found. Please ensure your account is set up.',
-        details: `No AppUser found with email: ${userEmail}`
+        error: 'User not found',
+        details: `No AppUser found with UUID: ${userId}`
       });
     }
 
     const appUser = userResult[0];
-    const userId = appUser.id; // This is the UUID
-
-    // Validate that userId is actually a UUID (not a Google ID)
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (!userId || typeof userId !== 'string' || !uuidRegex.test(userId)) {
-      console.error('❌ CREATE_MESSAGE: Invalid userId format:', { userId, type: typeof userId, userEmail, googleId });
-      return res.status(500).json({ 
-        error: 'Invalid user ID format. User lookup may have failed.',
-        details: `Expected UUID, got: ${typeof userId} "${userId}"`,
-        userEmail,
-        googleId
+    // userId is already set from req.headers['x-user-id'] above
+    // Validate that userId matches the found user
+    if (userId !== appUser.id) {
+      console.error('❌ CREATE_MESSAGE: User ID mismatch:', { headerUserId: userId, dbUserId: appUser.id });
+      return res.status(403).json({ 
+        error: 'User ID mismatch',
+        details: 'Header user ID does not match database user'
       });
     }
 
-    console.log('📝 CREATE_MESSAGE:', { content, pageId, parentId, userId, userEmail, userIdType: typeof userId });
+    console.log('📝 CREATE_MESSAGE:', { content, pageId, parentId, userId, userIdType: typeof userId });
 
     // Insert message
     // Handle nullable UUIDs properly - use conditional SQL fragments

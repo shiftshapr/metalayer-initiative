@@ -4,6 +4,7 @@
   <title>Presence</title>
   <meta charset="utf-8">
   <link rel="stylesheet" href="sidepanel.css">
+  <link rel="stylesheet" href="tab-manager.css">
   
   <!-- ===== CORE SYSTEM LOADING ===== -->
   <!-- Load Configuration FIRST (sets window.SUPABASE_URL, etc.) -->
@@ -52,10 +53,8 @@
   <script type="module" src="SupabaseRealtimeClient.js"></script>
   <!-- Load Unified Authentication System -->
   <script type="module" src="unified-auth.js"></script>
-  <!-- Load Visibility Manager (TypeScript) (MUST load before sidepanel.js) -->
-  <script type="module" src="features/VisibilityManager.js"></script>
-  <!-- Legacy: Keep old VisibilityManager for now (will remove after testing) -->
-  <!-- <script src="features/VisibilityManager.js"></script> -->
+  <!-- Visibility Manager is now loaded via buildGraph.js in Sidepanel.js -->
+  <!-- Legacy VisibilityManager.js removed - using refactored visibility module -->
   <!-- Load Sidepanel Core -->
   <script type="module" src="core/SidepanelCore.js"></script>
   
@@ -86,8 +85,9 @@
   <script type="module" src="utils/XIconLibrary.js"></script>
   <!-- Load UnifiedMessageModal BEFORE CanopiModule -->
   <script type="module" src="components/UnifiedMessageModal.js"></script>
-  <!-- Load CanopiModule (ES6 Module) - CRITICAL: Must export to window immediately -->
-  <script type="module" src="features/CanopiModule.js"></script>
+  <!-- Load MessagesModule (ES6 Module) - CRITICAL: Must export to window immediately -->
+  <!-- REFACTOR: Switched from CanopiModule.js to MessagesModule.js -->
+  <script type="module" src="features/MessagesModule.js"></script>
   <!-- Load Cursor Visibility Module -->
   <script type="module" src="features/CursorVisibilityModule.js"></script>
   <!-- Load Cursor Visibility UI Handler (TypeScript build output) -->
@@ -117,6 +117,9 @@
   <script type="module" src="features/CommunitiesModule.js"></script>
   <!-- Load NavigationManager (TypeScript build output) -->
   <script type="module" src="features/NavigationManager.js"></script>
+  <!-- Load TabManager (TypeScript build output) -->
+  <script type="module" src="features/TabManager/TabManager.js"></script>
+  <script type="module" src="features/TabManager/initializeTabManager.js"></script>
   <!-- Load NotificationManager as ES6 module (has imports) -->
   <script type="module" src="features/NotificationManager.js"></script>
   <script type="module" src="features/PeopleModule.js"></script>
@@ -142,13 +145,13 @@
   <div class="sidebar-container">
     <!-- Header with logo and actions -->
     <header class="sidebar-header-main">
-      <div class="logo-container">
-        <span class="logo-text">Canopi<span class="logo-beta">BETA</span></span>
-      </div>
-      <div class="header-actions">
+      <div class="header-left">
+        <div class="logo-container">
+          <img id="primary-community-logo" src="" alt="Community" class="primary-community-logo" style="display: none;">
+        </div>
         <div class="community-dropdown-trigger">
-          <span id="current-community-name">Main Community</span>
-          <span id="community-options-btn">▼</span>
+          <span id="current-community-name"></span>
+          <span id="community-options-btn" class="community-chevron">▼</span>
         </div>
         <div id="community-dropdown-panel" class="dropdown-panel" style="display: none;">
           <div class="dropdown-header">
@@ -156,17 +159,11 @@
             <button id="close-community-dropdown">&times;</button>
           </div>
           <ul class="community-list">
-            <li>
-              <img src="/images/community1.png" alt="Community">
-              <span>Main Community</span>
-              <span class="primary-tag">Primary</span>
-            </li>
-            <li>
-              <img src="/images/community2.png" alt="Community">
-              <span>Other Community</span>
-            </li>
+            <!-- Communities loaded dynamically from database via CommunityHelpers.updateCommunityDropdown() -->
           </ul>
         </div>
+      </div>
+      <div class="header-actions">
         <!-- Auth buttons removed - auth will be triggered on-demand -->
         <div id="user-info" style="display: none; margin-left: 10px; align-items: center; gap: 5px; position: relative;">
           <div id="notification-icon" class="notification-icon" style="position: relative; cursor: pointer; padding: 4px;">
@@ -175,16 +172,15 @@
           </div>
           <div id="user-avatar-container" style="position: relative; width: 24px; height: 24px; cursor: pointer;"></div>
           <div id="user-menu" class="user-menu" style="display: none; position: absolute; top: 100%; right: 0; z-index: 1000; min-width: 200px;">
-            <div style="padding: 8px 12px; border-bottom: 1px solid #eee; font-size: 0.9em; color: #666;">Signed in as</div>
-            <div id="user-menu-name" style="padding: 4px 12px; font-weight: bold; font-size: 0.9em;"></div>
+            <div style="padding: 8px 12px; border-bottom: 1px solid #eee; font-size: 0.9em; color: #666;">Signed in as <span id="user-menu-name" style="font-weight: bold;"></span></div>
             <div style="padding: 4px 0; border-top: 1px solid #eee;">
               <button id="aura-btn" style="width: 100%; padding: 8px 12px; border: none; background: none; text-align: left; cursor: pointer; font-size: 0.9em; display: flex; align-items: center; gap: 8px;">
                 <span>🎨</span>
                 <span>Change Aura Color</span>
               </button>
               <button id="theme-toggle-btn" style="width: 100%; padding: 8px 12px; border: none; background: none; text-align: left; cursor: pointer; font-size: 0.9em; display: flex; align-items: center; gap: 8px;">
-                <span id="theme-icon">🌙</span>
-                <span id="theme-text">Dark mode</span>
+                <span id="theme-icon"></span>
+                <span id="theme-text"></span>
               </button>
               <button id="visibility-settings-btn" style="width: 100%; padding: 8px 12px; border: none; background: none; text-align: left; cursor: pointer; font-size: 0.9em; display: flex; align-items: center; gap: 8px;">
                 <span>Visibility Settings</span>
@@ -198,43 +194,9 @@
     
     <!-- Main Navigation Tabs -->
     <!-- PURPLE HAT: Accessibility - Add tablist role and tab roles -->
+    <!-- Tabs are dynamically rendered by TabManager -->
     <div class="sidebar-nav-main" role="tablist" aria-label="Main navigation">
-      <button class="main-nav-tab active" 
-              data-tab="discuss-tab"
-              role="tab"
-              aria-selected="true"
-              aria-controls="discuss-tab"
-              aria-label="Discuss tab, active">Discuss</button>
-      <button class="main-nav-tab" 
-              data-tab="visibility-tab"
-              role="tab"
-              aria-selected="false"
-              aria-controls="visibility-tab"
-              aria-label="Visibility tab">Visibility</button>
-      <button class="main-nav-tab" 
-              data-tab="rooms-tab"
-              role="tab"
-              aria-selected="false"
-              aria-controls="rooms-tab"
-              aria-label="Rooms tab">Rooms</button>
-      <button class="main-nav-tab" 
-              data-tab="people-tab"
-              role="tab"
-              aria-selected="false"
-              aria-controls="people-tab"
-              aria-label="People tab">People</button>
-      <button class="main-nav-tab" 
-              data-tab="agent-tab"
-              role="tab"
-              aria-selected="false"
-              aria-controls="agent-tab"
-              aria-label="Agent tab">Agent</button>
-      <button class="main-nav-tab" 
-              data-tab="settings-tab"
-              role="tab"
-              aria-selected="false"
-              aria-controls="settings-tab"
-              aria-label="Settings tab">Settings</button>
+      <!-- TabManager will render tabs here -->
     </div>
     
     <!-- Main Tab Contents -->
@@ -320,41 +282,28 @@
         </div>
       </div>
       
+      <!-- Manage Tab Content -->
+      <div id="manage-tab" class="main-tab-content">
+        <!-- Tab Manager content will be rendered here by TabManagerModal -->
+      </div>
+      
       <!-- Settings Tab Content -->
       <div id="settings-tab" class="main-tab-content">
         
-        <!-- Live Cursor Settings - ROOT CAUSE FIX: Changed title and removed large text, added hover tooltip -->
+        <!-- Live Cursor Settings -->
         <div class="settings-section">
-          <h4 title="When live, your cursor will be visible to subscribers. Click 'Park' to show support at a specific location.">Live Cursor</h4>
+          <h4 title="When live, your cursor will be visible to subscribers.">Live Cursor</h4>
           
-          <!-- Live Status Indicator - ROOT CAUSE FIX: Align with COMP layout -->
-          <div class="setting-item" style="display: flex; flex-direction: column;">
-            <label style="display: block; margin-bottom: 8px;">Status</label>
-            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+          <!-- Live Status Indicator - Status and controls on same line -->
+          <div class="setting-item" style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+            <label style="margin: 0; flex-shrink: 0;">Status</label>
+            <div style="display: flex; align-items: center; gap: 12px; flex: 1; justify-content: flex-end;">
               <span id="cursor-live-indicator" data-live-indicator data-live="false" style="font-size: 0.9em; color: var(--text-secondary);">⚪ Offline</span>
               <button id="cursor-live-button" data-live-button data-live="false" 
-                      style="padding: 6px 12px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85em; margin-left: auto;">
+                      style="padding: 6px 12px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85em;">
                 Go Live
               </button>
             </div>
-          </div>
-          
-          <!-- Park Cursor Controls (only visible when live) - ROOT CAUSE FIX: Better layout -->
-          <div class="setting-item" id="cursor-park-controls" style="display: none; flex-direction: column;">
-            <label style="display: block; margin-bottom: 8px; font-size: 0.9em;">Park Cursor</label>
-            <div style="display: flex; gap: 8px; align-items: center;">
-              <button id="cursor-park-button" 
-                      style="padding: 6px 12px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85em;">
-                Park
-              </button>
-              <button id="cursor-unpark-button" 
-                      style="padding: 6px 12px; background: #757575; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85em;">
-                Unpark
-              </button>
-            </div>
-            <p style="font-size: 0.85em; color: var(--text-secondary); margin-top: 8px; margin-bottom: 0;">
-              Click "Park" to show support at a specific location.
-            </p>
           </div>
         </div>
         
@@ -386,6 +335,25 @@
               <option value="AWAY">Away</option>
               <option value="OFFLINE">Offline</option>
             </select>
+          </div>
+          
+          <!-- Trace Limit -->
+          <div class="setting-item">
+            <label for="trace-limit-select" style="display: block; margin-bottom: 8px;">Trace Limit</label>
+            <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+              <select id="trace-limit-select" style="width: 30%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.9em;">
+                <option value="0">Hide traces</option>
+                <option value="-1">Unlimited</option>
+                <option value="7">7 days</option>
+                <option value="14">14 days</option>
+                <option value="30" selected>30 days</option>
+                <option value="60">60 days</option>
+                <option value="90">90 days</option>
+                <option value="180">180 days</option>
+                <option value="365">1 year</option>
+              </select>
+              <span style="font-size: 0.85em; color: var(--text-secondary);">How long to show "last seen" traces</span>
+            </div>
           </div>
           
           <!-- Aura - ROOT CAUSE FIX: Right align fields, keep title left -->
@@ -530,7 +498,24 @@
         <p style="font-size: 0.9em;">Enable visibility to see and be seen by others in your communities.</p>
         <div style="display: flex; gap: 8px; justify-content: flex-end;">
           <button id="go-visible-btn" style="padding: 6px 12px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9em;">Go Visible</button>
-          <button id="cancel-visibility-btn" style="padding: 6px 12px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9em;">Cancel</button>
+          <button id="cancel-visibility-btn" style="padding: 6px 12px; background: #6c757d; color: var(--text-primary, #333); border: none; border-radius: 4px; cursor: pointer; font-size: 0.9em;">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Leave Community Confirmation Modal -->
+  <div id="leave-community-modal" class="modal leave-community-modal" style="display: none;">
+    <div class="modal-content leave-community-modal-content">
+      <div class="modal-header">
+        <h3>Leave Community</h3>
+        <button id="close-leave-community-modal" class="close-button">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p id="leave-community-message" style="font-size: 0.9em; margin-bottom: 16px;">Are you sure you want to leave this community? You will no longer receive updates or be able to participate.</p>
+        <div style="display: flex; gap: 8px; justify-content: flex-end;">
+          <button id="cancel-leave-community-btn" style="padding: 6px 12px; background: #6c757d; color: var(--text-primary, #333); border: none; border-radius: 4px; cursor: pointer; font-size: 0.9em;">Cancel</button>
+          <button id="confirm-leave-community-btn" style="padding: 6px 12px; background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9em;">Leave</button>
         </div>
       </div>
     </div>
@@ -570,7 +555,8 @@
   <!-- Load Preference Managers (must load before sidepanel.js initializes them) -->
   <script type="module" src="features/SettingsHeadlineManager.js"></script>
   <script type="module" src="features/DisplayNameManager.js"></script>
-  <script type="module" src="features/VisibilitySettingsManager.js"></script>
+  <!-- LEGACY: VisibilitySettingsManager.js removed - now using VisibilitySettings from buildModuleGraph -->
+  <!-- <script type="module" src="features/VisibilitySettingsManager.js"></script> -->
   <!-- Load VisibilityModalHandler (TypeScript) -->
   <script type="module" src="features/VisibilityModalHandler.js"></script>
   <script type="module" src="features/UserHoverModal.js"></script>

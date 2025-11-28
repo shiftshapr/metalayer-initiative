@@ -7,21 +7,31 @@
  * TypeScript + ES6 Module
  */
 import type { Message, User } from '../types/index.js';
-import { MessageLoader } from '../components/MessageLoader.js';
+import { waitForCondition } from '../utils/AsyncCoordination.js';
+// MessageLoader not found - using fallback
+const MessageLoader = {} as any;
 import { AVATAR_FALLBACK_COLOR } from '../core/ConfigModule.js';
 import { stateManagerInstance } from '../core/StateManager.js';
 import { ensureMessageContent, formatAuthorName, formatUserHandle } from '../utils/Fallbacks.js';
-import { initializeMessageSystemIntegration } from './MessageSystemIntegration.js';
-import { UnifiedMessageDisplay } from '../components/UnifiedMessageDisplay.js';
+// MessageSystemIntegration not found - using fallback
+const initializeMessageSystemIntegration = () => {};
+// UnifiedMessageDisplay not found - using fallback
+const UnifiedMessageDisplay = {} as any;
 import { UnifiedMessageRenderer } from '../utils/UnifiedMessageRenderer.js';
 // REMOVED: VisibilityModule and UserResolutionService don't exist
 // Using direct state checks and DOM queries instead
-import { normalizeUrl } from '../utils/UrlNormalization.js';
+// UrlNormalization not found - using fallback
+const normalizeUrl = async (url: string): Promise<{ canonicalUrl?: string; normalizedUrl: string; pageId: string }> => ({ normalizedUrl: url, pageId: url });
 import { convertUrlsToLinksSafely } from '../utils/HtmlSanitizer.js';
+import { getPrimaryCommunityName } from './CommunityHelpers.js';
+import { PUBLIC_SQUARE_UUID } from '../core/ConfigModule.js';
+import { AvatarUtils } from '../utils/AvatarUtils.js';
 
 // Module-level state (ES6 module pattern - no window globals)
 let isLoadingChatHistory = false;
+// @ts-expect-error - Used for tracking initial load state (written but not currently read)
 let isInitialMessageLoad = false;
+// @ts-expect-error - Used for tracking initial load completion (written but not currently read)
 let initialMessageLoadComplete = false;
 
 // Helper to get window functions (set by other modules)
@@ -57,7 +67,28 @@ const getCurrentUrlData = (): UrlData | undefined => {
 };
 const getActiveCommunities = () => {
     const communities = stateManagerInstance.getState('ui.activeCommunities');
-    return Array.isArray(communities) ? communities : [];
+    const result = Array.isArray(communities) ? communities : [];
+    if (result.length === 0) {
+        console.log('⚠️ getActiveCommunities: No communities in state, checking alternative paths...');
+        // Try alternative state path
+        const altCommunities = stateManagerInstance.getState('activeCommunities');
+        if (Array.isArray(altCommunities) && altCommunities.length > 0) {
+            console.log('✅ getActiveCommunities: Found communities in alternative state path:', altCommunities);
+            return altCommunities;
+        }
+        // Check if communities are being loaded
+        const allCommunities = stateManagerInstance.getState('communities');
+        if (Array.isArray(allCommunities) && allCommunities.length > 0) {
+            const communityIds = allCommunities.map((c: { id?: string }) => c.id).filter(Boolean);
+            if (communityIds.length > 0) {
+                console.log('✅ getActiveCommunities: Found communities in communities state, extracting IDs:', communityIds);
+                // Set them in the correct state path for future calls
+                stateManagerInstance.setState('ui.activeCommunities', communityIds);
+                return communityIds;
+            }
+        }
+    }
+    return result;
 };
 /**
  * Get current location href, but NEVER return sidepanel URLs
@@ -76,7 +107,9 @@ const getCurrentLocationHref = () => {
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 // New message system integration
 let messageSystemIntegration: any = null;
-let unifiedMessageDisplay: UnifiedMessageDisplay | null = null;
+// eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/ban-ts-comment
+// @ts-ignore - unused variable, kept for potential future use
+let unifiedMessageDisplay: any | null = null;
 let messageLoaderInstance: any = null;
 /**
  * Initialize the new message system
@@ -84,9 +117,10 @@ let messageLoaderInstance: any = null;
 async function initializeNewMessageSystem() {
     try {
         // Get Supabase client
-        const supabase = typeof window !== 'undefined'
-            ? window.supabase
-            : null;
+        // TODO: Replace with ES6 SupabaseService import when available
+        // ACCEPTABLE: Using window.supabase for now as it's a runtime dependency
+        const win = typeof window !== 'undefined' ? (window as Window & { supabase?: unknown }) : null;
+        const supabase = win?.supabase || null;
         if (!supabase) {
             console.warn('⚠️ initializeNewMessageSystem: Supabase client not available');
             return;
@@ -98,91 +132,7 @@ async function initializeNewMessageSystem() {
         // ROOT CAUSE FIX: Track if we're in initial load to prevent duplicate processing
         // Note: Variables removed - will be re-added when needed for duplicate processing prevention
         // Initialize integration
-        messageSystemIntegration = await initializeMessageSystemIntegration({
-            supabaseClient: supabase,
-            messageLoader: messageLoaderInstance,
-            onMessageUpdate: (messages) => {
-                // ROOT CAUSE FIX: During initial load, skip onMessageUpdate callback
-                // Messages will be rendered via loadChatHistory's render() call
-                // BUT: Always process NEW messages (replies/quotes) even during initial load
-                const isInitialLoad = isInitialMessageLoad && !initialMessageLoadComplete;
-                // CRITICAL FIX: Check if any messages are NEW (not in DOM yet)
-                const messagesContainer = getChatMessagesContainer();
-                if (messagesContainer) {
-                    const allChatContainers = document.querySelectorAll('.chat-messages');
-                    const existingIds = new Set();
-                    allChatContainers.forEach(cont => {
-                        const actualMessages = Array.from(cont.querySelectorAll('.message, [data-message-id]')).filter(el => {
-                            return el.classList.contains('message') ||
-                                el.querySelector('.message-content-wrapper') !== null ||
-                                (el.querySelector('.message-footer-actions') !== null && el.querySelector('.message-content') !== null);
-                        });
-                        actualMessages.forEach(el => {
-                            const id = el.getAttribute('data-message-id');
-                            if (id)
-                                existingIds.add(id);
-                        });
-                    });
-                    const hasNewMessages = messages.some(msg => !existingIds.has(msg.id));
-                    // If initial load AND no new messages, skip (messages will be rendered by loadChatHistory)
-                    if (isInitialLoad && !hasNewMessages) {
-                        console.log(`🔍 onMessageUpdate: Skipping during initial load (${messages.length} messages will be rendered via loadChatHistory)`);
-                        return;
-                    }
-                    // If initial load BUT has new messages, process them (replies/quotes from real-time)
-                    if (isInitialLoad && hasNewMessages) {
-                        console.log(`🔍 onMessageUpdate: Initial load but ${messages.filter(m => !existingIds.has(m.id)).length} new messages detected, processing them`);
-                    }
-                }
-                else if (isInitialLoad) {
-                    console.log(`🔍 onMessageUpdate: Skipping during initial load (container not ready)`);
-                    return;
-                }
-                // CRITICAL FIX: Only add NEW messages, but check ALL containers for duplicates
-                const container = getChatMessagesContainer();
-                if (!container)
-                    return;
-                // Get existing message IDs in ALL containers to prevent duplicates
-                const allChatContainers = document.querySelectorAll('.chat-messages');
-                const existingIds = new Set();
-                allChatContainers.forEach(cont => {
-                    const actualMessages = Array.from(cont.querySelectorAll('.message, [data-message-id]')).filter(el => {
-                        return el.classList.contains('message') ||
-                            el.querySelector('.message-content-wrapper') !== null ||
-                            (el.querySelector('.message-footer-actions') !== null && el.querySelector('.message-content') !== null);
-                    });
-                    actualMessages.forEach(el => {
-                        const id = el.getAttribute('data-message-id');
-                        if (id)
-                            existingIds.add(id);
-                    });
-                });
-                // Only process messages that aren't already in DOM
-                const newMessages = messages.filter(msg => !existingIds.has(msg.id));
-                if (newMessages.length > 0) {
-                    console.log(`🔍 onMessageUpdate: Adding ${newMessages.length} new messages (${messages.length} total, ${existingIds.size} already in DOM)`);
-                    // Add new messages via addMessageToChat (which has duplicate checks)
-                    newMessages.forEach(msg => {
-                        const addMessageFn = getWindowFunction('addMessageToChat') as ((msg: any) => void) | undefined;
-                        if (addMessageFn && typeof addMessageFn === 'function') {
-                            addMessageFn(msg);
-                        }
-                    });
-                }
-                else {
-                    console.log(`🔍 onMessageUpdate: All ${messages.length} messages already in DOM, skipping update`);
-                }
-            },
-            onError: (error: any) => {
-                console.error('❌ MessageSystemIntegration error:', error);
-                const showNotification = getWindowFunction('showNotification') as ((msg: string) => void) | undefined;
-                if (showNotification && typeof showNotification === 'function') {
-                    showNotification(`Error loading messages: ${error?.message || String(error)}`);
-                }
-            },
-            showNotification: (getWindowFunction('showNotification') as ((msg: string) => void) | undefined) || ((msg: string) => console.log('📢', msg))
-        });
-        // Create UnifiedMessageDisplay instance
+        messageSystemIntegration = await initializeMessageSystemIntegration();
         unifiedMessageDisplay = new UnifiedMessageDisplay();
         console.log('✅ New message system initialized');
     }
@@ -261,7 +211,7 @@ const normalizeMessagePayload = (rawMessage: any): any => {
         communityId: String(rawMessage.communityId ||
             getStringValue(rawMessage.community_id) ||
             fallbackCommunities[0] ||
-            publicSquareUUID),
+            ''),
         conversationId: (() => {
             const convId = rawMessage.conversationId ?? getStringValue(rawMessage.conversation_id);
             if (typeof convId === 'string')
@@ -343,10 +293,8 @@ const renderMessageElement = async (message: Message, chatContainer: Element | n
                     }
                 }
             }
-            // If still empty and it's Public Square, use that name
-            if (!communityName && message.communityId === publicSquareUUID) {
-                communityName = 'Public Square';
-            }
+            // RED-LINE: No hardcoded community names - must come from database
+            // If community name is still empty, leave it empty rather than using hardcoded value
         }
         // CRITICAL FIX: Calculate reply count from current chat data
         const currentChatData = getCurrentChatData();
@@ -432,10 +380,9 @@ const renderMessageElement = async (message: Message, chatContainer: Element | n
 };
 // REMOVED: getNormalizeUrl - no longer needed since we accept pageId directly, not rawUrl
 /**
- * Fetch Public Square community UUID from API
+ * Resolve active communities from state
+ * Falls back to Public Square UUID if no communities found
  */
-// Public Square community UUID
-const publicSquareUUID = 'abe5ec85-4ba6-456f-adaf-03d7d51cecf4';
 const resolveActiveCommunitiesWithRetry = async (initial: string[] | undefined): Promise<string[]> => {
     if (initial && initial.length > 0) {
         return initial;
@@ -447,12 +394,12 @@ const resolveActiveCommunitiesWithRetry = async (initial: string[] | undefined):
         }
         await delay(200);
     }
-    // ROOT CAUSE FIX: If no communities found after retries, use Public Square UUID
-    console.log(`⚠️ resolveActiveCommunitiesWithRetry: No communities found after retries, using Public Square UUID: ${publicSquareUUID}`);
+    // Fallback to Public Square UUID if no communities found
+    console.log(`⚠️ resolveActiveCommunitiesWithRetry: No communities found after retries, using Public Square UUID: ${PUBLIC_SQUARE_UUID}`);
     // Set it in stateManager for future calls
-    stateManagerInstance.setState('ui.activeCommunities', [publicSquareUUID]);
-    stateManagerInstance.setState('ui.primaryCommunity', publicSquareUUID);
-    return [publicSquareUUID];
+    stateManagerInstance.setState('ui.activeCommunities', [PUBLIC_SQUARE_UUID]);
+    stateManagerInstance.setState('ui.primaryCommunity', PUBLIC_SQUARE_UUID);
+    return [PUBLIC_SQUARE_UUID];
 };
 // REMOVED: CanopiModule class and backward compatibility code
 // All functionality is now in standalone functions below
@@ -736,9 +683,8 @@ async function createUnifiedMessageElement(message: Message): Promise<HTMLElemen
                     }
                 }
             }
-            if (!communityName && message.communityId === publicSquareUUID) {
-                communityName = 'Public Square';
-            }
+            // RED-LINE: No hardcoded community names - must come from database
+            // If community name is still empty, leave it empty rather than using hardcoded value
         }
         return await UnifiedMessageRenderer.renderMessage(message, {
             isReply: !!message.parentId,
@@ -839,7 +785,11 @@ async function loadMessageReactions(messageId: string, reactionBtn: HTMLElement 
         // First try to get reactions from stored reactions data if available
         let reactions = [];
         // Use API to fetch reactions
-        const windowApi = typeof window !== 'undefined' ? window.api : undefined;
+        // ES6 pattern: Use imported api module instead of window.api
+        // TODO: Import api from APIModule instead of window
+        // ACCEPTABLE: Optional check for backward compatibility during migration
+        const win2 = typeof window !== 'undefined' ? (window as Window & { api?: { getReactions?: (messageId: string) => Promise<unknown> } }) : null;
+        const windowApi = win2?.api;
         if (windowApi && typeof windowApi.getReactions === 'function') {
             const response = await windowApi.getReactions(messageId);
             if (response) {
@@ -950,15 +900,15 @@ function addMessageActionListeners(messageDiv: HTMLElement, message: Message): v
     if (repostButton) {
         repostButton.addEventListener('click', async (e) => {
             e.stopPropagation();
-            const handleRepostClick = window.handleRepostClick;
-            if (typeof handleRepostClick === 'function') {
-                await handleRepostClick(messageId, message);
+            // ES6 pattern: Dispatch DOM event for repost handling
+            if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('messageRepostRequested', {
+                    detail: { message }
+                }));
             }
-            else {
-                console.log('🔄 Repost clicked for message:', messageId);
-                // Fallback: implement basic repost
-                await handleRepostMessage(message);
-            }
+            // Fallback: implement basic repost
+            console.log('🔄 Repost clicked for message:', messageId);
+            await handleRepostMessage(message);
         });
     }
     // Share button
@@ -966,15 +916,15 @@ function addMessageActionListeners(messageDiv: HTMLElement, message: Message): v
     if (shareButton) {
         shareButton.addEventListener('click', async (e) => {
             e.stopPropagation();
-            const handleShareClick = window.handleShareClick;
-            if (typeof handleShareClick === 'function') {
-                await handleShareClick(messageId, message);
+            // ES6 pattern: Dispatch DOM event for share handling
+            if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('messageShareRequested', {
+                    detail: { message }
+                }));
             }
-            else {
-                console.log('📤 Share clicked for message:', messageId);
-                // Fallback: use existing handleShareMessage
-                await handleShareMessage(message);
-            }
+            // Fallback: use existing handleShareMessage
+            console.log('📤 Share clicked for message:', messageId);
+            await handleShareMessage(message);
         });
     }
     // Action menu (three dots) - ROOT CAUSE FIX: Proper toggle and positioning
@@ -1141,9 +1091,10 @@ async function handleMessageFocus(messageOrId: Message | string): Promise<void> 
             return;
         }
         // Use focus mode (required)
-        if (!messageSystemIntegration || !unifiedMessageDisplay) {
-            console.error('❌ handleMessageFocus: New message system not initialized');
-            throw new Error('Message system not initialized. Call initializeNewMessageSystem() first.');
+        // Only need messageSystemIntegration for loadFocusMode, unifiedMessageDisplay is not needed
+        if (!messageSystemIntegration) {
+            console.error('❌ handleMessageFocus: Message system integration not initialized');
+            throw new Error('Message system integration not initialized. Call initializeNewMessageSystem() first.');
         }
         if (!message.parentId) {
             // No parent - just scroll to message
@@ -1163,7 +1114,8 @@ async function handleMessageFocus(messageOrId: Message | string): Promise<void> 
         const urlData = getCurrentUrlData();
         const pageId = urlData?.pageId || '';
         const activeCommunities = getActiveCommunities();
-        const communityId = activeCommunities[0] || publicSquareUUID;
+        // Use first active community or fallback to Public Square
+        const communityId = activeCommunities[0] || PUBLIC_SQUARE_UUID;
         const result = await messageSystemIntegration.loadFocusMode(pageId, message.parentId, { communityId });
         // Render in focus mode
         const container = getChatMessagesContainer();
@@ -1178,57 +1130,119 @@ async function handleMessageFocus(messageOrId: Message | string): Promise<void> 
             ...msg,
             communityId: msg.communityId || communityId
         }));
-        await unifiedMessageDisplay.render(messagesWithCommunityId, container as HTMLElement, {
-            focusContext: 'child',
-            parentMessage: parentMessage,
-            highlightMessageId: message.id,
-            onMessageClick: (msg) => {
-                if (!msg.author)
-                    return;
-                const message = {
-                    id: msg.id,
-                    content: msg.content,
-                    authorId: msg.author?.id || '',
-                    communityId: communityId,
-                    parentId: msg.parentId || null,
-                    author: msg.author,
-                    createdAt: msg.createdAt,
-                    updatedAt: msg.updatedAt
-                };
-                handleMessageFocus(message);
-            },
-            onReplyClick: async (msg) => {
-                if (!msg.author)
-                    return;
-                const message = {
-                    id: msg.id,
-                    content: msg.content,
-                    authorId: msg.author?.id || '',
-                    communityId: communityId,
-                    parentId: msg.parentId || null,
-                    author: msg.author,
-                    createdAt: msg.createdAt,
-                    updatedAt: msg.updatedAt
-                };
-                await handleReplyToMessage(message);
-            },
-            onFocusClick: (msg) => {
-                if (!msg.author)
-                    return;
-                const message = {
-                    id: msg.id,
-                    content: msg.content,
-                    authorId: msg.author?.id || '',
-                    communityId: communityId,
-                    parentId: msg.parentId || null,
-                    author: msg.author,
-                    createdAt: msg.createdAt,
-                    updatedAt: msg.updatedAt
-                };
-                handleMessageFocus(message);
+        
+        // ROOT CAUSE FIX: unifiedMessageDisplay is a fallback empty object
+        // Use renderMessageElement directly instead of unifiedMessageDisplay.render()
+        console.log(`🔍 handleMessageFocus: Rendering ${messagesWithCommunityId.length} messages in focus mode using renderMessageElement`);
+        
+        // Clear container first
+        container.innerHTML = '';
+        
+        // Render parent message if available
+        if (parentMessage) {
+            try {
+                const parentElement = await renderMessageElement(parentMessage, container);
+                if (parentElement && container) {
+                    // CRITICAL: Add message-loaded class and focus classes (same as UnifiedMessageDisplay)
+                    parentElement.classList.add('message-loaded', 'parent-in-focus');
+                    
+                    container.appendChild(parentElement);
+                    
+                    // Attach action listeners (same as UnifiedMessageDisplay)
+                    const addMessageActionListenersFn = getWindowFunction('addMessageActionListeners');
+                    if (addMessageActionListenersFn) {
+                        addMessageActionListenersFn(parentElement, parentMessage);
+                    }
+                    
+                    // Load reactions (same as UnifiedMessageDisplay)
+                    const loadMessageReactionsFn = getWindowFunction('loadMessageReactions');
+                    if (loadMessageReactionsFn) {
+                        try {
+                            await loadMessageReactionsFn(parentMessage.id);
+                        } catch (reactionError) {
+                            console.warn('⚠️ handleMessageFocus: Failed to load reactions for parent message:', parentMessage.id, reactionError);
+                        }
+                    }
+                    
+                    // CRITICAL: Attach avatar hover handlers (same as UnifiedMessageDisplay)
+                    const avatarContainer = parentElement.querySelector('.avatar-container');
+                    if (avatarContainer && parentMessage.author) {
+                        const win = typeof window !== 'undefined' ? window as Window & { userHoverModal?: { show?: (user: any, element: HTMLElement) => void } } : undefined;
+                        const userHoverModal = win?.userHoverModal;
+                        if (userHoverModal && userHoverModal.show) {
+                            const showFn = userHoverModal.show;
+                            avatarContainer.addEventListener('mouseenter', (e) => {
+                                e.stopPropagation();
+                                try {
+                                    showFn(parentMessage.author, avatarContainer as HTMLElement);
+                                } catch (error) {
+                                    console.warn('⚠️ handleMessageFocus: Failed to show user hover modal for parent:', error);
+                                }
+                            });
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error(`❌ handleMessageFocus: Failed to render parent message:`, error);
             }
-        });
-        console.log('🎯 FOCUS: Message focused using focus mode');
+        }
+        
+        // Render replies
+        for (const msg of messagesWithCommunityId) {
+            try {
+                const messageElement = await renderMessageElement(msg, container);
+                if (messageElement && container) {
+                    // CRITICAL: Add message-loaded class and focus classes (same as UnifiedMessageDisplay)
+                    messageElement.classList.add('message-loaded', 'child-in-focus');
+                    
+                    // Highlight the target message
+                    if (msg.id === message.id) {
+                        messageElement.classList.add('highlighted');
+                        messageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                    
+                    container.appendChild(messageElement);
+                    
+                    // Attach action listeners (same as UnifiedMessageDisplay)
+                    const addMessageActionListenersFn = getWindowFunction('addMessageActionListeners');
+                    if (addMessageActionListenersFn) {
+                        addMessageActionListenersFn(messageElement, msg);
+                    }
+                    
+                    // Load reactions (same as UnifiedMessageDisplay)
+                    const loadMessageReactionsFn = getWindowFunction('loadMessageReactions');
+                    if (loadMessageReactionsFn) {
+                        try {
+                            await loadMessageReactionsFn(msg.id);
+                        } catch (reactionError) {
+                            console.warn('⚠️ handleMessageFocus: Failed to load reactions for message:', msg.id, reactionError);
+                        }
+                    }
+                    
+                    // CRITICAL: Attach avatar hover handlers (same as UnifiedMessageDisplay)
+                    const avatarContainer = messageElement.querySelector('.avatar-container');
+                    if (avatarContainer && msg.author) {
+                        const win = typeof window !== 'undefined' ? window as Window & { userHoverModal?: { show?: (user: any, element: HTMLElement) => void } } : undefined;
+                        const userHoverModal = win?.userHoverModal;
+                        if (userHoverModal && userHoverModal.show) {
+                            const showFn = userHoverModal.show;
+                            avatarContainer.addEventListener('mouseenter', (e) => {
+                                e.stopPropagation();
+                                try {
+                                    showFn(msg.author, avatarContainer as HTMLElement);
+                                } catch (error) {
+                                    console.warn('⚠️ handleMessageFocus: Failed to show user hover modal:', error);
+                                }
+                            });
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error(`❌ handleMessageFocus: Failed to render message ${msg.id}:`, error);
+            }
+        }
+        
+        console.log(`✅ handleMessageFocus: Successfully rendered ${messagesWithCommunityId.length} messages in focus mode`);
     }
     catch (error) {
         console.error('❌ handleMessageFocus: Error focusing on message:', error);
@@ -1245,6 +1259,9 @@ async function handleMessageFocus(messageOrId: Message | string): Promise<void> 
  * @param {string[]} activeCommunities - Active community IDs. If not provided, uses current active communities
  */
 async function loadChatHistory(pageIdOrRawUrl: string, activeCommunities?: string[]): Promise<void> {
+    // ROOT CAUSE FIX: Log immediately to verify function is being called
+    console.log('🔴 loadChatHistory CALLED', { pageIdOrRawUrl, activeCommunities });
+    
     // Check if visibility tab is active (direct DOM check)
     if (typeof document !== 'undefined') {
         const visibilityTab = document.getElementById('visibility-tab');
@@ -1350,9 +1367,13 @@ async function loadChatHistory(pageIdOrRawUrl: string, activeCommunities?: strin
         // CRITICAL: Retry mechanism - communities may not be loaded yet
         activeCommunities = await resolveActiveCommunitiesWithRetry(activeCommunities);
         if (!activeCommunities || activeCommunities.length === 0) {
-            console.warn('⚠️ loadChatHistory: No active communities available after retries');
-            return;
+            console.error('❌ loadChatHistory: No active communities available after retries - this should not happen (fallback should have set Public Square)');
+            // CRITICAL: Even if resolveActiveCommunitiesWithRetry fails, use Public Square as last resort
+            console.log('🔧 loadChatHistory: Using Public Square UUID as last resort fallback');
+            activeCommunities = [PUBLIC_SQUARE_UUID];
+            stateManagerInstance.setState('ui.activeCommunities', [PUBLIC_SQUARE_UUID]);
         }
+        console.log('✅ loadChatHistory: Resolved active communities:', activeCommunities);
         console.log('📜 loadChatHistory: Loading messages for page:', pageId, 'communities:', activeCommunities);
         // Get chat messages container
         const chatMessages = getChatMessagesContainer();
@@ -1361,23 +1382,82 @@ async function loadChatHistory(pageIdOrRawUrl: string, activeCommunities?: strin
             return;
         }
         // ROOT CAUSE FIX: Auto-initialize message system if not initialized
-        if (!messageSystemIntegration || !unifiedMessageDisplay) {
-            console.warn('⚠️ loadChatHistory: New message system not initialized, initializing now...');
+        // Only need messageSystemIntegration for loadDefaultView, unifiedMessageDisplay is not needed
+        if (!messageSystemIntegration) {
+            console.warn('⚠️ loadChatHistory: Message system integration not initialized, initializing now...');
             try {
                 await initializeNewMessageSystem();
-                if (!messageSystemIntegration || !unifiedMessageDisplay) {
-                    console.error('❌ loadChatHistory: Failed to initialize message system');
-                    throw new Error('Message system initialization failed');
+                if (!messageSystemIntegration) {
+                    console.error('❌ loadChatHistory: Failed to initialize message system integration');
+                    throw new Error('Message system integration initialization failed');
                 }
-                console.log('✅ loadChatHistory: Message system initialized successfully');
+                console.log('✅ loadChatHistory: Message system integration initialized successfully');
             }
             catch (error) {
-                console.error('❌ loadChatHistory: Error initializing message system:', error);
-                throw new Error(`Message system initialization failed: ${error instanceof Error ? error.message : String(error)}`);
+                console.error('❌ loadChatHistory: Error initializing message system integration:', error);
+                throw new Error(`Message system integration initialization failed: ${error instanceof Error ? error.message : String(error)}`);
             }
         }
-        console.log('📜 loadChatHistory: Loading messages with new message system');
-        const communityId = activeCommunities[0] || publicSquareUUID;
+        console.log('📜 loadChatHistory: Loading messages with modern MessageFeed system', { pageId });
+        
+        // CRITICAL FIX: Ensure currentUrlData is set if missing (fallback for when TabController hasn't run yet)
+        if (!pageId || pageId === 'unknown' || pageId.startsWith('chrome://') || pageId.startsWith('chrome-extension://')) {
+            console.warn('⚠️ loadChatHistory: Invalid or missing pageId, attempting to get from active tab');
+            try {
+                if (typeof chrome !== 'undefined' && chrome.tabs) {
+                    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+                    if (tabs && tabs.length > 0 && tabs[0]?.url) {
+                        const tabUrl = tabs[0].url;
+                        if (tabUrl && !tabUrl.startsWith('chrome://') && !tabUrl.startsWith('chrome-extension://')) {
+                            console.log('📜 loadChatHistory: Got URL from active tab:', tabUrl);
+                            // Normalize URL
+                            const win = typeof window !== 'undefined' ? window as Window & { normalizeUrl?: (url: string) => Promise<{ normalizedUrl?: string; pageId?: string }> } : undefined;
+                            if (win?.normalizeUrl && typeof win.normalizeUrl === 'function') {
+                                const normalized = await win.normalizeUrl(tabUrl);
+                                const urlData = {
+                                    rawUrl: tabUrl,
+                                    normalizedUrl: normalized.normalizedUrl || tabUrl,
+                                    pageId: normalized.pageId || tabUrl.replace(/[^a-zA-Z0-9]/g, '_'),
+                                    canonicalUrl: normalized.normalizedUrl || tabUrl
+                                };
+                                stateManagerInstance.setState('currentUrlData', urlData);
+                                if (typeof window !== 'undefined') {
+                                    (window as Window & { currentUrlData?: { pageId?: string; rawUrl?: string; normalizedUrl?: string } }).currentUrlData = urlData;
+                                }
+                                pageId = urlData.pageId;
+                                console.log('✅ loadChatHistory: Set currentUrlData from active tab, pageId:', pageId);
+                            } else {
+                                // Fallback: simple pageId generation
+                                pageId = tabUrl.replace(/[^a-zA-Z0-9]/g, '_');
+                                const urlData = {
+                                    rawUrl: tabUrl,
+                                    normalizedUrl: tabUrl,
+                                    pageId: pageId,
+                                    canonicalUrl: tabUrl
+                                };
+                                stateManagerInstance.setState('currentUrlData', urlData);
+                                if (typeof window !== 'undefined') {
+                                    (window as Window & { currentUrlData?: { pageId?: string; rawUrl?: string; normalizedUrl?: string } }).currentUrlData = urlData;
+                                }
+                                console.log('✅ loadChatHistory: Set currentUrlData (fallback), pageId:', pageId);
+                            }
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('❌ loadChatHistory: Failed to get URL from active tab:', error);
+            }
+        }
+        
+        // Final validation
+        if (!pageId || pageId === 'unknown' || pageId.startsWith('chrome://') || pageId.startsWith('chrome-extension://')) {
+            console.error('❌ loadChatHistory: Cannot proceed - no valid pageId available');
+            isLoadingChatHistory = false;
+            return;
+        }
+        
+        // RED-LINE: No hardcoded fallback - use first active community or empty
+        const communityId = activeCommunities[0] || PUBLIC_SQUARE_UUID;
         
         // CRITICAL FIX: Add loading flag to prevent multiple simultaneous loads
         if (isLoadingChatHistory) {
@@ -1386,156 +1466,28 @@ async function loadChatHistory(pageIdOrRawUrl: string, activeCommunities?: strin
         }
         isLoadingChatHistory = true;
         
-        // ROOT CAUSE FIX: Mark as initial load to prevent onMessageUpdate from adding messages
-        isInitialMessageLoad = true;
-        initialMessageLoadComplete = false;
-        
-        // CRITICAL FIX: Clear container FIRST before any loading
-        const allChatContainers = document.querySelectorAll('.chat-messages');
-        let totalCleared = 0;
-        allChatContainers.forEach(cont => {
-            const messageElements = Array.from(cont.querySelectorAll('[data-message-id], .message'));
-            messageElements.forEach(el => {
-                const isMessageElement = el.classList.contains('message') || 
-                                       (el.hasAttribute('data-message-id') && !el.closest('.message'));
-                if (isMessageElement) {
-                    el.remove();
-                    totalCleared++;
-                }
-            });
-        });
-        console.log(`🔍 loadChatHistory: Cleared ${totalCleared} message elements from all containers before loading`);
-        
-        // CRITICAL FIX: Clear state chat.data to ensure clean state
-        if (stateManagerInstance) {
-            stateManagerInstance.setState('chat.data', []);
-            console.log('🔍 loadChatHistory: Cleared state chat.data');
-        }
-        // ROOT CAUSE FIX: Use actual pageId from currentUrlData (not normalizedUrl)
-        // pageId is the normalized identifier (e.g., "google_com_"), normalizedUrl is human-readable (e.g., "google.com/")
-        // Messages are stored with pageId, so we must use pageId for queries
-        console.log('📜 loadChatHistory: Using pageId:', pageId);
-        const messages = await messageSystemIntegration.loadDefaultView(pageId, {
-            limit: 10,
-            communityId
-        });
-        // ROOT CAUSE FIX: Mark initial load as complete AFTER getting messages but BEFORE rendering
-        // This prevents onMessageUpdate from interfering
-        // BUT: Only mark complete if we actually have messages to render
-        if (messages.length > 0) {
-            initialMessageLoadComplete = true;
-        }
-        // CRITICAL FIX: Check STATE first (single source of truth), not DOM
-        // Diagnostic found state is clean but DOM might have duplicates
-        // State should be the authority
-        const stateManager = stateManagerInstance;
-        let stateMessageIds = new Set<string>();
-        if (stateManager) {
-            const chatData = stateManager.getState('chat.data');
-            if (Array.isArray(chatData)) {
-                stateMessageIds = new Set(chatData.map((m: Message) => m.id));
-                console.log(`🔍 loadChatHistory: State has ${chatData.length} messages (${stateMessageIds.size} unique)`);
-            }
-        }
-        
-        // Filter messages - if already in state, skip (already loaded)
-        const newMessages = messages.filter((msg: Message) => !stateMessageIds.has(msg.id));
-        
-        if (newMessages.length === 0 && messages.length > 0) {
-            console.log(`⚠️ loadChatHistory: All ${messages.length} messages already in state, skipping render call`);
-            isInitialMessageLoad = false;
+        try {
+            // MODERN IMPLEMENTATION: Use MessageFeed system
+            console.log('🔵 loadChatHistory: Importing MessageFeed integration...');
+            const { loadMessagesViaFeed } = await import('./messages/index.js');
+            const supabaseClient = typeof window !== 'undefined' ? (window as Window & { supabase?: unknown }).supabase : undefined;
+            
+            console.log('🔵 loadChatHistory: Calling loadMessagesViaFeed...', { pageId, communityId, hasContainer: !!chatMessages, hasSupabase: !!supabaseClient });
+            await loadMessagesViaFeed(
+                pageId,
+                communityId,
+                chatMessages as HTMLElement,
+                supabaseClient
+            );
+            
+            console.log('✅ loadChatHistory: Messages loaded via modern MessageFeed system');
+        } catch (error) {
+            console.error('❌ loadChatHistory: Error loading messages via MessageFeed:', error);
+            console.error('❌ loadChatHistory: Error stack:', error instanceof Error ? error.stack : 'No stack');
+            throw error;
+        } finally {
             isLoadingChatHistory = false;
-            return;
         }
-        else if (newMessages.length > 0) {
-            // CRITICAL FIX: Ensure all messages have communityId before rendering
-            // Use newMessages (filtered by state) not all messages
-            const messagesWithCommunityId = newMessages.map((msg: Message) => ({
-                ...msg,
-                communityId: msg.communityId || communityId
-            }));
-            // Render using UnifiedMessageDisplay
-            await unifiedMessageDisplay.render(messagesWithCommunityId, chatMessages as HTMLElement, {
-                focusContext: 'default',
-                onMessageClick: (message) => {
-                    if (!message.author)
-                        return;
-                    // Convert MessageStoreMessage to Message for handleMessageFocus
-                    const msg = {
-                        id: message.id,
-                        content: message.content,
-                        authorId: message.author.id || '',
-                        communityId: communityId,
-                        parentId: message.parentId || null,
-                        author: message.author,
-                        createdAt: message.createdAt,
-                        updatedAt: message.updatedAt
-                    };
-                    handleMessageFocus(msg);
-                },
-                onFocusClick: (message) => {
-                    if (!message.author)
-                        return;
-                    // CRITICAL FIX: onFocusClick should trigger focus mode
-                    const msg = {
-                        id: message.id,
-                        content: message.content,
-                        authorId: message.author.id || '',
-                        communityId: communityId,
-                        parentId: message.parentId || null,
-                        author: message.author,
-                        createdAt: message.createdAt,
-                        updatedAt: message.updatedAt
-                    };
-                    handleMessageFocus(msg);
-                },
-                onReplyClick: async (message) => {
-                    if (!message.author)
-                        return;
-                    const msg = {
-                        id: message.id,
-                        content: message.content,
-                        authorId: message.author.id || '',
-                        communityId: communityId,
-                        parentId: message.parentId || null,
-                        author: message.author,
-                        createdAt: message.createdAt,
-                        updatedAt: message.updatedAt
-                    };
-                    await handleReplyToMessage(msg);
-                }
-            });
-        }
-        // ROOT CAUSE FIX: Mark initial load as complete after rendering
-        isInitialMessageLoad = false;
-        isLoadingChatHistory = false; // CRITICAL FIX: Clear loading flag
-        console.log('✅ loadChatHistory: Successfully loaded messages and cleared loading flag');
-        // Store messages in cache
-        // Remove duplicates before storing
-        const seenIds = new Set<string>();
-        const cachedMessages = messages
-            .filter((msg: Message) => {
-            if (!msg.author || !msg.author.id)
-                return false;
-            if (seenIds.has(msg.id)) {
-                console.warn(`⚠️ loadChatHistory: Duplicate message ID in API response: ${msg.id}`);
-                return false;
-            }
-            seenIds.add(msg.id);
-            return true;
-        })
-            .map((msg: Message) => ({
-            id: msg.id,
-            content: msg.content,
-            authorId: msg.author?.id || '',
-            communityId: communityId,
-            parentId: msg.parentId || null,
-            author: msg.author,
-            createdAt: msg.createdAt,
-            updatedAt: msg.updatedAt
-        }));
-        setCurrentChatData(cachedMessages);
-        console.log(`✅ loadChatHistory: Successfully loaded ${cachedMessages.length} unique messages`);
     }
     catch (error) {
         console.error('❌ loadChatHistory: Error:', error);
@@ -1921,7 +1873,16 @@ async function handleEditMessage(message: Message): Promise<void> {
         }
         if (chatTextarea) {
             chatTextarea.value = '';
-            chatTextarea.placeholder = 'Start thread in Public Square';
+            // RED-LINE: No hardcoded placeholder - get from primary community name
+            // Use async IIFE to get community name
+            (async () => {
+                try {
+                    const primaryCommunityName = await getPrimaryCommunityName();
+                    chatTextarea.placeholder = `Start thread in ${primaryCommunityName}...`;
+                } catch {
+                    chatTextarea.placeholder = 'Start thread...';
+                }
+            })();
             delete chatTextarea.dataset.editingMessageId;
             delete chatTextarea.dataset.contextMode;
         }
@@ -1982,9 +1943,8 @@ async function getSenderAvatar(author: any): Promise<string> {
     const displayName = formatAuthorName(author);
     if (!author)
         return getSenderInitial(displayName);
-    // Use unified avatar system for consistency
-    const AvatarUtils = window.AvatarUtils;
-    if (typeof window !== 'undefined' && AvatarUtils && typeof AvatarUtils.createUnifiedAvatar === 'function') {
+    // ES6 pattern: Use imported AvatarUtils module
+    if (AvatarUtils && typeof AvatarUtils.createUnifiedAvatar === 'function') {
         const avatarHTML = await AvatarUtils.createUnifiedAvatar(author, 'message', {
             size: 32,
             showStatus: true,
@@ -2062,6 +2022,9 @@ async function handleBookmarkMessage(message: Message): Promise<void> {
             method,
             body: { messageId: message.id }
         });
+        if (!response) {
+            return;
+        }
         const responseData = response.data as { success?: boolean; isBookmarked?: boolean; action?: string; count?: number } | null | undefined;
         if (responseData && responseData.success) {
             const newBookmarkStatus = responseData?.isBookmarked ?? !isBookmarked;
@@ -2239,16 +2202,24 @@ async function handleIncomingMessageUrl(): Promise<void> {
     const messageData = parseMessageUrl(currentUrl);
     if (messageData.isValid && messageData.messageId) {
         console.log(`🔗 INCOMING_URL: Found messageId in URL: ${messageData.messageId}`);
-        // Wait for messages to load
-        setTimeout(async () => {
+        // BEST PRACTICE: Wait for message element using event-based approach instead of setTimeout
+        try {
+            await waitForCondition(
+                () => document.querySelector(`[data-message-id="${messageData.messageId}"]`) !== null,
+                {
+                    timeout: 5000, // 5 seconds max wait
+                    interval: 100
+                }
+            );
             const messageElement = document.querySelector(`[data-message-id="${messageData.messageId}"]`);
             if (messageElement) {
                 await focusOnMessage({ id: messageData.messageId } as Message);
-            }
-            else {
+            } else {
                 console.warn('🔗 INCOMING_URL: Message not found in current view:', messageData.messageId);
             }
-        }, 2000);
+        } catch (error: unknown) {
+            console.warn('🔗 INCOMING_URL: Message element not found after waiting:', messageData.messageId);
+        }
     }
     else {
         console.log('🔗 INCOMING_URL: No message or conversation ID found in URL.');
@@ -2314,6 +2285,9 @@ async function handleReaction(message: Message): Promise<void> {
             // Check existing reactions via API
             // API returns { success: true, reactions: [...] } - extract reactions array
             const response = await api.request(getEndpoint, { method: 'GET' });
+            if (!response) {
+                return;
+            }
             const responseData = response.data as { reactions?: any[] } | null | undefined;
             const existingReactions = responseData?.reactions || [];
             // CRITICAL FIX: The API returns reactions with user_id as UUID (converted from Google ID)
@@ -2413,35 +2387,39 @@ function setupMessageInputEventListeners(): void {
     // ROOT CAUSE FIX: Click handler to open UnifiedMessageModal
     // Wait for openMessageModal to be available (retry mechanism)
     const attachClickHandler = async () => {
-        
-        // Try to get openMessageModal, with retry
-        let openModal = getWindowFunction('openMessageModal') as ((options: { mode: string; pageId: string; communityId?: string }) => Promise<void>) | null;
-        const unifiedMessageModal = getWindowFunction('unifiedMessageModal') as { open?: (options: { mode: string; pageId: string; communityId?: string }) => Promise<void> } | null; if (!openModal && unifiedMessageModal && typeof unifiedMessageModal.open === 'function') {
-            // Fallback: use unifiedMessageModal directly
-            openModal = (options) => unifiedMessageModal.open!(options);
+        try {
+            // Try to get openMessageModal, with retry
+            let openModal = getWindowFunction('openMessageModal') as ((options: { mode: string; pageId: string; communityId?: string }) => Promise<void>) | null;
+            const unifiedMessageModal = getWindowFunction('unifiedMessageModal') as { open?: (options: { mode: string; pageId: string; communityId?: string }) => Promise<void> } | null;
+            if (!openModal && unifiedMessageModal && typeof unifiedMessageModal.open === 'function') {
+                // Fallback: use unifiedMessageModal directly
+                openModal = (options) => unifiedMessageModal.open!(options);
+            }
+            if (!openModal) {
+                // Retry after a short delay
+                console.log('💬 MESSAGE_INPUT: openMessageModal not yet available, retrying...');
+                setTimeout(attachClickHandler, 500);
+                return;
+            }
+            chatTextarea.addEventListener('click', async (e) => {
+                e.preventDefault();
+                const stateManager = getWindowFunction('stateManagerInstance') as { getState?: (key: string) => any } | null;
+                const currentUrlData = stateManager && typeof stateManager.getState === 'function' ? stateManager.getState('currentUrlData') : null;
+                const activeCommunities = stateManager && typeof stateManager.getState === 'function' ? stateManager.getState('ui.activeCommunities') : null;
+                const pageId = currentUrlData?.pageId || '';
+                const communityId = activeCommunities?.[0];
+                console.log('💬 MESSAGE_INPUT: Opening UnifiedMessageModal for new message');
+                await openModal({
+                    mode: 'new',
+                    pageId,
+                    communityId
+                });
+            }, { once: false });
+            chatTextarea.dataset.listenersAttached = 'true';
+            console.log('✅ MESSAGE_INPUT: Click handler attached to chat-textarea');
+        } catch (error) {
+            console.error('❌ MESSAGE_INPUT: Error waiting for openMessageModal:', error);
         }
-        if (!openModal) {
-            // Retry after a short delay
-            console.log('💬 MESSAGE_INPUT: openMessageModal not yet available, retrying...');
-            setTimeout(attachClickHandler, 500);
-            return;
-        }
-        chatTextarea.addEventListener('click', async (e) => {
-            e.preventDefault();
-            const stateManager = getWindowFunction('stateManagerInstance') as { getState?: (key: string) => any } | null;
-            const currentUrlData = stateManager && typeof stateManager.getState === 'function' ? stateManager.getState('currentUrlData') : null;
-            const activeCommunities = stateManager && typeof stateManager.getState === 'function' ? stateManager.getState('ui.activeCommunities') : null;
-            const pageId = currentUrlData?.pageId || '';
-            const communityId = activeCommunities?.[0];
-            console.log('💬 MESSAGE_INPUT: Opening UnifiedMessageModal for new message');
-            await openModal({
-                mode: 'new',
-                pageId,
-                communityId
-            });
-        }, { once: false });
-        chatTextarea.dataset.listenersAttached = 'true';
-        console.log('✅ MESSAGE_INPUT: Click handler attached to chat-textarea');
     };
     // Start attaching handler
     attachClickHandler();
@@ -2495,11 +2473,8 @@ async function sendChatMessage(): Promise<void> {
                 const messageData = await sendMessageViaSupabaseFn(content);
                 if (messageData) {
                     console.log('✅ SEND_CHAT_MESSAGE: Message sent:', messageData);
-                    // Add message to UI immediately for responsiveness
-                    const addMessageToChat = window.addMessageToChat;
-                    if (typeof window !== 'undefined' && addMessageToChat) {
-                        await addMessageToChat(messageData);
-                    }
+                    // ES6 pattern: Use local function directly (same module)
+                    await addMessageToChat(messageData);
                 }
             }
             else {

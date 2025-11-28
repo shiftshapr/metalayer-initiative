@@ -1,9 +1,7 @@
-/**
- * SETTINGS HEADLINE MANAGER - CRUD Operations for Settings Headline
- * Handles Create, Read, Update, Delete operations for user headline
- *
- * Modeled exactly after DisplayNameManager pattern
- */
+import { createProfileSettingChannel } from './settings/helpers/profileSettingChannel.js';
+import { ensureManager, waitForPreferencesManager, getSettingContracts } from '../sidepanel/windowInjections.js';
+import { handleError } from '../utils/ErrorHandler.js';
+import { Logger } from '../utils/Logger.js';
 class SettingsHeadlineManager {
     constructor() {
         this.minLength = 20; // Min characters for headline
@@ -12,6 +10,7 @@ class SettingsHeadlineManager {
         this.originalHeadline = null;
         this.isInitialized = false;
         this.isEditing = false;
+        this.storage = createProfileSettingChannel('headline');
         this.headlineInput = null;
         this.charCount = null;
         this.charMax = null;
@@ -30,10 +29,10 @@ class SettingsHeadlineManager {
      */
     async initialize() {
         if (this.isInitialized) {
-            console.log('⚠️ SETTINGS_HEADLINE: Already initialized');
+            Logger.debug('⚠️ SETTINGS_HEADLINE: Already initialized', null, 'settings');
             return;
         }
-        console.log('🔧 SETTINGS_HEADLINE: Initializing headline manager...');
+        Logger.debug('🔧 SETTINGS_HEADLINE: Initializing headline manager...', null, 'settings');
         try {
             // Get DOM elements
             this.headlineInput = document.getElementById('settings-headline-input');
@@ -49,7 +48,7 @@ class SettingsHeadlineManager {
             this.menuDelete = document.getElementById('headline-menu-delete');
             this.statusDiv = document.getElementById('headline-status');
             if (!this.headlineInput || !this.charCount || !this.saveBtn || !this.cancelBtn) {
-                console.warn('⚠️ SETTINGS_HEADLINE: Required DOM elements not found');
+                Logger.warn('⚠️ SETTINGS_HEADLINE: Required DOM elements not found', null, 'settings');
                 return;
             }
             if (this.charMax) {
@@ -62,10 +61,18 @@ class SettingsHeadlineManager {
             // Set up event listeners
             this.setupEventListeners();
             this.isInitialized = true;
-            console.log('✅ SETTINGS_HEADLINE: Headline manager initialized');
+            Logger.debug('✅ SETTINGS_HEADLINE: Headline manager initialized', null, 'settings');
         }
         catch (error) {
-            console.error('❌ SETTINGS_HEADLINE: Failed to initialize:', error);
+            handleError(error, {
+                log: true,
+                logLevel: 'error',
+                context: {
+                    operation: 'catch',
+                    component: 'SettingsHeadline'
+                }
+            });
+            ;
         }
     }
     /**
@@ -138,7 +145,7 @@ class SettingsHeadlineManager {
                 this.updateUIState();
             }
         });
-        console.log('✅ SETTINGS_HEADLINE: Event listeners attached');
+        Logger.debug('✅ SETTINGS_HEADLINE: Event listeners attached', null, 'settings');
     }
     /**
      * Update character count display
@@ -172,81 +179,49 @@ class SettingsHeadlineManager {
      */
     async readHeadline() {
         try {
-            console.log('📖 SETTINGS_HEADLINE: Reading headline...');
-            console.log('🔍 DIAGNOSTIC: Reading headline from UserPreferencesManager');
-            // Use UserPreferencesManager (unified system)
-            const userPreferencesManager = window.userPreferencesManager;
-            if (userPreferencesManager && userPreferencesManager.isInitialized) {
-                const headline = await userPreferencesManager.getPreference('headline');
-                this.currentHeadline = (typeof headline === 'string' ? headline : '') || '';
-                this.originalHeadline = (typeof headline === 'string' ? headline : '') || '';
-                if (this.headlineInput) {
-                    this.headlineInput.value = this.currentHeadline || '';
-                }
-                this.updateCharCount();
-                this.updateUIState();
-                console.log('✅ SETTINGS_HEADLINE: Headline loaded from UserPreferencesManager');
-                console.log('🔍 DIAGNOSTIC: Headline value:', this.currentHeadline);
-                return;
-            }
-            // Fallback to old system during transition
-            console.log('⚠️ SETTINGS_HEADLINE: UserPreferencesManager not available, using fallback');
-            // Try Chrome storage first
-            const storageData = await chrome.storage.local.get(['settingsHeadline']);
-            if (storageData.settingsHeadline) {
-                this.currentHeadline = storageData.settingsHeadline;
-                this.originalHeadline = storageData.settingsHeadline;
-                if (this.headlineInput) {
-                    this.headlineInput.value = this.currentHeadline || '';
-                }
-                this.updateCharCount();
-                this.updateUIState();
-                console.log('✅ SETTINGS_HEADLINE: Headline loaded from Chrome storage');
-                return;
-            }
-            // Try API if available (DEPRECATED - will be removed after migration)
-            if (window.currentUser && window.currentUser.id) {
-                try {
-                    const authToken = await this.getAuthToken();
-                    const response = await fetch(`http://216.238.91.120:3002/v1/users/${window.currentUser.id}/preferences`, {
-                        method: 'GET',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${authToken}`
-                        }
-                    });
-                    if (response.ok) {
-                        const data = await response.json();
-                        if (data.preferences && data.preferences.headline) {
-                            this.currentHeadline = data.preferences.headline;
-                            this.originalHeadline = data.preferences.headline;
-                            if (this.headlineInput) {
-                                this.headlineInput.value = this.currentHeadline || '';
-                            }
-                            this.updateCharCount();
-                            this.updateUIState();
-                            await chrome.storage.local.set({ settingsHeadline: this.currentHeadline });
-                            console.log('✅ SETTINGS_HEADLINE: Headline loaded from API');
-                            return;
-                        }
-                    }
-                }
-                catch (apiError) {
-                    console.warn('⚠️ SETTINGS_HEADLINE: API read failed:', apiError);
-                }
-            }
-            // No headline found
-            this.currentHeadline = '';
-            this.originalHeadline = '';
+            Logger.debug('📖 SETTINGS_HEADLINE: Reading headline...', null, 'settings');
+            Logger.debug('🔍 DIAGNOSTIC: Reading headline via unified storage channel', null, 'settings');
+            const headline = await this.storage.read();
+            this.currentHeadline = headline || '';
+            this.originalHeadline = headline || '';
             if (this.headlineInput) {
-                this.headlineInput.value = '';
+                this.headlineInput.value = this.currentHeadline || '';
             }
             this.updateCharCount();
             this.updateUIState();
-            console.log('ℹ️ SETTINGS_HEADLINE: No headline found, starting fresh');
+            if (headline) {
+                Logger.debug('✅ SETTINGS_HEADLINE: Headline loaded via profile setting channel', null, 'settings');
+            }
+            else {
+                Logger.debug('ℹ️ SETTINGS_HEADLINE: No headline found, starting fresh', 'settings');
+            }
+            // If UserPreferencesManager wasn't ready, retry when it becomes available
+            const contracts = getSettingContracts();
+            const userPreferencesManager = contracts.userPreferencesManager;
+            if (!userPreferencesManager?.isInitialized) {
+                Logger.debug('🔄 SETTINGS_HEADLINE: UserPreferencesManager not ready, will retry when available', 'settings');
+                const retryHandler = async () => {
+                    const contracts = getSettingContracts();
+                    const prefsMgr = contracts.userPreferencesManager;
+                    if (prefsMgr?.isInitialized) {
+                        window.removeEventListener('preferenceLoaded', retryHandler);
+                        Logger.debug('🔄 SETTINGS_HEADLINE: UserPreferencesManager now ready, re-reading headline', 'settings');
+                        await this.readHeadline();
+                    }
+                };
+                window.addEventListener('preferenceLoaded', retryHandler);
+            }
         }
         catch (error) {
-            console.error('❌ SETTINGS_HEADLINE: Failed to read headline:', error);
+            handleError(error, {
+                log: true,
+                logLevel: 'error',
+                context: {
+                    operation: 'catch',
+                    component: 'SettingsHeadline'
+                }
+            });
+            ;
             this.showStatus('Error loading headline', 'error');
         }
     }
@@ -324,56 +299,25 @@ class SettingsHeadlineManager {
                     return;
                 }
             }
-            console.log('💾 SETTINGS_HEADLINE: Saving headline...');
-            // Use UserPreferencesManager (unified system)
-            const userPreferencesManager = window.userPreferencesManager;
-            if (userPreferencesManager && userPreferencesManager.isInitialized) {
-                // FIX: Save immediately (not batched) to ensure database save happens right away
-                await userPreferencesManager.savePreference('headline', newHeadline || null, { batch: false });
-                console.log('✅ SETTINGS_HEADLINE: Headline saved via UserPreferencesManager');
-            }
-            else {
-                // Fallback to old system during transition
-                console.log('⚠️ SETTINGS_HEADLINE: UserPreferencesManager not available, using fallback');
-                // Save to Chrome storage
-                await chrome.storage.local.set({ settingsHeadline: newHeadline });
-                // Save to API (DEPRECATED - will be removed after migration)
-                if (window.currentUser && window.currentUser.id) {
-                    try {
-                        const authToken = await this.getAuthToken();
-                        const response = await fetch(`http://216.238.91.120:3002/v1/users/${window.currentUser.id}/preferences`, {
-                            method: 'PATCH',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'Authorization': `Bearer ${authToken}`
-                            },
-                            body: JSON.stringify({
-                                preferences: {
-                                    headline: newHeadline || null
-                                }
-                            })
-                        });
-                        if (response.ok) {
-                            console.log('✅ SETTINGS_HEADLINE: Headline saved to API (fallback)');
-                        }
-                        else {
-                            console.warn('⚠️ SETTINGS_HEADLINE: API save failed, but saved locally');
-                        }
-                    }
-                    catch (apiError) {
-                        console.warn('⚠️ SETTINGS_HEADLINE: API save error, but saved locally:', apiError);
-                    }
-                }
-            }
+            Logger.debug('💾 SETTINGS_HEADLINE: Saving headline...', null, 'settings');
+            await this.storage.save(newHeadline || null);
             this.currentHeadline = newHeadline || null;
             this.originalHeadline = newHeadline || null;
             this.isEditing = false;
             this.updateUIState();
             this.showStatus('Headline saved successfully', 'success');
-            console.log('✅ SETTINGS_HEADLINE: Headline saved');
+            Logger.debug('✅ SETTINGS_HEADLINE: Headline saved', null, 'settings');
         }
         catch (error) {
-            console.error('❌ SETTINGS_HEADLINE: Failed to save headline:', error);
+            handleError(error, {
+                log: true,
+                logLevel: 'error',
+                context: {
+                    operation: 'catch',
+                    component: 'SettingsHeadline'
+                }
+            });
+            ;
             this.showStatus('Error saving headline', 'error');
         }
     }
@@ -382,9 +326,8 @@ class SettingsHeadlineManager {
      */
     async deleteHeadline() {
         try {
-            console.log('🗑️ SETTINGS_HEADLINE: Deleting headline...');
-            // Delete from Chrome storage
-            await chrome.storage.local.remove(['settingsHeadline']);
+            Logger.debug('🗑️ SETTINGS_HEADLINE: Deleting headline...', null, 'settings');
+            await this.storage.delete();
             this.currentHeadline = '';
             this.originalHeadline = '';
             if (this.headlineInput) {
@@ -394,38 +337,19 @@ class SettingsHeadlineManager {
             this.isEditing = false;
             this.updateUIState();
             this.hideMenu();
-            // Delete from API if available
-            if (window.currentUser && window.currentUser.id) {
-                try {
-                    const authToken = await this.getAuthToken();
-                    const response = await fetch(`http://216.238.91.120:3002/v1/users/${window.currentUser.id}/preferences`, {
-                        method: 'PATCH',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${authToken}`
-                        },
-                        body: JSON.stringify({
-                            preferences: {
-                                headline: null
-                            }
-                        })
-                    });
-                    if (response.ok) {
-                        console.log('✅ SETTINGS_HEADLINE: Headline deleted from API');
-                    }
-                    else {
-                        console.warn('⚠️ SETTINGS_HEADLINE: API delete failed, but deleted locally');
-                    }
-                }
-                catch (apiError) {
-                    console.warn('⚠️ SETTINGS_HEADLINE: API delete error, but deleted locally:', apiError);
-                }
-            }
             this.showStatus('Headline deleted successfully', 'success');
-            console.log('✅ SETTINGS_HEADLINE: Headline deleted');
+            Logger.debug('✅ SETTINGS_HEADLINE: Headline deleted', null, 'settings');
         }
         catch (error) {
-            console.error('❌ SETTINGS_HEADLINE: Failed to delete headline:', error);
+            handleError(error, {
+                log: true,
+                logLevel: 'error',
+                context: {
+                    operation: 'catch',
+                    component: 'SettingsHeadline'
+                }
+            });
+            ;
             this.showStatus('Error deleting headline', 'error');
         }
     }
@@ -440,7 +364,7 @@ class SettingsHeadlineManager {
         this.isEditing = false;
         this.updateUIState();
         this.showStatus('Changes cancelled', 'info');
-        console.log('❌ SETTINGS_HEADLINE: Edit cancelled');
+        Logger.debug('❌ SETTINGS_HEADLINE: Edit cancelled', null, 'settings');
     }
     /**
      * Show status message
@@ -472,31 +396,35 @@ class SettingsHeadlineManager {
             this.statusDiv.style.display = 'none';
         }, 3000);
     }
-    /**
-     * Get auth token for API calls
-     */
-    async getAuthToken() {
-        try {
-            const authData = await chrome.storage.local.get(['authToken', 'googleAccessToken']);
-            return (authData.authToken || authData.googleAccessToken || '');
-        }
-        catch (error) {
-            console.warn('⚠️ SETTINGS_HEADLINE: Failed to get auth token:', error);
-            return '';
-        }
+}
+// Initialize when DOM is ready and UserPreferencesManager is available
+const bootstrapSettingsHeadlineManager = async () => {
+    try {
+        const manager = ensureManager('settingsHeadlineManager', () => new SettingsHeadlineManager());
+        // Wait for UserPreferencesManager to be ready before initializing
+        await waitForPreferencesManager();
+        await manager.initialize();
     }
+    catch (error) {
+        handleError(error, {
+            log: true,
+            logLevel: 'error',
+            context: {
+                operation: 'bootstrapSettingsHeadlineManager',
+                component: 'SettingsHeadlineManager'
+            }
+        });
+    }
+};
+if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+            void bootstrapSettingsHeadlineManager();
+        });
+    }
+    else {
+        void bootstrapSettingsHeadlineManager();
+    }
+    // Constructor export removed - use window.settingsHeadlineManager instance instead
 }
-// Initialize when DOM is ready
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-        window.settingsHeadlineManager = new SettingsHeadlineManager();
-        window.settingsHeadlineManager?.initialize();
-    });
-}
-else {
-    window.settingsHeadlineManager = new SettingsHeadlineManager();
-    window.settingsHeadlineManager?.initialize();
-}
-// Export for use in other modules
-window.SettingsHeadlineManager = SettingsHeadlineManager;
 export { SettingsHeadlineManager };

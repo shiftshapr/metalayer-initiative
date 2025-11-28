@@ -63,6 +63,7 @@ This document defines the manifest schema for Canopi Sidebar Tab modules distrib
     "title": "string (required, display name in sidebar)",
     "icon": "string (required, icon identifier or SVG path)",
     "order": "number (optional, display order in sidebar, lower = earlier)",
+    "position": "string (optional, sidebar position: 'left' | 'right', default: 'right')",
     "badge": {
       "enabled": "boolean (optional, default: false)",
       "type": "string (optional, one of: count, dot, text, default: count)"
@@ -259,6 +260,7 @@ This document defines the manifest schema for Canopi Sidebar Tab modules distrib
     "title": "Archive",
     "icon": "archive-icon",
     "order": 10,
+    "position": "right",
     "badge": {
       "enabled": true,
       "type": "count"
@@ -724,6 +726,10 @@ The manifest schema is designed to be extensible. Future versions may add:
 - [Canopi Store API](./CANOPI_STORE_API.md) (to be created)
 - [Semantic Versioning](https://semver.org/)
 - [JSON Schema](https://json-schema.org/)
+
+
+
+
 
 
 

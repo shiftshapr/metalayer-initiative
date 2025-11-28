@@ -1,4 +1,4 @@
-import { User } from '../types/index.js';
+import { User, Message, ApiResponse } from '../types/index.js';
 import { AvatarUtils } from '../utils/AvatarUtils.js';
 import { Logger } from '../utils/Logger.js';
 export type UIState = {
@@ -20,11 +20,11 @@ export type VisibleUser = {
 };
 interface MessageSendResult {
     success?: boolean;
-    data?: any;
+    data?: Message;
 }
 interface MessagingService {
-    sendMessage: (content: string, metadata?: Record<string, any>) => Promise<MessageSendResult | null>;
-    addMessageToChat?: (message: any) => Promise<void> | void;
+    sendMessage: (content: string, metadata?: Record<string, unknown>) => Promise<MessageSendResult | null>;
+    addMessageToChat?: (message: Message) => Promise<void> | void;
     loadChatHistory?: () => Promise<void>;
 }
 interface NavigationService {
@@ -39,9 +39,9 @@ interface ThemeService {
     getCurrentUserTheme?: () => Promise<string>;
 }
 interface ApiClient {
-    request: (url: string, options?: RequestInit & {
+    request: <T = unknown>(url: string, options?: RequestInit & {
         headers?: Record<string, string>;
-    }) => Promise<any>;
+    }) => Promise<ApiResponse<T>>;
 }
 interface UIEnvironment {
     document?: Document;
@@ -65,7 +65,8 @@ interface UIManagerDependencies {
 type UIManagerWindow = Window & {
     uiManager?: UIManager;
     UIManager?: typeof UIManager;
-    addMessageToChat?: (message: any) => Promise<void> | void;
+    initializeUIManager?: () => UIManager | null;
+    addMessageToChat?: (message: Message) => Promise<void> | void;
     initializeAgentTab?: () => void | Promise<void>;
     initializePeopleTab?: () => void | Promise<void>;
     updateThemeEverywhere?: (theme: string) => Promise<void>;
@@ -79,9 +80,7 @@ type UIManagerWindow = Window & {
     api?: ApiClient;
 };
 export declare class UIManager {
-    private readonly deps;
     private readonly document?;
-    private readonly window?;
     private readonly avatarUtils;
     private readonly logger;
     private readonly visibility;
@@ -125,7 +124,7 @@ export declare class UIManager {
     sendChatMessage(): Promise<void>;
     cleanup(): void;
     initializeTheme(): Promise<void>;
-    setTheme(theme: string): Promise<void>;
+    setTheme(theme: string, saveToDatabase?: boolean): Promise<void>;
     toggleTheme(): Promise<void>;
     runUpdateVisualHierarchyDiagnostic(): void;
     runDebugHierarchyDiagnostic(): void;
@@ -133,36 +132,28 @@ export declare class UIManager {
     private getCurrentUser;
     private addEventListener;
 }
-declare global {
-    interface Window {
-        currentUser?: User | null;
-        uiManager?: UIManager;
-        UIManager?: typeof UIManager;
-        addMessageToChat?: (message: any) => Promise<void> | void;
-        initializeAgentTab?: () => void | Promise<void>;
-        initializePeopleTab?: () => void | Promise<void>;
-        updateThemeEverywhere?: (theme: string) => Promise<void>;
-        getCurrentUserTheme?: () => Promise<string>;
-        setupTabNavigation?: () => void;
-        setupMessageInputEventListeners?: () => void;
-        initializeTheme?: () => Promise<void>;
-        setTheme?: (theme: string) => Promise<void>;
-        toggleTheme?: () => Promise<void>;
-        autoResize?: (textarea: HTMLTextAreaElement | null) => void;
-        api?: ApiClient;
-        updateVisualHierarchy?: () => void;
-        debugHierarchy?: () => void;
-        forceRefreshCSS?: () => void;
-    }
-}
-declare const uiManagerInstance: UIManager;
-export declare const updateVisualHierarchy: () => void;
-export declare const debugHierarchy: () => void;
-export declare const forceRefreshCSS: () => void;
-export declare const setupTabNavigation: () => void;
-export declare const setupMessageInputEventListeners: () => void;
-export declare const initializeTheme: () => Promise<void>;
-export declare const setTheme: (theme: string) => Promise<void>;
-export declare const toggleTheme: () => Promise<void>;
-export default uiManagerInstance;
+declare const getUIManagerInstance: () => UIManager;
+declare const updateVisualHierarchy: () => void;
+declare const debugHierarchy: () => void;
+declare const forceRefreshCSS: () => void;
+declare const setupTabNavigation: () => void;
+declare const setupMessageInputEventListeners: () => void;
+declare const initializeTheme: () => Promise<void>;
+declare const setTheme: (theme: string) => Promise<void>;
+declare const toggleTheme: () => Promise<void>;
+declare const initializeUIManager: () => UIManager | null;
+declare const uiManagerApi: {
+    initializeUIManager: () => UIManager | null;
+    getUIManagerInstance: () => UIManager;
+    updateVisualHierarchy: () => void;
+    debugHierarchy: () => void;
+    forceRefreshCSS: () => void;
+    setupTabNavigation: () => void;
+    setupMessageInputEventListeners: () => void;
+    initializeTheme: () => Promise<void>;
+    setTheme: (theme: string) => Promise<void>;
+    toggleTheme: () => Promise<void>;
+};
+export { initializeUIManager, getUIManagerInstance, updateVisualHierarchy, debugHierarchy, forceRefreshCSS, setupTabNavigation, setupMessageInputEventListeners, initializeTheme, setTheme, toggleTheme };
+export default uiManagerApi;
 //# sourceMappingURL=UIManager.d.ts.map

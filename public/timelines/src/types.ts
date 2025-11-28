@@ -136,16 +136,17 @@ export interface TimelineMetadata {
 
 // Filter Types
 export interface TimelineFilters {
-  persistence: PersistenceType;
-  community: string | null;
+  persistence: PersistenceType | PersistenceType[];  // Support multi-select
+  communities: string[];  // Changed from community: string | null to support multi-select
   activityTypes: ActivityType[];
   search: string | null;
 }
 
 // Query Options
 export interface TimelineQueryOptions {
-  persistence?: PersistenceType;
-  community?: string | null;
+  persistence?: PersistenceType | PersistenceType[];
+  communities?: string[];  // Multi-select support
+  community?: string | null;  // Backward compatibility
   search?: string | null;
   activityTypes?: ActivityType[];
   page?: number;

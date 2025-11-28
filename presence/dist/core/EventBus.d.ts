@@ -1,62 +1,31 @@
 /**
- * EVENTBUS - Centralized Event Management
- * TypeScript + ES6 Module
+ * EVENT BUS - Simple Event Emitter
+ *
+ * Minimal implementation for event handling in the sidepanel.
+ * Provides basic pub/sub functionality.
  */
-import { EventBus as IEventBus, EventType, EventCallback } from '../types/index.js';
-declare class EventBus implements IEventBus {
+type EventCallback = (payload: unknown) => Promise<void> | void;
+/**
+ * Simple event bus for sidepanel events
+ */
+export declare class EventBus {
     private listeners;
-    private onceListeners;
-    private eventHistory;
-    private maxHistorySize;
-    private isDestroyed;
-    constructor();
     /**
-     * Register an event listener
+     * Subscribe to an event
      */
-    on(event: EventType, callback: EventCallback, options?: {
-        priority?: number;
-        context?: any;
-    }): string;
+    on(event: string, callback: EventCallback): void;
     /**
-     * Remove an event listener
+     * Unsubscribe from an event
      */
-    off(event: EventType, listenerId: string): void;
+    off(event: string, callback: EventCallback): void;
     /**
-     * Emit an event to all listeners
+     * Emit an event
      */
-    emit(event: EventType, data?: any): void;
-    /**
-     * Register a one-time event listener
-     */
-    once(event: EventType, callback: EventCallback, options?: {
-        priority?: number;
-        context?: any;
-    }): string;
-    /**
-     * Get event history
-     */
-    getHistory(event?: EventType): any[];
+    emit(event: string, payload: unknown): Promise<void>;
     /**
      * Remove all listeners for an event
      */
-    removeAllListeners(event?: EventType): void;
-    /**
-     * Cleanup resources
-     */
-    cleanup(): void;
-    /**
-     * Destroy the event bus (alias for cleanup)
-     */
-    destroy(): void;
-    /**
-     * Add event to history
-     */
-    private addToHistory;
-    /**
-     * Generate unique listener ID
-     */
-    private generateId;
+    removeAllListeners(event?: string): void;
 }
-export { EventBus };
-export default EventBus;
+export {};
 //# sourceMappingURL=EventBus.d.ts.map

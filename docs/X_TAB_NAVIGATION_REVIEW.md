@@ -178,3 +178,7 @@ For tabs with notifications/counts:
 - On desktop: Show all tabs evenly
 - Consider collapsing less-used tabs into a "More" menu if needed
 
+
+
+
+

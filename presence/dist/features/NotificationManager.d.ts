@@ -1,3 +1,4 @@
+import { NotificationDataInput } from '../types/index';
 type NotificationPriority = 'high' | 'medium' | 'low';
 interface NotificationTypeSettings {
     id?: string;
@@ -15,10 +16,20 @@ interface NotificationSettings {
     desktop?: boolean;
     sound?: boolean;
     types?: Record<string, NotificationTypeSettings>;
-    anchor?: Record<string, any>;
-    offline?: Record<string, any>;
+    anchor?: {
+        highlightDuration?: number;
+        highlightStyle?: string;
+        scrollBehavior?: string;
+        autoFocus?: boolean;
+        [key: string]: unknown;
+    };
+    offline?: {
+        enabled?: boolean;
+        maxQueueSize?: number;
+        [key: string]: unknown;
+    };
     doNotDisturb?: boolean;
-    [key: string]: any;
+    [key: string]: unknown;
 }
 interface NotificationSourceMeta {
     category?: string;
@@ -42,7 +53,11 @@ interface NotificationHistoryEntry {
     data?: Record<string, unknown>;
     source?: NotificationSourceMeta;
 }
-type NotificationEventCallback = (payload?: any) => void;
+type NotificationEventCallback = (payload?: {
+    event: string;
+    timestamp: number;
+    [key: string]: unknown;
+}) => void;
 /**
  * NotificationManager class
  * Manages notifications, permissions, settings, and content anchoring
@@ -86,11 +101,11 @@ export declare class NotificationManager {
     /**
      * Show a notification
      */
-    showNotification(type: string, data: any): Promise<NotificationHistoryEntry | null>;
+    showNotification(type: string, data: NotificationDataInput): Promise<NotificationHistoryEntry | null>;
     /**
      * Queue notification for offline processing
      */
-    queueNotification(type: string, data: any): Promise<NotificationHistoryEntry>;
+    queueNotification(type: string, data: NotificationDataInput): Promise<NotificationHistoryEntry>;
     /**
      * Process queued notifications
      */
@@ -126,23 +141,7 @@ export declare class NotificationManager {
     /**
      * Get current settings
      */
-    getSettings(): Promise<NotificationSettings | {
-        enabled: boolean;
-        sound: boolean;
-        desktop: boolean;
-        types: Record<string, NotificationTypeSettings>;
-        anchor: {
-            highlightDuration: number;
-            highlightStyle: string;
-            scrollBehavior: string;
-            autoFocus: boolean;
-        };
-        doNotDisturb: boolean;
-        offline: {
-            enabled: boolean;
-            maxQueueSize: number;
-        };
-    }>;
+    getSettings(): Promise<NotificationSettings>;
     /**
      * Update settings
      */
@@ -197,15 +196,15 @@ export declare class NotificationManager {
     /**
      * Play notification sound
      */
-    playNotificationSound(type: string): void;
+    playNotificationSound(_type: string): void;
     /**
      * Build notification data from input
      */
-    buildNotificationData(type: string, data: any): NotificationHistoryEntry;
+    buildNotificationData(type: string, data: NotificationDataInput): NotificationHistoryEntry;
     /**
      * Determine notification priority based on type and data
      */
-    determinePriority(type: string, data: any): NotificationPriority;
+    determinePriority(type: string, data: NotificationDataInput): NotificationPriority;
     /**
      * Add notification to history
      */
@@ -221,23 +220,7 @@ export declare class NotificationManager {
     /**
      * Get default settings
      */
-    getDefaultSettings(): {
-        enabled: boolean;
-        sound: boolean;
-        desktop: boolean;
-        types: Record<string, NotificationTypeSettings>;
-        anchor: {
-            highlightDuration: number;
-            highlightStyle: string;
-            scrollBehavior: string;
-            autoFocus: boolean;
-        };
-        doNotDisturb: boolean;
-        offline: {
-            enabled: boolean;
-            maxQueueSize: number;
-        };
-    };
+    getDefaultSettings(): NotificationSettings;
     /**
      * Load history from storage
      */
@@ -269,7 +252,7 @@ export declare class NotificationManager {
     /**
      * Emit event
      */
-    emitEvent(event: string, data?: any): void;
+    emitEvent(event: string, data?: Record<string, unknown>): void;
     /**
      * Check if notification should be shown based on subscription settings
      */

@@ -1,3 +1,5 @@
+import { Logger } from '../utils/Logger.js';
+import { handleError } from '../utils/ErrorHandler.js';
 /**
  * GoVisibleModal - Simple modal for prompting user to go visible
  *
@@ -114,17 +116,29 @@ class GoVisibleModal {
             this.hide();
         });
         confirmBtn?.addEventListener('click', async () => {
-            // Set visibility to true
-            const win = window;
-            if (win.setVisibilityStatus) {
-                await win.setVisibilityStatus(true);
+            try {
+                // Set visibility to true
+                const win = window;
+                if (win.setVisibilityStatus) {
+                    await win.setVisibilityStatus(true);
+                }
+                this.hide();
+                // Navigate to Visibility tab after setting visible
+                if (win.navigateToVisibilityTab) {
+                    setTimeout(() => {
+                        win.navigateToVisibilityTab();
+                    }, 100);
+                }
             }
-            this.hide();
-            // Navigate to Visibility tab after setting visible
-            if (win.navigateToVisibilityTab) {
-                setTimeout(() => {
-                    win.navigateToVisibilityTab();
-                }, 100);
+            catch (error) {
+                handleError(error, {
+                    log: true,
+                    logLevel: 'error',
+                    context: {
+                        operation: 'setVisibilityStatus',
+                        component: 'GoVisibleModal'
+                    }
+                });
             }
         });
         // Close on overlay click
@@ -161,7 +175,7 @@ if (typeof window !== 'undefined') {
     window.showGoVisibleModal = () => goVisibleModalInstance.show();
     window.openGoVisibleModal = () => goVisibleModalInstance.show();
     window.goVisibleModal = goVisibleModalInstance;
-    console.log('✅ GO_VISIBLE_MODAL: Initialized and exported to window');
+    Logger.debug('✅ GO_VISIBLE_MODAL: Initialized and exported to window', null, 'visibility');
 }
 export { GoVisibleModal, goVisibleModalInstance };
 export default GoVisibleModal;

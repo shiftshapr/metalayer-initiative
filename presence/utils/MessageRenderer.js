@@ -71,7 +71,7 @@ export class MessageRenderer {
 }
 // Export to window for backward compatibility
 if (typeof window !== 'undefined') {
-    window.MessageRenderer = MessageRenderer;
+    // Export removed - use ES6 imports
     console.log('✅ MessageRenderer: Exported to window');
 }
 export default MessageRenderer;

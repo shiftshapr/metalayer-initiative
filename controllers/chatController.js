@@ -1,6 +1,9 @@
 const { PrismaClient } = require('../generated/prisma');
 const prisma = new PrismaClient();
 
+// Public Square community UUID - default community for all users
+const PUBLIC_SQUARE_UUID = 'abe5ec85-4ba6-456f-adaf-03d7d51cecf4';
+
 // POST /chat/message
 exports.postMessage = async (req, res) => {
   try {
@@ -9,15 +12,15 @@ exports.postMessage = async (req, res) => {
       return res.status(400).json({ error: 'user_id & content are required' });
     }
     
-    // CRITICAL FIX: Default to comm-001 (Public Square) if communityId not provided
-    // This matches the database schema default and ensures messages are always assigned to a community
-    const resolvedCommunityId = communityId || 'comm-001';
+    // RED-LINE: No hardcoded fallback - require communityId
+    if (!communityId) {
+      console.log(`⚠️ CHAT_CREATE: No communityId provided - returning 400 error`);
+      return res.status(400).json({ error: 'communityId is required' });
+    }
+    const resolvedCommunityId = communityId;
 
     console.log(`✅ CHAT: Creating message for user ${user_id} in community ${resolvedCommunityId} on URI ${uri}`);
     console.log(`🔍 CHAT_CREATE: Message content: "${content}"`);
-    if (!communityId) {
-      console.log(`🔍 CHAT_CREATE: No communityId provided, defaulting to comm-001 (Public Square)`);
-    }
 
     // Look up user by email to get database user ID
     const user = await prisma.appUser.findUnique({

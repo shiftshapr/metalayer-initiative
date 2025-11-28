@@ -1,0 +1,421 @@
+/**
+ * Tab Manager Module Styles
+ * Extends existing tab styles without modifying core CSS
+ */
+
+/* Tab Manager Modal */
+.tab-manager-modal {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  z-index: 10000;
+  align-items: center;
+  justify-content: center;
+}
+
+.tab-manager-modal-content {
+  width: 100%;
+  max-width: 600px;
+  max-height: 90vh;
+  background: var(--background-primary, #ffffff);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.tab-manager-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-color, #dee2e6);
+}
+
+.tab-manager-modal-header h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary, #212529);
+}
+
+.tab-manager-close {
+  background: none;
+  border: none;
+  color: var(--text-secondary, #6c757d);
+  font-size: 24px;
+  cursor: pointer;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tab-manager-close:hover {
+  color: var(--text-primary, #212529);
+  background: var(--background-hover, #f8f9fa);
+  border-radius: 4px;
+}
+
+.tab-manager-modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+}
+
+/* Tab Manager Sections */
+.tab-manager-section {
+  margin-bottom: 32px;
+}
+
+.tab-manager-section h3 {
+  margin: 0 0 16px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary, #212529);
+}
+
+/* Tab List */
+.tab-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tab-list-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: var(--background-secondary, #f8f9fa);
+  border-radius: 8px;
+  border: 1px solid var(--border-color, #dee2e6);
+  cursor: move;
+}
+
+.tab-list-item.dragging {
+  opacity: 0.5;
+}
+
+.tab-list-item-handle {
+  cursor: grab;
+  color: var(--text-secondary, #6c757d);
+  font-size: 18px;
+  user-select: none;
+}
+
+.tab-list-item-handle:active {
+  cursor: grabbing;
+}
+
+.tab-list-item-content {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tab-label.clickable-tab-label {
+  cursor: pointer;
+  color: var(--text-primary, #212529);
+  transition: all 0.2s ease;
+  padding: 4px 8px;
+  border-radius: 4px;
+  user-select: none;
+}
+
+.tab-label.clickable-tab-label:hover {
+  color: #1D9BF0;
+  background: var(--background-hover, #f8f9fa);
+  text-decoration: underline;
+}
+
+.tab-label.clickable-tab-label:active {
+  transform: scale(0.98);
+}
+
+.tab-label.clickable-tab-label:focus {
+  outline: 2px solid #1D9BF0;
+  outline-offset: 2px;
+}
+
+.tab-badge-wrapper {
+  display: flex;
+  align-items: center;
+  margin-left: auto;
+}
+
+.tab-badge {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.built-in-badge {
+  background: #1D9BF0;
+  color: #FFFFFF;
+}
+
+.sdk-badge {
+  background: #71767A;
+  color: #FFFFFF;
+}
+
+.developer-mode-tab {
+  border-left: 3px solid #FFD700;
+}
+
+/* Tab Visibility Toggle */
+.tab-visibility-toggle {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+  cursor: pointer;
+}
+
+.tab-visibility-toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #71767A;
+  border-radius: 24px;
+  transition: 0.3s;
+}
+
+.toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  border-radius: 50%;
+  transition: 0.3s;
+}
+
+.tab-visibility-toggle input:checked + .toggle-slider {
+  background-color: #1D9BF0;
+}
+
+.tab-visibility-toggle input:checked + .toggle-slider:before {
+  transform: translateX(20px);
+}
+
+/* Display Settings */
+.visible-tab-count-control {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.visible-tab-count-control label {
+  color: var(--text-primary, #212529);
+  font-size: 14px;
+}
+
+.visible-tab-count-control input {
+  width: 60px;
+  padding: 6px 8px;
+  border: 1px solid var(--border-color, #dee2e6);
+  border-radius: 4px;
+  background: var(--background-secondary, #f8f9fa);
+  color: var(--text-primary, #212529);
+  font-size: 14px;
+}
+
+.tab-count-preview {
+  color: var(--text-secondary, #6c757d);
+  font-size: 12px;
+}
+
+/* App Store */
+.app-store-filters {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.app-store-filters input,
+.app-store-filters select {
+  flex: 1;
+  min-width: 150px;
+  padding: 8px 12px;
+  border: 1px solid var(--border-color, #dee2e6);
+  border-radius: 4px;
+  background: var(--background-secondary, #f8f9fa);
+  color: var(--text-primary, #212529);
+  font-size: 14px;
+}
+
+.app-store-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.app-store-item {
+  padding: 16px;
+  background: var(--background-secondary, #f8f9fa);
+  border-radius: 8px;
+  border: 1px solid var(--border-color, #dee2e6);
+}
+
+.app-store-item-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.app-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+  object-fit: cover;
+}
+
+.app-info {
+  flex: 1;
+}
+
+.app-info h4 {
+  margin: 0 0 4px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary, #212529);
+}
+
+.app-developer {
+  margin: 0 0 8px 0;
+  font-size: 12px;
+  color: var(--text-secondary, #6c757d);
+}
+
+.app-rating {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.stars {
+  color: #FFD700;
+}
+
+.rating-text {
+  color: var(--text-secondary, #6c757d);
+}
+
+.provenance-badge {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.provenance-badge.verified {
+  background: #00C853;
+  color: #FFFFFF;
+}
+
+.provenance-badge.unverified {
+  background: #FF6B00;
+  color: #FFFFFF;
+}
+
+.app-description {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  color: var(--text-secondary, #6c757d);
+  line-height: 1.4;
+}
+
+.app-store-item-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.app-install-btn,
+.app-details-btn {
+  padding: 8px 16px;
+  border: 1px solid var(--border-color, #dee2e6);
+  border-radius: 4px;
+  background: var(--background-primary, #ffffff);
+  color: var(--text-primary, #212529);
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.app-install-btn:hover,
+.app-details-btn:hover {
+  background: var(--background-hover, #f8f9fa);
+}
+
+.app-install-btn {
+  background: #1D9BF0;
+  border-color: #1D9BF0;
+}
+
+.app-install-btn:hover {
+  background: #1a8cd8;
+}
+
+/* Tab Manager Content (when used as tab, not modal) */
+.tab-manager-content {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.tab-manager-content-wrapper {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.tab-manager-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-color, #dee2e6);
+  flex-shrink: 0;
+}
+
+.tab-manager-header h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary, #212529);
+}
+
+.tab-manager-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+}
+
+/* REFACTOR: Tab navigation styles moved to sidepanel.css for better maintainability */
+/* This file now contains only Tab Manager modal-specific styles */

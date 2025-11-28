@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Tab Manager Test Page</title>
+  <meta charset="utf-8">
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      padding: 20px;
+      background: #000;
+      color: #fff;
+    }
+    .test-container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    .test-section {
+      margin: 20px 0;
+      padding: 20px;
+      background: #16181C;
+      border-radius: 8px;
+      border: 1px solid #2F3336;
+    }
+    .test-section h2 {
+      margin-top: 0;
+      color: #1D9BF0;
+    }
+    button {
+      padding: 8px 16px;
+      background: #1D9BF0;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      margin: 4px;
+    }
+    button:hover {
+      background: #1a8cd8;
+    }
+    .sidebar-nav-main {
+      display: flex;
+      background: #000;
+      border-bottom: 1px solid #2F3336;
+      padding: 0;
+      margin: 20px 0;
+    }
+    .main-tab-content {
+      display: none;
+      padding: 20px;
+      background: #16181C;
+      border-radius: 8px;
+      margin: 20px 0;
+    }
+    .main-tab-content.active {
+      display: block;
+    }
+    #test-results {
+      margin-top: 20px;
+      padding: 16px;
+      background: #16181C;
+      border-radius: 8px;
+      font-family: monospace;
+      white-space: pre-wrap;
+    }
+    .success {
+      color: #00C853;
+    }
+    .error {
+      color: #FF4444;
+    }
+  </style>
+  <link rel="stylesheet" href="tab-manager.css">
+</head>
+<body>
+  <div class="test-container">
+    <h1>🧪 Tab Manager Module Test Page</h1>
+    
+    <div class="test-section">
+      <h2>Test Controls</h2>
+      <button id="run-tests-btn">Run All Tests</button>
+      <button id="init-manager-btn">Initialize Tab Manager</button>
+      <button id="open-modal-btn">Open Modal</button>
+      <button id="switch-tab-btn">Switch to Settings Tab</button>
+      <button id="clear-storage-btn">Clear Storage</button>
+    </div>
+
+    <div class="test-section">
+      <h2>Tab Navigation (Test Display)</h2>
+      <div class="sidebar-nav-main" role="tablist">
+        <!-- Tabs will be rendered here by TabDisplay -->
+      </div>
+    </div>
+
+    <div class="test-section">
+      <h2>Tab Content Areas</h2>
+      <div id="discuss-tab" class="main-tab-content active">
+        <h3>Discuss Tab</h3>
+        <p>This is the discuss tab content.</p>
+      </div>
+      <div id="visibility-tab" class="main-tab-content">
+        <h3>Visibility Tab</h3>
+        <p>This is the visibility tab content.</p>
+      </div>
+      <div id="rooms-tab" class="main-tab-content">
+        <h3>Rooms Tab</h3>
+        <p>This is the rooms tab content.</p>
+      </div>
+      <div id="people-tab" class="main-tab-content">
+        <h3>People Tab</h3>
+        <p>This is the people tab content.</p>
+      </div>
+      <div id="agent-tab" class="main-tab-content">
+        <h3>Agent Tab</h3>
+        <p>This is the agent tab content.</p>
+      </div>
+      <div id="timelines-tab" class="main-tab-content">
+        <h3>Timelines Tab</h3>
+        <p>This is the timelines tab content.</p>
+      </div>
+      <div id="settings-tab" class="main-tab-content">
+        <h3>Settings Tab</h3>
+        <p>This is the settings tab content.</p>
+      </div>
+    </div>
+
+    <div class="test-section">
+      <h2>Current State</h2>
+      <div id="state-display">
+        <p><strong>Current Tab:</strong> <span id="current-tab-display">-</span></p>
+        <p><strong>Previous Tab:</strong> <span id="previous-tab-display">-</span></p>
+        <p><strong>Visible Tab Count:</strong> <span id="visible-count-display">-</span></p>
+      </div>
+    </div>
+
+    <div class="test-section">
+      <h2>Test Results</h2>
+      <div id="test-results">Click "Run All Tests" to see results...</div>
+    </div>
+  </div>
+
+  <!-- Load Chrome Extension APIs Mock (for testing) -->
+  <script>
+    // Mock chrome.storage.local for testing
+    if (typeof chrome === 'undefined') {
+      window.chrome = {
+        storage: {
+          local: {
+            get: function(keys, callback) {
+              const stored = JSON.parse(localStorage.getItem('chrome.storage.local') || '{}');
+              const result = {};
+              keys.forEach(key => {
+                result[key] = stored[key] || null;
+              });
+              callback(result);
+            },
+            set: function(items, callback) {
+              const stored = JSON.parse(localStorage.getItem('chrome.storage.local') || '{}');
+              Object.assign(stored, items);
+              localStorage.setItem('chrome.storage.local', JSON.stringify(stored));
+              if (callback) callback();
+            },
+            remove: function(keys, callback) {
+              const stored = JSON.parse(localStorage.getItem('chrome.storage.local') || '{}');
+              keys.forEach(key => delete stored[key]);
+              localStorage.setItem('chrome.storage.local', JSON.stringify(stored));
+              if (callback) callback();
+            }
+          }
+        },
+        runtime: {
+          lastError: null
+        }
+      };
+    }
+  </script>
+
+  <!-- Load Logger (mock) -->
+  <script type="module">
+    // Create a mock Logger module that can be imported
+    // This needs to be a module so it can be imported by the TabManager files
+    window.Logger = {
+      debug: console.log.bind(console),
+      error: console.error.bind(console),
+      warn: console.warn.bind(console),
+      log: console.log.bind(console)
+    };
+    
+    // Export Logger as a module for ES6 imports
+    // We'll create a Logger.js file that the compiled code can import
+  </script>
+  
+  <!-- Create Logger.js module file dynamically -->
+  <script>
+    // Create a Logger.js file that can be imported
+    const loggerScript = document.createElement('script');
+    loggerScript.type = 'module';
+    loggerScript.textContent = `
+      export const Logger = {
+        debug: console.log.bind(console),
+        error: console.error.bind(console),
+        warn: console.warn.bind(console),
+        log: console.log.bind(console)
+      };
+    `;
+    // We'll create this as an actual file instead
+  </script>
+
+  <!-- Load Tab Manager Module -->
+  <script type="module">
+    // Import and setup test page
+    // Note: TypeScript files need to be compiled to JavaScript first
+    // Run: tsc in the TabManager directory to compile .ts files to .js
+    
+    // Try to load the module - adjust path as needed
+    import('./TabManager.js').then(async module => {
+      const { getTabManager } = module;
+      
+      // Load test suite with error handling
+      let TabManagerTestSuite = null;
+      try {
+        const testModule = await import('./TabManager.test.js');
+        TabManagerTestSuite = testModule.TabManagerTestSuite || testModule.default;
+        if (TabManagerTestSuite) {
+          window.TabManagerTestSuite = TabManagerTestSuite;
+        }
+      } catch (error) {
+        console.warn('⚠️ Could not load test suite:', error);
+        // Try global fallback
+        TabManagerTestSuite = window.TabManagerTestSuite;
+      }
+      
+      let tabManager = null;
+      let testSuite = null;
+
+      // Setup test controls
+      document.getElementById('run-tests-btn')?.addEventListener('click', async () => {
+        const resultsDiv = document.getElementById('test-results');
+        if (!resultsDiv) return;
+
+        if (!TabManagerTestSuite) {
+          resultsDiv.textContent = 'Error: TabManagerTestSuite not loaded. Check console for import errors.';
+          resultsDiv.className = 'error';
+          return;
+        }
+
+        resultsDiv.textContent = 'Running tests...\n';
+        resultsDiv.className = '';
+
+        // Capture console output
+        const originalLog = console.log;
+        const originalError = console.error;
+        let output = '';
+
+        console.log = (...args) => {
+          output += args.join(' ') + '\n';
+          originalLog.apply(console, args);
+        };
+
+        console.error = (...args) => {
+          output += args.join(' ') + '\n';
+          originalError.apply(console, args);
+        };
+
+        try {
+          testSuite = new TabManagerTestSuite();
+          await testSuite.runAll();
+          resultsDiv.textContent = output || 'Tests completed (no output captured)';
+          resultsDiv.className = 'success';
+        } catch (error) {
+          const errorMessage = error && typeof error === 'object' && 'message' in error ? error.message : String(error);
+          resultsDiv.textContent = output + '\nError: ' + errorMessage;
+          resultsDiv.className = 'error';
+        } finally {
+          console.log = originalLog;
+          console.error = originalError;
+        }
+      });
+
+      document.getElementById('init-manager-btn')?.addEventListener('click', async () => {
+        try {
+          tabManager = getTabManager();
+          await tabManager.initialize();
+          
+          // Make tabManager accessible globally for diagnostics
+          window.tabManager = tabManager;
+          
+          updateStateDisplay();
+          updateTabContent();
+          console.log('✅ Tab Manager initialized');
+        } catch (error) {
+          console.error('❌ Failed to initialize:', error);
+        }
+      });
+
+      document.getElementById('open-modal-btn')?.addEventListener('click', () => {
+        if (!tabManager) {
+          alert('Please initialize Tab Manager first');
+          return;
+        }
+        // Modal will be opened via manage button
+        const manageBtn = document.querySelector('.manage-button');
+        if (manageBtn) {
+          manageBtn.click();
+        }
+      });
+
+      document.getElementById('switch-tab-btn')?.addEventListener('click', async () => {
+        if (!tabManager) {
+          alert('Please initialize Tab Manager first');
+          return;
+        }
+        const config = tabManager.getConfiguration();
+        await config.switchToTab('settings-tab');
+        updateStateDisplay();
+        updateTabContent();
+      });
+
+      document.getElementById('clear-storage-btn')?.addEventListener('click', async () => {
+        localStorage.removeItem('chrome.storage.local');
+        console.log('✅ Storage cleared');
+        updateStateDisplay();
+      });
+
+      function updateStateDisplay() {
+        if (!tabManager) return;
+
+        const currentTab = tabManager.getCurrentTab();
+        const previousTab = tabManager.getPreviousTab();
+        const config = tabManager.getConfiguration();
+        const state = config.getState();
+
+        const currentDisplay = document.getElementById('current-tab-display');
+        const previousDisplay = document.getElementById('previous-tab-display');
+        const countDisplay = document.getElementById('visible-count-display');
+
+        const visibleTabs = config.getVisibleTabs();
+        if (currentDisplay) currentDisplay.textContent = currentTab || 'null';
+        if (previousDisplay) previousDisplay.textContent = previousTab || 'null';
+        if (countDisplay) {
+          countDisplay.textContent = `${state.visibleTabCount} (${visibleTabs.length} visible)`;
+        }
+      }
+
+      function updateTabContent() {
+        if (!tabManager) return;
+
+        const currentTab = tabManager.getCurrentTab();
+        const allTabs = document.querySelectorAll('.main-tab-content');
+        
+        allTabs.forEach(tab => {
+          tab.classList.remove('active');
+        });
+
+        if (currentTab) {
+          const activeTab = document.getElementById(currentTab);
+          if (activeTab) {
+            activeTab.classList.add('active');
+          }
+        }
+      }
+
+      // Listen for tab switches
+      document.addEventListener('tabManager:tabSwitched', () => {
+        updateStateDisplay();
+        updateTabContent();
+      });
+
+      // Listen for visible tab count changes
+      document.addEventListener('tabManager:visibleTabCountChanged', (e) => {
+        updateStateDisplay();
+        // Refresh display to show updated tab count
+        if (tabManager) {
+          const config = tabManager.getConfiguration();
+          const visibleTabs = config.getVisibleTabs();
+          const currentTab = config.getCurrentTab();
+          const display = tabManager.display;
+          if (display) {
+            display.render(visibleTabs, currentTab);
+          }
+        }
+      });
+
+      // Auto-initialize on load
+      window.addEventListener('load', async () => {
+        console.log('🚀 Test page loaded. Click "Initialize Tab Manager" to start.');
+      });
+    }).catch(error => {
+      console.error('Failed to load Tab Manager module:', error);
+      document.getElementById('test-results').textContent = 
+        'Error: Could not load Tab Manager module. Make sure the TypeScript files are compiled to JavaScript.\n' +
+        'Error: ' + error.message;
+      document.getElementById('test-results').className = 'error';
+    });
+  </script>
+</body>
+</html>
+

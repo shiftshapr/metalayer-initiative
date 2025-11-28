@@ -3,40 +3,57 @@
  * TypeScript + ES6 Module
  */
 import { stateManagerInstance } from '../core/StateManager.js';
+import { handleError } from '../utils/ErrorHandler.js';
+import { Logger } from '../utils/Logger.js';
 class AuthManager {
     constructor() {
         this.currentUser = null;
         this.authState = 'unknown';
         this.authCallbacks = [];
-        console.log('AuthManager initialized', null, 'auth');
+        Logger.debug('AuthManager initialized', null, 'auth');
         this.initializeAuthHandlers();
     }
     async initialize() {
-        console.log('🔧 AuthManager initialize called');
+        Logger.debug('🔧 AuthManager initialize called', null, 'auth');
         // ROOT CAUSE FIX: Preserve existing currentUser from stateManager instead of clearing it
         const existingUser = stateManagerInstance.getState('currentUser');
         if (existingUser && !this.currentUser) {
-            console.log('✅ AuthManager: Preserving existing user from stateManager:', existingUser.email);
+            Logger.debug('✅ AuthManager: Preserving existing user from stateManager', { email: existingUser.email }, 'auth');
             this.currentUser = existingUser;
             this.authState = 'authenticated';
         }
         return Promise.resolve(true);
     }
     async signIn(provider, email = null) {
-        console.log('🔧 AuthManager signIn called with provider:', provider);
-        if (provider === 'google') {
-            if (typeof window !== 'undefined' && window.realGoogleAuth) {
-                const realGoogleAuth = window.realGoogleAuth;
-                return await realGoogleAuth?.signInWithGoogle();
+        try {
+            Logger.debug('🔧 AuthManager signIn called with provider', { provider }, 'auth');
+            if (provider === 'google') {
+                if (typeof window !== 'undefined' && window.realGoogleAuth) {
+                    const realGoogleAuth = window.realGoogleAuth;
+                    return await realGoogleAuth?.signInWithGoogle();
+                }
             }
-        }
-        else if (provider === 'magic_link' && email) {
-            if (typeof window !== 'undefined' && window.realGoogleAuth) {
-                const realGoogleAuth = window.realGoogleAuth;
-                return await realGoogleAuth?.signInWithMagicLink(email);
+            else if (provider === 'magic_link' && email) {
+                if (typeof window !== 'undefined' && window.realGoogleAuth) {
+                    const realGoogleAuth = window.realGoogleAuth;
+                    return await realGoogleAuth?.signInWithMagicLink(email);
+                }
             }
+            return null;
         }
-        return null;
+        catch (error) {
+            handleError(error, {
+                log: true,
+                logLevel: 'error',
+                context: {
+                    operation: 'signIn',
+                    component: 'AuthManager',
+                    provider,
+                    email
+                }
+            });
+            return null;
+        }
     }
     initializeAuthHandlers() {
         if (typeof document === 'undefined')
@@ -51,7 +68,7 @@ class AuthManager {
     async handleGoogleSignInInternal() {
         // Implementation for internal Google sign-in handling
     }
-    async handleMagicLinkSignInInternal(email) {
+    async handleMagicLinkSignInInternal(_email) {
         // Implementation for internal magic link sign-in handling
     }
     async handleGoogleSignIn() {
@@ -89,7 +106,7 @@ class AuthManager {
         }
     }
     async updateUserProfile(updates) {
-        console.log('Updating user profile', { updates }, 'auth');
+        Logger.debug('Updating user profile', { updates }, 'auth');
         if (this.currentUser) {
             const updatedUser = { ...this.currentUser, ...updates };
             this.setCurrentUser(updatedUser);
@@ -113,7 +130,15 @@ class AuthManager {
                 callback(detail);
             }
             catch (error) {
-                console.error('Error in auth state change callback:', error);
+                handleError(error, {
+                    log: true,
+                    logLevel: 'error',
+                    context: {
+                        operation: 'catch',
+                        component: 'Auth'
+                    }
+                });
+                ;
             }
         });
     }
@@ -128,7 +153,7 @@ class AuthManager {
     }
     showAuthPrompt(action) {
         // Implementation for showing auth prompt
-        console.log('Show auth prompt for action:', action);
+        Logger.debug('Show auth prompt for action:', action, 'auth');
     }
     createAuthPromptModal() {
         // Implementation for creating auth prompt modal

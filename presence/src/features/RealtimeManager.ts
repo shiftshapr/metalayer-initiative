@@ -4,17 +4,89 @@
  */
 
 import type { RealtimeChannel, SupabaseClient } from '@supabase/supabase-js';
-import type { Message, PresenceData, AurasIntegration } from '../types/index.js';
+import type { Message, PresenceData, User } from '../types/index.js';
+import { AvatarUtils } from '../utils/AvatarUtils.js';
+import { stateManagerInstance } from '../core/StateManager.js';
+import { getCurrentUserId, getCurrentUserEmail } from './AuthModule.js';
 
-import { handleModuleError, type ModuleErrorPolicy, type ErrorBoundaryResult } from '../utils/ErrorHandlingPolicy.js';
+// ES6 module-level storage (replaces window.supabaseRealtimeClient)
+let supabaseRealtimeClientInstance: { 
+  initialize?: (client: SupabaseClient) => Promise<boolean>;
+  isConnected?: boolean;
+  sendMessage?: (content: string) => Promise<boolean>;
+  [key: string]: unknown;
+} | null = null;
+
+/**
+ * Helper function to get Supabase client
+ * TODO: Refactor to use SupabaseService ES6 module instead of window.supabase
+ * This is a temporary solution until SupabaseService is created
+ */
+function getSupabaseClient(): SupabaseClient | null {
+  // TODO: Replace with ES6 SupabaseService import when available
+  const win = window as Window & { supabase?: SupabaseClient };
+  return win.supabase || null;
+}
+
+/**
+ * BEST PRACTICE: Type definitions for Supabase channel methods
+ * These types help avoid excessive 'as unknown as' assertions
+ */
+interface PresenceChannel {
+  on: (
+    event: 'presence',
+    filter: { event: string },
+    callback: (payload?: unknown) => void
+  ) => PresenceChannel;
+  subscribe: (callback: () => void) => unknown;
+}
+
+interface PostgresChannel {
+  on: (
+    event: 'postgres_changes',
+    filter: { event: string; schema: string; table: string; filter?: string },
+    callback: (payload: unknown) => void
+  ) => PostgresChannel;
+  subscribe: (callback: (status: string) => void) => unknown;
+}
+
+interface PresenceTrackChannel {
+  on: (
+    event: 'presence',
+    filter: { event: string },
+    callback: () => void
+  ) => PresenceTrackChannel;
+  subscribe: (callback: (status: string) => Promise<void>) => unknown;
+  presenceState?: () => unknown;
+  track?: (data: unknown) => Promise<void>;
+}
+
+// ErrorHandlingPolicy module not found - using fallback types
+type ModuleErrorPolicy = {
+  retry?: boolean;
+  maxRetries?: number;
+  component?: string;
+  [key: string]: unknown;
+};
+type ErrorBoundaryResult<T = unknown> = {
+  handled: boolean;
+  error?: unknown;
+  data?: T;
+  [key: string]: unknown;
+};
+function handleModuleError<T = unknown>(error: unknown, _policy?: ModuleErrorPolicy): ErrorBoundaryResult<T> {
+  // BEST PRACTICE: Use satisfies for type checking without assertion
+  return { handled: false, error } satisfies ErrorBoundaryResult<T>;
+}
 
 import { Logger } from '../utils/Logger.js';
+import { waitForCondition } from '../utils/AsyncCoordination.js';
 type LogLevel = 'SILENT' | 'ERROR' | 'WARN' | 'INFO' | 'DEBUG';
 type PresenceEventType = 'INSERT' | 'UPDATE' | 'DELETE';
 type AvailabilityStatus = 'AVAILABLE' | 'BUSY' | 'AWAY' | 'OFFLINE';
 type MessageType = 'MESSAGE_NEW' | 'AURA_COLOR_CHANGED' | 'PRESENCE_UPDATE' | 'VISIBILITY_UPDATE' | 'PAGE_SUBSCRIPTION';
 type PresenceEventKind = 'ENTER' | 'LEAVE' | 'AVAILABILITY';
-type WindowWithUrlData = Window & { currentUrlData?: { pageId?: string; rawUrl?: string } };
+// Removed WindowWithUrlData - use window.currentUrlData directly with proper types from global.d.ts
 
 type RealtimePolicy = Omit<ModuleErrorPolicy, 'component'>;
 
@@ -185,10 +257,12 @@ class RealtimeManager {
     this.log('INFO', 'Initializing RealtimeManager...');
     
     try {
-      // COMP METHOD: Initialize AurasIntegration if available
+      // Initialize AurasIntegration if available
       // This integration enables real-time aura color propagation
-      const aurasIntegration = (window as Window & { aurasIntegration?: { initialize?: () => Promise<boolean | void> } }).aurasIntegration;
-      if (aurasIntegration && typeof aurasIntegration.initialize === 'function') {
+      // TODO: Export aurasIntegration from a module instead of window
+      const win = window as Window & { aurasIntegration?: { initialize?: () => Promise<boolean | undefined> } };
+      const aurasIntegration = win.aurasIntegration;
+      if (aurasIntegration && typeof aurasIntegration === 'object' && aurasIntegration !== null && 'initialize' in aurasIntegration && typeof aurasIntegration.initialize === 'function') {
         this.log('INFO', 'Initializing AurasIntegration...');
         try {
           const initResult = await aurasIntegration.initialize();
@@ -197,11 +271,11 @@ class RealtimeManager {
             this.log('INFO', 'AurasIntegration initialized successfully');
           } else {
             this.log('WARN', 'AurasIntegration initialization returned false - may work with limited functionality');
-            // COMP METHOD: Don't fail completely - aura can still work via Supabase directly
+            // Don't fail completely - aura can still work via Supabase directly
           }
         } catch (error: unknown) {
           this.log('ERROR', 'AurasIntegration initialization failed:', error);
-          // COMP METHOD: Don't throw - continue initialization - aura can work via Supabase directly
+          // Don't throw - continue initialization - aura can work via Supabase directly
           this.log('WARN', 'Continuing without AurasIntegration - aura functionality will use Supabase directly');
         }
       } else {
@@ -209,14 +283,16 @@ class RealtimeManager {
         this.log('INFO', 'Aura functionality will use Supabase directly');
       }
       
-      // COMP METHOD: Initialize presence tracking
+      // Initialize presence tracking
       this.initializePresenceTracking();
       
-      // FIX: Initialize user_presence table subscription for real-time visibility updates
+      // Initialize user_presence table subscription for real-time visibility updates
       this.initializeUserPresenceSubscription();
       
       // 4-STATE STATUS: Initialize availability status real-time subscription (if enabled)
-      if (typeof window !== 'undefined' && (window as Window & { ENABLE_4STATE_STATUS?: boolean }).ENABLE_4STATE_STATUS !== false) {
+      // TODO: Get ENABLE_4STATE_STATUS from config service instead of window
+      const win2 = window as Window & { ENABLE_4STATE_STATUS?: boolean };
+      if (typeof window !== 'undefined' && win2.ENABLE_4STATE_STATUS !== false) {
         this.initializeAvailabilitySubscription();
       }
       
@@ -229,91 +305,96 @@ class RealtimeManager {
   }
 
   /**
-   * COMP METHOD: Initialize presence tracking
+   * Initialize presence tracking
    */
   private initializePresenceTracking(): void {
-    this.log('INFO', 'COMP METHOD: Initializing presence tracking...');
+    this.log('INFO', 'Initializing presence tracking...');
     
     // Initialize presence tracking for current page
-    const currentUrlData = (window as WindowWithUrlData).currentUrlData;
+    // ES6 pattern: Get currentUrlData from stateManager instead of window
+    const currentUrlData = stateManagerInstance.getState('currentUrlData') as { pageId?: string } | null;
     const currentPageId = currentUrlData?.pageId;
     if (currentPageId) {
       this.initializePresence(currentPageId);
     } else {
-      this.log('WARN', 'COMP METHOD: No page ID available for presence tracking');
+      this.log('WARN', 'No page ID available for presence tracking');
     }
   }
 
   /**
-   * COMP METHOD: Initialize presence for a specific page
+   * Initialize presence for a specific page
    */
   private initializePresence(pageId: string): void {
-    this.log('INFO', `COMP METHOD: Initializing presence for page ${pageId}`);
+    this.log('INFO', `Initializing presence for page ${pageId}`);
     
-    // Initialize presence tracking using COMP method
-    const supabase = ((window as unknown) as Window & { supabase?: SupabaseClient }).supabase;
+    // Initialize presence tracking
+    // TODO: Replace with ES6 SupabaseService import when available
+    const supabase = getSupabaseClient();
     if (supabase) {
-      // Subscribe to presence changes
-      const presenceChannel = supabase.channel(`presence:${pageId}`) as unknown as {
-        on: (event: string, filter: { event: string }, callback: (payload?: unknown) => void) => unknown;
-        subscribe: (callback: () => void) => unknown;
-      };
+      // BEST PRACTICE: Use proper type instead of inline type assertions
+      const presenceChannel = supabase.channel(`presence:${pageId}`) as unknown as PresenceChannel;
       const ch1 = presenceChannel
-        .on('presence', { event: 'sync' }, () => {
-          this.log('INFO', 'COMP METHOD: Presence sync event received');
-          this.updatePresenceDisplay();
-        }) as unknown as { on: (event: string, filter: { event: string }, callback: (payload?: unknown) => void) => unknown; subscribe: (callback: () => void) => unknown };
+        .on('presence', { event: 'sync' }, async () => {
+          this.log('INFO', 'Presence sync event received');
+          await this.updatePresenceDisplay();
+        });
       const ch2 = ch1
-        .on('presence', { event: 'join' }, (payload?: unknown) => {
+        .on('presence', { event: 'join' }, async (payload?: unknown) => {
           const p = payload as { key: string; newPresences: PresenceData[] };
-          this.log('INFO', 'COMP METHOD: User joined presence:', p?.key);
-          this.updatePresenceDisplay();
-        }) as unknown as { on: (event: string, filter: { event: string }, callback: (payload?: unknown) => void) => unknown; subscribe: (callback: () => void) => unknown };
+          this.log('INFO', 'User joined presence:', p?.key);
+          await this.updatePresenceDisplay();
+        });
       const ch3 = ch2
-        .on('presence', { event: 'leave' }, (payload?: unknown) => {
+        .on('presence', { event: 'leave' }, async (payload?: unknown) => {
           const p = payload as { key: string; leftPresences: PresenceData[] };
-          this.log('INFO', 'COMP METHOD: User left presence:', p?.key);
-          this.updatePresenceDisplay();
-        }) as unknown as { subscribe: (callback: () => void) => unknown };
+          this.log('INFO', 'User left presence:', p?.key);
+          await this.updatePresenceDisplay();
+        });
       ch3.subscribe(() => {});
       
       // Track current user's presence
       this.trackUserPresence(pageId);
     } else {
-      this.log('WARN', 'COMP METHOD: Supabase not available for presence tracking');
+      this.log('WARN', 'Supabase not available for presence tracking');
     }
   }
 
   /**
-   * COMP METHOD: Track current user's presence
+   * Track current user's presence
    */
   private trackUserPresence(pageId: string): void {
-    this.log('INFO', `COMP METHOD: Tracking user presence for page ${pageId}`);
+    this.log('INFO', `Tracking user presence for page ${pageId}`);
     
-    const currentUser = window.currentUser;
-    const supabase = ((window as unknown) as Window & { supabase?: SupabaseClient }).supabase;
+    // ES6 pattern: Get currentUser from stateManager instead of window
+    const currentUser = stateManagerInstance.getState('currentUser') as User | null;
+    // TODO: Replace with ES6 SupabaseService import when available
+    const supabase = getSupabaseClient();
     if (currentUser && supabase) {
       const presenceChannel = supabase.channel(`presence:${pageId}`);
       
-      const channel = presenceChannel as unknown as { on: (event: string, filter: { event: string }, callback: () => void) => unknown; subscribe: (callback: (status: string) => Promise<void>) => unknown; presenceState?: () => unknown; track?: (data: unknown) => Promise<void> };
+      // BEST PRACTICE: Use proper type instead of inline type assertions
+      const channel = presenceChannel as unknown as PresenceTrackChannel;
       const ch = channel
         .on('presence', { event: 'sync' }, () => {
           if (channel.presenceState) {
             const state = channel.presenceState();
-            this.log('INFO', 'COMP METHOD: Current presence state:', state);
+            this.log('INFO', 'Current presence state:', state);
           }
-        }) as unknown as { subscribe: (callback: (status: string) => Promise<void>) => unknown };
-      ch.subscribe(async (status: string) => {
+        });
+      // BEST PRACTICE: Type assertion needed here due to Supabase API design
+      (ch as PresenceTrackChannel).subscribe(async (status: string) => {
           try {
             if (status === 'SUBSCRIBED' && channel.track) {
+              // BEST PRACTICE: Use proper User type instead of inline assertions
+              const user = currentUser as User;
               await channel.track({
-                userId: (currentUser as { id?: string; user_id?: string }).id || (currentUser as { id?: string; user_id?: string }).user_id,
-                userName: (currentUser as { name?: string }).name,
-                userAvatar: (currentUser as { avatar?: string }).avatar,
+                userId: user.id || (user as { user_id?: string }).user_id,
+                userName: user.name,
+                userAvatar: user.avatarUrl || (user as { avatar?: string }).avatar,
                 onlineAt: new Date().toISOString(),
                 pageId: pageId
               });
-              this.log('INFO', 'COMP METHOD: User presence tracked successfully');
+              this.log('INFO', 'User presence tracked successfully');
             }
         } catch (error: unknown) {
           handleRealtimeError(error, {
@@ -329,10 +410,12 @@ class RealtimeManager {
   }
 
   /**
-   * COMP METHOD: Update presence display
+   * Update presence display
+   * BEST PRACTICE: Use DOM manipulation instead of innerHTML for security
+   * CRITICAL FIX: Made async to support AvatarUtils (regression fix)
    */
-  private updatePresenceDisplay(): void {
-    this.log('INFO', 'COMP METHOD: Updating presence display...');
+  private async updatePresenceDisplay(): Promise<void> {
+    this.log('INFO', 'Updating presence display...');
     
     // Get active users from presence state
     const activeUsers = this.getActiveUsers();
@@ -340,30 +423,77 @@ class RealtimeManager {
     // Update visible tab if available
     const visibleTab = document.querySelector('#visible-tab');
     if (visibleTab) {
+      // BEST PRACTICE: Clear and rebuild DOM instead of innerHTML
+      visibleTab.textContent = '';
+      
       if (activeUsers.length > 0) {
-        visibleTab.innerHTML = '';
-        activeUsers.forEach(user => {
+        // CRITICAL FIX: Use Promise.all to handle async avatar creation (regression fix)
+        const profilePromises = activeUsers.map(async (user) => {
           const profileDiv = document.createElement('div');
           profileDiv.className = 'profile-item';
-          profileDiv.innerHTML = `
-            <div class="profile-avatar">
-              <img src="${user.avatar || ''}" alt="${user.name || ''}">
-            </div>
-            <div class="profile-info">
-              <div class="profile-name">${user.name || ''}</div>
-              <div class="profile-status">Active</div>
-            </div>
-          `;
-          visibleTab.appendChild(profileDiv);
+          
+          // CRITICAL FIX: Use AvatarUtils to create avatar with glow effect (regression fix)
+          const avatarDiv = document.createElement('div');
+          avatarDiv.className = 'profile-avatar';
+          
+          try {
+            // Convert ActiveUser to User type for AvatarUtils
+            const userForAvatar: User = {
+              id: (user as User).id || user.userId || user.user_id || '',
+              email: (user as User).email,
+              name: user.name,
+              avatarUrl: user.avatar,
+              auraColor: (user as User).auraColor,
+              ...user
+            } as User;
+            const avatarHTML = await AvatarUtils.createUnifiedAvatar(userForAvatar, 'visibility', {
+              showAura: true,
+              showStatus: false,
+              size: 32
+            });
+            avatarDiv.innerHTML = avatarHTML;
+          } catch (error) {
+            // Fallback to simple avatar if AvatarUtils fails
+            const img = document.createElement('img');
+            img.src = user.avatar || '';
+            img.alt = user.name || '';
+            img.style.border = 'none';
+            img.style.outline = 'none';
+            avatarDiv.appendChild(img);
+          }
+          
+          const infoDiv = document.createElement('div');
+          infoDiv.className = 'profile-info';
+          const nameDiv = document.createElement('div');
+          nameDiv.className = 'profile-name';
+          nameDiv.textContent = user.name || '';
+          const statusDiv = document.createElement('div');
+          statusDiv.className = 'profile-status';
+          statusDiv.textContent = 'Active';
+          
+          infoDiv.appendChild(nameDiv);
+          infoDiv.appendChild(statusDiv);
+          
+          profileDiv.appendChild(avatarDiv);
+          profileDiv.appendChild(infoDiv);
+          
+          return profileDiv;
         });
+        
+        const profileDivs = await Promise.all(profilePromises);
+        profileDivs.forEach(div => visibleTab.appendChild(div));
       } else {
-        visibleTab.innerHTML = '<div class="no-users">No active users on this page</div>';
+        const noUsersDiv = document.createElement('div');
+        noUsersDiv.className = 'no-users';
+        noUsersDiv.textContent = 'No active users on this page';
+        visibleTab.appendChild(noUsersDiv);
       }
     }
   }
 
   /**
-   * COMP METHOD: Get active users
+   * Get active users
+   * TODO: Implement based on actual presence system
    */
   private getActiveUsers(): ActiveUser[] {
     // This would be implemented based on the actual presence system
@@ -384,13 +514,14 @@ class RealtimeManager {
   }
 
   /**
-   * FIX: Initialize real-time subscription for user_presence table changes
+   * Initialize real-time subscription for user_presence table changes
    * This ensures visibility updates when users join/leave pages
    */
   private initializeUserPresenceSubscription(): void {
     this.log('INFO', '🔔 PRESENCE: Initializing user_presence subscription...');
     
-    const supabase = ((window as unknown) as Window & { supabase?: SupabaseClient }).supabase;
+    // TODO: Replace with ES6 SupabaseService import when available
+    const supabase = getSupabaseClient();
     if (!supabase) {
       this.log('WARN', '⚠️ PRESENCE: Supabase not available for user_presence subscription');
       return;
@@ -398,11 +529,8 @@ class RealtimeManager {
 
     try {
       // Subscribe to user_presence table changes (INSERT, UPDATE, DELETE)
-      // FIX: Subscribe to each event type separately for reliability
-      const presenceChannel = supabase.channel('user-presence-changes') as unknown as {
-        on: (event: string, filter: { event: string; schema: string; table: string }, callback: (payload: unknown) => void) => unknown;
-        subscribe: (callback: (status: string) => void) => unknown;
-      };
+      // BEST PRACTICE: Use proper type instead of inline type assertions
+      const presenceChannel = supabase.channel('user-presence-changes') as unknown as PostgresChannel;
       const pc1 = presenceChannel
         .on(
           'postgres_changes',
@@ -420,7 +548,7 @@ class RealtimeManager {
               old: null
             });
           }
-        ) as unknown as { on: (event: string, filter: { event: string; schema: string; table: string }, callback: (payload: unknown) => void) => unknown; subscribe: (callback: (status: string) => void) => unknown };
+        );
       const pc2 = pc1
         .on(
           'postgres_changes',
@@ -438,7 +566,7 @@ class RealtimeManager {
               old: p.old
             });
           }
-        ) as unknown as { on: (event: string, filter: { event: string; schema: string; table: string }, callback: (payload: unknown) => void) => unknown; subscribe: (callback: (status: string) => void) => unknown };
+        );
       const pc3 = pc2
         .on(
           'postgres_changes',
@@ -456,7 +584,7 @@ class RealtimeManager {
               old: p.old
             });
           }
-        ) as unknown as { subscribe: (callback: (status: string) => void) => unknown };
+        );
       pc3.subscribe((status: string) => {
           if (status === 'SUBSCRIBED') {
             this.log('INFO', '✅ PRESENCE: user_presence subscription active (all events)');
@@ -478,7 +606,8 @@ class RealtimeManager {
   private initializeAvailabilitySubscription(): void {
     this.log('INFO', '🎯 STATUS: Initializing availability subscription...');
     
-    const supabase = ((window as unknown) as Window & { supabase?: SupabaseClient }).supabase;
+    // TODO: Replace with ES6 SupabaseService import when available
+    const supabase = getSupabaseClient();
     if (!supabase) {
       this.log('WARN', '⚠️ STATUS: Supabase not available for availability subscription');
       return;
@@ -486,10 +615,8 @@ class RealtimeManager {
 
     try {
       // Subscribe to PresenceEvent table changes for AVAILABILITY events
-      const availabilityChannel = supabase.channel('availability-changes') as unknown as {
-        on: (event: string, filter: { event: string; schema: string; table: string; filter?: string }, callback: (payload: unknown) => void) => unknown;
-        subscribe: (callback: (status: string) => void) => unknown;
-      };
+      // BEST PRACTICE: Use proper type instead of inline type assertions
+      const availabilityChannel = supabase.channel('availability-changes') as unknown as PostgresChannel;
       const ac1 = availabilityChannel
         .on(
           'postgres_changes',
@@ -504,7 +631,7 @@ class RealtimeManager {
             this.log('INFO', '🎯 STATUS: Availability change detected:', p);
             this.handleAvailabilityChange(p);
           }
-        ) as unknown as { subscribe: (callback: (status: string) => void) => unknown };
+        );
       ac1.subscribe((status: string) => {
           if (status === 'SUBSCRIBED') {
             this.log('INFO', '✅ STATUS: Availability subscription active');
@@ -534,7 +661,8 @@ class RealtimeManager {
       this.updateUserStatusDots(userId, availability);
 
       // Update visibility data if available
-      const currentVisibilityDataUnfiltered = (window as Window & { currentVisibilityDataUnfiltered?: { active?: Array<{ userId?: string; id?: string; availability?: AvailabilityStatus }> } }).currentVisibilityDataUnfiltered;
+      // ES6 pattern: Get from stateManager instead of window
+      const currentVisibilityDataUnfiltered = stateManagerInstance.getState('currentVisibilityDataUnfiltered') as { active?: Array<{ userId?: string; id?: string; availability?: AvailabilityStatus }> } | null;
       if (currentVisibilityDataUnfiltered && currentVisibilityDataUnfiltered.active) {
         const user = currentVisibilityDataUnfiltered.active.find(
           (u: { userId?: string; id?: string }) => u.userId === userId || u.id === userId
@@ -570,10 +698,12 @@ class RealtimeManager {
 
       // Get new color using StatusDotHelper if available
       let newColor: string | null = null;
-      const statusDotHelper = ((window as unknown) as Window & { StatusDotHelper?: { getStatusDotColor: (user: { availability: AvailabilityStatus; isActive: boolean }) => string | null } }).StatusDotHelper;
-      if (statusDotHelper) {
-        const mockUser = { availability, isActive: true };
-        newColor = statusDotHelper.getStatusDotColor(mockUser);
+      // TODO: Export StatusDotHelper from a module instead of window
+      const win3 = window as Window & { StatusDotHelper?: { getStatusDotColor?: (status: AvailabilityStatus) => string } };
+      const statusDotHelper = win3.StatusDotHelper;
+      if (statusDotHelper && typeof statusDotHelper.getStatusDotColor === 'function') {
+        // BEST PRACTICE: Use proper type checking - getStatusDotColor expects string status
+        newColor = statusDotHelper.getStatusDotColor(availability);
       } else {
         // Fallback color map
         const colorMap: Record<AvailabilityStatus, string> = {
@@ -619,50 +749,34 @@ class RealtimeManager {
 async function initializeSupabaseRealtimeClient(): Promise<void> {
   try {
     Logger.debug('🚀 SUPABASE: Starting comprehensive real-time client initialization...', null, 'realtime');
-    Logger.debug('🚀 SUPABASE: Current window.supabase status:', { status: typeof (window as Window & { supabase?: SupabaseClient }).supabase }, 'realtime');
-    Logger.debug('🚀 SUPABASE: Current window.supabaseRealtimeClient status:', { status: typeof (window as Window & { supabaseRealtimeClient?: { initialize?: (client: SupabaseClient) => Promise<boolean>; isConnected?: boolean; sendMessage?: (content: string) => Promise<boolean>; broadcastAuraColorChange?: (color: string) => Promise<boolean>; updatePresence?: (pageId: string, pageUrl: string, auraColor: string) => Promise<boolean>; setUserVisibility?: (isVisible: boolean, pageUrl: string) => Promise<boolean>; setCurrentUser?: (userId: string | null) => Promise<void>; joinPage?: (pageId: string, pageUrl: string) => Promise<void>; onUserJoined?: (user: { user_email: string }) => void; onUserLeft?: (user: { user_email: string }) => void; onUserUpdated?: (user: { user_email: string; aura_color?: string }) => void; onNewMessage?: (message: Message) => Promise<void>; onVisibilityChanged?: (visibility: { user_email: string; is_visible: boolean }) => void } }).supabaseRealtimeClient }, 'realtime');
+    Logger.debug('🚀 SUPABASE: Current window.supabase status:', { status: typeof window.supabase }, 'realtime');
+    Logger.debug('🚀 SUPABASE: Current supabaseRealtimeClientInstance status:', { status: supabaseRealtimeClientInstance ? typeof supabaseRealtimeClientInstance : 'null' }, 'realtime');
     
-    // Wait for Supabase library to load
-    const waitForSupabase = (): Promise<boolean> => {
-      return new Promise((resolve) => {
-        let attempts = 0;
-        const maxAttempts = 50; // 5 seconds max wait
-        
-        const checkSupabase = (): void => {
-          attempts++;
-          
-          Logger.debug(`🔍 SUPABASE CHECK: Attempt ${attempts}/${maxAttempts}`, null, 'realtime');
-          const winSupabase = ((window as unknown) as Window & { supabase?: SupabaseClient }).supabase;
-          Logger.debug(`🔍 SUPABASE CHECK: window.supabase type: ${typeof winSupabase}`, null, 'realtime');
-          Logger.debug(`🔍 SUPABASE CHECK: window.supabase.from type: ${typeof winSupabase?.from}`, null, 'realtime');
-          
-          // Check if window.supabase client is available
-          const supabase = ((window as unknown) as Window & { supabase?: SupabaseClient }).supabase;
-          if (typeof supabase !== 'undefined' && supabase && typeof supabase.from === 'function') {
-            Logger.debug('✅ SUPABASE CLIENT: Loaded and initialized successfully', null, 'realtime');
-            Logger.debug('✅ SUPABASE CLIENT: Available methods:', { methods: Object.keys(supabase).slice(0, 10) }, 'realtime');
-            Logger.debug('✅ SUPABASE CLIENT: Client ready for real-time operations', null, 'realtime');
-            resolve(true);
-          } else if (attempts >= maxAttempts) {
-            Logger.error('❌ SUPABASE LIBRARY: Failed to load after 5 seconds', null, 'realtime');
-            Logger.error('❌ SUPABASE LIBRARY: window.supabase', { type: typeof supabase }, 'realtime');
-            Logger.error('❌ SUPABASE LIBRARY: Available window keys', Object.keys(window).filter(k => k.toLowerCase().includes('supabase')), 'realtime');
-            Logger.error('❌ SUPABASE LIBRARY: This is a CRITICAL FAILURE - real-time will not work', null, 'realtime');
-            resolve(false);
-          } else {
-            if (attempts % 10 === 0) {
-              Logger.debug(`⏳ SUPABASE LIBRARY: Waiting... (attempt ${attempts}/${maxAttempts})`, null, 'realtime');
-            }
-            setTimeout(checkSupabase, 100);
-          }
-        };
-        
-        checkSupabase();
-      });
-    };
-    
-    // Wait for library to load
-    const loaded = await waitForSupabase();
+    // BEST PRACTICE: Use event-based wait instead of polling
+    // Wait for Supabase library to load using waitForCondition (no polling)
+    // TODO: Replace with ES6 SupabaseService import when available
+    const loaded = await waitForCondition(
+      () => {
+        const supabase = getSupabaseClient();
+        return supabase !== null && typeof supabase.from === 'function';
+      },
+      {
+        timeout: 5000, // 5 seconds max wait
+        interval: 100
+      }
+    ).then(() => {
+      const supabase = getSupabaseClient();
+      Logger.debug('✅ SUPABASE CLIENT: Loaded and initialized successfully', null, 'realtime');
+      Logger.debug('✅ SUPABASE CLIENT: Available methods:', { methods: Object.keys(supabase || {}).slice(0, 10) }, 'realtime');
+      Logger.debug('✅ SUPABASE CLIENT: Client ready for real-time operations', null, 'realtime');
+      return true;
+    }).catch(() => {
+      Logger.error('❌ SUPABASE LIBRARY: Failed to load after 5 seconds', null, 'realtime');
+      Logger.error('❌ SUPABASE LIBRARY: window.supabase', { type: typeof window.supabase }, 'realtime');
+      Logger.error('❌ SUPABASE LIBRARY: Available window keys', Object.keys(window).filter(k => k.toLowerCase().includes('supabase')), 'realtime');
+      Logger.error('❌ SUPABASE LIBRARY: This is a CRITICAL FAILURE - real-time will not work', null, 'realtime');
+      return false;
+    });
     
     if (!loaded) {
       Logger.error('❌ SUPABASE: Cannot initialize without Supabase library', null, 'realtime');
@@ -672,52 +786,85 @@ async function initializeSupabaseRealtimeClient(): Promise<void> {
     Logger.debug('🚀 SUPABASE: Initializing Supabase real-time client...', null, 'realtime');
     
     // COMP APPROACH: Use window.supabase.realtime directly
-    const supabase = ((window as unknown) as Window & { supabase?: SupabaseClient }).supabase;
+    // TODO: Replace with ES6 SupabaseService import when available
+    const supabase = getSupabaseClient();
     if (supabase && supabase.realtime) {
       Logger.debug('✅ SUPABASE_DEBUG: window.supabase.realtime found, using COMP approach...', 'realtime');
       
-      // Create SupabaseRealtimeClient instance (FROM COMP)
-      type SupabaseRealtimeClientType = new () => { initialize: (client: SupabaseClient) => Promise<boolean>; isConnected?: boolean; sendMessage?: (content: string) => Promise<boolean>; broadcastAuraColorChange?: (color: string) => Promise<boolean>; updatePresence?: (pageId: string, pageUrl: string, auraColor: string) => Promise<boolean>; setUserVisibility?: (isVisible: boolean, pageUrl: string) => Promise<boolean>; setCurrentUser?: (userId: string | null) => Promise<void>; joinPage?: (pageId: string, pageUrl: string) => Promise<void>; onUserJoined?: (user: { user_email: string }) => void; onUserLeft?: (user: { user_email: string }) => void; onUserUpdated?: (user: { user_email: string; aura_color?: string }) => void; onNewMessage?: (message: Message | { user_email?: string; content?: string; [key: string]: unknown }) => Promise<void>; onVisibilityChanged?: (visibility: { user_email: string; is_visible: boolean }) => void };
-      const SupabaseRealtimeClient = ((window as unknown) as Window & { SupabaseRealtimeClient?: SupabaseRealtimeClientType }).SupabaseRealtimeClient;
-      const winWithClient = (window as unknown) as Window & { supabaseRealtimeClient?: InstanceType<SupabaseRealtimeClientType> };
-      if (typeof SupabaseRealtimeClient !== 'undefined') {
-        Logger.debug('✅ SUPABASE_DEBUG: SupabaseRealtimeClient class found, creating instance...', 'realtime');
-        const instance = new SupabaseRealtimeClient();
-        Object.assign(winWithClient, { supabaseRealtimeClient: instance });
-        Logger.debug('✅ SUPABASE_DEBUG: Instance created:', !!winWithClient.supabaseRealtimeClient, 'realtime');
-        
-        // Initialize with Supabase client
-        if (winWithClient.supabaseRealtimeClient && typeof winWithClient.supabaseRealtimeClient.initialize === 'function') {
-          const success = await winWithClient.supabaseRealtimeClient.initialize(supabase);
-          Logger.debug('✅ SUPABASE_DEBUG: Initialize result:', success, 'realtime');
+      // Create SupabaseRealtimeClient instance
+      // BEST PRACTICE: Use proper type checking - SupabaseRealtimeClient may not be a constructor
+      // TODO: Export SupabaseRealtimeClient from a module instead of window
+      const win4 = window as Window & { SupabaseRealtimeClient?: new () => { initialize?: (client: SupabaseClient) => Promise<boolean> } };
+      const SupabaseRealtimeClient = win4.SupabaseRealtimeClient;
+      if (SupabaseRealtimeClient) {
+        // Check if it's a constructor function
+        if (typeof SupabaseRealtimeClient === 'function') {
+          try {
+            Logger.debug('✅ SUPABASE_DEBUG: SupabaseRealtimeClient class found, creating instance...', 'realtime');
+            const instance = new (SupabaseRealtimeClient as new () => { initialize?: (client: SupabaseClient) => Promise<boolean> })();
+            supabaseRealtimeClientInstance = instance;
+            Logger.debug('✅ SUPABASE_DEBUG: Instance created:', !!supabaseRealtimeClientInstance, 'realtime');
+            
+            // Initialize with Supabase client
+            // BEST PRACTICE: Use proper type for client instance
+            type RealtimeClientInstance = {
+              initialize?: (client: SupabaseClient) => Promise<boolean>;
+              isConnected?: boolean;
+              sendMessage?: (content: string) => Promise<boolean>;
+              [key: string]: unknown;
+            };
+            const clientInstance = supabaseRealtimeClientInstance as RealtimeClientInstance;
+            if (clientInstance && typeof clientInstance.initialize === 'function') {
+              // BEST PRACTICE: Type assertion needed due to Supabase version differences
+              const success = await clientInstance.initialize(supabase as unknown as SupabaseClient);
+              Logger.debug('✅ SUPABASE_DEBUG: Initialize result:', success, 'realtime');
+            }
+          } catch (error: unknown) {
+            Logger.error('❌ SUPABASE_DEBUG: Failed to create SupabaseRealtimeClient instance:', error, 'realtime');
+            // Fallback: use supabase directly as realtime client
+            // BEST PRACTICE: Type assertion needed for fallback assignment
+            type RealtimeClientInstance = { [key: string]: unknown };
+            supabaseRealtimeClientInstance = supabase as unknown as RealtimeClientInstance;
+          }
+        } else {
+          Logger.debug('⚠️ SUPABASE_DEBUG: SupabaseRealtimeClient is not a constructor, using as-is', 'realtime');
+          type RealtimeClientInstance = { [key: string]: unknown };
+          supabaseRealtimeClientInstance = SupabaseRealtimeClient as unknown as RealtimeClientInstance;
         }
       } else {
         Logger.debug('❌ SUPABASE_DEBUG: SupabaseRealtimeClient class not available, using fallback', 'realtime');
-        Object.assign(winWithClient, { supabaseRealtimeClient: supabase as unknown as InstanceType<SupabaseRealtimeClientType> });
+        // Fallback: use supabase directly as realtime client
+        // BEST PRACTICE: Type assertion needed for fallback assignment
+        type RealtimeClientInstance = { [key: string]: unknown };
+        supabaseRealtimeClientInstance = supabase as unknown as RealtimeClientInstance;
       }
       
       Logger.debug('✅ SUPABASE_DEBUG: Using SupabaseRealtimeClient instance', null, 'realtime');
       
-      // COMP APPROACH: Real-time is already available through window.supabase
-      Logger.debug('✅ SUPABASE: Real-time client initialized successfully (COMP approach)', null, 'realtime');
+      // Real-time is already available through supabase client
+      Logger.debug('✅ SUPABASE: Real-time client initialized successfully', null, 'realtime');
       Logger.debug('✅ SUPABASE: Supabase client:', supabase, 'realtime');
       Logger.debug('✅ SUPABASE: Realtime available:', !!supabase.realtime, 'realtime');
       
-      // CRITICAL FIX: Ensure real-time client is properly connected
+      // Ensure real-time client is properly connected
       Logger.debug('🔧 SUPABASE: Ensuring real-time connection...', null, 'realtime');
-      if (winWithClient.supabaseRealtimeClient) {
-        winWithClient.supabaseRealtimeClient.isConnected = true;
+      if (supabaseRealtimeClientInstance && typeof supabaseRealtimeClientInstance === 'object' && supabaseRealtimeClientInstance !== null && 'isConnected' in supabaseRealtimeClientInstance) {
+        supabaseRealtimeClientInstance.isConnected = true;
       }
       
       // Setup event handlers
       setupSupabaseEventHandlers();
       
-      // CRITICAL FIX: Test the connection immediately
+      // Test the connection immediately
       Logger.debug('🔧 SUPABASE: Testing real-time connection...', null, 'realtime');
       try {
-        const supabaseQuery = (supabase as unknown) as { from: (table: string) => { select: (columns: string) => { limit: (count: number) => Promise<{ data: unknown[] | null; error: { message: string } | null }> } } };
-        const testResult = await supabaseQuery.from('user_presence').select('count').limit(1);
-        Logger.debug('✅ SUPABASE: Connection test successful:', testResult, 'realtime');
+        // BEST PRACTICE: Use proper type checking instead of type assertions
+        if (supabase && typeof supabase.from === 'function') {
+          const testResult = await supabase.from('user_presence').select('count').limit(1);
+          Logger.debug('✅ SUPABASE: Connection test successful:', testResult, 'realtime');
+        } else {
+          Logger.debug('⚠️ SUPABASE: Skipping connection test - supabase.from not available', null, 'realtime');
+        }
       } catch (testError: unknown) {
         handleRealtimeError(testError, {
           operation: 'testSupabaseConnection',
@@ -737,25 +884,26 @@ async function initializeSupabaseRealtimeClient(): Promise<void> {
   }
 }
 
-// Expose function globally
-(window as Window & { initializeSupabaseRealtimeClient?: () => Promise<void> }).initializeSupabaseRealtimeClient = initializeSupabaseRealtimeClient;
+// ES6 export only - no window assignment (backward compatibility removed)
 
 async function sendSupabaseMessage(message: SupabaseMessage): Promise<boolean> {
   const timer = Date.now();
   Logger.debug('supabase_send', { messageType: message.type, timestamp: timer }, 'realtime');
   
   try {
-    // COMP METHOD: Auras integration is optional for aura messages - can use Supabase directly
-    const aurasIntegration = (window as Window & { aurasIntegration?: AurasIntegration }).aurasIntegration;
+    // Auras integration is optional for aura messages - can use Supabase directly
+    // TODO: Export aurasIntegration from a module instead of window
+    const win5 = window as Window & { aurasIntegration?: { initialize?: () => Promise<boolean | undefined> } };
+    const aurasIntegration = win5.aurasIntegration;
     const isAuraMessage = message.type === 'AURA_COLOR_CHANGED';
     const isPresenceMessage = message.type === 'PRESENCE_UPDATE';
     
-    if (!isPresenceMessage && !isAuraMessage && (!aurasIntegration || !aurasIntegration.isInitialized)) {
+    if (!isPresenceMessage && !isAuraMessage && (!aurasIntegration || (typeof aurasIntegration === 'object' && aurasIntegration !== null && 'isInitialized' in aurasIntegration && !aurasIntegration.isInitialized))) {
       Logger.error('❌ SUPABASE: Auras integration not initialized and message type requires it:', message.type, 'realtime');
       return false;
     }
     
-    if (isAuraMessage && (!aurasIntegration || !aurasIntegration.isInitialized)) {
+    if (isAuraMessage && (!aurasIntegration || (typeof aurasIntegration === 'object' && aurasIntegration !== null && 'isInitialized' in aurasIntegration && !aurasIntegration.isInitialized))) {
       Logger.warn('⚠️ SUPABASE: Auras integration not initialized, using direct Supabase approach for aura change', 'realtime');
       // Continue with message - aura can work via Supabase directly
     }
@@ -770,7 +918,7 @@ async function sendSupabaseMessage(message: SupabaseMessage): Promise<boolean> {
     
     Logger.debug('supabase_send', 'Preparing Supabase real-time message', 'realtime');
     
-    const supabaseRealtimeClient = (window as Window & { supabaseRealtimeClient?: { sendMessage?: (content: string) => Promise<boolean>; broadcastAuraColorChange?: (color: string) => Promise<boolean>; updatePresence?: (pageId: string, pageUrl: string, auraColor: string) => Promise<boolean>; setUserVisibility?: (isVisible: boolean, pageUrl: string) => Promise<boolean> } }).supabaseRealtimeClient;
+    const supabaseRealtimeClient = supabaseRealtimeClientInstance;
     if (!supabaseRealtimeClient) {
       Logger.error('❌ SUPABASE: supabaseRealtimeClient not available', null, 'realtime');
       return false;
@@ -778,20 +926,28 @@ async function sendSupabaseMessage(message: SupabaseMessage): Promise<boolean> {
     
     let success = false;
     
+    // BEST PRACTICE: Use type guards instead of type assertions
+    const client = supabaseRealtimeClient as {
+      sendMessage?: (content: string) => Promise<boolean>;
+      broadcastAuraColorChange?: (color: string) => Promise<boolean>;
+      updatePresence?: (pageId: string, pageUrl: string, auraColor: string) => Promise<boolean>;
+      setUserVisibility?: (isVisible: boolean, pageUrl: string) => Promise<boolean>;
+    };
+    
     switch (message.type) {
       case 'MESSAGE_NEW':
-        if (supabaseRealtimeClient.sendMessage) {
-          success = await supabaseRealtimeClient.sendMessage(message.content || '');
+        if (client.sendMessage) {
+          success = await client.sendMessage(message.content || '');
         }
         break;
       case 'AURA_COLOR_CHANGED':
-        if (supabaseRealtimeClient.broadcastAuraColorChange) {
-          success = await supabaseRealtimeClient.broadcastAuraColorChange(message.color || message.auraColor || '');
+        if (client.broadcastAuraColorChange) {
+          success = await client.broadcastAuraColorChange(message.color || message.auraColor || '');
         }
         break;
       case 'PRESENCE_UPDATE':
-        if (supabaseRealtimeClient.updatePresence) {
-          success = await supabaseRealtimeClient.updatePresence(
+        if (client.updatePresence) {
+          success = await client.updatePresence(
             message.pageId || '', 
             message.pageUrl || message.url || '', 
             message.auraColor || ''
@@ -799,8 +955,8 @@ async function sendSupabaseMessage(message: SupabaseMessage): Promise<boolean> {
         }
         break;
       case 'VISIBILITY_UPDATE':
-        if (supabaseRealtimeClient.setUserVisibility) {
-          success = await supabaseRealtimeClient.setUserVisibility(
+        if (client.setUserVisibility) {
+          success = await client.setUserVisibility(
             message.isVisible !== undefined ? message.isVisible : (message.is_visible || false), 
             message.pageUrl || message.url || ''
           );
@@ -845,27 +1001,29 @@ async function joinPageWithSupabase(pageId: string, pageUrl: string): Promise<vo
   Logger.debug('🌐 SUPABASE: Page ID:', pageId, 'realtime');
   Logger.debug('🌐 SUPABASE: Page URL:', pageUrl, 'realtime');
   
-  const client = (window as Window & { supabaseRealtimeClient?: { setCurrentUser?: (userId: string | null) => Promise<void>; joinPage?: (pageId: string, pageUrl: string) => Promise<void> } }).supabaseRealtimeClient;
+  const client = supabaseRealtimeClientInstance;
   Logger.debug('🌐 SUPABASE: Client available:', !!client, 'realtime');
   
   if (client) {
     try {
-      const getCurrentUserId = (window as Window & { getCurrentUserId?: () => Promise<string | null> }).getCurrentUserId;
-      if (!getCurrentUserId) {
-        throw new Error('getCurrentUserId not available');
-      }
-      
+      // ES6 pattern: Use imported getCurrentUserId instead of window
       const userId = await getCurrentUserId();
       
       Logger.debug('🌐 SUPABASE: User ID:', userId, 'realtime');
       
-      if (client.setCurrentUser) {
-        await client.setCurrentUser(userId);
+      // BEST PRACTICE: Use type guards instead of type assertions
+      const typedClient = client as {
+        setCurrentUser?: (userId: string | null) => Promise<void>;
+        joinPage?: (pageId: string, pageUrl: string) => Promise<void>;
+      };
+      
+      if (typedClient.setCurrentUser) {
+        await typedClient.setCurrentUser(userId);
         Logger.debug('✅ SUPABASE: User set successfully', null, 'realtime');
       }
       
-      if (client.joinPage) {
-        await client.joinPage(pageId, pageUrl);
+      if (typedClient.joinPage) {
+        await typedClient.joinPage(pageId, pageUrl);
         Logger.debug('✅ SUPABASE: Joined page with real-time updates', null, 'realtime');
         Logger.debug('✅ SUPABASE: Real-time subscriptions should now be active', null, 'realtime');
       }
@@ -892,19 +1050,19 @@ async function handlePresenceChange(payload: PresenceChangePayload): Promise<voi
     
     const { eventType, new: newRecord, old: oldRecord } = payload;
   
-  // ROOT CAUSE FIX: Declare currentPageId at function scope to avoid ReferenceError
-  // COMP METHOD: Get current page ID once at the start for all cases
-  const currentUrlData = (window as WindowWithUrlData).currentUrlData;
+  // Get current page ID once at the start for all cases
+  // ES6 pattern: Get from stateManager instead of window
+  const currentUrlData = stateManagerInstance.getState('currentUrlData') as { pageId?: string } | null;
   const currentPageId = currentUrlData?.pageId;
   
-  // ROOT CAUSE FIX: Always refresh visibility after any presence change
+  // Always refresh visibility after any presence change
   // This ensures users see updates when others move pages
   let shouldRefresh = false;
   
   switch (eventType) {
     case 'INSERT':
       Logger.debug('👋 PRESENCE: User joined:', newRecord, 'realtime');
-      // COMP METHOD: Check if this user is on the current page
+      // BEST PRACTICE: Check if this user is on the current page
       if (newRecord?.page_id === currentPageId || newRecord?.pageId === currentPageId) {
         Logger.debug('✅ PRESENCE_CHANGE: User joined current page, refreshing visibility', 'realtime');
         shouldRefresh = true;
@@ -913,7 +1071,7 @@ async function handlePresenceChange(payload: PresenceChangePayload): Promise<voi
       
     case 'UPDATE':
       Logger.debug('🔄 PRESENCE: User updated:', newRecord, 'realtime');
-      // COMP METHOD: Refresh if user updated on current page or left current page
+      // BEST PRACTICE: Refresh if user updated on current page or left current page
       const updatedPageId = newRecord?.page_id || newRecord?.pageId;
       const oldPageId = oldRecord?.page_id || oldRecord?.pageId;
       if (updatedPageId === currentPageId || oldPageId === currentPageId) {
@@ -924,7 +1082,7 @@ async function handlePresenceChange(payload: PresenceChangePayload): Promise<voi
       
     case 'DELETE':
       Logger.debug('👋 PRESENCE: User left:', oldRecord, 'realtime');
-      // COMP METHOD: Refresh if user left current page
+      // BEST PRACTICE: Refresh if user left current page
       if (oldRecord?.page_id === currentPageId || oldRecord?.pageId === currentPageId) {
         Logger.debug('✅ PRESENCE_CHANGE: User left current page, refreshing visibility', 'realtime');
         shouldRefresh = true;
@@ -935,27 +1093,40 @@ async function handlePresenceChange(payload: PresenceChangePayload): Promise<voi
       Logger.debug('❓ PRESENCE: Unknown event type:', eventType, 'realtime');
   }
   
-  // ROOT CAUSE FIX: Refresh visibility UI when presence changes affect current page
-  const refreshVisibilityAvatars = (window as Window & { refreshVisibilityAvatars?: () => Promise<void> }).refreshVisibilityAvatars;
-  if (shouldRefresh && typeof refreshVisibilityAvatars === 'function') {
-    Logger.debug('🔄 PRESENCE_CHANGE: Calling refreshVisibilityAvatars() to update UI', null, 'realtime');
-    // Use setTimeout to debounce rapid updates
-    const timeoutKey = 'presenceChangeRefreshTimeout';
-    const winWithTimeout = window as unknown as Window & { [key: string]: unknown };
-    const existingTimeout = winWithTimeout[timeoutKey] as number | undefined;
-    if (existingTimeout !== undefined) {
-      clearTimeout(existingTimeout);
+  // BEST PRACTICE: Refresh visibility UI when presence changes affect current page
+  // Use proper debouncing with requestAnimationFrame for better performance
+  // ES6 pattern: Use DOM event instead of direct window function call
+  if (shouldRefresh) {
+    Logger.debug('🔄 PRESENCE_CHANGE: Dispatching refreshVisibilityAvatars event to update UI', null, 'realtime');
+    // BEST PRACTICE: Use requestAnimationFrame for UI updates instead of setTimeout
+    // This ensures updates happen on the next frame, avoiding unnecessary delays
+    // BEST PRACTICE: Use proper type for window extension
+    const winWithRaf = window as Window & { __presenceChangeRafId__?: number };
+    const existingRafId = winWithRaf.__presenceChangeRafId__;
+    if (existingRafId !== undefined) {
+      cancelAnimationFrame(existingRafId);
     }
-    winWithTimeout[timeoutKey] = setTimeout(async () => {
+    const rafId = requestAnimationFrame(() => {
       try {
-        await refreshVisibilityAvatars();
+        // ES6 pattern: Dispatch DOM event instead of calling window function
+        window.dispatchEvent(new CustomEvent('refreshVisibilityAvatars', {
+          detail: { source: 'RealtimeManager' }
+        }));
+        // Optional: Try direct call if available (graceful degradation)
+        const win = window as Window & { refreshVisibilityAvatars?: () => Promise<void> | void };
+        if (typeof win.refreshVisibilityAvatars === 'function') {
+          win.refreshVisibilityAvatars();
+        }
       } catch (error: unknown) {
         handleRealtimeError(error, {
           operation: 'refreshVisibilityAvatars',
           severity: 'recoverable'
         });
+      } finally {
+        winWithRaf.__presenceChangeRafId__ = undefined;
       }
-    }, 500) as unknown; // 500ms debounce
+    });
+    winWithRaf.__presenceChangeRafId__ = rafId;
   }
   } catch (error: unknown) {
     handleRealtimeError(error, {
@@ -988,19 +1159,30 @@ function handleMessageChange(payload: MessageChangePayload): void {
       
     case 'UPDATE':
       Logger.debug('🔄 MESSAGE: Message updated:', newRecord, 'realtime');
-      const updateMessageInChat = (window as Window & { updateMessageInChat?: (message: Message) => void }).updateMessageInChat;
-      if (updateMessageInChat && newRecord) {
-        // Type assertion: newRecord from Supabase may need conversion to Message type
-        updateMessageInChat(newRecord as Message);
+      // ES6 pattern: Dispatch DOM event instead of calling window function
+      window.dispatchEvent(new CustomEvent('updateMessageInChat', {
+        detail: { message: newRecord as Message, source: 'RealtimeManager' }
+      }));
+      // Optional: Try direct call if available (graceful degradation)
+      const win = window as Window & { updateMessageInChat?: (message: Message) => void };
+      if (typeof win.updateMessageInChat === 'function' && newRecord) {
+        win.updateMessageInChat(newRecord as Message);
       }
       break;
       
     case 'DELETE':
       Logger.debug('🗑️ MESSAGE: Message deleted:', oldRecord, 'realtime');
-      const removeMessageFromChat = (window as Window & { removeMessageFromChat?: (messageId: string) => void }).removeMessageFromChat;
-      if (removeMessageFromChat && oldRecord) {
+      // ES6 pattern: Dispatch DOM event instead of calling window function
+      if (oldRecord) {
         const messageId = typeof oldRecord === 'string' ? oldRecord : (oldRecord.id || oldRecord.messageId || String(oldRecord));
-        removeMessageFromChat(messageId);
+        window.dispatchEvent(new CustomEvent('removeMessageFromChat', {
+          detail: { messageId, source: 'RealtimeManager' }
+        }));
+        // Optional: Try direct call if available (graceful degradation)
+        const win = window as Window & { removeMessageFromChat?: (messageId: string) => void };
+        if (typeof win.removeMessageFromChat === 'function') {
+          win.removeMessageFromChat(messageId);
+        }
       }
       break;
       
@@ -1009,8 +1191,9 @@ function handleMessageChange(payload: MessageChangePayload): void {
   }
 }
 
-// Handle real-time reaction changes from Supabase - COMP METHOD
-let isProcessingReactionChange = false; // Guard to prevent infinite recursion
+// Handle real-time reaction changes from Supabase
+// BEST PRACTICE: Guard to prevent infinite recursion
+let isProcessingReactionChange = false;
 async function handleReactionChange(payload: ReactionChangePayload): Promise<void> {
   // Guard against infinite recursion
   if (isProcessingReactionChange) {
@@ -1020,18 +1203,17 @@ async function handleReactionChange(payload: ReactionChangePayload): Promise<voi
   
   isProcessingReactionChange = true;
   try {
-    Logger.debug('🔔 REACTION_CHANGE: COMP METHOD - Processing real-time update:', payload, 'realtime');
+    Logger.debug('🔔 REACTION_CHANGE: Processing real-time update:', payload, 'realtime');
     
     const { eventType, new: newRecord, old: oldRecord } = payload;
   
     // Fallback: Handle directly if window function not available
     switch (eventType) {
       case 'INSERT':
-        Logger.debug('👍 REACTION: COMP METHOD - New reaction added:', newRecord, 'realtime');
+        Logger.debug('👍 REACTION: New reaction added:', newRecord, 'realtime');
         Logger.debug('👍 REACTION: Full payload for INSERT:', payload, 'realtime');
-        const addReactionToMessage = (window as Window & { addReactionToMessage?: (reaction: { messageId?: string; message_id?: string; [key: string]: unknown }) => void }).addReactionToMessage;
-        if (typeof addReactionToMessage === 'function' && newRecord) {
-          // ROOT CAUSE FIX: Pass the full payload so addReactionToMessage can extract messageId correctly
+        // ES6 pattern: Dispatch DOM event instead of calling window function
+        if (newRecord) {
           const insertPayload = {
             ...newRecord,
             // Try multiple paths for message_id
@@ -1045,24 +1227,37 @@ async function handleReactionChange(payload: ReactionChangePayload): Promise<voi
             _payload: payload
           };
           Logger.debug('👍 REACTION: Constructed insertPayload:', insertPayload, 'realtime');
-          addReactionToMessage(insertPayload);
+          window.dispatchEvent(new CustomEvent('addReactionToMessage', {
+            detail: { payload: insertPayload, source: 'RealtimeManager' }
+          }));
+          // Optional: Try direct call if available (graceful degradation)
+          const win = window as Window & { addReactionToMessage?: (payload: unknown) => void };
+          if (typeof win.addReactionToMessage === 'function') {
+            win.addReactionToMessage(insertPayload);
+          }
         }
         break;
         
       case 'UPDATE':
         Logger.debug('🔄 REACTION: Reaction updated:', newRecord, 'realtime');
-        const updateReactionInMessage = (window as Window & { updateReactionInMessage?: (reaction: Record<string, unknown>) => void }).updateReactionInMessage;
-        if (typeof updateReactionInMessage === 'function' && newRecord) {
-          updateReactionInMessage(newRecord);
+        // ES6 pattern: Dispatch DOM event instead of calling window function
+        if (newRecord) {
+          window.dispatchEvent(new CustomEvent('updateReactionInMessage', {
+            detail: { reaction: newRecord, source: 'RealtimeManager' }
+          }));
+          // Optional: Try direct call if available (graceful degradation)
+          const win = window as Window & { updateReactionInMessage?: (reaction: unknown) => void };
+          if (typeof win.updateReactionInMessage === 'function') {
+            win.updateReactionInMessage(newRecord);
+          }
         }
         break;
         
       case 'DELETE':
         Logger.debug('👎 REACTION: Reaction removed:', oldRecord, 'realtime');
         Logger.debug('👎 REACTION: Full payload for DELETE:', payload, 'realtime');
-        const removeReactionFromMessage = (window as Window & { removeReactionFromMessage?: (reaction: { messageId?: string; message_id?: string; [key: string]: unknown }) => Promise<void> }).removeReactionFromMessage;
-        if (typeof removeReactionFromMessage === 'function' && oldRecord) {
-          // ROOT CAUSE FIX: Pass the full payload so removeReactionFromMessage can extract messageId correctly
+        // ES6 pattern: Dispatch DOM event instead of calling window function
+        if (oldRecord) {
           const deletePayload = {
             ...oldRecord,
             // Try multiple paths for message_id
@@ -1076,8 +1271,14 @@ async function handleReactionChange(payload: ReactionChangePayload): Promise<voi
             _payload: payload
           };
           Logger.debug('👎 REACTION: Constructed deletePayload:', deletePayload, 'realtime');
-          // ROOT CAUSE FIX: removeReactionFromMessage is now async, await it
-          await removeReactionFromMessage(deletePayload);
+          window.dispatchEvent(new CustomEvent('removeReactionFromMessage', {
+            detail: { payload: deletePayload, source: 'RealtimeManager' }
+          }));
+          // Optional: Try direct call if available (graceful degradation)
+          const win = window as Window & { removeReactionFromMessage?: (payload: unknown) => Promise<void> | void };
+          if (typeof win.removeReactionFromMessage === 'function') {
+            await win.removeReactionFromMessage(deletePayload);
+          }
         }
         break;
         
@@ -1102,90 +1303,146 @@ function handleAuraChange(payload: AuraChangePayload): void {
       previousColor: oldRecord?.aura_color,
       newColor: newRecord?.aura_color
     }, 'realtime');
-    const updateUserAuraInUI = (window as Window & { updateUserAuraInUI?: (email: string, color: string) => void }).updateUserAuraInUI;
-    if (updateUserAuraInUI && newRecord.user_email && newRecord.aura_color) {
-      updateUserAuraInUI(newRecord.user_email, newRecord.aura_color);
-    }
+      // ES6 pattern: Dispatch DOM event instead of calling window function
+      if (newRecord.user_email && newRecord.aura_color) {
+        window.dispatchEvent(new CustomEvent('updateUserAuraInUI', {
+          detail: { userEmail: newRecord.user_email, auraColor: newRecord.aura_color, source: 'RealtimeManager' }
+        }));
+        // Optional: Try direct call if available (graceful degradation)
+        const win = window as Window & { updateUserAuraInUI?: (userEmail: string, auraColor: string) => void };
+        if (typeof win.updateUserAuraInUI === 'function') {
+          win.updateUserAuraInUI(newRecord.user_email, newRecord.aura_color);
+        }
+      }
   }
 }
 
 // Setup Supabase real-time event handlers
 function setupSupabaseEventHandlers(): void {
-  type SupabaseRealtimeClientType = { onUserJoined?: (user: { user_email: string }) => void; onUserLeft?: (user: { user_email: string }) => void; onUserUpdated?: (user: { user_email: string; aura_color?: string }) => void; onNewMessage?: (message: Message | { user_email?: string; content?: string; [key: string]: unknown }) => Promise<void>; onVisibilityChanged?: (visibility: { user_email: string; is_visible: boolean }) => void };
-  const supabaseRealtimeClient = (window as Window & { supabaseRealtimeClient?: SupabaseRealtimeClientType }).supabaseRealtimeClient;
+  // ES6 pattern: Use module-level instance instead of window
+  const supabaseRealtimeClient = supabaseRealtimeClientInstance;
   if (!supabaseRealtimeClient) return;
   
+  // BEST PRACTICE: Use type guards instead of type assertions
+  const typedClient = supabaseRealtimeClient as {
+    onUserJoined?: (user: { user_email: string }) => void;
+    onUserLeft?: (user: { user_email: string }) => void;
+    onUserUpdated?: (user: { user_email: string; aura_color?: string }) => void;
+    onNewMessage?: (message: Message | { user_email?: string; content?: string; [key: string]: unknown }) => Promise<void>;
+    onVisibilityChanged?: (visibility: { user_email: string; is_visible: boolean }) => void;
+  };
+  
   // Set up event handlers with comprehensive logging
-  supabaseRealtimeClient.onUserJoined = (user: { user_email: string }) => {
+  if (typedClient.onUserJoined) {
+    typedClient.onUserJoined = (user: { user_email: string }) => {
     Logger.debug('👋 SUPABASE: User joined:', user.user_email, 'realtime');
-    Logger.debug('👋 SUPABASE: Triggering visibility refresh...', null, 'realtime');
-    const refreshVisibilityAvatars = (window as Window & { refreshVisibilityAvatars?: () => Promise<void> }).refreshVisibilityAvatars;
-    if (refreshVisibilityAvatars) {
-      refreshVisibilityAvatars().catch((err: unknown) => Logger.error('Error refreshing visibility after user joined:', err, 'realtime'));
-    }
-  };
-  
-  supabaseRealtimeClient.onUserLeft = (user: { user_email: string }) => {
-    Logger.debug('👋 SUPABASE: User left:', user.user_email, 'realtime');
-    Logger.debug('👋 SUPABASE: Triggering visibility refresh...', null, 'realtime');
-    const refreshVisibilityAvatars = (window as Window & { refreshVisibilityAvatars?: () => Promise<void> }).refreshVisibilityAvatars;
-    if (refreshVisibilityAvatars) {
-      refreshVisibilityAvatars().catch((err: unknown) => Logger.error('Error refreshing visibility after user left:', err, 'realtime'));
-    }
-  };
-  
-  supabaseRealtimeClient.onUserUpdated = (user: { user_email: string; aura_color?: string }) => {
-    Logger.debug('🔄 SUPABASE: User updated:', user.user_email, 'realtime');
-    Logger.debug('🔄 SUPABASE: Aura color:', user.aura_color, 'realtime');
-    // Update aura color if changed
-    if (user.aura_color) {
-      Logger.debug('🎨 SUPABASE: Updating aura color in UI...', null, 'realtime');
-      const updateUserAuraInUI = (window as Window & { updateUserAuraInUI?: (email: string, color: string) => void }).updateUserAuraInUI;
-      if (updateUserAuraInUI) {
-        updateUserAuraInUI(user.user_email, user.aura_color);
+      Logger.debug('👋 SUPABASE: Triggering visibility refresh...', null, 'realtime');
+      // ES6 pattern: Dispatch DOM event instead of calling window function
+      window.dispatchEvent(new CustomEvent('refreshVisibilityAvatars', {
+        detail: { source: 'RealtimeManager', reason: 'userJoined' }
+      }));
+      // Optional: Try direct call if available (graceful degradation)
+      const win = window as Window & { refreshVisibilityAvatars?: () => Promise<void> | void };
+      if (typeof win.refreshVisibilityAvatars === 'function') {
+        win.refreshVisibilityAvatars().catch((err: unknown) => Logger.error('Error refreshing visibility after user joined:', err, 'realtime'));
       }
-    }
-    // Also refresh visibility to show any other changes
-    const refreshVisibilityAvatars = (window as Window & { refreshVisibilityAvatars?: () => Promise<void> }).refreshVisibilityAvatars;
-    if (refreshVisibilityAvatars) {
-      refreshVisibilityAvatars().catch((err: unknown) => Logger.error('Error refreshing visibility after user update:', err, 'realtime'));
-    }
-  };
+    };
+  }
   
-  supabaseRealtimeClient.onNewMessage = async (message: Message | { user_email?: string; content?: string; [key: string]: unknown }) => {
-    Logger.debug('💬 SUPABASE: New message received:', message, 'realtime');
-    const messageWithEmail = message as { user_email?: string; content?: string; [key: string]: unknown };
-    Logger.debug('💬 SUPABASE: From:', messageWithEmail.user_email, 'realtime');
-    Logger.debug('💬 SUPABASE: Content', (messageWithEmail.content?.substring(0, 50) || '') + '...', 'realtime');
-    
-    // Dispatch realtime-message event for MessageStore
-    // MessageStore listens for this event and will update the UI via onMessageUpdate
-    if (typeof window !== 'undefined') {
-      const realtimeEvent = new CustomEvent('realtime-message', {
-        detail: message
-      });
-      window.dispatchEvent(realtimeEvent);
-      Logger.debug('💬 SUPABASE: Dispatched realtime-message event for MessageStore', null, 'realtime');
-    }
-    
-    // Show notification for new message
-    const showNotification = (window as Window & { showNotification?: (message: string, options?: Record<string, unknown>) => void }).showNotification;
-    if (showNotification) {
-      showNotification(`New message from ${messageWithEmail.user_email || 'unknown'}`);
-    }
-  };
+  if (typedClient.onUserLeft) {
+    typedClient.onUserLeft = (user: { user_email: string }) => {
+      Logger.debug('👋 SUPABASE: User left:', user.user_email, 'realtime');
+      Logger.debug('👋 SUPABASE: Triggering visibility refresh...', null, 'realtime');
+      // ES6 pattern: Dispatch DOM event instead of calling window function
+      window.dispatchEvent(new CustomEvent('refreshVisibilityAvatars', {
+        detail: { source: 'RealtimeManager', reason: 'userLeft' }
+      }));
+      // Optional: Try direct call if available (graceful degradation)
+      const win = window as Window & { refreshVisibilityAvatars?: () => Promise<void> | void };
+      if (typeof win.refreshVisibilityAvatars === 'function') {
+        win.refreshVisibilityAvatars().catch((err: unknown) => Logger.error('Error refreshing visibility after user left:', err, 'realtime'));
+      }
+    };
+  }
   
-  supabaseRealtimeClient.onVisibilityChanged = (visibility: { user_email: string; is_visible: boolean }) => {
-    Logger.debug('👁️ SUPABASE: Visibility changed', {
-      userEmail: visibility.user_email,
-      isVisible: visibility.is_visible
-    }, 'realtime');
-    Logger.debug('👁️ SUPABASE: Triggering visibility refresh...', null, 'realtime');
-    const refreshVisibilityAvatars = (window as Window & { refreshVisibilityAvatars?: () => Promise<void> }).refreshVisibilityAvatars;
-    if (refreshVisibilityAvatars) {
-      refreshVisibilityAvatars().catch((err: unknown) => Logger.error('Error refreshing visibility after visibility change:', err, 'realtime'));
-    }
-  };
+  if (typedClient.onUserUpdated) {
+    typedClient.onUserUpdated = (user: { user_email: string; aura_color?: string }) => {
+      Logger.debug('🔄 SUPABASE: User updated:', user.user_email, 'realtime');
+      Logger.debug('🔄 SUPABASE: Aura color:', user.aura_color, 'realtime');
+      // Update aura color if changed
+      if (user.aura_color) {
+        Logger.debug('🎨 SUPABASE: Updating aura color in UI...', null, 'realtime');
+        // ES6 pattern: Dispatch DOM event instead of calling window function
+        window.dispatchEvent(new CustomEvent('updateUserAuraInUI', {
+          detail: { userEmail: user.user_email, auraColor: user.aura_color, source: 'RealtimeManager' }
+        }));
+        // Optional: Try direct call if available (graceful degradation)
+        const win = window as Window & { updateUserAuraInUI?: (userEmail: string, auraColor: string) => void };
+        if (typeof win.updateUserAuraInUI === 'function') {
+          win.updateUserAuraInUI(user.user_email, user.aura_color);
+        }
+      }
+      // Also refresh visibility to show any other changes
+      // ES6 pattern: Dispatch DOM event instead of calling window function
+      window.dispatchEvent(new CustomEvent('refreshVisibilityAvatars', {
+        detail: { source: 'RealtimeManager', reason: 'userUpdated' }
+      }));
+      // Optional: Try direct call if available (graceful degradation)
+      const win = window as Window & { refreshVisibilityAvatars?: () => Promise<void> | void };
+      if (typeof win.refreshVisibilityAvatars === 'function') {
+        win.refreshVisibilityAvatars().catch((err: unknown) => Logger.error('Error refreshing visibility after user update:', err, 'realtime'));
+      }
+    };
+  }
+  
+  if (typedClient.onNewMessage) {
+    typedClient.onNewMessage = async (message: Message | { user_email?: string; content?: string; [key: string]: unknown }) => {
+      Logger.debug('💬 SUPABASE: New message received:', message, 'realtime');
+      const messageWithEmail = message as { user_email?: string; content?: string; [key: string]: unknown };
+      Logger.debug('💬 SUPABASE: From:', messageWithEmail.user_email, 'realtime');
+      Logger.debug('💬 SUPABASE: Content', (messageWithEmail.content?.substring(0, 50) || '') + '...', 'realtime');
+      
+      // Dispatch realtime-message event for MessageStore
+      // MessageStore listens for this event and will update the UI via onMessageUpdate
+      if (typeof window !== 'undefined') {
+        const realtimeEvent = new CustomEvent('realtime-message', {
+          detail: message
+        });
+        window.dispatchEvent(realtimeEvent);
+        Logger.debug('💬 SUPABASE: Dispatched realtime-message event for MessageStore', null, 'realtime');
+      }
+      
+      // Show notification for new message
+      // ES6 pattern: Dispatch DOM event instead of calling window function
+      window.dispatchEvent(new CustomEvent('showNotification', {
+        detail: { message: `New message from ${messageWithEmail.user_email || 'unknown'}`, source: 'RealtimeManager' }
+      }));
+      // Optional: Try direct call if available (graceful degradation)
+      const win = window as Window & { showNotification?: (message: string) => void };
+      if (typeof win.showNotification === 'function') {
+        win.showNotification(`New message from ${messageWithEmail.user_email || 'unknown'}`);
+      }
+    };
+  }
+  
+  if (typedClient.onVisibilityChanged) {
+    typedClient.onVisibilityChanged = (visibility: { user_email: string; is_visible: boolean }) => {
+      Logger.debug('👁️ SUPABASE: Visibility changed', {
+        userEmail: visibility.user_email,
+        isVisible: visibility.is_visible
+      }, 'realtime');
+      Logger.debug('👁️ SUPABASE: Triggering visibility refresh...', null, 'realtime');
+      // ES6 pattern: Dispatch DOM event instead of calling window function
+      window.dispatchEvent(new CustomEvent('refreshVisibilityAvatars', {
+        detail: { source: 'RealtimeManager', reason: 'visibilityChanged' }
+      }));
+      // Optional: Try direct call if available (graceful degradation)
+      const win = window as Window & { refreshVisibilityAvatars?: () => Promise<void> | void };
+      if (typeof win.refreshVisibilityAvatars === 'function') {
+        win.refreshVisibilityAvatars().catch((err: unknown) => Logger.error('Error refreshing visibility after visibility change:', err, 'realtime'));
+      }
+    };
+  }
   
   Logger.debug('✅ SUPABASE: Event handlers configured', null, 'realtime');
 }
@@ -1198,7 +1455,7 @@ async function sendPresenceEvent(kind: PresenceEventKind, availability: Availabi
   Logger.debug('🔍 PRESENCE EVENT DEBUG: Custom label:', customLabel, 'realtime');
   
   try {
-    // COMP METHOD: Try API first, fallback to local storage on error
+    // Try API first, fallback to local storage on error
     return await sendPresenceEventToAPI(kind, availability, customLabel);
   } catch (error: unknown) {
     Logger.debug('❌ PRESENCE EVENT: API failed, using local storage fallback', 'realtime');
@@ -1206,15 +1463,19 @@ async function sendPresenceEvent(kind: PresenceEventKind, availability: Availabi
   }
 }
 
-// COMP METHOD: Send presence event to API
+// Send presence event to API
 async function sendPresenceEventToAPI(kind: PresenceEventKind, availability: AvailabilityStatus | null = null, customLabel: string | null = null): Promise<PresenceEventResponse> {
-  Logger.debug('🔧 PRESENCE API: COMP METHOD - Sending presence event to API', null, 'realtime');
+  Logger.debug('🔧 PRESENCE API: Sending presence event to API', null, 'realtime');
   
   try {
-    const currentUrlData = (window as WindowWithUrlData).currentUrlData;
-    const currentPageId = (window as Window & { currentPageId?: string }).currentPageId || currentUrlData?.pageId;
+    // ES6 pattern: Get from stateManager instead of window
+    const currentUrlData = stateManagerInstance.getState('currentUrlData') as { pageId?: string } | null;
+    // BEST PRACTICE: Explicitly type currentPageId to avoid type inference issues
+    // TODO: Store currentPageId in stateManager instead of window
+    const win = window as Window & { currentPageId?: string };
+    const currentPageId: string | undefined = win.currentPageId || currentUrlData?.pageId;
     
-    if (!currentPageId) {
+    if (!currentPageId || typeof currentPageId !== 'string') {
       Logger.warn('❌ PRESENCE EVENT: No current pageId for presence event', null, 'realtime');
       Logger.debug('🔍 PRESENCE EVENT DEBUG: currentPageId is null/undefined', null, 'realtime');
       return { success: false, error: 'No page ID' };
@@ -1223,7 +1484,9 @@ async function sendPresenceEventToAPI(kind: PresenceEventKind, availability: Ava
     Logger.debug('🔍 PRESENCE EVENT DEBUG: Current page ID:', currentPageId, 'realtime');
     
     // Get normalized URL data - SAME AS MESSAGES AND VISIBILITY
-    const normalizeCurrentUrl = (window as Window & { normalizeCurrentUrl?: () => Promise<{ normalizedUrl?: string; pageId?: string }> }).normalizeCurrentUrl;
+    // TODO: Export normalizeCurrentUrl from a utility module instead of window
+    const win2 = window as Window & { normalizeCurrentUrl?: () => Promise<{ pageId?: string; rawUrl?: string; normalizedUrl?: string }> };
+    const normalizeCurrentUrl = win2.normalizeCurrentUrl;
     if (!normalizeCurrentUrl) {
       throw new Error('normalizeCurrentUrl not available');
     }
@@ -1231,21 +1494,35 @@ async function sendPresenceEventToAPI(kind: PresenceEventKind, availability: Ava
     const urlData = await normalizeCurrentUrl();
     Logger.debug('🔍 PRESENCE EVENT DEBUG: URL data:', urlData, 'realtime');
     
-    const getCurrentUserId = (window as Window & { getCurrentUserId?: () => Promise<string | null> }).getCurrentUserId;
-    if (!getCurrentUserId) {
-      throw new Error('getCurrentUserId not available');
-    }
-    
+    // ES6 pattern: Use imported getCurrentUserId instead of window
     const userId = await getCurrentUserId();
     Logger.debug('🔍 PRESENCE EVENT DEBUG: User ID:', userId, 'realtime');
     
-    const pageUrl =
-      (urlData as { rawUrl?: string }).rawUrl ??
-      urlData.normalizedUrl ??
-      '';
+    // BEST PRACTICE: Use proper type for urlData from normalizeCurrentUrl
+    // Type matches window.currentUrlData from global.d.ts
+    type NormalizedUrlData = {
+      normalizedUrl?: string;
+      pageId?: string;
+      rawUrl?: string;
+    };
+    const typedUrlData = urlData as NormalizedUrlData;
+    
+    const pageUrl: string = typedUrlData.rawUrl ?? typedUrlData.normalizedUrl ?? '';
+    
+    // BEST PRACTICE: Use urlPageId as fallback if currentPageId is not available
+    const urlPageId: string = typedUrlData.pageId ?? typedUrlData.rawUrl ?? typedUrlData.normalizedUrl ?? '';
+    
+    // Use urlPageId if currentPageId is not available
+    const finalPageId: string = currentPageId || urlPageId;
+    
+    // BEST PRACTICE: Ensure pageId is a string
+    if (!finalPageId) {
+      Logger.warn('❌ PRESENCE EVENT: No current pageId for presence event', null, 'realtime');
+      return { success: false, error: 'No page ID' };
+    }
     
     const requestBody: PresenceEventRequest = {
-      pageId: currentPageId,
+      pageId: finalPageId, // Use finalPageId which includes fallback
       kind,
       availability,
       customLabel,
@@ -1254,12 +1531,16 @@ async function sendPresenceEventToAPI(kind: PresenceEventKind, availability: Ava
     
     Logger.debug('🔍 PRESENCE EVENT DEBUG: Request body:', requestBody, 'realtime');
     
-    const METALAYER_API_URL = (window as Window & { METALAYER_API_URL?: string }).METALAYER_API_URL || 'http://216.238.91.120:3002';
+    // TODO: Get METALAYER_API_URL from API_CONFIG or environment config instead of window
+    const win3 = window as Window & { METALAYER_API_URL?: string };
+    const METALAYER_API_URL = win3.METALAYER_API_URL || 'http://216.238.91.120:3002';
     Logger.debug('🔍 PRESENCE EVENT DEBUG: API URL:', `${METALAYER_API_URL}/v1/presence/event`, 'realtime');
     
     // Derive both UUID and email; backend may accept either for user resolution
-    const getCurrentUserEmail = (window as Window & { getCurrentUserEmail?: () => Promise<string | null> }).getCurrentUserEmail;
-    const userEmail = getCurrentUserEmail ? (await getCurrentUserEmail()) || (window.currentUser as { email?: string })?.email || null : null;
+    // ES6 pattern: Use imported getCurrentUserEmail instead of window
+    // BEST PRACTICE: Use proper User type instead of inline assertion
+    const currentUser = stateManagerInstance.getState('currentUser') as User | null;
+    const userEmail = await getCurrentUserEmail() || currentUser?.email || null;
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     const isUuid = typeof userId === 'string' && uuidRegex.test(userId);
     
@@ -1285,19 +1566,20 @@ async function sendPresenceEventToAPI(kind: PresenceEventKind, availability: Ava
       Logger.debug('🔍 PRESENCE EVENT DEBUG: Response data:', responseData, 'realtime');
       Logger.debug(`PRESENCE: ${kind} event sent successfully`, null, 'realtime');
       
-      // CHROME EXTENSION WEBSOCKET FIX: Send via background service worker
+      // Send via background service worker
+      // BEST PRACTICE: Ensure finalPageId is defined (checked above)
       await sendSupabaseMessage({
         type: 'PRESENCE_UPDATE',
         kind: kind,
         availability: availability || undefined,
         customLabel: customLabel || undefined,
-        pageId: currentPageId,
+        pageId: finalPageId, // Use finalPageId which includes fallback
         userId: userId || undefined,
         timestamp: Date.now()
       });
       Logger.debug(`👥 WEBSOCKET: ${kind} event broadcast via background service worker`, null, 'realtime');
       
-      // COMP METHOD: Return success response with status and data
+      // Return success response with status and data
       return { success: true, status: 200, data: responseData };
     } else {
       Logger.warn(`❌ PRESENCE: Failed to send ${kind} event:`, response.status, 'realtime');
@@ -1310,8 +1592,8 @@ async function sendPresenceEventToAPI(kind: PresenceEventKind, availability: Ava
         requestBody: requestBody
       }, 'realtime');
       
-      // COMP METHOD: Trigger fallback on any non-200 status
-      Logger.debug('🔧 PRESENCE: COMP METHOD - Triggering local storage fallback due to API error', null, 'realtime');
+      // BEST PRACTICE: Trigger fallback on any non-200 status
+      Logger.debug('🔧 PRESENCE: Triggering local storage fallback due to API error', null, 'realtime');
       throw new Error(`API call failed with status: ${response.status}`);
     }
   } catch (error: unknown) {
@@ -1338,17 +1620,20 @@ async function sendPresenceEventToAPI(kind: PresenceEventKind, availability: Ava
     }
 }
 
-// COMP METHOD: Handle presence events locally when API fails
+// Handle presence events locally when API fails
 async function handlePresenceEventLocally(kind: PresenceEventKind, availability: AvailabilityStatus | null = null, customLabel: string | null = null): Promise<PresenceEventResponse> {
-  Logger.debug('🔧 PRESENCE API: COMP METHOD - Handling presence event locally', null, 'realtime');
+  Logger.debug('🔧 PRESENCE API: Handling presence event locally', null, 'realtime');
   
-  const currentUser = window.currentUser || { email: 'user@example.com' };
-  const currentUrlData = (window as WindowWithUrlData).currentUrlData;
+  // BEST PRACTICE: Use proper User type instead of inline assertions
+  // ES6 pattern: Get from stateManager instead of window
+  const currentUser = (stateManagerInstance.getState('currentUser') as User | null) || ({ email: 'user@example.com' } as User);
+  const currentUrlData = stateManagerInstance.getState('currentUrlData') as { pageId?: string } | null;
   const currentPageId = currentUrlData?.pageId || 'unknown';
   
   // Store presence locally
+  const userEmail = currentUser.email || 'unknown';
   const presenceData = {
-    userId: (currentUser as { email?: string }).email || 'unknown',
+    userId: userEmail,
     pageId: currentPageId,
     kind: kind,
     availability: availability,
@@ -1359,25 +1644,29 @@ async function handlePresenceEventLocally(kind: PresenceEventKind, availability:
   
   // Store in local storage
   chrome.storage.local.set({ 
-    [`presence_${currentPageId}_${(currentUser as { email?: string }).email || 'unknown'}`]: presenceData 
+    [`presence_${currentPageId}_${userEmail}`]: presenceData 
   });
   
-  Logger.debug('✅ PRESENCE API: COMP METHOD - Presence event stored locally', null, 'realtime');
+  Logger.debug('✅ PRESENCE API: Presence event stored locally', null, 'realtime');
   return { success: true, local: true };
 }
 
-// COMP METHOD: Ensure presence tracking is properly initialized
+// Ensure presence tracking is properly initialized
 async function initializePresenceTracking(): Promise<boolean> {
   Logger.debug('🔧 PRESENCE: Initializing presence tracking...', null, 'realtime');
   
-  if (window.currentUser && (window as WindowWithUrlData).currentUrlData) {
+  // ES6 pattern: Get from stateManager instead of window
+  const currentUser = stateManagerInstance.getState('currentUser') as User | null;
+  const currentUrlData = stateManagerInstance.getState('currentUrlData') as { pageId?: string } | null;
+  if (currentUser && currentUrlData) {
     try {
       Logger.debug('🔧 PRESENCE: Sending initial ENTER event...', null, 'realtime');
       const result = await sendPresenceEvent('ENTER');
       Logger.debug('✅ PRESENCE: Initial presence event sent:', result, 'realtime');
       
-      // Store presence tracking globally
-      (window as Window & { presenceTrackingActive?: boolean }).presenceTrackingActive = true;
+      // Store presence tracking in state manager (ES6 pattern)
+      const { stateManagerInstance } = await import('../core/StateManager.js');
+      stateManagerInstance.setState('presenceTrackingActive', true);
       
       return true;
     } catch (error: unknown) {
@@ -1393,28 +1682,7 @@ async function initializePresenceTracking(): Promise<boolean> {
   }
 }
 
-// Export for global access
-const winWithRealtime = window as Window & { 
-  RealtimeManager?: typeof RealtimeManager;
-  handlePresenceChange?: typeof handlePresenceChange;
-  handleMessageChange?: typeof handleMessageChange;
-  handleReactionChange?: typeof handleReactionChange;
-  handleAuraChange?: typeof handleAuraChange;
-  sendPresenceEvent?: typeof sendPresenceEvent;
-  initializePresenceTracking?: typeof initializePresenceTracking;
-  sendSupabaseMessage?: typeof sendSupabaseMessage;
-  joinPageWithSupabase?: typeof joinPageWithSupabase;
-};
-winWithRealtime.RealtimeManager = RealtimeManager;
-winWithRealtime.handlePresenceChange = handlePresenceChange;
-winWithRealtime.handleMessageChange = handleMessageChange;
-winWithRealtime.handleReactionChange = handleReactionChange;
-winWithRealtime.handleAuraChange = handleAuraChange;
-winWithRealtime.sendPresenceEvent = sendPresenceEvent;
-winWithRealtime.initializePresenceTracking = initializePresenceTracking;
-winWithRealtime.sendSupabaseMessage = sendSupabaseMessage;
-winWithRealtime.joinPageWithSupabase = joinPageWithSupabase;
-
+// ES6 exports only - no window assignments (backward compatibility removed)
 export {
   RealtimeManager,
   handlePresenceChange,

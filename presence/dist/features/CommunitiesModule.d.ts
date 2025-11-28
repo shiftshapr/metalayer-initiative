@@ -1,28 +1,21 @@
 /**
  * COMMUNITIES MODULE - Community Management
- * TypeScript + ES6 Module
- * Handles all community functionality
+ *
+ * Minimal implementation for community management in the sidepanel.
+ * Provides basic community initialization functionality.
  */
-declare class CommunitiesModule {
-    private logLevel;
-    private isInitialized;
-    private logger;
-    constructor();
+/**
+ * Communities module for managing communities
+ */
+export declare class CommunitiesModule {
+    private initialized;
     /**
-     * Initialize CommunitiesModule
+     * Initialize the communities module
      */
     initialize(): Promise<void>;
     /**
-     * Initialize community dropdown activation
-     * Ensures community dropdown is properly activated in sidepanel
-     * SD3: Integrated from COMMUNITY_DROPDOWN_ACTIVATOR.js
+     * Check if module is initialized
      */
-    initializeCommunityDropdown(): void;
-    /**
-     * Logging utility
-     */
-    private log;
+    isInitialized(): boolean;
 }
-export { CommunitiesModule };
-export default CommunitiesModule;
 //# sourceMappingURL=CommunitiesModule.d.ts.map

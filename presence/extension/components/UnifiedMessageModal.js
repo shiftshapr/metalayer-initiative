@@ -12,6 +12,11 @@
  * - Focus context support
  */
 import { getXIcon } from '../utils/XPatternSystem.js';
+import { messageStore } from '../services/MessageStore.js';
+import { getEmojiMetadata } from '../utils/EmojiUtils.js';
+import { handleError } from '../utils/ErrorHandler.js';
+import { Logger } from '../utils/Logger.js';
+import { API_CONFIG } from '../core/APIConfig.js';
 export class UnifiedMessageModal {
     constructor() {
         this.modal = null;
@@ -38,25 +43,32 @@ export class UnifiedMessageModal {
      * Open the modal with the given options
      */
     async open(options) {
-        this.options = options;
-        this.attachments = [];
-        this.emojiMetadata = {};
-        this.parentMessage = null;
-        this.quotedMessage = null;
-        // If editing, load existing message data
-        if (options.mode === 'edit' && options.editMessage) {
-            // TODO: Load attachments and emoji metadata from existing message
+        try {
+            this.options = options;
+            this.attachments = [];
+            this.emojiMetadata = {};
+            this.parentMessage = null;
+            this.quotedMessage = null;
+            // If editing, load existing message data
+            if (options.mode === 'edit' && options.editMessage) {
+                // TODO: Load attachments and emoji metadata from existing message
+            }
+            // Load parent message for replies
+            if (options.mode === 'reply' && options.parentId) {
+                await this.loadParentMessage(options.parentId);
+            }
+            // Load quoted message for quotes
+            if (options.mode === 'quote' && options.quoteId) {
+                await this.loadQuotedMessage(options.quoteId);
+            }
+            await this.render();
+            this.isOpen = true;
         }
-        // Load parent message for replies
-        if (options.mode === 'reply' && options.parentId) {
-            await this.loadParentMessage(options.parentId);
+        catch (error) {
+            handleError(error, {
+                context: { operation: 'open', component: 'UnifiedMessageModal' }
+            });
         }
-        // Load quoted message for quotes
-        if (options.mode === 'quote' && options.quoteId) {
-            await this.loadQuotedMessage(options.quoteId);
-        }
-        await this.render();
-        this.isOpen = true;
     }
     /**
      * Close the modal
@@ -78,62 +90,69 @@ export class UnifiedMessageModal {
      * parent overflow:hidden can still clip it, so we ensure body is the parent.
      */
     async render() {
-        if (!this.options)
-            return;
-        // Ensure pageId is set - resolve from stateManager if missing
-        if (!this.options.pageId) {
-            const win = window;
-            const urlData = win.stateManagerInstance?.getState('currentUrlData');
-            if (urlData?.pageId) {
-                this.options.pageId = urlData.pageId;
-                console.log('📝 UnifiedMessageModal: Resolved pageId from stateManager:', this.options.pageId);
+        try {
+            if (!this.options)
+                return;
+            // Ensure pageId is set - resolve from stateManager if missing
+            if (!this.options.pageId) {
+                const win = window;
+                const urlData = win.stateManagerInstance?.getState('currentUrlData');
+                if (urlData?.pageId) {
+                    this.options.pageId = urlData.pageId;
+                    Logger.debug('📝 UnifiedMessageModal: Resolved pageId from stateManager:', this.options.pageId, 'messages');
+                }
+                else {
+                    // Try to get from current location
+                    const currentUrl = window.location.href;
+                    // Generate pageId from URL (same logic as used elsewhere)
+                    const pageId = currentUrl.replace(/^https?:\/\//, '').replace(/\/$/, '').replace(/[^a-zA-Z0-9]/g, '_');
+                    this.options.pageId = pageId;
+                    Logger.debug('📝 UnifiedMessageModal: Generated pageId from URL:', this.options.pageId, 'messages');
+                }
             }
-            else {
-                // Try to get from current location
-                const currentUrl = window.location.href;
-                // Generate pageId from URL (same logic as used elsewhere)
-                const pageId = currentUrl.replace(/^https?:\/\//, '').replace(/\/$/, '').replace(/[^a-zA-Z0-9]/g, '_');
-                this.options.pageId = pageId;
-                console.log('📝 UnifiedMessageModal: Generated pageId from URL:', this.options.pageId);
+            // Remove existing modal if present
+            const existing = document.getElementById('unified-message-modal');
+            if (existing) {
+                existing.remove();
+            }
+            const modal = document.createElement('div');
+            modal.id = 'unified-message-modal';
+            modal.className = 'unified-message-modal';
+            modal.innerHTML = await this.getModalHTML();
+            // CRITICAL: Append to body (not sidebar) to escape container constraints
+            // Fixed positioning is viewport-relative, but parent overflow can still clip
+            // By appending to body, we ensure modal is outside sidebar container
+            // 
+            // Chrome Extension Sidepanel Note:
+            // - Sidepanels have their own viewport (typically 320-400px wide)
+            // - Fixed positioning is relative to sidepanel viewport, not browser window
+            // - Modal can overflow left using negative margin-left
+            // - Body/html must have overflow-x: visible to allow overflow
+            document.body.appendChild(modal);
+            this.modal = modal;
+            // Verify modal is actually in body (not sidebar)
+            if (this.modal.parentElement !== document.body) {
+                Logger.warn('⚠️ MODAL: Modal parent is not body! Moving to body...', null, 'messages');
+                document.body.appendChild(this.modal);
+            }
+            // Modal is now sized to fit within sidepanel - no overflow needed
+            // CSS handles responsive sizing (calc(100vw - 40px) with max-width: 300px)
+            // Setup event handlers
+            this.setupModalHandlers();
+            // Auto-resize textarea on initial render and focus
+            const textarea = modal.querySelector('#message-content');
+            if (textarea) {
+                // Initial resize to fill available space
+                setTimeout(() => {
+                    this.autoResizeTextarea(textarea);
+                }, 50);
+                textarea.focus();
             }
         }
-        // Remove existing modal if present
-        const existing = document.getElementById('unified-message-modal');
-        if (existing) {
-            existing.remove();
-        }
-        const modal = document.createElement('div');
-        modal.id = 'unified-message-modal';
-        modal.className = 'unified-message-modal';
-        modal.innerHTML = await this.getModalHTML();
-        // CRITICAL: Append to body (not sidebar) to escape container constraints
-        // Fixed positioning is viewport-relative, but parent overflow can still clip
-        // By appending to body, we ensure modal is outside sidebar container
-        // 
-        // Chrome Extension Sidepanel Note:
-        // - Sidepanels have their own viewport (typically 320-400px wide)
-        // - Fixed positioning is relative to sidepanel viewport, not browser window
-        // - Modal can overflow left using negative margin-left
-        // - Body/html must have overflow-x: visible to allow overflow
-        document.body.appendChild(modal);
-        this.modal = modal;
-        // Verify modal is actually in body (not sidebar)
-        if (this.modal.parentElement !== document.body) {
-            console.warn('⚠️ MODAL: Modal parent is not body! Moving to body...');
-            document.body.appendChild(this.modal);
-        }
-        // Modal is now sized to fit within sidepanel - no overflow needed
-        // CSS handles responsive sizing (calc(100vw - 40px) with max-width: 300px)
-        // Setup event handlers
-        this.setupModalHandlers();
-        // Auto-resize textarea on initial render and focus
-        const textarea = modal.querySelector('#message-content');
-        if (textarea) {
-            // Initial resize to fill available space
-            setTimeout(() => {
-                this.autoResizeTextarea(textarea);
-            }, 50);
-            textarea.focus();
+        catch (error) {
+            handleError(error, {
+                context: { operation: 'render', component: 'UnifiedMessageModal' }
+            });
         }
     }
     /**
@@ -148,24 +167,25 @@ export class UnifiedMessageModal {
      * - Post button (gray when disabled, blue when active)
      */
     async getModalHTML() {
-        if (!this.options)
-            return '';
-        const { mode, editMessage, parentId, quoteId } = this.options;
-        const content = editMessage?.content || '';
-        const showParentContext = mode === 'reply' && parentId;
-        const showQuoteContext = mode === 'quote' && quoteId;
-        // Get current user for profile picture
-        const currentUser = this.getCurrentUser();
-        const userAvatar = currentUser?.avatarUrl || currentUser?.picture || '';
-        const userName = currentUser?.name || currentUser?.displayName || 'You';
-        // Get current community for audience selector
-        const win = window;
-        const activeCommunities = win.stateManagerInstance?.getState('ui.activeCommunities');
-        const communityId = activeCommunities?.[0] || this.options.communityId;
-        const audienceLabel = communityId ? 'Community' : 'Everyone';
-        // Get avatar HTML (async)
-        const avatarHTML = await this.getAvatarHTML(currentUser, userAvatar, userName);
-        return `
+        try {
+            if (!this.options)
+                return '';
+            const { mode, editMessage, parentId, quoteId } = this.options;
+            const content = editMessage?.content || '';
+            const showParentContext = mode === 'reply' && parentId;
+            const showQuoteContext = mode === 'quote' && quoteId;
+            // Get current user for profile picture
+            const currentUser = this.getCurrentUser();
+            const userAvatar = currentUser?.avatarUrl || currentUser?.picture || '';
+            const userName = currentUser?.name || currentUser?.displayName || 'You';
+            // Get current community for audience selector
+            const win = window;
+            const activeCommunities = win.stateManagerInstance?.getState('ui.activeCommunities');
+            const communityId = activeCommunities?.[0] || this.options.communityId;
+            const audienceLabel = communityId ? 'Community' : 'Everyone';
+            // Get avatar HTML (async)
+            const avatarHTML = await this.getAvatarHTML(currentUser, userAvatar, userName);
+            return `
       <div class="unified-message-modal-overlay"></div>
       <div class="unified-message-modal-content x-design-pattern${this.options.premiumText ? ' premium-text' : ''}"${this.options.premiumText ? ' data-premium="true"' : ''}>
         <!-- Top Bar: X (close) on left only -->
@@ -271,23 +291,16 @@ export class UnifiedMessageModal {
       <video id="camera-video" style="display: none;"></video>
       <canvas id="camera-canvas" style="display: none;"></canvas>
     `;
-    }
-    getModalTitle() {
-        if (!this.options)
-            return 'New Message';
-        switch (this.options.mode) {
-            case 'new':
-                return 'New Message';
-            case 'reply':
-                return 'Reply';
-            case 'quote':
-                return 'Quote Message';
-            case 'edit':
-                return 'Edit Message';
-            default:
-                return 'New Message';
+        }
+        catch (error) {
+            handleError(error, {
+                context: { operation: 'getModalHTML', component: 'UnifiedMessageModal' }
+            });
+            return '';
         }
     }
+    // Removed unused method: getModalTitle
+    // Modal title is handled in the HTML template, not needed as a separate method
     getParentContextHTML() {
         if (!this.parentMessage) {
             return '<div class="unified-message-parent-context"><div class="unified-message-loading">Loading...</div></div>';
@@ -366,7 +379,15 @@ export class UnifiedMessageModal {
             this.renderContextSection();
         }
         catch (error) {
-            console.error('Error loading parent message:', error);
+            handleError(error, {
+                log: true,
+                logLevel: 'error',
+                context: {
+                    operation: 'catch',
+                    component: 'UnifiedMessageModal'
+                }
+            });
+            ;
             // Don't block modal opening if parent load fails
         }
     }
@@ -384,7 +405,15 @@ export class UnifiedMessageModal {
             this.renderContextSection();
         }
         catch (error) {
-            console.error('Error loading quoted message:', error);
+            handleError(error, {
+                log: true,
+                logLevel: 'error',
+                context: {
+                    operation: 'catch',
+                    component: 'UnifiedMessageModal'
+                }
+            });
+            ;
             // Don't block modal opening if quote load fails
         }
     }
@@ -509,134 +538,155 @@ export class UnifiedMessageModal {
      * Handle drafts
      */
     async handleDrafts() {
-        console.log('📝 DRAFTS: Opening drafts');
-        // Import and open draft selection modal
-        const { draftSelectionModal } = await import('./DraftSelectionModal.js');
-        const currentUser = this.getCurrentUser();
-        const userId = currentUser?.id || '';
-        if (!this.options)
-            return;
-        if (!userId) {
-            alert('Sign in to access drafts');
-            return;
-        }
-        await draftSelectionModal.open({
-            pageId: this.options.pageId,
-            userId,
-            onSelect: async (draft) => {
-                // Load draft into modal
-                await this.loadDraft(draft);
-            },
-            onDelete: () => {
-                console.log('📝 DRAFT: Draft deleted');
-            },
-            onCancel: () => {
-                console.log('📝 DRAFT: Draft selection cancelled');
+        try {
+            Logger.debug('📝 DRAFTS: Opening drafts', null, 'messages');
+            // Import and open draft selection modal
+            const { draftSelectionModal } = await import('./DraftSelectionModal.js');
+            const currentUser = this.getCurrentUser();
+            const userId = currentUser?.id || '';
+            if (!this.options)
+                return;
+            if (!userId) {
+                alert('Sign in to access drafts');
+                return;
             }
-        });
+            await draftSelectionModal.open({
+                pageId: this.options.pageId,
+                userId,
+                onSelect: async (draft) => {
+                    try {
+                        // Load draft into modal
+                        await this.loadDraft(draft);
+                    }
+                    catch (error) {
+                        handleError(error, {
+                            context: { operation: 'onSelectDraft', component: 'UnifiedMessageModal' }
+                        });
+                    }
+                },
+                onDelete: () => {
+                    Logger.debug('📝 DRAFT: Draft deleted', null, 'messages');
+                },
+                onCancel: () => {
+                    Logger.debug('📝 DRAFT: Draft selection cancelled', null, 'messages');
+                }
+            });
+        }
+        catch (error) {
+            handleError(error, {
+                context: { operation: 'handleDrafts', component: 'UnifiedMessageModal' }
+            });
+        }
     }
     /**
      * Load a draft into the modal
      */
     async loadDraft(draft) {
-        if (!this.modal)
-            return;
-        // Set content
-        const textarea = this.modal.querySelector('#message-content');
-        if (textarea) {
-            textarea.value = draft.content;
-            // Trigger input event to update character count and send button state
-            textarea.dispatchEvent(new Event('input', { bubbles: true }));
-        }
-        // Update options/context for parent or quote
-        if (this.options) {
-            this.options.parentId = draft.parentId || null;
-            this.options.quoteId = draft.quoteId || null;
-        }
-        if (draft.parentId) {
-            if (this.options) {
-                this.options.mode = 'reply';
+        try {
+            if (!this.modal)
+                return;
+            // Set content
+            const textarea = this.modal.querySelector('#message-content');
+            if (textarea) {
+                textarea.value = draft.content;
+                // Trigger input event to update character count and send button state
+                textarea.dispatchEvent(new Event('input', { bubbles: true }));
             }
-            await this.loadParentMessage(draft.parentId);
-        }
-        else {
-            this.parentMessage = null;
-        }
-        if (draft.quoteId) {
+            // Update options/context for parent or quote
             if (this.options) {
-                this.options.mode = 'quote';
+                this.options.parentId = draft.parentId || null;
+                this.options.quoteId = draft.quoteId || null;
             }
-            await this.loadQuotedMessage(draft.quoteId);
+            if (draft.parentId) {
+                if (this.options) {
+                    this.options.mode = 'reply';
+                }
+                await this.loadParentMessage(draft.parentId);
+            }
+            else {
+                this.parentMessage = null;
+            }
+            if (draft.quoteId) {
+                if (this.options) {
+                    this.options.mode = 'quote';
+                }
+                await this.loadQuotedMessage(draft.quoteId);
+            }
+            else {
+                this.quotedMessage = null;
+            }
+            if (!draft.parentId && !draft.quoteId && this.options && this.options.mode !== 'edit') {
+                this.options.mode = 'new';
+            }
+            this.renderContextSection();
+            // Load attachments if any
+            if (draft.attachments && draft.attachments.length > 0) {
+                // TODO: Load attachments
+                Logger.debug('📝 DRAFT: Loading attachments', draft.attachments, 'messages');
+            }
+            // Focus textarea
+            textarea?.focus();
         }
-        else {
-            this.quotedMessage = null;
+        catch (error) {
+            handleError(error, {
+                context: { operation: 'loadDraft', component: 'UnifiedMessageModal' }
+            });
         }
-        if (!draft.parentId && !draft.quoteId && this.options && this.options.mode !== 'edit') {
-            this.options.mode = 'new';
-        }
-        this.renderContextSection();
-        // Load attachments if any
-        if (draft.attachments && draft.attachments.length > 0) {
-            // TODO: Load attachments
-            console.log('📝 DRAFT: Loading attachments', draft.attachments);
-        }
-        // Focus textarea
-        textarea?.focus();
     }
     /**
      * Handle audience selection
      */
     handleAudienceSelect() {
-        console.log('👥 AUDIENCE: Opening audience selector');
+        Logger.debug('👥 AUDIENCE: Opening audience selector', null, 'messages');
         // TODO: Implement audience selector dropdown
     }
     /**
      * Handle GIF picker
      */
     handleGIF() {
-        console.log('🎬 GIF: Opening GIF picker');
+        Logger.debug('🎬 GIF: Opening GIF picker', null, 'messages');
         // TODO: Implement GIF picker
     }
     /**
      * Handle poll creation
      */
     handlePoll() {
-        console.log('📊 POLL: Opening poll creator');
+        Logger.debug('📊 POLL: Opening poll creator', null, 'messages');
         // TODO: Implement poll creation
     }
     /**
      * Handle list creation
      */
     handleList() {
-        console.log('📋 LIST: Opening list creator');
+        Logger.debug('📋 LIST: Opening list creator', null, 'messages');
         // TODO: Implement list creation
     }
     /**
      * Handle schedule
      */
     handleSchedule() {
-        console.log('📅 SCHEDULE: Opening schedule picker');
+        Logger.debug('📅 SCHEDULE: Opening schedule picker', null, 'messages');
         // TODO: Implement schedule functionality
     }
     /**
      * Handle location
      */
     handleLocation() {
-        console.log('📍 LOCATION: Opening location picker');
+        Logger.debug('📍 LOCATION: Opening location picker', null, 'messages');
         // TODO: Implement location picker
     }
     /**
      * Handle bold formatting
      */
     handleBold() {
-        console.log('** BOLD: Applying bold formatting');
+        Logger.debug('** BOLD: Applying bold formatting', null, 'messages');
         // TODO: Implement text formatting
     }
     /**
      * Handle italic formatting
      */
     handleItalic() {
-        console.log('* ITALIC: Applying italic formatting');
+        Logger.debug('* ITALIC: Applying italic formatting', null, 'messages');
         // TODO: Implement text formatting
     }
     /**
@@ -656,7 +706,7 @@ export class UnifiedMessageModal {
      */
     async submitMessage(status) {
         if (!this.options || !this.modal) {
-            console.error('❌ submitMessage: Missing options or modal');
+            Logger.error('❌ submitMessage: Missing options or modal', null, 'messages');
             return;
         }
         const textarea = this.modal.querySelector('#message-content');
@@ -668,7 +718,7 @@ export class UnifiedMessageModal {
         }
         // Validate pageId - must be provided
         if (!this.options.pageId) {
-            console.error('❌ submitMessage: Missing pageId in options', this.options);
+            Logger.error('❌ submitMessage: Missing pageId in options', this.options, 'messages');
             alert('Error: Page ID is missing. Please try again.');
             return;
         }
@@ -685,7 +735,7 @@ export class UnifiedMessageModal {
                 return cleaned;
             }
             // If not a valid UUID, return null (API will handle Google ID conversion via headers)
-            console.warn(`⚠️ UnifiedMessageModal: Invalid UUID format: ${id}, will be handled by API`);
+            Logger.warn(`⚠️ UnifiedMessageModal: Invalid UUID format: ${id}, will be handled by API`, 'messages');
             return null;
         };
         const messageData = {
@@ -744,7 +794,7 @@ export class UnifiedMessageModal {
             if (!messageData.pageId) {
                 throw new Error('Page ID is required');
             }
-            console.log('📤 SENDING_MESSAGE:', {
+            Logger.debug('📤 SENDING_MESSAGE:', {
                 endpoint,
                 messageData: {
                     ...messageData,
@@ -753,7 +803,7 @@ export class UnifiedMessageModal {
                     hasAttachments: messageData.attachments.length > 0,
                     pageId: messageData.pageId
                 }
-            });
+            }, 'messages');
             const response = await fetch(endpoint, {
                 method: 'POST',
                 headers,
@@ -768,18 +818,24 @@ export class UnifiedMessageModal {
                 try {
                     const errorData = await response.json();
                     errorMessage = errorData.error || errorData.message || errorMessage;
-                    console.error('❌ API_ERROR:', errorData);
+                    Logger.error('❌ API_ERROR:', errorData, 'messages');
                 }
                 catch (e) {
                     // If response is not JSON, use status text
                     try {
                         const errorText = await response.text();
-                        console.error('❌ API_ERROR_TEXT:', errorText);
                         errorMessage = errorText || errorMessage;
                     }
                     catch (textError) {
                         // Fallback to status text
-                        console.error('❌ API_ERROR_STATUS:', response.status, response.statusText);
+                        handleError(textError, {
+                            log: true,
+                            logLevel: 'error',
+                            context: {
+                                operation: 'readErrorResponse',
+                                component: 'UnifiedMessageModal'
+                            }
+                        });
                     }
                 }
                 throw new Error(`Failed to ${status === 'draft' ? 'save draft' : 'publish message'}: ${errorMessage} (${response.status})`);
@@ -787,7 +843,7 @@ export class UnifiedMessageModal {
             const message = await response.json();
             if (status === 'draft') {
                 this.options.onDraftSaved?.(message);
-                console.log('📝 Draft saved', message.id);
+                Logger.debug('📝 Draft saved', message.id, 'messages');
             }
             else {
                 this.options.onSuccess?.(message);
@@ -795,8 +851,17 @@ export class UnifiedMessageModal {
             this.close();
         }
         catch (error) {
-            console.error(`Error ${status === 'draft' ? 'saving draft' : 'sending message'}:`, error);
-            alert(`Failed to ${status === 'draft' ? 'save draft' : 'send message'}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            const errorMessage = `Failed to ${status === 'draft' ? 'save draft' : 'send message'}`;
+            handleError(error, {
+                log: true,
+                logLevel: 'error',
+                showUserNotification: true,
+                userMessage: errorMessage,
+                context: {
+                    operation: 'submitMessage',
+                    component: 'UnifiedMessageModal'
+                }
+            });
         }
     }
     /**
@@ -810,7 +875,11 @@ export class UnifiedMessageModal {
         if (types.size > 1) {
             return 'MIXED';
         }
-        const type = this.attachments[0].type;
+        const firstAttachment = this.attachments[0];
+        if (!firstAttachment) {
+            return 'TEXT';
+        }
+        const type = firstAttachment.type;
         switch (type) {
             case 'image':
                 return 'IMAGE';
@@ -833,41 +902,55 @@ export class UnifiedMessageModal {
      * Handle file selection
      */
     async handleFileSelect(event) {
-        const input = event.target;
-        const files = input.files;
-        if (!files || files.length === 0)
-            return;
-        for (const file of Array.from(files)) {
-            await this.addAttachment(file);
+        try {
+            const input = event.target;
+            const files = input.files;
+            if (!files || files.length === 0)
+                return;
+            for (const file of Array.from(files)) {
+                await this.addAttachment(file);
+            }
+            this.updateAttachmentsPreview();
         }
-        this.updateAttachmentsPreview();
+        catch (error) {
+            handleError(error, {
+                context: { operation: 'handleFileSelect', component: 'UnifiedMessageModal' }
+            });
+        }
     }
     /**
      * Add an attachment
      */
     async addAttachment(file) {
-        const attachment = {
-            id: `att-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-            type: this.getFileType(file.type),
-            url: '',
-            filename: file.name,
-            size: file.size,
-            mimeType: file.type,
-            blob: file
-        };
-        // Generate preview/thumbnail
-        if (attachment.type === 'image') {
-            attachment.url = await this.blobToDataURL(file);
-            attachment.thumbnailUrl = attachment.url;
+        try {
+            const attachment = {
+                id: `att-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                type: this.getFileType(file.type),
+                url: '',
+                filename: file.name,
+                size: file.size,
+                mimeType: file.type,
+                blob: file
+            };
+            // Generate preview/thumbnail
+            if (attachment.type === 'image') {
+                attachment.url = await this.blobToDataURL(file);
+                attachment.thumbnailUrl = attachment.url;
+            }
+            else if (attachment.type === 'video') {
+                attachment.url = await this.blobToDataURL(file);
+                attachment.thumbnailUrl = await this.generateVideoThumbnail(file);
+            }
+            else {
+                attachment.url = await this.blobToDataURL(file);
+            }
+            this.attachments.push(attachment);
         }
-        else if (attachment.type === 'video') {
-            attachment.url = await this.blobToDataURL(file);
-            attachment.thumbnailUrl = await this.generateVideoThumbnail(file);
+        catch (error) {
+            handleError(error, {
+                context: { operation: 'addAttachment', component: 'UnifiedMessageModal' }
+            });
         }
-        else {
-            attachment.url = await this.blobToDataURL(file);
-        }
-        this.attachments.push(attachment);
     }
     /**
      * Get file type from MIME type
@@ -896,28 +979,37 @@ export class UnifiedMessageModal {
      * Generate video thumbnail
      */
     async generateVideoThumbnail(file) {
-        return new Promise((resolve, reject) => {
-            const video = document.createElement('video');
-            video.src = URL.createObjectURL(file);
-            video.onloadedmetadata = () => {
-                video.currentTime = 1; // Seek to 1 second
-            };
-            video.onseeked = () => {
-                const canvas = document.createElement('canvas');
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
-                const ctx = canvas.getContext('2d');
-                if (ctx) {
-                    ctx.drawImage(video, 0, 0);
-                    resolve(canvas.toDataURL());
-                }
-                else {
-                    reject(new Error('Failed to get canvas context'));
-                }
-                URL.revokeObjectURL(video.src);
-            };
-            video.onerror = reject;
-        });
+        try {
+            return await new Promise((resolve, reject) => {
+                const video = document.createElement('video');
+                video.src = URL.createObjectURL(file);
+                video.onloadedmetadata = () => {
+                    video.currentTime = 1; // Seek to 1 second
+                };
+                video.onseeked = () => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    const ctx = canvas.getContext('2d');
+                    if (ctx) {
+                        ctx.drawImage(video, 0, 0);
+                        resolve(canvas.toDataURL());
+                    }
+                    else {
+                        reject(new Error('Failed to get canvas context'));
+                    }
+                    URL.revokeObjectURL(video.src);
+                };
+                video.onerror = reject;
+            });
+        }
+        catch (error) {
+            handleError(error, {
+                context: { operation: 'generateVideoThumbnail', component: 'UnifiedMessageModal' }
+            });
+            // Return empty string as fallback
+            return '';
+        }
     }
     /**
      * Update attachments preview
@@ -971,7 +1063,6 @@ export class UnifiedMessageModal {
     handleEmojiPicker() {
         // TODO: Implement emoji picker
         // For now, show a simple emoji selector
-        const emojiList = ['😀', '😂', '❤️', '👍', '🎉', '🔥', '💯', '✨'];
         const emoji = prompt('Select an emoji or type one:', '😀');
         if (emoji) {
             this.insertEmoji(emoji);
@@ -996,58 +1087,14 @@ export class UnifiedMessageModal {
     }
     /**
      * Update emoji metadata from content
+     * Uses EmojiUtils for consistent emoji detection across the codebase
      */
     updateEmojiMetadata(content) {
-        // Simple emoji detection (can be enhanced)
-        const emojiRegex = /[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/gu;
-        const emojis = content.match(emojiRegex) || [];
-        this.emojiMetadata = {
-            emojis: [...new Set(emojis)],
-            emojiCount: emojis.length,
-            hasEmoji: emojis.length > 0
-        };
+        this.emojiMetadata = getEmojiMetadata(content);
     }
-    /**
-     * Handle camera capture
-     */
-    async handleCamera() {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: 'environment' }
-            });
-            this.cameraStream = stream;
-            // Show camera preview
-            const video = this.modal?.querySelector('#camera-video');
-            const canvas = this.modal?.querySelector('#camera-canvas');
-            if (video && canvas) {
-                video.srcObject = stream;
-                video.play();
-                // Show camera UI
-                // TODO: Create camera capture UI
-                const capture = confirm('Take photo?');
-                if (capture) {
-                    const ctx = canvas.getContext('2d');
-                    if (ctx) {
-                        canvas.width = video.videoWidth;
-                        canvas.height = video.videoHeight;
-                        ctx.drawImage(video, 0, 0);
-                        canvas.toBlob(async (blob) => {
-                            if (blob) {
-                                const file = new File([blob], `camera-${Date.now()}.jpg`, { type: 'image/jpeg' });
-                                await this.addAttachment(file);
-                                this.updateAttachmentsPreview();
-                            }
-                        }, 'image/jpeg', 0.9);
-                    }
-                }
-                this.cleanupCamera();
-            }
-        }
-        catch (error) {
-            console.error('Camera error:', error);
-            alert('Failed to access camera. Please check permissions.');
-        }
-    }
+    // Removed unused method: handleCamera
+    // Camera functionality not currently implemented. If needed in the future,
+    // it can be re-implemented or restored from git history.
     /**
      * Cleanup camera stream
      */
@@ -1086,7 +1133,15 @@ export class UnifiedMessageModal {
                 return await win.AvatarUtils.createUnifiedAvatar(userForAvatar, 'profile', { size: 40, showAura: true });
             }
             catch (error) {
-                console.warn('⚠️ MODAL: Failed to use AvatarUtils, falling back to manual creation:', error);
+                handleError(error, {
+                    log: true,
+                    logLevel: 'warn',
+                    context: {
+                        operation: 'getAvatarHTML',
+                        component: 'UnifiedMessageModal'
+                    }
+                });
+                // Fall through to fallback
             }
         }
         // Fallback: Manual creation using same pattern as AvatarUtils
@@ -1163,7 +1218,7 @@ export class UnifiedMessageModal {
         // Try window globals
         const baseFromWindow = win?.API_URL || win?.apiBaseURL || win?.config?.API_URL;
         // Fallback
-        const FALLBACK_API_BASE = 'http://216.238.91.120:3002';
+        const FALLBACK_API_BASE = API_CONFIG.baseUrl;
         const baseUrl = baseFromState || baseFromWindow || FALLBACK_API_BASE;
         return baseUrl.replace(/\/$/, '');
     }
@@ -1178,45 +1233,51 @@ export class UnifiedMessageModal {
 }
 // Export singleton instance
 export const unifiedMessageModal = new UnifiedMessageModal();
-// Export to window for global access
+// Export to window for global access (for Chrome extension compatibility)
+// Note: Prefer importing unifiedMessageModal directly when possible
 if (typeof window !== 'undefined') {
     const win = window;
     win.unifiedMessageModal = unifiedMessageModal;
     win.openMessageModal = (options) => unifiedMessageModal.open(options);
     /**
      * Helper: Open modal for replying to a message
+     * Accepts either a full Message object or an object with at least an id property
      */
     win.openReplyModal = async (message, pageId) => {
         await unifiedMessageModal.open({
             mode: 'reply',
             pageId,
             parentId: message.id,
-            communityId: message.communityId,
+            communityId: 'communityId' in message ? message.communityId : undefined,
             onSuccess: (replyMessage) => {
-                console.log('Reply sent:', replyMessage);
-                // Refresh message list or add reply to UI
-                if (win.messageStore && typeof win.messageStore.emit === 'function') {
-                    // Trigger refresh of replies for this parent
-                    win.messageStore.emit('messageAdded', replyMessage);
-                }
+                Logger.debug('Reply sent:', replyMessage, 'messages');
+                // Refresh message list by adding to MessageStore cache
+                messageStore.handleRealtimeMessage({
+                    ...replyMessage,
+                    page_id: pageId,
+                    parent_id: message.id
+                });
             }
         });
     };
     /**
      * Helper: Open modal for quoting a message
+     * Accepts either a full Message object or an object with at least an id property
      */
     win.openQuoteModal = async (message, pageId) => {
         await unifiedMessageModal.open({
             mode: 'quote',
             pageId,
             quoteId: message.id,
-            communityId: message.communityId,
+            communityId: 'communityId' in message ? message.communityId : undefined,
             onSuccess: (quoteMessage) => {
-                console.log('Quote sent:', quoteMessage);
-                // Refresh message list or add quote to UI
-                if (win.messageStore && typeof win.messageStore.emit === 'function') {
-                    win.messageStore.emit('messageAdded', quoteMessage);
-                }
+                Logger.debug('Quote sent:', quoteMessage, 'messages');
+                // Refresh message list by adding to MessageStore cache
+                messageStore.handleRealtimeMessage({
+                    ...quoteMessage,
+                    page_id: pageId,
+                    parent_id: undefined // Quotes are top-level messages
+                });
             }
         });
     };

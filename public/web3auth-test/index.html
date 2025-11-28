@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web3Auth Test - Canopi</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 16px;
+            padding: 40px;
+            max-width: 500px;
+            width: 100%;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+        
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        
+        .status {
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            display: block;
+        }
+        
+        .status.info {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+        
+        .status.success {
+            background: #e8f5e9;
+            color: #388e3c;
+        }
+        
+        .status.error {
+            background: #ffebee;
+            color: #d32f2f;
+        }
+        
+        .button {
+            width: 100%;
+            padding: 14px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-bottom: 12px;
+        }
+        
+        .button.primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .button.primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        
+        .button.secondary {
+            background: #f5f5f5;
+            color: #333;
+        }
+        
+        .button.secondary:hover {
+            background: #e0e0e0;
+        }
+        
+        .button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        .user-info {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f9f9f9;
+            border-radius: 8px;
+            display: none;
+        }
+        
+        .user-info.active {
+            display: block;
+        }
+        
+        .user-info h3 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 18px;
+        }
+        
+        .user-info-item {
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+        
+        .user-info-label {
+            font-weight: 600;
+            color: #666;
+            display: inline-block;
+            width: 100px;
+        }
+        
+        .user-info-value {
+            color: #333;
+            word-break: break-all;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Web3Auth Test</h1>
+        <p class="subtitle">Testing Web3Auth integration for Canopi</p>
+        
+        <div id="status" class="status info">
+            Loading Web3Auth SDK...
+        </div>
+        
+        <button id="connectBtn" class="button primary" disabled>
+            Connect with Web3Auth
+        </button>
+        
+        <button id="disconnectBtn" class="button secondary" style="display: none;">
+            Disconnect
+        </button>
+        
+        <div id="userInfo" class="user-info">
+            <h3>User Information</h3>
+            <div class="user-info-item">
+                <span class="user-info-label">Email:</span>
+                <span class="user-info-value" id="userEmail">-</span>
+            </div>
+            <div class="user-info-item">
+                <span class="user-info-label">Name:</span>
+                <span class="user-info-value" id="userName">-</span>
+            </div>
+            <div class="user-info-item">
+                <span class="user-info-label">User ID:</span>
+                <span class="user-info-value" id="userId">-</span>
+            </div>
+            <div class="user-info-item">
+                <span class="user-info-label">Provider:</span>
+                <span class="user-info-value" id="userProvider">-</span>
+            </div>
+            <div class="user-info-item">
+                <span class="user-info-label">Wallet Address:</span>
+                <span class="user-info-value" id="walletAddress">-</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Web3Auth Modal SDK - Load with proper event handlers -->
+    <script>
+        // Load Web3Auth script dynamically with proper error handling
+        (function() {
+            const script = document.createElement('script');
+            // Using specific version to avoid whitelabel issues - try latest stable
+            script.src = 'https://unpkg.com/@web3auth/modal@latest/dist/modal.umd.min.js';
+            script.crossOrigin = 'anonymous';
+            
+            script.onload = function() {
+                // Script loaded - check what global was created
+                console.log('Web3Auth script loaded');
+                if (window.Modal) {
+                    console.log('Modal object found. Keys:', Object.keys(window.Modal));
+                    if (window.Modal.Web3Auth) {
+                        console.log('✓ Found: window.Modal.Web3Auth');
+                    } else {
+                        console.log('⚠ window.Modal.Web3Auth not found. Exploring...');
+                    }
+                } else {
+                    console.error('✗ Modal object not found after script load');
+                }
+                
+                // Initialize after script loads
+                initApp();
+            };
+            
+            script.onerror = function() {
+                document.getElementById('status').textContent = 'Failed to load Web3Auth SDK. Check console for details.';
+                document.getElementById('status').className = 'status error';
+                console.error('Failed to load Web3Auth script');
+            };
+            
+            document.head.appendChild(script);
+        })();
+        
+        // Client ID will be injected server-side - check window global first, then fallback to null
+        let WEB3AUTH_CLIENT_ID = (typeof window !== 'undefined' && window.CANOPI_WEB3AUTH_CLIENT_ID) || null;
+        let web3auth = null;
+        let provider = null;
+        
+        // Client ID should be injected server-side (no fetching needed)
+        // This function is a fallback only
+        async function fetchClientId() {
+            // Client ID should already be set by server-side injection
+            // This is just a fallback
+            if (typeof window.CANOPI_WEB3AUTH_CLIENT_ID !== 'undefined' && window.CANOPI_WEB3AUTH_CLIENT_ID) {
+                return window.CANOPI_WEB3AUTH_CLIENT_ID;
+            }
+            return null;
+        }
+        
+        // Initialize the application after Web3Auth loads
+        async function initApp() {
+            // Network configuration - can be overridden by server injection or URL parameter
+            // Default to mainnet, but server can inject via window.CANOPI_WEB3AUTH_NETWORK
+            let WEB3AUTH_NETWORK = (typeof window !== 'undefined' && window.CANOPI_WEB3AUTH_NETWORK) || 'sapphire_mainnet';
+            
+            // Check URL parameter for network override
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('network') === 'devnet' || urlParams.get('network') === 'testnet') {
+                WEB3AUTH_NETWORK = 'sapphire_devnet';
+            } else if (urlParams.get('network') === 'mainnet') {
+                WEB3AUTH_NETWORK = 'sapphire_mainnet';
+            }
+            
+            try {
+                // Client ID should be injected server-side, but check window global as primary source
+                // This ensures it works even if server-side injection has issues
+                if (!WEB3AUTH_CLIENT_ID) {
+                    WEB3AUTH_CLIENT_ID = (typeof window !== 'undefined' && window.CANOPI_WEB3AUTH_CLIENT_ID) || null;
+                }
+                
+                // Debug logging
+                console.log('Client ID check:', {
+                    hasClientId: !!WEB3AUTH_CLIENT_ID,
+                    clientIdLength: WEB3AUTH_CLIENT_ID ? WEB3AUTH_CLIENT_ID.length : 0,
+                    hasWindowGlobal: typeof window !== 'undefined' && typeof window.CANOPI_WEB3AUTH_CLIENT_ID !== 'undefined',
+                    windowGlobalValue: typeof window !== 'undefined' ? window.CANOPI_WEB3AUTH_CLIENT_ID : 'window undefined',
+                    windowGlobalLength: (typeof window !== 'undefined' && window.CANOPI_WEB3AUTH_CLIENT_ID) ? window.CANOPI_WEB3AUTH_CLIENT_ID.length : 0
+                });
+                
+                // Check if Client ID is set
+                if (!WEB3AUTH_CLIENT_ID) {
+                    updateStatus('ERROR: Web3Auth Client ID not configured. Server must provide WEB3AUTH_CLIENT_ID from .env file.', 'error');
+                    console.error('WEB3AUTH_CLIENT_ID is missing. Check server configuration.');
+                    console.error('Current WEB3AUTH_CLIENT_ID value:', WEB3AUTH_CLIENT_ID);
+                    console.error('window.CANOPI_WEB3AUTH_CLIENT_ID:', typeof window !== 'undefined' ? window.CANOPI_WEB3AUTH_CLIENT_ID : 'window undefined');
+                    console.error('All window properties containing "WEB3" or "AUTH":', typeof window !== 'undefined' ? Object.keys(window).filter(k => k.includes('WEB3') || k.includes('AUTH') || k.includes('CANOPI')).join(', ') : 'N/A');
+                    return;
+                }
+                
+                updateStatus('Loading configuration...', 'info');
+                
+                // According to Web3Auth docs, the Modal SDK exposes Modal.Web3Auth
+                // Try: Modal.Web3Auth, window.Modal.Web3Auth, or window.Modal.default.Web3Auth
+                let Web3AuthClass = null;
+                
+                // First try: Modal.Web3Auth (if Modal is in global scope)
+                if (typeof Modal !== 'undefined' && Modal.Web3Auth) {
+                    Web3AuthClass = Modal.Web3Auth;
+                    console.log('Found: Modal.Web3Auth');
+                } 
+                // Second try: window.Modal.Web3Auth
+                else if (typeof window.Modal !== 'undefined' && window.Modal.Web3Auth) {
+                    Web3AuthClass = window.Modal.Web3Auth;
+                    console.log('Found: window.Modal.Web3Auth');
+                }
+                // Third try: window.Modal.default.Web3Auth
+                else if (typeof window.Modal !== 'undefined' && window.Modal.default && window.Modal.default.Web3Auth) {
+                    Web3AuthClass = window.Modal.default.Web3Auth;
+                    console.log('Found: window.Modal.default.Web3Auth');
+                }
+                // Fallback: explore Modal structure
+                else if (typeof window.Modal !== 'undefined') {
+                    console.log('Modal object found. Exploring structure...');
+                    const modalKeys = Object.keys(window.Modal);
+                    console.log('Modal keys:', modalKeys);
+                    
+                    // Try to find Web3Auth in any property
+                    for (const key of modalKeys) {
+                        const value = window.Modal[key];
+                        if (value && typeof value === 'object' && value.Web3Auth) {
+                            Web3AuthClass = value.Web3Auth;
+                            console.log(`Found: window.Modal.${key}.Web3Auth`);
+                            break;
+                        } else if (value && typeof value === 'function' && value.prototype && 
+                                   (key === 'Web3Auth' || key.includes('Web3Auth'))) {
+                            Web3AuthClass = value;
+                            console.log(`Found: window.Modal.${key} (constructor function)`);
+                            break;
+                        }
+                    }
+                }
+                
+                if (!Web3AuthClass) {
+                    const errorMsg = 'Web3Auth class not found. ' + 
+                        (window.Modal ? `Modal keys: ${Object.keys(window.Modal).join(', ')}` : 'Modal not found') +
+                        '. Check Web3Auth SDK documentation.';
+                    throw new Error(errorMsg);
+                }
+                
+                console.log('Using Web3Auth class:', Web3AuthClass.name || 'anonymous');
+                console.log('Web3Auth class prototype methods:', Object.getOwnPropertyNames(Web3AuthClass.prototype).filter(m => typeof Web3AuthClass.prototype[m] === 'function').join(', '));
+                
+                updateStatus('Initializing Web3Auth...', 'info');
+                
+                // Initialize Web3Auth
+                // Note: web3AuthNetwork should match your Web3Auth dashboard project settings
+                // Options: 'sapphire_mainnet' (production) or 'sapphire_devnet' (development/testnet)
+                // Using minimal config compatible with base plan (no whitelabel features)
+                // Based on quick start: https://github.com/Web3Auth/web3auth-examples/tree/main/quick-starts
+                // IMPORTANT: Mainnet is default - wallet addresses cannot transition from testnet to mainnet
+                // Note: SDK automatically sends is_whitelabel=true - this cannot be disabled in code
+                // Issue must be resolved at dashboard level or via support
+                // Testnet test confirmed: Client ID is mainnet-only (network mismatch error)
+                
+                web3auth = new Web3AuthClass({
+                    clientId: WEB3AUTH_CLIENT_ID,
+                    web3AuthNetwork: WEB3AUTH_NETWORK,
+                    chainConfig: {
+                        chainNamespace: 'eip155',
+                        chainId: '0x1',
+                        rpcTarget: 'https://rpc.ankr.com/eth',
+                        displayName: 'Ethereum Mainnet',
+                        blockExplorerUrl: 'https://etherscan.io',
+                        ticker: 'ETH',
+                        tickerName: 'Ethereum',
+                    },
+                    // Explicitly disable whitelabel for base plan compatibility
+                    // Note: Some SDK versions may still send is_whitelabel=true by default
+                    // If this doesn't work, you may need to contact Web3Auth support
+                    // or check if there's a project-level setting in the dashboard
+                });
+                
+                console.log('Web3Auth config:', {
+                    clientId: WEB3AUTH_CLIENT_ID.substring(0, 20) + '...',
+                    network: WEB3AUTH_NETWORK,
+                    chainId: '0x1'
+                });
+                
+                console.log('Web3Auth instance created:', web3auth);
+                console.log('Web3Auth instance methods:', Object.getOwnPropertyNames(Object.getPrototypeOf(web3auth)).filter(m => typeof web3auth[m] === 'function' && m !== 'constructor').join(', '));
+                
+                // Use init() method (Modal SDK uses init, not initModal)
+                if (typeof web3auth.init === 'function') {
+                    console.log('Calling web3auth.init()...');
+                    try {
+                        await web3auth.init();
+                        console.log('Web3Auth initialized successfully');
+                        updateStatus('Web3Auth initialized successfully. Ready to connect!', 'success');
+                        document.getElementById('connectBtn').disabled = false;
+                    } catch (initError) {
+                        console.error('Init error details:', initError);
+                        // Check if it's a project configuration error
+                        if (initError.message && (initError.message.includes('Project not found') || initError.message.includes('failed to fetch project configurations'))) {
+                            throw new Error('Web3Auth Project Configuration Error:\n\n' +
+                                'The project may not be fully activated yet. Please:\n' +
+                                '1. Verify the project is "Active" in Web3Auth Dashboard\n' +
+                                '2. Wait a few minutes for configuration to propagate\n' +
+                                '3. Check that all required settings are saved in the dashboard\n' +
+                                '4. Verify the Client ID exactly matches: ' + WEB3AUTH_CLIENT_ID.substring(0, 20) + '...\n\n' +
+                                'Original error: ' + initError.message);
+                        }
+                        throw initError;
+                    }
+                } else {
+                    throw new Error('Web3Auth init() method not found. Available methods: ' + Object.getOwnPropertyNames(Object.getPrototypeOf(web3auth)).filter(m => typeof web3auth[m] === 'function').join(', '));
+                }
+                
+                // Check if already connected
+                if (web3auth.connected) {
+                    try {
+                        provider = web3auth.provider;
+                        const user = await web3auth.getUserInfo();
+                        const accounts = await provider.request({ method: 'eth_accounts' });
+                        displayUserInfo(user, accounts[0]);
+                        updateStatus('Already connected', 'success');
+                        document.getElementById('connectBtn').style.display = 'none';
+                        document.getElementById('disconnectBtn').style.display = 'block';
+                    } catch (error) {
+                        console.error('Error checking connection:', error);
+                    }
+                }
+            } catch (error) {
+                console.error('Error initializing Web3Auth:', error);
+                let errorMessage = error.message || 'Unknown error';
+                
+                // Provide helpful error messages for common issues
+                if (errorMessage.includes('Project not found') || errorMessage.includes('failed to fetch project configurations')) {
+                    errorMessage += '\n\nTroubleshooting:\n' +
+                        '1. Verify Client ID matches your Web3Auth Dashboard project\n' +
+                        '2. Check that network matches (sapphire_mainnet vs sapphire_devnet) - Currently using: ' + WEB3AUTH_NETWORK + '\n' +
+                        '3. Ensure "view.canopi.live" is in Allowed Origins in Web3Auth Dashboard\n' +
+                        '4. Verify project is active in Web3Auth Dashboard';
+                }
+                
+                updateStatus('Error: ' + errorMessage, 'error');
+            }
+        }
+        
+        // Connect to Web3Auth
+        async function connect() {
+            if (!web3auth) {
+                updateStatus('Web3Auth not initialized', 'error');
+                return;
+            }
+            
+            try {
+                updateStatus('Connecting...', 'info');
+                document.getElementById('connectBtn').disabled = true;
+                
+                provider = await web3auth.connect();
+                
+                if (provider) {
+                    const user = await web3auth.getUserInfo();
+                    const accounts = await provider.request({ method: 'eth_accounts' });
+                    
+                    displayUserInfo(user, accounts[0]);
+                    updateStatus('Connected successfully!', 'success');
+                    
+                    document.getElementById('connectBtn').style.display = 'none';
+                    document.getElementById('disconnectBtn').style.display = 'block';
+                } else {
+                    updateStatus('Connection failed', 'error');
+                    document.getElementById('connectBtn').disabled = false;
+                }
+            } catch (error) {
+                console.error('Error connecting:', error);
+                updateStatus('Error: ' + error.message, 'error');
+                document.getElementById('connectBtn').disabled = false;
+            }
+        }
+        
+        // Disconnect from Web3Auth
+        async function disconnect() {
+            if (!web3auth) return;
+            
+            try {
+                updateStatus('Disconnecting...', 'info');
+                await web3auth.logout();
+                provider = null;
+                hideUserInfo();
+                updateStatus('Disconnected', 'info');
+                document.getElementById('connectBtn').style.display = 'block';
+                document.getElementById('disconnectBtn').style.display = 'none';
+                document.getElementById('connectBtn').disabled = false;
+            } catch (error) {
+                console.error('Error disconnecting:', error);
+                updateStatus('Error: ' + error.message, 'error');
+            }
+        }
+        
+        // Display user information
+        function displayUserInfo(user, walletAddress) {
+            document.getElementById('userEmail').textContent = user.email || '-';
+            document.getElementById('userName').textContent = user.name || '-';
+            document.getElementById('userId').textContent = user.verifierId || user.verifier || '-';
+            document.getElementById('userProvider').textContent = user.typeOfLogin || '-';
+            document.getElementById('walletAddress').textContent = walletAddress || '-';
+            document.getElementById('userInfo').classList.add('active');
+        }
+        
+        // Hide user information
+        function hideUserInfo() {
+            document.getElementById('userInfo').classList.remove('active');
+            document.getElementById('userEmail').textContent = '-';
+            document.getElementById('userName').textContent = '-';
+            document.getElementById('userId').textContent = '-';
+            document.getElementById('userProvider').textContent = '-';
+            document.getElementById('walletAddress').textContent = '-';
+        }
+        
+        // Update status message
+        function updateStatus(message, type = 'info') {
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = message;
+            statusEl.className = `status ${type}`;
+        }
+        
+        // Event listeners (set up after DOM is ready)
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('connectBtn').addEventListener('click', connect);
+            document.getElementById('disconnectBtn').addEventListener('click', disconnect);
+        });
+    </script>
+</body>
+</html>

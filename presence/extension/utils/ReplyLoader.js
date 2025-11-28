@@ -5,6 +5,8 @@
  * Separates reply loading logic from message rendering.
  */
 import { supabaseServiceInstance } from '../services/SupabaseService.js';
+import { handleError } from './ErrorHandler.js';
+import { Logger } from './Logger.js';
 export class ReplyLoader {
     /**
      * Check if a message has nested replies
@@ -20,7 +22,7 @@ export class ReplyLoader {
             const queryResult = await supabaseQuery.from('messages').select('id').eq('parent_id', messageId).eq('page_id', pageId).eq('community_id', communityId);
             const { data: nestedReplies, error } = queryResult;
             if (error) {
-                console.warn(`⚠️ ReplyLoader: Error checking nested replies for ${messageId}:`, error);
+                Logger.warn(`⚠️ ReplyLoader: Error checking nested replies for ${messageId}:`, error, 'messages');
                 return { hasReplies: false, replyCount: 0 };
             }
             const hasReplies = nestedReplies !== null && nestedReplies !== undefined && nestedReplies.length > 0;
@@ -28,7 +30,15 @@ export class ReplyLoader {
             return { hasReplies: hasReplies || false, replyCount };
         }
         catch (err) {
-            console.warn(`⚠️ ReplyLoader: Error checking nested replies for ${messageId}:`, err);
+            handleError(err, {
+                log: true,
+                logLevel: 'warn',
+                context: {
+                    operation: 'checkForReplies',
+                    component: 'ReplyLoader',
+                    messageId
+                }
+            });
             return { hasReplies: false, replyCount: 0 };
         }
     }
@@ -38,7 +48,7 @@ export class ReplyLoader {
     static async loadAllReplies(messageId, pageId, communityId) {
         const supabase = window.supabase || supabaseServiceInstance.getClient();
         if (!supabase || !pageId || !communityId) {
-            console.warn(`⚠️ ReplyLoader: Cannot load replies - missing dependencies`);
+            Logger.warn(`⚠️ ReplyLoader: Cannot load replies - missing dependencies`, null, 'messages');
             return [];
         }
         try {
@@ -47,7 +57,7 @@ export class ReplyLoader {
             const queryResult = await supabaseQuery.from('messages').select('*').eq('parent_id', messageId).eq('page_id', pageId).eq('community_id', communityId).order('created_at', { ascending: true });
             const { data: directReplies, error } = queryResult;
             if (error) {
-                console.error(`❌ ReplyLoader: Error loading direct replies for ${messageId}:`, error);
+                Logger.error(`❌ ReplyLoader: Error loading direct replies for ${messageId}:`, error, 'messages');
                 return [];
             }
             if (!directReplies || directReplies.length === 0) {
@@ -79,7 +89,16 @@ export class ReplyLoader {
             return allReplies;
         }
         catch (err) {
-            console.error(`❌ ReplyLoader: Error loading replies for ${messageId}:`, err);
+            handleError(err, {
+                log: true,
+                logLevel: 'error',
+                context: {
+                    operation: 'loadReplies',
+                    component: 'ReplyLoader',
+                    pageId,
+                    communityId
+                }
+            });
             return [];
         }
     }
@@ -109,7 +128,15 @@ export class ReplyLoader {
             }
         }
         catch (err) {
-            console.error('❌ ReplyLoader: Error fetching reply author:', err);
+            handleError(err, {
+                log: true,
+                logLevel: 'error',
+                context: {
+                    operation: 'getUserInfo',
+                    component: 'ReplyLoader',
+                    userId
+                }
+            });
         }
         return { id: userId, name: 'Unknown' };
     }
@@ -150,6 +177,6 @@ export class ReplyLoader {
 // Export to window for backward compatibility
 if (typeof window !== 'undefined') {
     window.ReplyLoader = ReplyLoader;
-    console.log('✅ ReplyLoader: Exported to window');
+    Logger.debug('✅ ReplyLoader: Exported to window', null, 'messages');
 }
 export default ReplyLoader;

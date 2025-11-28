@@ -1,0 +1,14 @@
+# Prevent direct editing of build/compiled files
+# These files are generated from src/ and should NEVER be edited directly
+
+# Mark extension/ as generated (read-only in some tools)
+extension/** linguist-generated=true
+dist/** linguist-generated=true
+build/** linguist-generated=true
+
+# Mark src/ as source (editable)
+src/** linguist-generated=false
+
+
+
+

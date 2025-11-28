@@ -16,18 +16,42 @@ class RealGoogleAuth {
       console.log('🔍 REAL_GOOGLE_AUTH: Starting initialization...');
       console.log('🔍 REAL_GOOGLE_AUTH: window.supabase available:', typeof window !== 'undefined' && !!window.supabase);
       
-      if (typeof window !== 'undefined' && window.supabase) {
-        this.supabase = window.supabase;
-        this.initialized = true;
-        console.log('🔍 REAL_GOOGLE_AUTH: Initialized for real profile pictures');
-        console.log('🔍 REAL_GOOGLE_AUTH: Supabase client:', this.supabase);
-        console.log('🔍 REAL_GOOGLE_AUTH: Supabase auth:', this.supabase.auth);
-        return true;
-      } else {
-        console.error('🔍 REAL_GOOGLE_AUTH: Supabase client not available');
-        console.error('🔍 REAL_GOOGLE_AUTH: window.supabase:', window.supabase);
-        throw new Error('Supabase client not available');
+      // CRITICAL FIX: Wait for Supabase to be fully initialized with auth property
+      let attempts = 0;
+      const maxAttempts = 10;
+      const delay = 100; // 100ms between attempts
+      
+      while (attempts < maxAttempts) {
+        if (typeof window !== 'undefined' && window.supabase) {
+          // Check if auth property exists
+          if (window.supabase.auth) {
+            this.supabase = window.supabase;
+            this.initialized = true;
+            console.log('🔍 REAL_GOOGLE_AUTH: Initialized for real profile pictures');
+            console.log('🔍 REAL_GOOGLE_AUTH: Supabase client:', this.supabase);
+            console.log('🔍 REAL_GOOGLE_AUTH: Supabase auth:', this.supabase.auth);
+            return true;
+          } else {
+            // Auth not available yet, wait and retry
+            console.log(`🔍 REAL_GOOGLE_AUTH: Supabase client exists but auth not ready, waiting... (attempt ${attempts + 1}/${maxAttempts})`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            attempts++;
+          }
+        } else {
+          // Supabase not available yet, wait and retry
+          console.log(`🔍 REAL_GOOGLE_AUTH: Supabase client not available yet, waiting... (attempt ${attempts + 1}/${maxAttempts})`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          attempts++;
+        }
       }
+      
+      // If we get here, Supabase didn't initialize properly
+      console.error('🔍 REAL_GOOGLE_AUTH: Supabase client not available after waiting');
+      console.error('🔍 REAL_GOOGLE_AUTH: window.supabase:', window.supabase);
+      if (window.supabase) {
+        console.error('🔍 REAL_GOOGLE_AUTH: window.supabase.auth:', window.supabase.auth);
+      }
+      throw new Error('Supabase client not available or auth property missing');
     } catch (error) {
       console.error('Failed to initialize Real Google Auth:', error);
       throw error;
@@ -174,10 +198,37 @@ class RealGoogleAuth {
               provider: 'chrome_profile',
               id: chromeProfileEmail
             };
-            // ROOT CAUSE FIX: Update stateManager (TypeScript migration - no window.currentUser)
-            if (stateManagerInstance?.setState) {
+            // ROOT CAUSE FIX: Convert Google ID to UUID BEFORE setting currentUser
+            let appUserUUID = null;
+            try {
+              const appUserResponse = await window.api.request(`/v1/users/${encodeURIComponent(chromeProfileEmail)}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  email: chromeProfileEmail,
+                  name: chromeProfileEmail.split('@')[0],
+                  avatarUrl: null,
+                  auraColor: window.AVATAR_FALLBACK_COLOR
+                })
+              });
+              const appUser = appUserResponse?.data || appUserResponse;
+              if (appUser && appUser.id) {
+                appUserUUID = appUser.id;
+                chromeProfileUser.id = appUserUUID;
+                console.log('✅ REAL_GOOGLE_AUTH: Converted to UUID:', appUserUUID);
+              }
+            } catch (error) {
+              console.error('❌ REAL_GOOGLE_AUTH: Failed to get UUID:', error);
+            }
+            
+            // ROOT CAUSE FIX: Use window.handleUserChange() instead of direct setState
+            // This ensures UUID conversion happens in BootController.handleUserChange()
+            if (typeof window !== 'undefined' && window.handleUserChange) {
+              await window.handleUserChange(chromeProfileUser);
+              console.log('✅ REAL_GOOGLE_AUTH: Set currentUser via handleUserChange (UUID converted):', chromeProfileUser.email);
+            } else if (stateManagerInstance?.setState) {
+              console.warn('⚠️ REAL_GOOGLE_AUTH: window.handleUserChange not available, using direct setState (UUID conversion skipped)');
               stateManagerInstance.setState('currentUser', chromeProfileUser);
-              console.log('✅ REAL_GOOGLE_AUTH: Set stateManager.currentUser from Chrome profile info:', chromeProfileEmail);
             }
             
             // Try getAuthToken method (non-interactive first to avoid popups)
@@ -218,6 +269,32 @@ class RealGoogleAuth {
                 const chromeProfile = userInfo;
 
                 if (chromeProfile && chromeProfile.email) {
+                  // ROOT CAUSE FIX: Convert Google ID to UUID BEFORE creating user object
+                  let appUserUUID = null;
+                  try {
+                    // Get or create AppUser - backend will return UUID
+                    const appUserResponse = await window.api.request(`/v1/users/${encodeURIComponent(chromeProfile.email)}`, {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                      },
+                      body: JSON.stringify({
+                        email: chromeProfile.email,
+                        name: chromeProfile.name || chromeProfile.email.split('@')[0],
+                        avatarUrl: chromeProfile.picture,
+                        auraColor: window.AVATAR_FALLBACK_COLOR
+                      })
+                    });
+                    
+                    const appUser = appUserResponse?.data || appUserResponse;
+                    if (appUser && appUser.id) {
+                      appUserUUID = appUser.id;
+                      console.log('✅ REAL_GOOGLE_AUTH: Converted Google ID to UUID:', chromeProfile.id, '→', appUserUUID);
+                    }
+                  } catch (error) {
+                    console.error('❌ REAL_GOOGLE_AUTH: Failed to get UUID:', error);
+                  }
+                  
                   // COMP METHOD: Create user object from Chrome profile with OAuth data
                   const chromeUser = {
                     email: chromeProfile.email,
@@ -228,7 +305,7 @@ class RealGoogleAuth {
                       avatar_url: chromeProfile.picture // Use ACTUAL Google profile picture
                     },
                     provider: 'chrome_profile',
-                    id: chromeProfile.id || chromeProfile.email
+                    id: appUserUUID || chromeProfile.email // Use UUID if available, fallback to email (NOT Google ID)
                   };
 
                   console.log('🔍 REAL_GOOGLE_AUTH: Chrome profile user created with OAuth data:', chromeUser.email);
@@ -276,12 +353,16 @@ class RealGoogleAuth {
                     console.log('⚠️ REAL_GOOGLE_AUTH: Not updating AppUser table - avatar URL is generic fallback:', chromeProfile.picture);
                   }
                   
-                  // ROOT CAUSE FIX: Store Chrome profile user in StateManager (TypeScript migration - no window.currentUser)
-                  if (stateManagerInstance?.setState) {
+                  // ROOT CAUSE FIX: Use window.handleUserChange() instead of direct setState
+                  // This ensures UUID conversion happens in BootController.handleUserChange()
+                  if (typeof window !== 'undefined' && window.handleUserChange) {
+                    await window.handleUserChange(chromeUser);
+                    console.log('✅ REAL_GOOGLE_AUTH: Set currentUser via handleUserChange (UUID converted):', chromeUser.email);
+                  } else if (stateManagerInstance?.setState) {
+                    console.warn('⚠️ REAL_GOOGLE_AUTH: window.handleUserChange not available, using direct setState (UUID conversion skipped)');
                     stateManagerInstance.setState('currentUser', chromeUser);
                     stateManagerInstance.setState('supabaseUser', chromeUser);
                     stateManagerInstance.setState('supabaseSession', { user: chromeUser });
-                    console.log('✅ REAL_GOOGLE_AUTH: Set stateManager.currentUser from OAuth profile:', chromeUser.email);
                   }
                   
                   console.log('🔍 REAL_GOOGLE_AUTH: RETURNING Chrome profile user:', chromeUser.email);
@@ -338,12 +419,16 @@ class RealGoogleAuth {
               console.log('⚠️ REAL_GOOGLE_AUTH: Failed to create user in backend (will continue anyway):', error);
             }
             
-            // ROOT CAUSE FIX: Store Chrome profile user in StateManager (TypeScript migration - no window.currentUser)
-            if (stateManagerInstance?.setState) {
+            // ROOT CAUSE FIX: Use window.handleUserChange() instead of direct setState
+            // This ensures UUID conversion happens in BootController.handleUserChange()
+            if (typeof window !== 'undefined' && window.handleUserChange) {
+              await window.handleUserChange(chromeUser);
+              console.log('✅ REAL_GOOGLE_AUTH: Set currentUser via handleUserChange (UUID converted):', chromeUser.email);
+            } else if (stateManagerInstance?.setState) {
+              console.warn('⚠️ REAL_GOOGLE_AUTH: window.handleUserChange not available, using direct setState (UUID conversion skipped)');
               stateManagerInstance.setState('currentUser', chromeUser);
               stateManagerInstance.setState('supabaseUser', chromeUser);
               stateManagerInstance.setState('supabaseSession', { user: chromeUser });
-              console.log('✅ REAL_GOOGLE_AUTH: Set stateManager.currentUser:', chromeUser.email);
             }
             
             console.log('🔍 REAL_GOOGLE_AUTH: RETURNING Chrome profile user (email only):', chromeUser.email);
@@ -371,11 +456,42 @@ class RealGoogleAuth {
           await window.setState('supabaseUser', user);
         }
         
-        // ROOT CAUSE FIX: Update stateManager (TypeScript migration - no window.currentUser)
-        if (stateManagerInstance?.setState) {
+        // ROOT CAUSE FIX: Convert Google ID to UUID BEFORE setting currentUser
+        if (user && user.id && user.email) {
+          const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+          const isGoogleId = /^\d{15,21}$/.test(user.id);
+          
+          if (isGoogleId || !uuidRegex.test(user.id)) {
+            try {
+              const appUserResponse = await window.api.request(`/v1/users/${encodeURIComponent(user.email)}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  email: user.email,
+                  name: user.name || user.user_metadata?.full_name || user.email.split('@')[0],
+                  avatarUrl: user.picture || user.user_metadata?.avatar_url
+                })
+              });
+              const appUser = appUserResponse?.data || appUserResponse;
+              if (appUser && appUser.id) {
+                user.id = appUser.id;
+                console.log('✅ REAL_GOOGLE_AUTH: Converted Supabase Google ID to UUID:', appUser.id);
+              }
+            } catch (error) {
+              console.error('❌ REAL_GOOGLE_AUTH: Failed to convert Supabase Google ID:', error);
+            }
+          }
+        }
+        
+        // ROOT CAUSE FIX: Use window.handleUserChange() instead of direct setState
+        // This ensures UUID conversion happens in BootController.handleUserChange()
+        if (typeof window !== 'undefined' && window.handleUserChange) {
+          await window.handleUserChange(user);
+          console.log('✅ REAL_GOOGLE_AUTH: Set currentUser via handleUserChange (UUID converted):', user.email);
+        } else if (stateManagerInstance?.setState) {
+          console.warn('⚠️ REAL_GOOGLE_AUTH: window.handleUserChange not available, using direct setState (UUID conversion skipped)');
           stateManagerInstance.setState('currentUser', user);
           stateManagerInstance.setState('supabaseUser', user);
-          console.log('✅ REAL_GOOGLE_AUTH: Set stateManager.currentUser (Supabase OAuth):', user.email);
         }
         
         return user;
@@ -388,10 +504,42 @@ class RealGoogleAuth {
         console.log('🔍 REAL_GOOGLE_AUTH: Found stored user with real avatar:', result.supabaseUser.email);
         console.log('🔍 REAL_GOOGLE_AUTH: Stored avatar URL:', result.supabaseUser.user_metadata?.avatar_url);
         
-        // ROOT CAUSE FIX: Update stateManager (TypeScript migration - no window.currentUser)
-        if (stateManagerInstance?.setState) {
-          stateManagerInstance.setState('currentUser', result.supabaseUser);
-          console.log('✅ REAL_GOOGLE_AUTH: Set stateManager.currentUser (stored):', result.supabaseUser.email);
+        // ROOT CAUSE FIX: Convert Google ID to UUID BEFORE setting currentUser
+        const storedUser = result.supabaseUser;
+        if (storedUser && storedUser.id && storedUser.email) {
+          const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+          const isGoogleId = /^\d{15,21}$/.test(storedUser.id);
+          
+          if (isGoogleId || !uuidRegex.test(storedUser.id)) {
+            try {
+              const appUserResponse = await window.api.request(`/v1/users/${encodeURIComponent(storedUser.email)}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  email: storedUser.email,
+                  name: storedUser.name || storedUser.user_metadata?.full_name || storedUser.email.split('@')[0],
+                  avatarUrl: storedUser.picture || storedUser.user_metadata?.avatar_url
+                })
+              });
+              const appUser = appUserResponse?.data || appUserResponse;
+              if (appUser && appUser.id) {
+                storedUser.id = appUser.id;
+                console.log('✅ REAL_GOOGLE_AUTH: Converted stored Google ID to UUID:', appUser.id);
+              }
+            } catch (error) {
+              console.error('❌ REAL_GOOGLE_AUTH: Failed to convert stored Google ID:', error);
+            }
+          }
+        }
+        
+        // ROOT CAUSE FIX: Use window.handleUserChange() instead of direct setState
+        // This ensures UUID conversion happens in BootController.handleUserChange()
+        if (typeof window !== 'undefined' && window.handleUserChange) {
+          await window.handleUserChange(storedUser);
+          console.log('✅ REAL_GOOGLE_AUTH: Set currentUser via handleUserChange (UUID converted):', storedUser.email);
+        } else if (stateManagerInstance?.setState) {
+          console.warn('⚠️ REAL_GOOGLE_AUTH: window.handleUserChange not available, using direct setState (UUID conversion skipped)');
+          stateManagerInstance.setState('currentUser', storedUser);
         }
         
         return result.supabaseUser;

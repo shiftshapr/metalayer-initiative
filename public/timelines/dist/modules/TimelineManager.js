@@ -9,7 +9,7 @@ export class TimelineManager {
         this.multiProfileIds = [];
         this.filters = {
             persistence: 'all',
-            community: null,
+            communities: [],
             activityTypes: [],
             search: ''
         };

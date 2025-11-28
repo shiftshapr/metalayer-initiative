@@ -17,6 +17,7 @@
 - ✅ **Quick Start Guide**: Step-by-step tutorial (`SIDEBAR_TAB_SDK_QUICK_START.md`)
 - ✅ **Example Manifest**: Archive Assistant example (`examples/archive-assistant-manifest.json`)
 - ✅ **Documentation Index**: Navigation and overview (`SIDEBAR_TAB_SDK_INDEX.md`)
+- ✅ **Sidebar Position Feature**: Added left/right position configuration (default: right)
 
 ### 2. Unified Store Architecture
 - ✅ **Architecture Decision**: Unified store for all SDK types
@@ -37,6 +38,7 @@
   - Store distribution model
   - All four SDK types
   - Security and integration patterns
+- ✅ **Sidebar Position Feature**: Documented in `JAU_MEMORY_LOGS_SIDEBAR_POSITION.md` (ready for JAUmemory logging)
 
 ---
 

@@ -1,19 +1,8 @@
 /**
- * USER MODULE - User State Management
- * TypeScript + ES6 Module for current user state
+ * UserModule - User management utilities
  */
-import { User } from '../types/index.js';
-/**
- * Get the current authenticated user
- */
+import type { User } from '../types/index.js';
 export declare function getCurrentUser(): User | null;
-/**
- * Set the current authenticated user
- * Automatically normalizes Supabase user_metadata fields to standardized format
- */
-export declare function setCurrentUser(user: User | any | null): void;
-/**
- * Check if user is authenticated
- */
+export declare function setCurrentUser(user: User | null): void;
 export declare function isAuthenticated(): boolean;
 //# sourceMappingURL=UserModule.d.ts.map

@@ -11,10 +11,13 @@ import { TimelineManager } from './modules/TimelineManager.js';
 import { TimelineRealtime } from './modules/TimelineRealtime.js';
 import { TimelineCache } from './modules/TimelineCache.js';
 import { TimelineQuery } from './modules/TimelineQuery.js';
-import { VisibilityManager } from './modules/VisibilityManager.js';
+// import { VisibilityManager } from './modules/VisibilityManager.js'; // Unused for now
 import { TimelineView } from './components/TimelineView.js';
 import { ProfileSelector } from './components/ProfileSelector.js';
 import { TimelineFilters } from './components/TimelineFilters.js';
+import { FeedFilters, type FeedFilterValues } from './components/FeedFilters.js';
+import { SidebarRight } from './components/SidebarRight.js';
+import { MultiSelect, type MultiSelectOption } from './utils/MultiSelect.js';
 // @ts-ignore - Runtime paths, TypeScript can't resolve
 import { AvatarUtils } from '/presence/utils/AvatarUtils.js';
 // @ts-ignore - Runtime paths, TypeScript can't resolve
@@ -24,7 +27,7 @@ import { SupabaseService } from '/presence/services/SupabaseService.js';
 
 import type { 
   SupabaseClient, 
-  TimelineData, 
+  // TimelineData, // Unused for now
   TimelineQueryOptions,
   ViewMode,
   PersistenceType,
@@ -68,7 +71,10 @@ class TimelineApp {
   private realtimeManager: TimelineRealtime | null;
   private timelineView: TimelineView;
   private profileSelector: ProfileSelector;
-  private filters: TimelineFilters;
+  private filters: TimelineFilters | null = null;
+  private feedFilters: FeedFilters | null = null;
+  private sidebarRight: SidebarRight | null = null;
+  private persistenceMultiSelect: MultiSelect | null = null;
   private currentUserId: string | null;
   private currentUserEmail: string | null;
   private currentUserCommunities: Community[];
@@ -91,14 +97,40 @@ class TimelineApp {
     const timelineItemsContainer = document.getElementById('timeline-items');
     const profileSelectorModal = document.getElementById('profile-selector-modal');
     const timelineFiltersContainer = document.getElementById('timeline-filters');
+    const feedFilterButtons = document.getElementById('feed-filter-buttons');
 
-    if (!timelineItemsContainer || !profileSelectorModal || !timelineFiltersContainer) {
+    if (!timelineItemsContainer || !profileSelectorModal) {
       throw new Error('TimelineApp: Required DOM elements not found');
     }
 
     this.timelineView = new TimelineView(timelineItemsContainer, this.timelineManager);
     this.profileSelector = new ProfileSelector(profileSelectorModal, this);
-    this.filters = new TimelineFilters(timelineFiltersContainer, this.timelineManager);
+    
+    // Initialize filters (legacy support, may be hidden in new layout)
+    if (timelineFiltersContainer) {
+      this.filters = new TimelineFilters(timelineFiltersContainer, this.timelineManager, () => this.query.getAuthHeaders());
+    }
+
+    // Initialize feed filters (Column B)
+    if (feedFilterButtons) {
+      this.feedFilters = new FeedFilters(
+        feedFilterButtons,
+        () => this.query.getAuthHeaders(),
+        (filters: FeedFilterValues) => this.handleFeedFilterChange(filters)
+      );
+    }
+
+    // Initialize right sidebar (Column C)
+    this.sidebarRight = new SidebarRight(
+      'global-search',
+      'rewards',
+      'top-canopies',
+      'top-timeline',
+      'top-posts',
+      'top-bridgers',
+      () => this.query.getAuthHeaders(),
+      (query: string) => this.handleSearch(query)
+    );
 
     // Current user info
     this.currentUserId = null;
@@ -153,22 +185,34 @@ class TimelineApp {
         modal.classList.add('hidden');
       }
 
-      // Parse route to get profile identifier
-      const identifier = this.parseRoute();
-      
-      if (!identifier) {
-        this.showError('No profile specified in URL');
-        return;
-      }
-
       // Load current user info
       await this.loadCurrentUser();
 
-      // Initialize filters with communities
-      this.filters.render(this.currentUserCommunities);
+      // Initialize feed filters (Column B)
+      if (this.feedFilters) {
+        await this.feedFilters.render();
+      }
 
-      // Load timeline
-      await this.loadTimeline(identifier);
+      // Initialize right sidebar (Column C)
+      if (this.sidebarRight) {
+        await this.sidebarRight.init();
+      }
+
+      // Initialize legacy filters (if container exists)
+      if (this.filters) {
+        await this.filters.render(this.currentUserCommunities);
+      }
+
+      // Parse route to get profile identifier
+      const identifier = this.parseRoute();
+      
+      // If no identifier or identifier is "timelines", show home feed
+      if (!identifier || identifier === 'timelines') {
+        await this.loadHomeFeed();
+      } else {
+        // Load specific profile timeline
+        await this.loadTimeline(identifier);
+      }
 
       // Set up event listeners
       this.setupEventListeners();
@@ -176,8 +220,8 @@ class TimelineApp {
       // Set up real-time subscriptions
       await this.setupRealtime();
 
-      // Set up filter change listener
-      document.addEventListener('timeline:filters:changed', (e: Event) => {
+      // Set up filter change listener (legacy)
+      document.addEventListener('timeline:filters:changed', async (e: Event) => {
         const customEvent = e as CustomEvent<TimelineFiltersType>;
         this.handleFilterChange(customEvent.detail);
       });
@@ -196,7 +240,7 @@ class TimelineApp {
     console.log('TimelineApp: Parsing route from path:', path);
     // Extract identifier from /timelines/:identifier or /:identifier (for subdomain)
     const match = path.match(/\/timelines\/([^\/]+)$/) || path.match(/^\/([^\/]+)$/);
-    const identifier = match ? match[1] : null;
+    const identifier = match ? (match[1] || null) : null;
     console.log('TimelineApp: Extracted identifier:', identifier);
     return identifier;
   }
@@ -214,7 +258,7 @@ class TimelineApp {
         
         if (user) {
           // Extract user ID (could be id, user_id, or uuid)
-          this.currentUserId = user.id || user.user_id || user.uuid || null;
+            this.currentUserId = (user.id || user.user_id || user.uuid || null) as string | null;
           this.currentUserEmail = user.email || null;
           
           console.log('Timeline: Current user loaded', { 
@@ -282,7 +326,8 @@ class TimelineApp {
       // Fetch from API
       const response = await this.query.getTimeline(identifier, {
         persistence: options.persistence || 'all',
-        community: options.community || null,
+        communities: options.communities || [],
+        community: options.community || null,  // Backward compatibility
         search: options.search || null,
         activityTypes: options.activityTypes || [],
         page: options.page || 1,
@@ -466,7 +511,21 @@ class TimelineApp {
    * Set up event listeners
    */
   private setupEventListeners(): void {
-    // Add profile button
+    // Column A navigation
+    const navItems = document.querySelectorAll('.nav-item');
+    navItems.forEach(item => {
+      item.addEventListener('click', (e) => {
+        e.preventDefault();
+        const navType = item.getAttribute('data-nav');
+        this.handleNavigation(navType);
+        
+        // Update active state
+        navItems.forEach(nav => nav.classList.remove('active'));
+        item.classList.add('active');
+      });
+    });
+
+    // Add profile button (legacy, may not exist in new layout)
     const addProfileBtn = document.getElementById('add-profile-btn');
     if (addProfileBtn) {
       addProfileBtn.addEventListener('click', () => {
@@ -474,11 +533,28 @@ class TimelineApp {
       });
     }
 
-    // Persistence selector
-    const persistenceSelect = document.getElementById('persistence-select') as HTMLSelectElement | null;
-    if (persistenceSelect) {
-      persistenceSelect.addEventListener('change', (e) => {
-        const persistence = (e.target as HTMLSelectElement).value as PersistenceType;
+    // Persistence selector - Convert to multi-select
+    const persistenceSelectContainer = document.getElementById('persistence-select-container');
+    if (persistenceSelectContainer) {
+      const persistenceOptions: MultiSelectOption[] = [
+        { value: 'all', label: 'All Time' },
+        { value: '1y', label: 'Last Year' },
+        { value: '30d', label: 'Last 30 Days' },
+        { value: '7d', label: 'Last 7 Days' },
+        { value: '1d', label: 'Last 24 Hours' }
+      ];
+
+      this.persistenceMultiSelect = new MultiSelect(persistenceSelectContainer, persistenceOptions, {
+        placeholder: 'Select time range...',
+        showCount: true
+      });
+      this.persistenceMultiSelect.render();
+
+      persistenceSelectContainer.addEventListener('multiselect:change', (e: Event) => {
+        const customEvent = e as CustomEvent;
+        const selectedValues = customEvent.detail.selectedValues as string[];
+        // For now, use first selected value (can be enhanced to support multiple)
+        const persistence = (selectedValues[0] || 'all') as PersistenceType;
         if (this.currentProfileId) {
           this.loadTimeline(this.currentProfileId, { persistence });
         }
@@ -556,6 +632,7 @@ class TimelineApp {
       const timeline = this.timelineManager.getTimeline(userId);
       if (timeline && timeline.activities && timeline.activities.length > 0) {
         const firstActivity = timeline.activities[0];
+        if (!firstActivity) return;
         const user = firstActivity.data?.user;
         if (user) {
           await this.renderProfileHeader(user);
@@ -679,11 +756,232 @@ class TimelineApp {
   }
 
   /**
+   * Handle navigation (Column A)
+   */
+  private handleNavigation(navType: string | null): void {
+    if (!navType) return;
+    
+    switch (navType) {
+      case 'home':
+        window.location.href = '/timelines';
+        break;
+      case 'canopies':
+        window.location.href = '/canopies';
+        break;
+      case 'timelines':
+        window.location.href = '/timelines';
+        break;
+      case 'bookmarks':
+        window.location.href = '/bookmarks';
+        break;
+      case 'profile':
+        if (this.currentUserId) {
+          window.location.href = `/profile/${this.currentUserId}`;
+        } else {
+          window.location.href = '/profile';
+        }
+        break;
+    }
+  }
+
+  /**
    * Handle filter changes
    */
   private async handleFilterChange(filters: Partial<TimelineFiltersType>): Promise<void> {
     if (this.currentProfileId) {
       await this.loadTimeline(this.currentProfileId, filters);
+    }
+  }
+
+  /**
+   * Handle feed filter changes (Column B)
+   * Filters are not mutually exclusive - can combine Following, My, Shared
+   */
+  private async handleFeedFilterChange(filters: FeedFilterValues): Promise<void> {
+    console.log('Feed filter changed:', filters);
+    
+    // Build combined feed based on active filters
+    // Priority: Following > My > Shared > Communities > Rooms
+    if (filters.following) {
+      await this.loadFollowingFeed(filters);
+    } else if (filters.my) {
+      await this.loadMyFeed(filters);
+    } else if (filters.shared) {
+      await this.loadSharedFeed(filters);
+    } else if (filters.communities.length > 0) {
+      await this.loadCommunitiesFeed(filters);
+    } else if (filters.rooms.length > 0) {
+      await this.loadRoomsFeed(filters);
+    } else {
+      // Default to home feed if nothing selected
+      await this.loadHomeFeed();
+    }
+  }
+
+  /**
+   * Handle search query (Column C)
+   */
+  private async handleSearch(query: string): Promise<void> {
+    console.log('Search query:', query);
+    // TODO: Implement search functionality
+    // This could filter the current feed or navigate to search results
+  }
+
+  /**
+   * Load home feed (all timelines)
+   */
+  private async loadHomeFeed(): Promise<void> {
+    try {
+      this.showLoading();
+      
+      // Load all visible timelines
+      const response = await fetch('/api/timelines', {
+        headers: this.query.getAuthHeaders()
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        // TODO: Render timeline list or aggregated feed
+        console.log('Home feed loaded:', data);
+      } else {
+        this.showError('Failed to load home feed');
+      }
+    } catch (error) {
+      console.error('Failed to load home feed:', error);
+      this.showError('Failed to load home feed');
+    } finally {
+      this.hideLoading();
+    }
+  }
+
+  /**
+   * Load "Following" feed
+   */
+  private async loadFollowingFeed(_filters: FeedFilterValues): Promise<void> {
+    if (!this.currentUserId) {
+      this.showError('Please log in to view following feed');
+      return;
+    }
+    
+    try {
+      this.showLoading();
+      
+      const response = await fetch(`/api/timelines/following?userId=${this.currentUserId}`, {
+        headers: this.query.getAuthHeaders()
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        // TODO: Render following feed
+        console.log('Following feed loaded:', data);
+      } else {
+        this.showError('Failed to load following feed');
+      }
+    } catch (error) {
+      console.error('Failed to load following feed:', error);
+      this.showError('Failed to load following feed');
+    } finally {
+      this.hideLoading();
+    }
+  }
+
+  /**
+   * Load "My" feed
+   */
+  private async loadMyFeed(_filters: FeedFilterValues): Promise<void> {
+    if (!this.currentUserId) {
+      this.showError('Please log in to view your feed');
+      return;
+    }
+    
+    await this.loadTimeline(this.currentUserId);
+  }
+
+  /**
+   * Load "Shared with Me" feed
+   */
+  private async loadSharedFeed(_filters: FeedFilterValues): Promise<void> {
+    try {
+      this.showLoading();
+      
+      const response = await fetch('/api/timelines/shared', {
+        headers: this.query.getAuthHeaders()
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        // TODO: Render shared timelines
+        console.log('Shared feed loaded:', data);
+      } else {
+        this.showError('Failed to load shared feed');
+      }
+    } catch (error) {
+      console.error('Failed to load shared feed:', error);
+      this.showError('Failed to load shared feed');
+    } finally {
+      this.hideLoading();
+    }
+  }
+
+  /**
+   * Load Communities feed
+   */
+  private async loadCommunitiesFeed(filters: FeedFilterValues): Promise<void> {
+    if (filters.communities.length === 0) {
+      this.showError('Please select at least one community');
+      return;
+    }
+    
+    try {
+      this.showLoading();
+      
+      const response = await fetch(`/api/timelines/communities?ids=${filters.communities.join(',')}`, {
+        headers: this.query.getAuthHeaders()
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        // TODO: Render communities feed
+        console.log('Communities feed loaded:', data);
+      } else {
+        this.showError('Failed to load communities feed');
+      }
+    } catch (error) {
+      console.error('Failed to load communities feed:', error);
+      this.showError('Failed to load communities feed');
+    } finally {
+      this.hideLoading();
+    }
+  }
+
+  /**
+   * Load Rooms feed
+   */
+  private async loadRoomsFeed(filters: FeedFilterValues): Promise<void> {
+    if (filters.rooms.length === 0) {
+      this.showError('Please select at least one room');
+      return;
+    }
+    
+    try {
+      this.showLoading();
+      
+      const response = await fetch(`/api/timelines/rooms?ids=${filters.rooms.join(',')}`, {
+        headers: this.query.getAuthHeaders()
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        // TODO: Render rooms feed
+        console.log('Rooms feed loaded:', data);
+      } else {
+        this.showError('Failed to load rooms feed');
+      }
+    } catch (error) {
+      console.error('Failed to load rooms feed:', error);
+      this.showError('Failed to load rooms feed');
+    } finally {
+      this.hideLoading();
     }
   }
 }

@@ -120,7 +120,18 @@ async function authenticateWithSupabase(user: User): Promise<void> {
     Logger.debug('🔧 SUPABASE AUTH: Authenticating user with Supabase...', null, 'auth');
     Logger.debug('🔧 SUPABASE AUTH: User id:', user.id || user.userId, 'auth');
     
-    const supabase = window.supabase;
+    // ROOT CAUSE FIX: Map user_metadata.avatar_url to avatarUrl before processing
+    const userWithMetadata = user as UserType & { user_metadata?: { avatar_url?: string } };
+    const avatarUrl = userWithMetadata.user_metadata?.avatar_url;
+    if (avatarUrl && !(user as UserType).avatarUrl) {
+      (user as UserType).avatarUrl = avatarUrl;
+      Logger.debug('[AUTH] Mapped user_metadata.avatar_url to avatarUrl in authenticateWithSupabase:', avatarUrl, 'auth');
+    }
+    
+    // TODO: Replace with ES6 SupabaseService import when available
+    // ACCEPTABLE: Using window.supabase for now as it's a runtime dependency
+    const win = window as Window & { supabase?: SupabaseClient };
+    const supabase = win.supabase;
     if (!supabase) {
       Logger.error('❌ SUPABASE AUTH: Supabase client not available', null, 'auth');
       return;
@@ -174,7 +185,10 @@ async function authenticateWithSupabase(user: User): Promise<void> {
     // Set the current user in the real-time client for context
     const supabaseRealtimeClient = (window as Window & { supabaseRealtimeClient?: SupabaseRealtimeClient }).supabaseRealtimeClient;
     if (supabaseRealtimeClient && supabaseRealtimeClient.setCurrentUser) {
-      await supabaseRealtimeClient.setCurrentUser(user.email, user.id, 'abe5ec85-4ba6-456f-adaf-03d7d51cecf4');
+      // Get primary community from state or fallback to Public Square
+      const { PUBLIC_SQUARE_UUID } = await import('../core/ConfigModule.js');
+      const primaryCommunity = stateManagerInstance.getState('primaryCommunity') as string | null;
+      await supabaseRealtimeClient.setCurrentUser(user.email, user.id, primaryCommunity || PUBLIC_SQUARE_UUID);
       Logger.debug('✅ SUPABASE AUTH: Real-time client user set', null, 'auth');
     }
     
@@ -279,7 +293,10 @@ async function authenticateWithSupabase(user: User): Promise<void> {
     }
       const currentUserForCommunity = stateManagerInstance.getState('currentUser') as UserType | null;
       if (currentUserForCommunity) {
-        stateManagerInstance.setState('currentUser', { ...currentUserForCommunity, communityId: 'abe5ec85-4ba6-456f-adaf-03d7d51cecf4' });
+        // Get primary community from state or fallback to Public Square
+        const { PUBLIC_SQUARE_UUID } = await import('../core/ConfigModule.js');
+        const primaryCommunity = stateManagerInstance.getState('primaryCommunity') as string | null;
+        stateManagerInstance.setState('currentUser', { ...currentUserForCommunity, communityId: primaryCommunity || PUBLIC_SQUARE_UUID });
       }
     }
     
@@ -398,9 +415,14 @@ function createAuthPromptModal(): void {
   if (googleBtn) {
     googleBtn.addEventListener('click', () => {
       (modal as HTMLElement).style.display = 'none';
-      const signInWithGoogle = window.signInWithGoogle;
-      if (signInWithGoogle) {
-        signInWithGoogle();
+      // ES6 pattern: Dispatch DOM event instead of calling window function
+      (window as Window).dispatchEvent(new CustomEvent('signInWithGoogle', {
+        detail: { source: 'AuthModule' }
+      }));
+      // Optional: Try direct call if available (graceful degradation)
+      const win = window as Window & { signInWithGoogle?: () => void };
+      if (typeof win.signInWithGoogle === 'function') {
+        win.signInWithGoogle();
       }
     });
   }
@@ -429,7 +451,10 @@ function initializeRealGoogleAuth(): void {
     Logger.debug('🚀 REAL_GOOGLE_AUTH: Initializing for actual Google profile pictures...', null, 'auth');
     
     // Initialize real Google auth
-    const RealGoogleAuth = window.RealGoogleAuth;
+    // TODO: Export RealGoogleAuth from a module instead of window
+    // ACCEPTABLE: RealGoogleAuth may be loaded from external script
+    const win2 = window as Window & { RealGoogleAuth?: new () => { initialize: () => Promise<boolean> } };
+    const RealGoogleAuth = win2.RealGoogleAuth;
     if (typeof RealGoogleAuth !== 'undefined' && typeof RealGoogleAuth === 'function') {
       const realGoogleAuth = new (RealGoogleAuth as new () => { initialize: () => Promise<boolean> })();
       realGoogleAuth.initialize().then((success: boolean) => {
@@ -516,14 +541,28 @@ async function signInWithGoogle(): Promise<void> {
       
       // Update UI with the authenticated user
       if (result && result.user) {
+        // ROOT CAUSE FIX: Map user_metadata.avatar_url to avatarUrl (camelCase conversion)
+        const userWithMetadata = result.user as UserType & { user_metadata?: { avatar_url?: string } };
+        const avatarUrl = userWithMetadata.user_metadata?.avatar_url;
+        
+        if (avatarUrl && !result.user.avatarUrl) {
+          result.user.avatarUrl = avatarUrl;
+          Logger.debug('[AUTH] Mapped user_metadata.avatar_url to avatarUrl in signInWithGoogle:', avatarUrl, 'auth');
+        }
+        
         // CRITICAL FIX: Authenticate with Supabase after Google auth
         await authenticateWithSupabase(result.user);
-        const updateUI = window.updateUI;
-        if (updateUI) {
-          await updateUI(result.user);
+        // ES6 pattern: Dispatch DOM event instead of calling window function
+        (window as Window).dispatchEvent(new CustomEvent('updateUI', {
+          detail: { user: result.user, source: 'AuthModule' }
+        }));
+        // Optional: Try direct call if available (graceful degradation)
+        const win3 = window as Window & { updateUI?: (user: UserType) => Promise<void> | void };
+        if (typeof win3.updateUI === 'function') {
+          await win3.updateUI(result.user);
         }
         Logger.debug(`User authenticated with REAL profile picture: ${result.user.email}`, null, 'auth');
-        Logger.debug('🔍 REAL_GOOGLE_AUTH: Real avatar URL:', (result.user as UserType & { user_metadata?: { avatar_url?: string } }).user_metadata?.avatar_url, 'auth');
+        Logger.debug('🔍 REAL_GOOGLE_AUTH: Real avatar URL:', avatarUrl || result.user.avatarUrl, 'auth');
       }
     } else if (authManager && authManager.signIn) {
       // Fallback to AuthManager
@@ -534,11 +573,14 @@ async function signInWithGoogle(): Promise<void> {
       if (result && result.user) {
         // CRITICAL FIX: Authenticate with Supabase after Google auth
         await authenticateWithSupabase(result.user);
-        const updateUI = window.updateUI;
-        if (updateUI) {
-          if (updateUI && typeof updateUI === 'function') {
-            await updateUI(result.user);
-          }
+        // ES6 pattern: Dispatch DOM event instead of calling window function
+        (window as Window).dispatchEvent(new CustomEvent('updateUI', {
+          detail: { user: result.user, source: 'AuthModule' }
+        }));
+        // Optional: Try direct call if available (graceful degradation)
+        const win4 = window as Window & { updateUI?: (user: UserType) => Promise<void> | void };
+        if (typeof win4.updateUI === 'function') {
+          await win4.updateUI(result.user);
         }
         Logger.debug(`User authenticated (fallback): ${result.user.email}`, null, 'auth');
       }
@@ -668,7 +710,10 @@ async function completeOTPForRealtime(otpCode: string): Promise<boolean> {
   }
   
   try {
-    const completeOTPVerification = window.completeOTPVerification;
+    // TODO: Export completeOTPVerification from a module instead of window
+    // ACCEPTABLE: Optional check for backward compatibility
+    const win5 = window as Window & { completeOTPVerification?: (supabase: SupabaseClient, otpCode: string) => Promise<unknown> };
+    const completeOTPVerification = win5.completeOTPVerification;
     if (!completeOTPVerification) {
       Logger.error('❌ OTP VERIFICATION: completeOTPVerification not available', null, 'auth');
       return false;
@@ -774,12 +819,21 @@ async function getCurrentUserEmail(): Promise<string | null> {
         if (user && user.email) {
           Logger.debug('[AUTH] Found authenticated user with REAL profile picture:', user.email, 'auth');
           
+          // ROOT CAUSE FIX: Map user_metadata.avatar_url to avatarUrl (camelCase conversion)
+          const userWithMetadata = user as UserType & { user_metadata?: { avatar_url?: string } };
+          const avatarUrl = userWithMetadata.user_metadata?.avatar_url;
+          
+          if (avatarUrl && !(user as UserType).avatarUrl) {
+            (user as UserType).avatarUrl = avatarUrl;
+            Logger.debug('[AUTH] Mapped user_metadata.avatar_url to avatarUrl:', avatarUrl, 'auth');
+          }
+          
+          Logger.debug('[AUTH] Real avatar URL:', avatarUrl || (user as UserType).avatarUrl, 'auth');
+          
           // ROOT CAUSE FIX: Update stateManager (TypeScript migration - no window.currentUser)
           stateManagerInstance.setState('currentUser', user as UserType);
           Logger.debug('[AUTH] Set stateManager.currentUser from getCurrentUserEmail():', user.email, 'auth');
           
-          const userWithMetadata = user as UserType & { user_metadata?: { avatar_url?: string } };
-          Logger.debug('[AUTH] Real avatar URL:', userWithMetadata.user_metadata?.avatar_url, 'auth');
           return user.email;
         } else {
           Logger.debug('[AUTH] Real Google Auth returned null or no email', null, 'auth');
@@ -852,26 +906,7 @@ function markInitializationComplete(): void {
   Logger.debug('[AUTH] Initialization complete - auth prompts will now be shown when needed', null, 'auth');
 }
 
-// Export for global access (lowercase to avoid shim detection)
-window.authModule = AuthModule;
-window.getCurrentUserEmail = getCurrentUserEmail;
-window.authenticateWithSupabase = authenticateWithSupabase;
-window.requireAuth = requireAuth;
-window.showAuthPrompt = showAuthPrompt;
-window.createAuthPromptModal = createAuthPromptModal;
-window.initializeRealGoogleAuth = initializeRealGoogleAuth;
-window.markInitializationComplete = markInitializationComplete;
-window.signOut = signOut;
-window.logout = signOut; // Alias for compatibility
-window.signInWithGoogle = signInWithGoogle;
-window.sendMagicLink = sendMagicLink;
-window.getCurrentUserId = getCurrentUserId;
-window.getCurrentUserAvatarColor = getCurrentUserAvatarColor;
-window.getUserAvatarBgColor = getUserAvatarBgColor;
-window.getCurrentUserAvatarBgColor = getCurrentUserAvatarBgColor;
-window.resetCustomAvatarColor = resetCustomAvatarColor;
-window.testRealtimeAfterAuth = testRealtimeAfterAuth;
-window.completeOTPForRealtime = completeOTPForRealtime;
+// ES6 exports only - no window assignments (backward compatibility removed)
 
 export {
   AuthModule,

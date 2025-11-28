@@ -73,22 +73,6 @@ export interface DiagnosticData {
     logs: DiagnosticLogEntry[];
     summary: DiagnosticSummary;
 }
-declare global {
-    interface Window {
-        supabase?: any;
-        currentChatData?: any[] | Record<string, any>;
-        activeCommunities?: string[];
-        currentUrlData?: any | {
-            pageId?: string;
-        };
-        currentPage?: {
-            pageId?: string;
-        };
-        diagnoseFocusModeReplies?: (messageId: string) => Promise<DiagnosticResults>;
-        getFocusModeReplyDiagnostic?: () => DiagnosticData;
-        __focusModeReplyDiagnosticActive?: boolean;
-    }
-}
 export declare function diagnoseFocusModeReplies(messageId: string): Promise<DiagnosticResults>;
 export declare function getFocusModeReplyDiagnostic(): DiagnosticData;
 //# sourceMappingURL=FOCUS_MODE_REPLY_DIAGNOSTIC.d.ts.map

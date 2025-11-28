@@ -2,6 +2,7 @@
  * ContextMenuConfig - Configuration for unified context menu
  * Provides Park cursor and other application-specific menu options
  */
+import { Logger } from '../utils/Logger.js';
 /**
  * Auto-detect menu type from context and return appropriate options
  * More flexible - derives options from context data rather than requiring explicit type
@@ -41,10 +42,9 @@ export function getMessageContextMenuOptions(context) {
             label: 'Reply',
             icon: '↩️',
             action: async () => {
-                const win = window;
-                if (win.openReplyModal && messageId) {
+                if (window.openReplyModal && messageId) {
                     const pageId = context.pageId || '';
-                    await win.openReplyModal({ id: messageId }, pageId);
+                    await window.openReplyModal({ id: messageId }, pageId);
                 }
             }
         },
@@ -53,10 +53,9 @@ export function getMessageContextMenuOptions(context) {
             label: 'Quote',
             icon: '💬',
             action: async () => {
-                const win = window;
-                if (win.openQuoteModal && messageId) {
+                if (window.openQuoteModal && messageId) {
                     const pageId = context.pageId || '';
-                    await win.openQuoteModal({ id: messageId }, pageId);
+                    await window.openQuoteModal({ id: messageId }, pageId);
                 }
             }
         },
@@ -66,19 +65,17 @@ export function getMessageContextMenuOptions(context) {
         options.push({
             id: 'park-cursor',
             label: () => {
-                const win = window;
-                const isParked = win.isCursorParked?.() || false;
+                const isParked = window.isCursorParked?.() || false;
                 return isParked ? 'Unpark Cursor' : 'Park Cursor';
             },
             icon: '📍',
             action: async () => {
-                const win = window;
-                if (win.toggleParkCursor) {
+                if (window.toggleParkCursor) {
                     // Get mouse position from the context menu event (stored in context)
                     const x = mouseX || window.innerWidth / 2;
                     const y = mouseY || window.innerHeight / 2;
-                    const isParked = await win.toggleParkCursor(x, y, { messageId, pageId: context.pageId });
-                    console.log(`📍 PARK_CURSOR: ${isParked ? 'Parked' : 'Unparked'} cursor at message`, messageId);
+                    const isParked = await window.toggleParkCursor(x, y, { messageId, pageId: context.pageId });
+                    Logger.debug(`📍 PARK_CURSOR: ${isParked ? 'Parked' : 'Unparked'} cursor at message`, messageId, 'context-menu');
                 }
             }
         });
@@ -152,7 +149,7 @@ export function getAvatarContextMenuOptions(context) {
             label: 'View Profile',
             icon: '👤',
             action: async () => {
-                console.log('👤 VIEW_PROFILE: Viewing profile for', userId);
+                Logger.debug('👤 VIEW_PROFILE: Viewing profile for', userId, 'context-menu');
                 // TODO: Implement profile view
             }
         },
@@ -162,19 +159,17 @@ export function getAvatarContextMenuOptions(context) {
         options.push({
             id: 'park-cursor',
             label: () => {
-                const win = window;
-                const isParked = win.isCursorParked?.() || false;
+                const isParked = window.isCursorParked?.() || false;
                 return isParked ? 'Unpark Cursor' : 'Park Cursor';
             },
             icon: '📍',
             action: async () => {
-                const win = window;
-                if (win.toggleParkCursor) {
+                if (window.toggleParkCursor) {
                     // Get mouse position from the context menu event (stored in context)
                     const x = mouseX || window.innerWidth / 2;
                     const y = mouseY || window.innerHeight / 2;
-                    const isParked = await win.toggleParkCursor(x, y, { userId });
-                    console.log(`📍 PARK_CURSOR: ${isParked ? 'Parked' : 'Unparked'} cursor at user`, userId);
+                    const isParked = await window.toggleParkCursor(x, y, { userId });
+                    Logger.debug(`📍 PARK_CURSOR: ${isParked ? 'Parked' : 'Unparked'} cursor at user`, userId, 'context-menu');
                 }
             }
         });
@@ -206,19 +201,17 @@ export function getTextSelectionContextMenuOptions(context) {
         options.push({
             id: 'park-cursor',
             label: () => {
-                const win = window;
-                const isParked = win.isCursorParked?.() || false;
+                const isParked = window.isCursorParked?.() || false;
                 return isParked ? 'Unpark Cursor' : 'Park Cursor';
             },
             icon: '📍',
             action: async () => {
-                const win = window;
-                if (win.toggleParkCursor) {
+                if (window.toggleParkCursor) {
                     // Get mouse position from the context menu event (stored in context)
                     const x = mouseX || window.innerWidth / 2;
                     const y = mouseY || window.innerHeight / 2;
-                    const isParked = await win.toggleParkCursor(x, y, { text: selectedText });
-                    console.log(`📍 PARK_CURSOR: ${isParked ? 'Parked' : 'Unparked'} cursor at text selection`);
+                    const isParked = await window.toggleParkCursor(x, y, { text: selectedText });
+                    Logger.debug(`📍 PARK_CURSOR: ${isParked ? 'Parked' : 'Unparked'} cursor at text selection`, null, 'context-menu');
                 }
             }
         });
@@ -307,19 +300,17 @@ export function getPageContextMenuOptions(context) {
         options.push({
             id: 'park-cursor',
             label: () => {
-                const win = window;
-                const isParked = win.isCursorParked?.() || false;
+                const isParked = window.isCursorParked?.() || false;
                 return isParked ? 'Unpark Cursor' : 'Park Cursor';
             },
             icon: '📍',
             action: async () => {
-                const win = window;
-                if (win.toggleParkCursor) {
+                if (window.toggleParkCursor) {
                     // Get mouse position from the context menu event (stored in context)
                     const x = mouseX || window.innerWidth / 2;
                     const y = mouseY || window.innerHeight / 2;
-                    const isParked = await win.toggleParkCursor(x, y, { pageId, communityId });
-                    console.log(`📍 PARK_CURSOR: ${isParked ? 'Parked' : 'Unparked'} cursor on page`, pageId);
+                    const isParked = await window.toggleParkCursor(x, y, { pageId, communityId });
+                    Logger.debug(`📍 PARK_CURSOR: ${isParked ? 'Parked' : 'Unparked'} cursor on page`, pageId, 'context-menu');
                 }
             }
         });
@@ -329,9 +320,8 @@ export function getPageContextMenuOptions(context) {
         label: 'New Message',
         icon: '✍️',
         action: async () => {
-            const win = window;
-            if (win.openMessageModal) {
-                await win.openMessageModal({
+            if (window.openMessageModal) {
+                await window.openMessageModal({
                     mode: 'new',
                     pageId: pageId || '',
                     communityId

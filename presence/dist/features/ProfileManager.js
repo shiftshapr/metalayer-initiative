@@ -1,33 +1,24 @@
 import { AvatarUtils } from '../utils/AvatarUtils.js';
 import { AVATAR_FALLBACK_COLOR } from '../core/ConfigModule.js';
 import { stateManagerInstance } from '../core/StateManager.js';
-// ROOT CAUSE FIX: legacyContext is DEPRECATED - all references should be replaced with proper TypeScript imports
-// Keeping temporarily for backward compatibility during migration - will be removed once all references are fixed
-const legacyContext = globalThis;
-// Helper functions using proper TypeScript imports
+import { apiServiceInstance } from '../services/APIService.js';
+import { Logger } from '../utils/Logger.js';
+import { userPreferencesManager } from '../utils/UserPreferencesManager.js';
+import { authManagerInstance } from './AuthManager.js';
+// Helper functions using ES6 imports (no window globals)
 const getApi = () => {
-    // ROOT CAUSE FIX: Get API from window (set by APIService.ts) or stateManager
-    const win = window;
-    if (win.api && typeof win.api.request === 'function') {
-        return win.api;
-    }
-    // Fallback: try stateManager
-    const apiFromState = stateManagerInstance.getState('api');
-    if (apiFromState && typeof apiFromState.request === 'function') {
-        return apiFromState;
-    }
-    return null;
+    // ES6 pattern: Use apiServiceInstance directly
+    return apiServiceInstance;
 };
 const ensureApi = (context) => {
     const api = getApi();
     if (!api) {
-        console.warn(`⚠️ PROFILE_MANAGER: API not available (${context})`);
+        Logger.warn(`⚠️ PROFILE_MANAGER: API not available (${context})`, null, 'profile');
         return null;
     }
     return api;
 };
 const getVisibilityDataUnfiltered = () => {
-    // ROOT CAUSE FIX: Get from window (set by VisibilityManager) instead of legacyContext
     const win = window;
     const candidate = win.currentVisibilityDataUnfiltered;
     if (candidate && Array.isArray(candidate.active)) {
@@ -36,7 +27,6 @@ const getVisibilityDataUnfiltered = () => {
     return null;
 };
 const getVisibilityDataFiltered = () => {
-    // ROOT CAUSE FIX: Get from window (set by VisibilityManager) instead of legacyContext
     const win = window;
     const candidate = win.currentVisibilityData;
     if (candidate && Array.isArray(candidate.active)) {
@@ -46,9 +36,8 @@ const getVisibilityDataFiltered = () => {
 };
 const getVisibilityData = () => getVisibilityDataUnfiltered() ?? getVisibilityDataFiltered();
 const getUserPreferencesManager = () => {
-    // ROOT CAUSE FIX: Get from window (set by UserPreferencesManager) instead of legacyContext
-    const win = window;
-    return win.userPreferencesManager ?? null;
+    // ES6 pattern: Use ES6 import directly
+    return userPreferencesManager;
 };
 const getChromeStorage = (keys) => {
     return new Promise((resolve) => {
@@ -70,18 +59,23 @@ const setChromeStorage = (items) => {
     });
 };
 // ROOT CAUSE FIX: Helper to ensure user object has required fields
+// UUID ONLY - no fake IDs, no email fallbacks
 // Note: This is synchronous - callers should get currentUser from stateManager first if needed
-const ensureLegacyUser = (user) => {
+const ensureUser = (user) => {
     if (!user) {
-        return {
-            id: `user-${Date.now()}`,
-            name: 'User',
-            email: 'user@example.com',
-            displayName: 'User'
-        };
+        // UUID ONLY - return null instead of fake user
+        return null;
     }
+    // UUID ONLY - user.id must be a valid UUID, no fallbacks
     if (!user.id) {
-        user.id = user.userId || `user-${Date.now()}`;
+        Logger.warn('⚠️ PROFILE: User missing id (UUID)', { email: user.email }, 'profile');
+        return null; // Don't create fake IDs
+    }
+    // Validate UUID format
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(user.id)) {
+        Logger.warn('⚠️ PROFILE: user.id is not a valid UUID', { userId: user.id, email: user.email }, 'profile');
+        return null; // Invalid ID
     }
     if (!user.name) {
         user.name = user.displayName || user.email?.split('@')[0] || 'User';
@@ -99,15 +93,14 @@ class ProfileManager {
          * ROOT CAUSE FIX: Prevent multiple simultaneous calls to avoid redundant API requests
          */
         this.setupProfileMenuAndAuraModalPromise = null;
-        this.currentUserUnsubscribe = null; // For StateManager subscription cleanup
         this.profileData = null;
         this.avatarCache = new Map();
         this.updateCallbacks = [];
         this.isAuthenticated = false;
-        this.authPromise = null;
-        console.log('ProfileManager initialized', null, 'profile');
-        // ROOT CAUSE FIX: Load and apply theme on startup
-        this.loadThemeOnStartup();
+        Logger.debug('ProfileManager initialized', null, 'profile');
+        // ROOT CAUSE FIX: Do NOT load theme on startup - UserPreferencesManager will handle it
+        // ProfileManager was setting theme to 'light' from Chrome storage before UserPreferencesManager could load the correct theme
+        // this.loadThemeOnStartup(); // DISABLED: Let UserPreferencesManager handle theme loading
         this.initializeProfileHandlers();
         // CRITICAL FIX: Initialize avatar immediately with available data, don't wait for everything
         this.initializeProfileAvatarImmediately();
@@ -121,8 +114,8 @@ class ProfileManager {
     async loadThemeOnStartup() {
         try {
             const theme = await getCurrentUserTheme();
-            if (theme && ['light', 'dark', 'auto'].includes(theme)) {
-                console.log(`✅ PROFILE MANAGER: Loading theme on startup: ${theme}`);
+            if (theme && typeof theme === 'string' && ['light', 'dark', 'auto'].includes(theme)) {
+                Logger.debug('✅ PROFILE MANAGER: Loading theme on startup', { theme }, 'profile');
                 // Apply theme immediately
                 document.documentElement.setAttribute('data-theme', theme);
                 document.body.setAttribute('data-theme', theme);
@@ -133,33 +126,32 @@ class ProfileManager {
                 }
                 // Update profile menu theme display
                 this.updateProfileMenuTheme();
-                console.log(`✅ PROFILE MANAGER: Theme applied on startup: ${theme}`);
+                Logger.debug('✅ PROFILE MANAGER: Theme applied on startup', { theme }, 'profile');
             }
         }
         catch (error) {
-            console.warn('⚠️ PROFILE MANAGER: Error loading theme on startup:', error);
+            Logger.warn('⚠️ PROFILE MANAGER: Error loading theme on startup', error, 'profile');
         }
     }
     /**
      * Wait for authentication AND pre-render initialization to complete using proper async/promises
      */
     async waitForAuthentication() {
-        console.log('🔧 PROFILE_MANAGER: Waiting for authentication and pre-render data...');
+        Logger.debug('🔧 PROFILE_MANAGER: Waiting for authentication and pre-render data...', null, 'profile');
         // Create promises for each dependency
         const waitForAuth = new Promise((resolve) => {
-            // ROOT CAUSE FIX: Use stateManager (TypeScript migration - no legacyContext.currentUser)
             const currentUser = stateManagerInstance.getState('currentUser');
             if (currentUser && currentUser.id) {
-                console.log('🔧 PROFILE_MANAGER: Authentication already available');
+                Logger.debug('🔧 PROFILE_MANAGER: Authentication already available', null, 'profile');
                 resolve();
                 return;
             }
-            console.log('🔧 PROFILE_MANAGER: Waiting for authentication...');
+            Logger.debug('🔧 PROFILE_MANAGER: Waiting for authentication...', null, 'profile');
             // Listen for auth events (these may already be fired, so check immediately)
             const checkAuth = () => {
                 const user = stateManagerInstance.getState('currentUser');
                 if (user && user.id) {
-                    console.log('🔧 PROFILE_MANAGER: Authentication completed:', user.email);
+                    Logger.debug('🔧 PROFILE_MANAGER: Authentication completed', { email: user.email }, 'profile');
                     resolve();
                 }
             };
@@ -180,26 +172,24 @@ class ProfileManager {
             }, { once: true });
         });
         const waitForPreRender = new Promise((resolve) => {
-            // ROOT CAUSE FIX: Get preRenderInitializer from window instead of legacyContext
             const win = window;
             if (win.preRenderInitializer?.isInitialized) {
-                console.log('🔧 PROFILE_MANAGER: Pre-render already initialized');
+                Logger.debug('🔧 PROFILE_MANAGER: Pre-render already initialized', null, 'profile');
                 resolve();
                 return;
             }
-            console.log('🔧 PROFILE_MANAGER: Waiting for pre-render initialization...');
+            Logger.debug('🔧 PROFILE_MANAGER: Waiting for pre-render initialization...', null, 'profile');
             // Listen for pre-render events
             const checkPreRender = () => {
-                // ROOT CAUSE FIX: Get preRenderInitializer from window instead of legacyContext
                 const win = window;
                 if (win.preRenderInitializer?.isInitialized) {
-                    console.log('🔧 PROFILE_MANAGER: Pre-render initialization completed');
+                    Logger.debug('🔧 PROFILE_MANAGER: Pre-render initialization completed', null, 'profile');
                     const preRenderData = win.preRenderInitializer.getPreRenderData();
-                    console.log('🔧 PROFILE_MANAGER: Pre-render data:', {
+                    Logger.debug('🔧 PROFILE_MANAGER: Pre-render data', {
                         hasAuraColor: !!preRenderData.auraColor,
                         hasAvatarUrl: !!preRenderData.avatarUrl,
                         auraColor: preRenderData.auraColor
-                    });
+                    }, 'profile');
                     resolve();
                 }
             };
@@ -211,35 +201,31 @@ class ProfileManager {
         // Add timeout as fallback (30 seconds max)
         const timeout = new Promise((resolve) => {
             setTimeout(() => {
-                console.warn('🔧 PROFILE_MANAGER: Timeout waiting for full initialization (30s)');
-                console.warn('🔧 PROFILE_MANAGER: Proceeding with available data...');
+                Logger.warn('🔧 PROFILE_MANAGER: Timeout waiting for full initialization (30s)', null, 'profile');
+                Logger.warn('🔧 PROFILE_MANAGER: Proceeding with available data...', null, 'profile');
                 resolve();
             }, 30000);
         });
         // Wait for all promises to resolve (auth + pre-render + timeout fallback)
         try {
             await Promise.all([waitForAuth, waitForPreRender, timeout]);
-            console.log('🔧 PROFILE_MANAGER: All initialization promises resolved');
+            Logger.debug('🔧 PROFILE_MANAGER: All initialization promises resolved', null, 'profile');
         }
         catch (error) {
-            console.error('🔧 PROFILE_MANAGER: Error waiting for promises:', error);
+            Logger.error('🔧 PROFILE_MANAGER: Error waiting for promises', error, 'profile');
         }
         // Check final state and proceed
-        // ROOT CAUSE FIX: Use stateManager (TypeScript migration - no legacyContext.currentUser)
         const currentUserForCheck = stateManagerInstance.getState('currentUser');
         const hasUser = currentUserForCheck && currentUserForCheck.id;
-        // ROOT CAUSE FIX: Get preRenderInitializer from window instead of legacyContext
-        const win = window;
-        const preRenderReady = win.preRenderInitializer && win.preRenderInitializer.isInitialized;
         if (hasUser) {
             this.isAuthenticated = true;
-            console.log('🔧 PROFILE_MANAGER: Ready to initialize profile avatar...');
+            Logger.debug('🔧 PROFILE_MANAGER: Ready to initialize profile avatar...', null, 'profile');
             // ROOT CAUSE FIX: Initialize UserPreferencesManager when user becomes available
             await this.initializeUserPreferencesManager(currentUserForCheck);
             await this.initializeProfileAvatar();
         }
         else {
-            console.warn('🔧 PROFILE_MANAGER: No authentication available, skipping profile avatar initialization');
+            Logger.warn('🔧 PROFILE_MANAGER: No authentication available, skipping profile avatar initialization', 'profile');
         }
     }
     /**
@@ -248,54 +234,53 @@ class ProfileManager {
      */
     async initializeUserPreferencesManager(user) {
         if (!user || !user.id) {
-            console.warn('⚠️ PROFILE_MANAGER: Cannot initialize UserPreferencesManager - no user ID');
+            Logger.warn('⚠️ PROFILE_MANAGER: Cannot initialize UserPreferencesManager - no user ID', null, 'profile');
             return;
         }
         try {
             const win = window;
             if (!win.userPreferencesManager) {
-                console.warn('⚠️ PROFILE_MANAGER: UserPreferencesManager not available on window');
+                Logger.warn('⚠️ PROFILE_MANAGER: UserPreferencesManager not available on window', null, 'profile');
                 return;
             }
             if (win.userPreferencesManager.isInitialized) {
-                console.log('✅ PROFILE_MANAGER: UserPreferencesManager already initialized');
+                Logger.debug('✅ PROFILE_MANAGER: UserPreferencesManager already initialized', null, 'profile');
                 return;
             }
-            console.log('🔧 PROFILE_MANAGER: Initializing UserPreferencesManager for user:', user.id);
+            Logger.debug('🔧 PROFILE_MANAGER: Initializing UserPreferencesManager for user', { userId: user.id }, 'profile');
             if (typeof win.userPreferencesManager.initialize === 'function') {
                 const result = await win.userPreferencesManager.initialize(user.id);
                 if (result) {
-                    console.log('✅ PROFILE_MANAGER: UserPreferencesManager initialized successfully');
+                    Logger.debug('✅ PROFILE_MANAGER: UserPreferencesManager initialized successfully', null, 'profile');
                 }
                 else {
-                    console.warn('⚠️ PROFILE_MANAGER: UserPreferencesManager initialization returned false');
+                    Logger.warn('⚠️ PROFILE_MANAGER: UserPreferencesManager initialization returned false', null, 'profile');
                 }
             }
             else {
-                console.warn('⚠️ PROFILE_MANAGER: UserPreferencesManager.initialize is not a function');
+                Logger.warn('⚠️ PROFILE_MANAGER: UserPreferencesManager.initialize is not a function', null, 'profile');
             }
         }
         catch (error) {
-            console.error('❌ PROFILE_MANAGER: Error initializing UserPreferencesManager:', error);
+            Logger.error('❌ PROFILE_MANAGER: Error initializing UserPreferencesManager', error, 'profile');
         }
     }
     /**
      * CRITICAL FIX: Initialize profile avatar with pre-render data to prevent white flash
      */
     async initializeProfileAvatarImmediately() {
-        console.log('🔧 PROFILE_MANAGER: Initializing profile avatar with pre-render data to prevent white flash...');
+        Logger.debug('🔧 PROFILE_MANAGER: Initializing profile avatar with pre-render data to prevent white flash...', null, 'profile');
         // CRITICAL FIX: Wait for PreRenderInitializer to complete before rendering avatar
         // This prevents the 10-15 second white flash while waiting for database auraColor
-        // ROOT CAUSE FIX: Get preRenderInitializer from window instead of legacyContext
         const win = window;
         if (!win.preRenderInitializer?.isInitialized) {
-            console.log('⏳ PROFILE_MANAGER: Waiting for PreRenderInitializer to complete...');
+            Logger.debug('⏳ PROFILE_MANAGER: Waiting for PreRenderInitializer to complete...', null, 'profile');
             // Wait for pre-render initialization to complete (max 10 seconds)
             const preRenderPromise = new Promise((resolve) => {
                 const checkPreRender = () => {
                     // ROOT CAUSE FIX: Reuse win variable from outer scope
                     if (win.preRenderInitializer?.isInitialized) {
-                        console.log('✅ PROFILE_MANAGER: PreRenderInitializer completed, proceeding with avatar setup');
+                        Logger.debug('✅ PROFILE_MANAGER: PreRenderInitializer completed, proceeding with avatar setup', 'profile');
                         resolve();
                     }
                     else {
@@ -307,27 +292,26 @@ class ProfileManager {
                 checkPreRender();
                 // Timeout after 10 seconds to prevent infinite waiting
                 setTimeout(() => {
-                    console.log('⏰ PROFILE_MANAGER: PreRenderInitializer timeout reached, proceeding anyway');
+                    Logger.debug('⏰ PROFILE_MANAGER: PreRenderInitializer timeout reached, proceeding anyway', 'profile');
                     resolve();
                 }, 10000);
             });
             await preRenderPromise;
         }
         // Now get the complete pre-render data
-        // ROOT CAUSE FIX: Use stateManager (TypeScript migration - no legacyContext.currentUser)
         const currentUser = stateManagerInstance.getState('currentUser');
         // ROOT CAUSE FIX: Reuse win variable from outer scope
         const preRenderData = win.preRenderInitializer?.getPreRenderData();
-        console.log('🔧 PROFILE_MANAGER: Pre-render data available:', {
+        Logger.debug('🔧 PROFILE_MANAGER: Pre-render data available', {
             isInitialized: preRenderData?.isInitialized,
             hasAuraColor: !!preRenderData?.auraColor,
             auraColor: preRenderData?.auraColor,
             hasAvatarUrl: !!preRenderData?.avatarUrl,
             avatarUrl: preRenderData?.avatarUrl?.substring(0, 50) + '...'
-        });
+        }, 'profile');
         // If we have user data, create the avatar with complete information
         if (currentUser?.id || preRenderData?.userData?.id) {
-            console.log('🔧 PROFILE_MANAGER: User data available, setting up avatar with complete data...');
+            Logger.debug('🔧 PROFILE_MANAGER: User data available, setting up avatar with complete data...', 'profile');
             // Set basic profile data from currentUser
             if (currentUser) {
                 this.profileData = { ...currentUser };
@@ -340,25 +324,25 @@ class ProfileManager {
                     const cachedAuraColor = storageResult.userAuraColor || storageResult.auraColor;
                     if (cachedAuraColor && cachedAuraColor !== '#ffffff' && cachedAuraColor !== 'white' && cachedAuraColor !== '#fff') {
                         auraColorValue = cachedAuraColor;
-                        console.log('🎨 PROFILE_MANAGER: Using aura color from Chrome storage (CACHE):', auraColorValue);
+                        Logger.debug('🎨 PROFILE_MANAGER: Using aura color from Chrome storage (CACHE)', { auraColor: auraColorValue }, 'profile');
                     }
                 }
                 catch (error) {
-                    console.warn('⚠️ PROFILE_MANAGER: Could not read from Chrome storage:', error);
+                    Logger.warn('⚠️ PROFILE_MANAGER: Could not read from Chrome storage', error, 'profile');
                 }
             }
             // Apply pre-render aura color (takes precedence over cache - this should be the database value)
             if (!auraColorValue && preRenderData?.auraColor) {
                 auraColorValue = preRenderData.auraColor;
-                console.log('🎨 PROFILE_MANAGER: Using auraColor from pre-render data (DATABASE):', auraColorValue);
+                Logger.debug('🎨 PROFILE_MANAGER: Using auraColor from pre-render data (DATABASE)', { auraColor: auraColorValue }, 'profile');
                 // Cache database value in Chrome storage for next time
                 if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
                     try {
                         await setChromeStorage({ userAuraColor: auraColorValue, auraColor: auraColorValue });
-                        console.log('💾 PROFILE_MANAGER: Cached aura color in Chrome storage:', auraColorValue);
+                        Logger.debug('💾 PROFILE_MANAGER: Cached aura color in Chrome storage', { auraColor: auraColorValue }, 'profile');
                     }
                     catch (error) {
-                        console.warn('⚠️ PROFILE_MANAGER: Could not cache to Chrome storage:', error);
+                        Logger.warn('⚠️ PROFILE_MANAGER: Could not cache to Chrome storage', error, 'profile');
                     }
                 }
             }
@@ -371,7 +355,7 @@ class ProfileManager {
                 }
             }
             else {
-                console.log('⚠️ PROFILE_MANAGER: No auraColor in cache or pre-render data, will fallback to auth data or API fetch');
+                Logger.debug('⚠️ PROFILE_MANAGER: No auraColor in cache or pre-render data, will fallback to auth data or API fetch', 'profile');
             }
             // Apply pre-render avatar URL if available
             if (preRenderData?.avatarUrl && currentUser) {
@@ -379,28 +363,28 @@ class ProfileManager {
                 if (this.profileData) {
                     this.profileData.avatarUrl = preRenderData.avatarUrl;
                 }
-                console.log('🖼️ PROFILE_MANAGER: Using avatarUrl from pre-render data');
+                Logger.debug('🖼️ PROFILE_MANAGER: Using avatarUrl from pre-render data', null, 'profile');
             }
             // Verify we have the auraColor before rendering
             if (this.profileData && this.profileData.auraColor) {
-                console.log('🎉 PROFILE_MANAGER: AuraColor available from pre-render/auth data - no white flash!');
+                Logger.debug('🎉 PROFILE_MANAGER: AuraColor available from pre-render/auth data - no white flash!', null, 'profile');
             }
             else {
-                console.log('⚠️ PROFILE_MANAGER: AuraColor still missing - will cause white flash');
+                Logger.debug('⚠️ PROFILE_MANAGER: AuraColor still missing - will cause white flash', null, 'profile');
             }
             // Set up the profile menu and avatar with complete data
             await this.setupProfileMenuAndAuraModal();
-            console.log('✅ PROFILE_MANAGER: Profile avatar initialized with complete pre-render data');
+            Logger.debug('✅ PROFILE_MANAGER: Profile avatar initialized with complete pre-render data', null, 'profile');
         }
         else {
-            console.log('🔧 PROFILE_MANAGER: No user data available, will initialize when authentication completes');
+            Logger.debug('🔧 PROFILE_MANAGER: No user data available, will initialize when authentication completes', 'profile');
         }
     }
     /**
      * Initialize profile avatar after authentication
      */
     async initializeProfileAvatar() {
-        console.log('🔧 PROFILE_MANAGER: Initializing profile avatar after authentication...');
+        Logger.debug('🔧 PROFILE_MANAGER: Initializing profile avatar after authentication...', null, 'profile');
         // Load aura color from storage if not already set
         await this.loadAuraColorFromStorage();
         // Set up the profile menu and avatar now that we have user data
@@ -411,20 +395,18 @@ class ProfileManager {
      */
     async loadAuraColorFromStorage() {
         try {
-            console.log('🔧 PROFILE_MANAGER: Loading aura color from available sources...');
+            Logger.debug('🔧 PROFILE_MANAGER: Loading aura color from available sources...', null, 'profile');
             // First priority: Check pre-render initializer data
-            // ROOT CAUSE FIX: Get preRenderInitializer from window instead of legacyContext
             const win = window;
             if (win.preRenderInitializer?.getPreRenderData) {
                 const preRenderData = win.preRenderInitializer.getPreRenderData();
-                console.log('🔧 PROFILE_MANAGER: Pre-render data available:', {
+                Logger.debug('🔧 PROFILE_MANAGER: Pre-render data available', {
                     isInitialized: preRenderData.isInitialized,
                     auraColor: preRenderData.auraColor,
                     avatarUrl: preRenderData.avatarUrl
-                });
-                // ROOT CAUSE FIX: Update stateManager (TypeScript migration - no legacyContext.currentUser)
+                }, 'profile');
                 if (preRenderData.auraColor) {
-                    console.log('🎨 PROFILE_MANAGER: Using aura color from pre-render data (DATABASE):', preRenderData.auraColor);
+                    Logger.debug('🎨 PROFILE_MANAGER: Using aura color from pre-render data (DATABASE)', { auraColor: preRenderData.auraColor }, 'profile');
                     const currentUserForAura = stateManagerInstance.getState('currentUser');
                     if (currentUserForAura) {
                         stateManagerInstance.setState('currentUser', { ...currentUserForAura, auraColor: preRenderData.auraColor });
@@ -433,27 +415,26 @@ class ProfileManager {
                     if (this.profileData) {
                         this.profileData.auraColor = preRenderData.auraColor;
                     }
-                    console.log('✅ PROFILE_MANAGER: Aura color applied to currentUser and profileData');
+                    Logger.debug('✅ PROFILE_MANAGER: Aura color applied to currentUser and profileData', null, 'profile');
                     return; // Don't check storage if we have pre-render data
                 }
                 else if (preRenderData.isInitialized) {
-                    console.log('ℹ️ PROFILE_MANAGER: Pre-render initialized but no aura color available');
+                    Logger.debug('ℹ️ PROFILE_MANAGER: Pre-render initialized but no aura color available', null, 'profile');
                 }
                 else {
-                    console.log('⏳ PROFILE_MANAGER: Pre-render data available but not yet initialized');
+                    Logger.debug('⏳ PROFILE_MANAGER: Pre-render data available but not yet initialized', null, 'profile');
                 }
             }
             else {
-                console.log('⚠️ PROFILE_MANAGER: Pre-render initializer not available');
+                Logger.debug('⚠️ PROFILE_MANAGER: Pre-render initializer not available', null, 'profile');
             }
             // Fallback: Load aura color from state storage (set by aura color modal)
-            // ROOT CAUSE FIX: Use stateManagerInstance instead of legacyContext.getState
+            // ROOT CAUSE FIX: Use stateManagerInstance instead of window.getState
             const storedColor = await stateManagerInstance.getState('userAvatarBgColor');
             if (storedColor) {
-                console.log('🔧 PROFILE_MANAGER: Checking storage for aura color:', storedColor);
-                // ROOT CAUSE FIX: Update stateManager (TypeScript migration - no legacyContext.currentUser)
+                Logger.debug('🔧 PROFILE_MANAGER: Checking storage for aura color', { storedColor }, 'profile');
                 if (storedColor && storedColor !== AVATAR_FALLBACK_COLOR) {
-                    console.log('🎨 PROFILE_MANAGER: Using aura color from storage (USER PREFERENCE):', storedColor);
+                    Logger.debug('🎨 PROFILE_MANAGER: Using aura color from storage (USER PREFERENCE)', { storedColor }, 'profile');
                     const currentUserForAura = stateManagerInstance.getState('currentUser');
                     if (currentUserForAura) {
                         stateManagerInstance.setState('currentUser', { ...currentUserForAura, auraColor: storedColor });
@@ -462,21 +443,20 @@ class ProfileManager {
                     if (this.profileData) {
                         this.profileData.auraColor = storedColor;
                     }
-                    console.log('✅ PROFILE_MANAGER: Aura color applied from storage');
+                    Logger.debug('✅ PROFILE_MANAGER: Aura color applied from storage', null, 'profile');
                 }
                 else {
-                    console.log('ℹ️ PROFILE_MANAGER: No valid aura color in storage');
+                    Logger.debug('ℹ️ PROFILE_MANAGER: No valid aura color in storage', null, 'profile');
                 }
             }
             else {
-                console.log('⚠️ PROFILE_MANAGER: State storage not available');
+                Logger.debug('⚠️ PROFILE_MANAGER: State storage not available', null, 'profile');
             }
             // Last resort: Try to fetch aura color directly from API
             const api = getApi();
-            // ROOT CAUSE FIX: Use stateManager (TypeScript migration - no legacyContext.currentUser)
             const currentUserForApi = stateManagerInstance.getState('currentUser');
             if (currentUserForApi?.id && api && !this.profileData?.auraColor) {
-                console.log('🔍 PROFILE_MANAGER: Last resort - fetching aura color directly from API...');
+                Logger.debug('🔍 PROFILE_MANAGER: Last resort - fetching aura color directly from API...', null, 'profile');
                 try {
                     const userResponse = await api.request(`/v1/users/${currentUserForApi.id}`, {
                         method: 'GET'
@@ -495,28 +475,27 @@ class ProfileManager {
                         }
                     }
                     if (apiAuraColor) {
-                        console.log('🎨 PROFILE_MANAGER: Retrieved aura color from API (fallback):', apiAuraColor);
-                        // ROOT CAUSE FIX: Update stateManager (TypeScript migration - no legacyContext.currentUser)
+                        Logger.debug('🎨 PROFILE_MANAGER: Retrieved aura color from API (fallback)', { apiAuraColor }, 'profile');
                         stateManagerInstance.setState('currentUser', { ...currentUserForApi, auraColor: apiAuraColor });
                         // Update profile data if it exists
                         if (this.profileData) {
                             this.profileData.auraColor = apiAuraColor;
                         }
-                        console.log('✅ PROFILE_MANAGER: Aura color applied from API fallback');
+                        Logger.debug('✅ PROFILE_MANAGER: Aura color applied from API fallback', null, 'profile');
                         return;
                     }
                     else {
-                        console.log('⚠️ PROFILE_MANAGER: API response received but no aura color found');
+                        Logger.debug('⚠️ PROFILE_MANAGER: API response received but no aura color found', null, 'profile');
                     }
                 }
                 catch (apiError) {
                     const errorMessage = apiError instanceof Error ? apiError.message : String(apiError);
-                    console.warn('⚠️ PROFILE_MANAGER: API fallback failed:', errorMessage);
+                    Logger.warn('⚠️ PROFILE_MANAGER: API fallback failed', { errorMessage }, 'profile');
                 }
             }
         }
         catch (error) {
-            console.log('🔧 PROFILE_MANAGER: Could not load aura color from storage:', error);
+            Logger.debug('🔧 PROFILE_MANAGER: Could not load aura color from storage', error, 'profile');
         }
     }
     /**
@@ -554,7 +533,7 @@ class ProfileManager {
         // ROOT CAUSE FIX: Subscribe to stateManager currentUser updates (event-driven, NO POLLING)
         // This handles the race condition where avatar is created before auraColor is fetched from API
         // Using StateManager subscription instead of polling - aligns with Supabase real-time architecture
-        const unsubscribeCurrentUser = stateManagerInstance.subscribe('currentUser', (newValue, oldValue) => {
+        stateManagerInstance.subscribe('currentUser', (newValue, oldValue) => {
             const currentUser = newValue;
             const oldUser = oldValue;
             // Only update if auraColor changed from missing/invalid to valid
@@ -575,7 +554,7 @@ class ProfileManager {
                             const existingAuraColor = window.getComputedStyle(auraElement).backgroundColor;
                             // If existing aura is white/fallback and we have a valid color, update avatar
                             if (existingAuraColor === 'rgb(255, 255, 255)' || existingAuraColor === 'rgba(255, 255, 255, 1)') {
-                                console.log(`🔄 PROFILE MANAGER: Aura color updated via StateManager subscription (${newAuraColor}), refreshing avatar...`);
+                                Logger.debug('🔄 PROFILE MANAGER: Aura color updated via StateManager subscription, refreshing avatar...', { newAuraColor }, 'profile');
                                 // Reset promise to allow avatar update
                                 this.setupProfileMenuAndAuraModalPromise = null;
                                 this.setupProfileMenuAndAuraModal();
@@ -586,7 +565,7 @@ class ProfileManager {
             }
         });
         // Store unsubscribe function for cleanup (if needed in future)
-        this.currentUserUnsubscribe = unsubscribeCurrentUser;
+        // Note: unsubscribeCurrentUser is stored but not currently used for cleanup
         // COMP METHOD: Initialize profile menu and aura modal fixes
         this.initializeProfileMenuAndAuraModal();
     }
@@ -594,7 +573,7 @@ class ProfileManager {
      * COMP METHOD: Initialize profile menu and aura modal with error handling
      */
     initializeProfileMenuAndAuraModal() {
-        console.log('🔧 PROFILE MANAGER: COMP METHOD - Initializing profile menu and aura modal...');
+        Logger.debug('🔧 PROFILE MANAGER: COMP METHOD - Initializing profile menu and aura modal...', null, 'profile');
         // Wait for DOM to be ready
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', () => this.setupProfileMenuAndAuraModal());
@@ -614,7 +593,7 @@ class ProfileManager {
             const computedStyle = window.getComputedStyle(userInfo);
             if (currentUser && (computedStyle.display === 'none' || userInfo.style.display === 'none')) {
                 userInfo.style.display = 'flex'; // Match the inline style intent (align-items: center suggests flex)
-                console.log('✅ PROFILE MANAGER: Showing user-info container (was hidden)');
+                Logger.debug('✅ PROFILE MANAGER: Showing user-info container (was hidden)', null, 'profile');
             }
         }
     }
@@ -625,7 +604,7 @@ class ProfileManager {
             // Check if promise is already resolved/rejected by trying to access it
             try {
                 // If promise exists, wait for it to complete
-                console.log('🔧 PROFILE MANAGER: COMP METHOD - setupProfileMenuAndAuraModal already in progress, waiting...');
+                Logger.debug('🔧 PROFILE MANAGER: COMP METHOD - setupProfileMenuAndAuraModal already in progress, waiting...', 'profile');
                 await this.setupProfileMenuAndAuraModalPromise;
                 // After waiting, check if we still need to proceed (currentUser might be available now)
                 const currentUserAfterWait = stateManagerInstance.getState('currentUser');
@@ -641,18 +620,18 @@ class ProfileManager {
             }
             catch (error) {
                 // Promise rejected, reset and continue
-                console.warn('⚠️ PROFILE MANAGER: Previous setupProfileMenuAndAuraModal promise rejected:', error);
+                Logger.warn('⚠️ PROFILE MANAGER: Previous setupProfileMenuAndAuraModal promise rejected', error, 'profile');
                 this.setupProfileMenuAndAuraModalPromise = null;
             }
         }
         this.setupProfileMenuAndAuraModalPromise = (async () => {
             try {
-                console.log('🔧 PROFILE MANAGER: COMP METHOD - Setting up profile menu and aura modal...');
+                Logger.debug('🔧 PROFILE MANAGER: COMP METHOD - Setting up profile menu and aura modal...', null, 'profile');
                 // ROOT CAUSE FIX: Get currentUser - if not available, StateManager subscription will trigger update when it arrives
                 // NO POLLING - using event-driven architecture (StateManager subscription handles updates)
                 let currentUserForAvatar = stateManagerInstance.getState('currentUser');
                 if (!currentUserForAvatar || !currentUserForAvatar.id) {
-                    console.log('⏳ PROFILE MANAGER: COMP METHOD - currentUser not yet available, will update via StateManager subscription when it arrives');
+                    Logger.debug('⏳ PROFILE MANAGER: COMP METHOD - currentUser not yet available, will update via StateManager subscription when it arrives', 'profile');
                     // Don't wait/poll - StateManager subscription (set up in constructor) will trigger update when currentUser arrives
                     // Create fallback avatar for now
                     this.createFallbackAvatar();
@@ -667,7 +646,7 @@ class ProfileManager {
                 // Find or create user avatar container
                 let userAvatarContainer = document.getElementById('user-avatar-container');
                 if (!userAvatarContainer) {
-                    console.log('🔧 PROFILE MANAGER: COMP METHOD - Creating user avatar container...');
+                    Logger.debug('🔧 PROFILE MANAGER: COMP METHOD - Creating user avatar container...', null, 'profile');
                     userAvatarContainer = document.createElement('div');
                     userAvatarContainer.id = 'user-avatar-container';
                     userAvatarContainer.className = 'user-avatar-container';
@@ -687,7 +666,7 @@ class ProfileManager {
                     sidebar.appendChild(userAvatarContainer);
                 }
                 else {
-                    console.log('🔧 PROFILE MANAGER: COMP METHOD - Found existing user avatar container, updating size for profile avatar...');
+                    Logger.debug('🔧 PROFILE MANAGER: COMP METHOD - Found existing user avatar container, updating size for profile avatar...', 'profile');
                     // Update existing container size to accommodate profile avatar (32px + 2px aura extension on each side)
                     userAvatarContainer.style.width = '36px'; // 32px avatar + 2px aura extension on each side
                     userAvatarContainer.style.height = '36px'; // 32px avatar + 2px aura extension on each side
@@ -720,7 +699,7 @@ class ProfileManager {
                             // If existing aura is white (rgb(255, 255, 255)) and we have a valid color, update it
                             if (existingAuraColor === 'rgb(255, 255, 255)' || existingAuraColor === 'rgba(255, 255, 255, 1)') {
                                 needsAuraColorUpdate = true;
-                                console.log(`🔄 PROFILE MANAGER: Existing avatar has white aura color, will update with: ${currentAuraColor}`);
+                                Logger.debug('🔄 PROFILE MANAGER: Existing avatar has white aura color, will update', { currentAuraColor }, 'profile');
                             }
                         }
                     }
@@ -728,7 +707,7 @@ class ProfileManager {
                 // Should create/update if: no avatar, fallback exists, OR aura color needs update
                 const shouldCreateAvatar = !userAvatar || (isFallbackAvatar && currentUserForAvatar && currentUserForAvatar.id) || needsAuraColorUpdate;
                 if (shouldCreateAvatar) {
-                    console.log('🔧 PROFILE MANAGER: COMP METHOD - Creating/updating user avatar...');
+                    Logger.debug('🔧 PROFILE MANAGER: COMP METHOD - Creating/updating user avatar...', null, 'profile');
                     // ROOT CAUSE FIX: Use imported AvatarUtils directly (TypeScript import - no need to wait or check window)
                     // AvatarUtils is imported at the top of this file, so it's always available
                     // ROOT CAUSE FIX: Re-check currentUser after waiting
@@ -754,10 +733,10 @@ class ProfileManager {
                                     auraColor !== 'white' &&
                                     auraColor.length > 0) {
                                     auraColorValue = auraColor;
-                                    console.log('🎨 PROFILE MANAGER: Using aura color from stateManager currentUser:', auraColorValue);
+                                    Logger.debug('🎨 PROFILE MANAGER: Using aura color from stateManager currentUser', { auraColorValue }, 'profile');
                                 }
                                 else {
-                                    console.log(`⚠️ PROFILE MANAGER: stateManager has auraColor but it's fallback/white: ${auraColor}`);
+                                    Logger.debug('⚠️ PROFILE MANAGER: stateManager has auraColor but it\'s fallback/white', { auraColor }, 'profile');
                                 }
                             }
                             // ROOT CAUSE FIX: Fallback to getCurrentUserAuraColor() if stateManager doesn't have it
@@ -768,16 +747,16 @@ class ProfileManager {
                                         auraColorValue !== AVATAR_FALLBACK_COLOR &&
                                         auraColorValue !== '#ffffff' &&
                                         auraColorValue !== 'ffffff') {
-                                        console.log('🎨 PROFILE MANAGER: Using aura color from getCurrentUserAuraColor():', auraColorValue);
+                                        Logger.debug('🎨 PROFILE MANAGER: Using aura color from getCurrentUserAuraColor()', { auraColorValue }, 'profile');
                                         fromChromeStorage = true;
                                     }
                                     else {
-                                        console.log(`⚠️ PROFILE MANAGER: getCurrentUserAuraColor() returned fallback/white: ${auraColorValue}`);
+                                        Logger.debug('⚠️ PROFILE MANAGER: getCurrentUserAuraColor() returned fallback/white', { auraColorValue }, 'profile');
                                         auraColorValue = null; // Don't use white/fallback
                                     }
                                 }
                                 catch (error) {
-                                    console.warn('⚠️ PROFILE MANAGER: Error calling getCurrentUserAuraColor():', error);
+                                    Logger.warn('⚠️ PROFILE MANAGER: Error calling getCurrentUserAuraColor()', error, 'profile');
                                 }
                             }
                             // Final fallback to profileData if still no value (but not white/fallback)
@@ -787,7 +766,7 @@ class ProfileManager {
                                     profileAuraColor !== '#ffffff' &&
                                     profileAuraColor !== 'ffffff') {
                                     auraColorValue = profileAuraColor;
-                                    console.log('🎨 PROFILE MANAGER: Using aura color from profileData:', auraColorValue);
+                                    Logger.debug('🎨 PROFILE MANAGER: Using aura color from profileData', { auraColor: auraColorValue }, 'profile');
                                 }
                             }
                             // ROOT CAUSE FIX: If still no valid color, check stateManager one more time (it may have been updated)
@@ -803,13 +782,13 @@ class ProfileManager {
                                         finalAuraColor !== 'white' &&
                                         finalAuraColor.length > 0) {
                                         auraColorValue = finalAuraColor;
-                                        console.log('🎨 PROFILE MANAGER: Using aura color from final stateManager check:', auraColorValue);
+                                        Logger.debug('🎨 PROFILE MANAGER: Using aura color from final stateManager check', { auraColor: auraColorValue }, 'profile');
                                     }
                                 }
                             }
                             // If still no valid color, log warning but don't use white
                             if (!auraColorValue) {
-                                console.warn('⚠️ PROFILE MANAGER: No valid aura color found, will use default from AvatarUtils');
+                                Logger.warn('⚠️ PROFILE MANAGER: No valid aura color found, will use default from AvatarUtils', 'profile');
                             }
                             // CRITICAL FIX: Use profileData if available (has aura color), otherwise fall back to currentUser
                             // ROOT CAUSE FIX: Ensure auraColorValue is passed to AvatarUtils
@@ -822,10 +801,17 @@ class ProfileManager {
                             // ROOT CAUSE FIX: Override auraColor in sourceUser if we found a valid one
                             if (auraColorValue) {
                                 sourceUser.auraColor = auraColorValue;
-                                console.log('🎨 PROFILE MANAGER: Setting auraColor on sourceUser:', auraColorValue);
+                                Logger.debug('🎨 PROFILE MANAGER: Setting auraColor on sourceUser', { auraColor: auraColorValue }, 'profile');
                             }
+                            // UUID ONLY - sourceUser.id must be a valid UUID
                             if (!sourceUser.id) {
-                                sourceUser.id = currentUserForAvatar?.id || `user-${Date.now()}`;
+                                if (currentUserForAvatar?.id) {
+                                    sourceUser.id = currentUserForAvatar.id;
+                                }
+                                else {
+                                    Logger.warn('⚠️ PROFILE: sourceUser missing id (UUID)', null, 'profile');
+                                    // Don't create fake ID - return early or handle null
+                                }
                             }
                             // ROOT CAUSE FIX: Map picture to avatarUrl for AvatarUtils compatibility
                             // currentUser has 'picture' property but AvatarUtils expects 'avatarUrl'
@@ -849,7 +835,7 @@ class ProfileManager {
                                         stateAura !== 'white' &&
                                         stateAura.length > 0) {
                                         finalAuraColor = stateAura;
-                                        console.log('🎨 PROFILE MANAGER: Using aura color from stateManager in userDataForAvatar:', finalAuraColor);
+                                        Logger.debug('🎨 PROFILE MANAGER: Using aura color from stateManager in userDataForAvatar', { auraColor: finalAuraColor }, 'profile');
                                     }
                                 }
                             }
@@ -862,14 +848,14 @@ class ProfileManager {
                                 picture: avatarUrlFromPicture || undefined, // Also keep picture for compatibility
                                 auraColor: finalAuraColor || undefined // ROOT CAUSE FIX: Use finalAuraColor which includes stateManager check, convert null to undefined
                             };
-                            console.log('🔧 PROFILE MANAGER: COMP METHOD - Creating avatar with user data:', {
+                            Logger.debug('🔧 PROFILE MANAGER: COMP METHOD - Creating avatar with user data', {
                                 userId: userDataForAvatar.id,
                                 auraColor: userDataForAvatar.auraColor,
                                 avatarUrl: userDataForAvatar.avatarUrl,
                                 usingProfileData: !!this.profileData,
                                 fromChromeStorage: fromChromeStorage,
                                 timestamp: new Date().toISOString()
-                            });
+                            }, 'profile');
                             // ROOT CAUSE FIX: Ensure availability is set for status dots
                             if (!userDataForAvatar.availability) {
                                 // Try to get from currentUser first
@@ -897,69 +883,70 @@ class ProfileManager {
                                 showStatus: true, // ROOT CAUSE FIX: Enable status dots on profile avatar
                                 size: 32
                             });
-                            console.log('🔧 PROFILE MANAGER: COMP METHOD - Avatar HTML generated, updating container at', new Date().toISOString());
+                            Logger.debug('🔧 PROFILE MANAGER: COMP METHOD - Avatar HTML generated, updating container', { timestamp: new Date().toISOString() }, 'profile');
                             // ROOT CAUSE FIX: Wrap AvatarUtils HTML in .user-avatar div for consistency with diagnostic expectations
                             // AvatarUtils returns .avatar-container, but we wrap it in .user-avatar for ProfileManager
                             userAvatarContainer.innerHTML = `<div class="user-avatar">${avatarHTML}</div>`;
                             // Log what was actually inserted
-                            console.log('🔧 PROFILE MANAGER: COMP METHOD - Container updated, innerHTML length:', userAvatarContainer.innerHTML.length);
-                            console.log('🔧 PROFILE MANAGER: COMP METHOD - Container updated, checking for aura element...');
+                            Logger.debug('🔧 PROFILE MANAGER: COMP METHOD - Container updated', { innerHTMLLength: userAvatarContainer.innerHTML.length }, 'profile');
+                            Logger.debug('🔧 PROFILE MANAGER: COMP METHOD - Container updated, checking for aura element...', 'profile');
                             const auraElement = userAvatarContainer.querySelector('.avatar-aura');
                             if (auraElement) {
-                                console.log('✅ PROFILE MANAGER: COMP METHOD - Aura element found with background:', auraElement.style.backgroundColor);
+                                Logger.debug('✅ PROFILE MANAGER: COMP METHOD - Aura element found with background', { backgroundColor: auraElement.style.backgroundColor }, 'profile');
                             }
                             else {
-                                console.log('⚠️ PROFILE MANAGER: COMP METHOD - Aura element NOT found in avatar HTML');
+                                Logger.warn('⚠️ PROFILE MANAGER: COMP METHOD - Aura element NOT found in avatar HTML', null, 'profile');
                             }
-                            console.log('✅ PROFILE MANAGER: COMP METHOD - User avatar created using AvatarUtils with aura color');
+                            Logger.debug('✅ PROFILE MANAGER: COMP METHOD - User avatar created using AvatarUtils with aura color', null, 'profile');
                         }
                         catch (error) {
-                            console.error('🔧 PROFILE MANAGER: COMP METHOD - Error creating avatar with AvatarUtils:', error);
+                            Logger.error('🔧 PROFILE MANAGER: COMP METHOD - Error creating avatar with AvatarUtils', error, 'profile');
                             // Fallback to simple avatar
                             this.createFallbackAvatar();
                         }
                     }
                     else {
                         // ROOT CAUSE FIX: Log detailed diagnostic info
-                        console.log('⚠️ PROFILE MANAGER: COMP METHOD - AvatarUtils.createUnifiedAvatar not available or currentUser missing');
-                        console.log('   📋 currentUserForAvatar:', currentUserForAvatar ? 'exists' : 'null/undefined');
-                        console.log('   📋 currentUserForAvatar.id:', currentUserForAvatar?.id || 'missing');
-                        console.log('   📋 AvatarUtils:', typeof AvatarUtils !== 'undefined' ? 'available' : 'undefined');
-                        console.log('   📋 AvatarUtils.createUnifiedAvatar:', typeof AvatarUtils?.createUnifiedAvatar === 'function' ? 'function' : typeof AvatarUtils?.createUnifiedAvatar);
+                        Logger.warn('⚠️ PROFILE MANAGER: COMP METHOD - AvatarUtils.createUnifiedAvatar not available or currentUser missing', {
+                            currentUserForAvatar: currentUserForAvatar ? 'exists' : 'null/undefined',
+                            currentUserForAvatarId: currentUserForAvatar?.id || 'missing',
+                            avatarUtils: typeof AvatarUtils !== 'undefined' ? 'available' : 'undefined',
+                            avatarUtilsCreateUnifiedAvatar: typeof AvatarUtils?.createUnifiedAvatar === 'function' ? 'function' : typeof AvatarUtils?.createUnifiedAvatar
+                        }, 'profile');
                         // Only create fallback if we don't have currentUser - otherwise wait for retry
                         if (!currentUserForAvatar || !currentUserForAvatar.id) {
-                            console.log('   ⏳ PROFILE MANAGER: COMP METHOD - currentUser not available yet, will retry when auth completes');
+                            Logger.debug('   ⏳ PROFILE MANAGER: COMP METHOD - currentUser not available yet, will retry when auth completes', 'profile');
                             // Don't create fallback - wait for handleAuthUIUpdate to retry
                         }
                         else {
-                            console.log('   ⚠️ PROFILE MANAGER: COMP METHOD - AvatarUtils issue, using fallback');
+                            Logger.warn('   ⚠️ PROFILE MANAGER: COMP METHOD - AvatarUtils issue, using fallback', 'profile');
                             this.createFallbackAvatar();
                         }
                     }
                 }
                 else {
-                    console.log('🔧 PROFILE MANAGER: COMP METHOD - User avatar already exists, skipping creation');
+                    Logger.debug('🔧 PROFILE MANAGER: COMP METHOD - User avatar already exists, skipping creation', 'profile');
                 }
                 // ROOT CAUSE FIX: Remove existing handler if it exists, then add new one
                 // Use a data attribute to track if handler is already attached
                 if (userAvatarContainer.dataset.clickHandlerAttached === 'true') {
                     // Handler already attached, skip to prevent duplicates
-                    console.log('🔧 PROFILE MANAGER: Click handler already attached, skipping');
+                    Logger.debug('🔧 PROFILE MANAGER: Click handler already attached, skipping', 'profile');
                     return;
                 }
                 // ROOT CAUSE FIX: Add click handler with proper event handling
                 userAvatarContainer.addEventListener('click', (e) => {
                     e.stopPropagation();
                     e.preventDefault();
-                    console.log('🔧 PROFILE MANAGER: COMP METHOD - Profile avatar clicked');
+                    Logger.debug('🔧 PROFILE MANAGER: COMP METHOD - Profile avatar clicked', null, 'profile');
                     this.toggleUserMenu(e); // Pass event to toggleUserMenu
                 });
                 // Mark handler as attached
                 userAvatarContainer.dataset.clickHandlerAttached = 'true';
-                console.log('✅ PROFILE MANAGER: COMP METHOD - Profile menu and aura modal setup complete');
+                Logger.debug('✅ PROFILE MANAGER: COMP METHOD - Profile menu and aura modal setup complete', null, 'profile');
             }
             catch (error) {
-                console.error('❌ PROFILE MANAGER: Error in setupProfileMenuAndAuraModal:', error);
+                Logger.error('❌ PROFILE MANAGER: Error in setupProfileMenuAndAuraModal', error, 'profile');
                 // ROOT CAUSE FIX: Reset promise on error so future calls can proceed
                 this.setupProfileMenuAndAuraModalPromise = null;
             }
@@ -974,7 +961,7 @@ class ProfileManager {
      * COMP METHOD: Toggle user menu
      */
     async toggleUserMenu(e) {
-        console.log('🔧 PROFILE MANAGER: COMP METHOD - Toggling user menu...');
+        Logger.debug('🔧 PROFILE MANAGER: COMP METHOD - Toggling user menu...', null, 'profile');
         // ROOT CAUSE FIX: Stop event propagation to prevent immediate click-outside handler
         if (e) {
             e.stopPropagation();
@@ -982,7 +969,7 @@ class ProfileManager {
         }
         let userMenu = document.getElementById('user-menu');
         if (!userMenu) {
-            console.log('🔧 PROFILE MANAGER: COMP METHOD - Menu not found, creating...');
+            Logger.debug('🔧 PROFILE MANAGER: COMP METHOD - Menu not found, creating...', 'profile');
             await this.createUserMenu();
             userMenu = document.getElementById('user-menu');
         }
@@ -994,6 +981,8 @@ class ProfileManager {
             if (userAvatarContainer && !isVisible) {
                 // Menu is being shown - CRITICAL FIX: Re-attach event listeners
                 this.addUserMenuEventListeners();
+                // ROOT CAUSE FIX: Update theme toggle display to show opposite of current theme
+                this.updateProfileMenuTheme();
                 // Position menu relative to avatar container
                 const rect = userAvatarContainer.getBoundingClientRect();
                 userMenu.style.position = 'absolute';
@@ -1014,17 +1003,17 @@ class ProfileManager {
                     document.removeEventListener('click', this.clickOutsideHandler);
                 }
             }
-            console.log('🔧 PROFILE MANAGER: COMP METHOD - Menu toggled:', !isVisible, 'display:', userMenu.style.display);
+            Logger.debug('🔧 PROFILE MANAGER: COMP METHOD - Menu toggled', { isVisible: !isVisible, display: userMenu.style.display }, 'profile');
         }
         else {
-            console.error('❌ PROFILE MANAGER: COMP METHOD - Failed to create or find user menu');
+            Logger.error('❌ PROFILE MANAGER: COMP METHOD - Failed to create or find user menu', null, 'profile');
         }
     }
     /**
      * COMP METHOD: Create user menu
      */
     async createUserMenu() {
-        console.log('🔧 PROFILE MANAGER: COMP METHOD - Creating user menu...');
+        Logger.debug('🔧 PROFILE MANAGER: COMP METHOD - Creating user menu...', null, 'profile');
         const userMenu = document.createElement('div');
         userMenu.id = 'user-menu';
         userMenu.className = 'user-menu';
@@ -1040,9 +1029,13 @@ class ProfileManager {
       min-width: 200px;
       display: none;
     `;
-        // ROOT CAUSE FIX: Get currentUser from stateManager instead of legacyContext
+        // Get currentUser from stateManager
         const currentUserFromState = stateManagerInstance.getState('currentUser');
-        const currentUser = ensureLegacyUser(currentUserFromState);
+        const currentUser = ensureUser(currentUserFromState);
+        if (!currentUser) {
+            Logger.warn('⚠️ PROFILE: No valid user for avatar generation', null, 'profile');
+            return ''; // UUID ONLY - can't generate avatar without valid user UUID
+        }
         // Create small avatar using AvatarUtils if available
         let smallAvatarHTML = '';
         // ROOT CAUSE FIX: Use imported AvatarUtils directly (TypeScript import)
@@ -1054,7 +1047,7 @@ class ProfileManager {
                 });
             }
             catch (error) {
-                console.error('🔧 PROFILE MANAGER: COMP METHOD - Error creating small avatar:', error);
+                Logger.error('🔧 PROFILE MANAGER: COMP METHOD - Error creating small avatar', error, 'profile');
                 const displayNameOrName = currentUser.displayName || currentUser.name || 'U';
                 smallAvatarHTML = `<div class="user-avatar-small" style="width: 24px; height: 24px; border-radius: 50%; background: #007bff; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 12px;">
           ${displayNameOrName.charAt(0).toUpperCase()}
@@ -1100,7 +1093,7 @@ class ProfileManager {
         const userAvatarContainer = document.getElementById('user-avatar-container');
         if (userAvatarContainer) {
             // Ensure container has position: relative for absolute positioning
-            // ROOT CAUSE FIX: Use window.getComputedStyle instead of legacyContext
+            // Use window.getComputedStyle
             if (window.getComputedStyle(userAvatarContainer).position === 'static') {
                 userAvatarContainer.style.position = 'relative';
             }
@@ -1113,7 +1106,7 @@ class ProfileManager {
             userMenu.style.zIndex = '10000';
         }
         else {
-            console.error('❌ PROFILE MANAGER: COMP METHOD - User avatar container not found');
+            Logger.error('❌ PROFILE MANAGER: COMP METHOD - User avatar container not found', null, 'profile');
         }
         // Add event listeners
         this.addUserMenuEventListeners();
@@ -1122,7 +1115,7 @@ class ProfileManager {
         // CRITICAL FIX: Initialize theme icon/text based on current theme
         this.updateProfileMenuTheme();
         // FIX: Listen for preference changes to update display name and theme
-        // ROOT CAUSE FIX: Get EventBus from window instead of legacyContext
+        // Get EventBus from window
         const win = window;
         if (win.EventBus && typeof win.EventBus === 'object') {
             const eventBus = win.EventBus;
@@ -1147,15 +1140,27 @@ class ProfileManager {
                 }
             }
         });
-        console.log('✅ PROFILE MANAGER: COMP METHOD - User menu created');
+        Logger.debug('✅ PROFILE MANAGER: COMP METHOD - User menu created', null, 'profile');
+        return userMenu.outerHTML;
     }
     /**
      * Update profile menu theme icon and text based on current theme
+     * ROOT CAUSE FIX: Update BOTH theme-icon/theme-text (sidepanel.html) AND theme-icon-menu/theme-text-menu (dynamic menu)
      */
     updateProfileMenuTheme() {
         const currentTheme = document.body.getAttribute('data-theme') ||
             document.documentElement.getAttribute('data-theme') ||
             'light';
+        // Update sidepanel.html elements (theme-icon, theme-text)
+        const themeIcon = document.getElementById('theme-icon');
+        const themeText = document.getElementById('theme-text');
+        if (themeIcon) {
+            themeIcon.textContent = currentTheme === 'dark' ? '☀️' : '🌙';
+        }
+        if (themeText) {
+            themeText.textContent = currentTheme === 'dark' ? 'Light mode' : 'Dark mode';
+        }
+        // Update dynamic menu elements (theme-icon-menu, theme-text-menu)
         const themeIconMenu = document.getElementById('theme-icon-menu');
         const themeTextMenu = document.getElementById('theme-text-menu');
         if (themeIconMenu) {
@@ -1170,13 +1175,21 @@ class ProfileManager {
      * This ensures both toggles stay in sync when theme is changed from either location
      */
     updateAllThemeUI(theme) {
-        console.log('🔄 THEME_SYNC: Updating all theme UI elements for theme:', theme);
+        Logger.debug('🔄 THEME_SYNC: Updating all theme UI elements for theme:', { theme }, 'profile');
         // Update DOM
         document.documentElement.setAttribute('data-theme', theme);
         document.body.setAttribute('data-theme', theme);
-        // Update profile menu theme icon/text (both IDs)
+        // Update profile menu theme icon/text (both IDs - sidepanel.html AND dynamic menu)
+        const themeIcon = document.getElementById('theme-icon');
+        const themeText = document.getElementById('theme-text');
         const themeIconMenu = document.getElementById('theme-icon-menu');
         const themeTextMenu = document.getElementById('theme-text-menu');
+        if (themeIcon) {
+            themeIcon.textContent = theme === 'dark' ? '☀️' : '🌙';
+        }
+        if (themeText) {
+            themeText.textContent = theme === 'dark' ? 'Light mode' : 'Dark mode';
+        }
         if (themeIconMenu) {
             themeIconMenu.textContent = theme === 'dark' ? '☀️' : '🌙';
         }
@@ -1193,19 +1206,19 @@ class ProfileManager {
                 win.visibilitySettingsManager.updateThemeStatus();
             }
         }
-        console.log('✅ THEME_SYNC: All theme UI elements updated');
+        Logger.debug('✅ THEME_SYNC: All theme UI elements updated', null, 'profile');
     }
     /**
      * COMP METHOD: Add user menu event listeners
      */
     addUserMenuEventListeners() {
-        console.log('🔧 PROFILE MANAGER: COMP METHOD - Adding event listeners...');
+        Logger.debug('🔧 PROFILE MANAGER: COMP METHOD - Adding event listeners...', null, 'profile');
         // Aura color button
         const auraColorBtn = document.getElementById('aura-color-btn');
         if (auraColorBtn) {
             auraColorBtn.onclick = (e) => {
                 e.preventDefault();
-                console.log('🔧 PROFILE MANAGER: COMP METHOD - Aura color button clicked');
+                Logger.debug('🔧 PROFILE MANAGER: COMP METHOD - Aura color button clicked', null, 'profile');
                 this.hideUserMenu();
                 this.showColorPickerModal();
             };
@@ -1220,7 +1233,7 @@ class ProfileManager {
             this.visibilitySettingsHandler = (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                console.log('🔧 PROFILE MANAGER: COMP METHOD - Visibility settings button clicked');
+                Logger.debug('🔧 PROFILE MANAGER: COMP METHOD - Visibility settings button clicked', null, 'profile');
                 this.hideUserMenu();
                 // FIX: Switch to visibility tab - try multiple methods for reliability
                 let switched = false;
@@ -1237,7 +1250,7 @@ class ProfileManager {
                     const button = document.querySelector(selector);
                     if (button) {
                         button.click();
-                        console.log(`✅ PROFILE MANAGER: Switched to settings tab via selector: ${selector}`);
+                        Logger.debug(`✅ PROFILE MANAGER: Switched to settings tab via selector: ${selector}`, null, 'profile');
                         switched = true;
                         break;
                     }
@@ -1254,39 +1267,59 @@ class ProfileManager {
                         settingsTab.classList.add('active');
                         // Update button states
                         allTabButtons.forEach(btn => {
-                            btn.classList.remove('active');
-                            if (btn.getAttribute('data-tab') === 'settings-tab' || btn.getAttribute('aria-controls') === 'settings-tab') {
-                                btn.classList.add('active');
+                            const btnElement = btn;
+                            btnElement.classList.remove('active');
+                            // ROOT CAUSE FIX: Remove forced styles from inactive tabs
+                            btnElement.style.removeProperty('border-bottom');
+                            btnElement.style.removeProperty('border-bottom-color');
+                            btnElement.style.removeProperty('border-bottom-width');
+                            btnElement.style.removeProperty('border-bottom-style');
+                            btnElement.style.removeProperty('color');
+                            btnElement.style.removeProperty('font-weight');
+                            if (btnElement.getAttribute('data-tab') === 'settings-tab' || btnElement.getAttribute('aria-controls') === 'settings-tab') {
+                                btnElement.classList.add('active');
+                                // ROOT CAUSE FIX: Force selector line via JavaScript since CSS isn't applying
+                                const SELECTOR_LINE_COLOR = '#1D9BF0'; // X's neon blue
+                                const SELECTOR_LINE_WIDTH = '4px';
+                                btnElement.style.setProperty('border-bottom', `${SELECTOR_LINE_WIDTH} solid ${SELECTOR_LINE_COLOR}`, 'important');
+                                btnElement.style.setProperty('border-bottom-color', SELECTOR_LINE_COLOR, 'important');
+                                btnElement.style.setProperty('border-bottom-width', SELECTOR_LINE_WIDTH, 'important');
+                                btnElement.style.setProperty('border-bottom-style', 'solid', 'important');
+                                btnElement.style.setProperty('color', SELECTOR_LINE_COLOR, 'important');
+                                btnElement.style.setProperty('font-weight', '700', 'important');
                             }
                         });
-                        console.log('✅ PROFILE MANAGER: Directly activated settings tab');
+                        Logger.debug('✅ PROFILE MANAGER: Directly activated settings tab', null, 'profile');
                         switched = true;
                     }
                 }
                 // Method 3: Dispatch custom event as last resort
                 if (!switched) {
                     const tabSwitchEvent = new CustomEvent('tabSwitch', { detail: { tabId: 'settings-tab' } });
-                    legacyContext.dispatchEvent(tabSwitchEvent);
-                    console.log('✅ PROFILE MANAGER: Dispatched tab switch event for settings tab');
+                    window.dispatchEvent(tabSwitchEvent);
+                    Logger.debug('✅ PROFILE MANAGER: Dispatched tab switch event for settings tab', null, 'profile');
                 }
                 // CRITICAL FIX: Ensure event listeners are attached when settings tab opens
                 setTimeout(async () => {
                     // ROOT CAUSE FIX: Ensure VisibilitySettingsManager event listeners are attached
-                    // Use dynamic import with type assertion (ES6 module pattern)
+                    // Use dynamic import with proper type declarations (ES6 module pattern)
                     try {
-                        // @ts-ignore - Dynamic import of JS module without type declarations
-                        const module = await import('../../extension/features/VisibilitySettingsManager.js');
+                        // Dynamic import - VisibilitySettingsManager is in extension/features at runtime
+                        // @ts-expect-error - Dynamic runtime import, types not available at compile time
+                        const module = await import('../../extension/features/VisibilitySettingsManager.js').catch(() => 
+                        // @ts-expect-error - Dynamic runtime import, types not available at compile time
+                        import('../../features/VisibilitySettingsManager.js'));
                         const visibilitySettingsManager = module?.visibilitySettingsManagerInstance;
                         if (visibilitySettingsManager && typeof visibilitySettingsManager.ensureEventListeners === 'function') {
                             await visibilitySettingsManager.ensureEventListeners();
-                            console.log('✅ PROFILE MANAGER: Ensured visibility settings event listeners after tab switch');
+                            Logger.debug('✅ PROFILE MANAGER: Ensured visibility settings event listeners after tab switch', null, 'profile');
                         }
                         else {
-                            console.warn('⚠️ PROFILE MANAGER: visibilitySettingsManagerInstance not available or ensureEventListeners not a function');
+                            Logger.warn('⚠️ PROFILE MANAGER: visibilitySettingsManagerInstance not available or ensureEventListeners not a function', null, 'profile');
                         }
                     }
                     catch (error) {
-                        console.warn('⚠️ PROFILE MANAGER: Failed to import VisibilitySettingsManager:', error);
+                        Logger.warn('⚠️ PROFILE MANAGER: Failed to import VisibilitySettingsManager:', error, 'profile');
                     }
                 }, 100);
             };
@@ -1298,10 +1331,10 @@ class ProfileManager {
             visibilitySettingsBtn.style.cursor = 'pointer';
             visibilitySettingsBtn.style.opacity = '1';
             visibilitySettingsBtn.disabled = false;
-            console.log('✅ PROFILE MANAGER: Visibility settings button handler added and activated');
+            Logger.debug('✅ PROFILE MANAGER: Visibility settings button handler added and activated', null, 'profile');
         }
         else {
-            console.warn('⚠️ PROFILE MANAGER: Visibility settings button not found in DOM');
+            Logger.warn('⚠️ PROFILE MANAGER: Visibility settings button not found in DOM', null, 'profile');
         }
         // Theme toggle button - CRITICAL FIX: Ensure button is clickable and handler is attached
         const themeToggleBtn = document.getElementById('theme-toggle-btn');
@@ -1313,14 +1346,14 @@ class ProfileManager {
             this.themeToggleHandler = async (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                console.log('🔧 PROFILE MANAGER: COMP METHOD - Theme toggle button clicked');
-                console.log('🔍 DIAGNOSTIC: Profile menu theme toggle clicked');
+                Logger.debug('🔧 PROFILE MANAGER: COMP METHOD - Theme toggle button clicked', null, 'profile');
+                Logger.debug('🔍 DIAGNOSTIC: Profile menu theme toggle clicked', null, 'profile');
                 const beforeTheme = document.body.getAttribute('data-theme') || document.documentElement.getAttribute('data-theme') || 'light';
-                console.log('🔍 DIAGNOSTIC: Theme before toggle:', beforeTheme);
+                Logger.debug('🔍 DIAGNOSTIC: Theme before toggle:', { beforeTheme }, 'profile');
                 await this.toggleTheme();
                 const afterTheme = document.body.getAttribute('data-theme') || document.documentElement.getAttribute('data-theme') || 'light';
-                console.log('🔍 DIAGNOSTIC: Theme after toggle:', afterTheme);
-                console.log('🔍 DIAGNOSTIC: Theme changed:', beforeTheme !== afterTheme ? 'YES ✅' : 'NO ❌');
+                Logger.debug('🔍 DIAGNOSTIC: Theme after toggle:', { afterTheme }, 'profile');
+                Logger.debug('🔍 DIAGNOSTIC: Theme changed:', { changed: beforeTheme !== afterTheme ? 'YES ✅' : 'NO ❌' }, 'profile');
                 // CRITICAL: Close profile menu after theme toggle
                 this.hideUserMenu();
             };
@@ -1334,22 +1367,22 @@ class ProfileManager {
             themeToggleBtn.style.opacity = '1';
             themeToggleBtn.style.visibility = 'visible';
             themeToggleBtn.disabled = false;
-            console.log('✅ PROFILE MANAGER: Theme toggle button handler attached and activated');
+            Logger.debug('✅ PROFILE MANAGER: Theme toggle button handler attached and activated', null, 'profile');
         }
         else {
-            console.warn('❌ PROFILE MANAGER: Theme toggle button not found');
+            Logger.warn('❌ PROFILE MANAGER: Theme toggle button not found', null, 'profile');
         }
         // Logout button
         const logoutBtn = document.getElementById('logout-btn');
         if (logoutBtn) {
             logoutBtn.onclick = (e) => {
                 e.preventDefault();
-                console.log('🔧 PROFILE MANAGER: COMP METHOD - Logout button clicked');
+                Logger.debug('🔧 PROFILE MANAGER: COMP METHOD - Logout button clicked', null, 'profile');
                 this.hideUserMenu();
                 this.performLogout();
             };
         }
-        console.log('✅ PROFILE MANAGER: COMP METHOD - Event listeners added');
+        Logger.debug('✅ PROFILE MANAGER: COMP METHOD - Event listeners added', null, 'profile');
     }
     /**
      * COMP METHOD: Hide user menu
@@ -1358,7 +1391,7 @@ class ProfileManager {
         const userMenu = document.getElementById('user-menu');
         if (userMenu) {
             userMenu.style.display = 'none';
-            console.log('🔧 PROFILE MANAGER: COMP METHOD - User menu hidden');
+            Logger.debug('🔧 PROFILE MANAGER: COMP METHOD - User menu hidden', null, 'profile');
         }
     }
     /**
@@ -1378,7 +1411,7 @@ class ProfileManager {
             if (userAvatarContainer && userMenu && target && userMenu.style.display !== 'none') {
                 // Check if click is outside both avatar container and menu
                 if (!userAvatarContainer.contains(target) && !userMenu.contains(target)) {
-                    console.log('🔧 PROFILE MANAGER: Click outside detected, hiding menu');
+                    Logger.debug('🔧 PROFILE MANAGER: Click outside detected, hiding menu', 'profile');
                     userMenu.style.display = 'none';
                     // Remove handler when menu closes
                     if (this.clickOutsideHandler) {
@@ -1399,7 +1432,7 @@ class ProfileManager {
      * COMP METHOD: Show color picker modal
      */
     async showColorPickerModal() {
-        console.log('🔧 PROFILE MANAGER: COMP METHOD - Showing color picker modal...');
+        Logger.debug('🔧 PROFILE MANAGER: COMP METHOD - Showing color picker modal...', null, 'profile');
         // Check if modal already exists
         let modal = document.getElementById('color-picker-modal');
         if (modal) {
@@ -1426,8 +1459,8 @@ class ProfileManager {
         const currentAuraColor = await getCurrentUserAuraColor();
         const currentColorHex = currentAuraColor ? currentAuraColor.replace('#', '') : '';
         const displayColor = currentAuraColor || AVATAR_FALLBACK_COLOR;
-        console.log('🔧 AURA_MODAL: Current database aura color:', currentAuraColor);
-        console.log('🔧 AURA_MODAL: Using color for modal:', displayColor);
+        Logger.debug('🔧 AURA_MODAL: Current database aura color:', { currentAuraColor }, 'profile');
+        Logger.debug('🔧 AURA_MODAL: Using color for modal:', { displayColor }, 'profile');
         modal.innerHTML = `
       <div class="color-picker-content" style="background: white; border-radius: 12px; padding: 24px; max-width: 400px; width: 90%; box-shadow: 0 8px 32px rgba(0,0,0,0.2);">
         <div class="color-picker-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
@@ -1452,7 +1485,7 @@ class ProfileManager {
         document.body.appendChild(modal);
         // Add event listeners
         this.addColorPickerEventListeners();
-        console.log('✅ PROFILE MANAGER: COMP METHOD - Color picker modal created');
+        Logger.debug('✅ PROFILE MANAGER: COMP METHOD - Color picker modal created', null, 'profile');
     }
     /**
      * COMP METHOD: Add color picker event listeners
@@ -1500,7 +1533,7 @@ class ProfileManager {
                 const color = colorInput.value;
                 if (color.length === 6) {
                     const colorHex = '#' + color;
-                    console.log('🔧 PROFILE MANAGER: COMP METHOD - Saving aura color:', colorHex);
+                    Logger.debug('🔧 PROFILE MANAGER: COMP METHOD - Saving aura color:', { colorHex }, 'profile');
                     // ROOT CAUSE FIX: Update BOTH Chrome storage AND database
                     await updateAuraColorEverywhere(colorHex);
                     modal.style.display = 'none';
@@ -1523,12 +1556,8 @@ class ProfileManager {
      * COMP METHOD: Toggle theme
      */
     async toggleTheme() {
-        console.log('🔧 PROFILE MANAGER: COMP METHOD - Toggling theme');
+        Logger.debug('🔧 PROFILE MANAGER: COMP METHOD - Toggling theme', null, 'profile');
         // Get current theme from DOM or storage
-        // ROOT CAUSE FIX: getCurrentUserTheme is defined in this file, use it directly
-        const currentThemeGetter = typeof getCurrentUserTheme === 'function'
-            ? getCurrentUserTheme
-            : undefined;
         // CRITICAL FIX: Get UserPreferencesManager first, then get theme
         const userPreferencesManager = getUserPreferencesManager();
         // CRITICAL FIX: Get theme from UserPreferencesManager first, then DOM, then default
@@ -1549,31 +1578,31 @@ class ProfileManager {
         }
         // Only toggle if we have a valid current theme
         const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-        console.log('🔧 PROFILE MANAGER: Current theme:', currentTheme, 'New theme:', newTheme);
-        console.log('🔍 DIAGNOSTIC: UserPreferencesManager available:', !!userPreferencesManager);
-        console.log('🔍 DIAGNOSTIC: UserPreferencesManager initialized:', userPreferencesManager?.isInitialized);
+        Logger.debug('🔧 PROFILE MANAGER: Current theme:', { currentTheme, newTheme }, 'profile');
+        Logger.debug('🔍 DIAGNOSTIC: UserPreferencesManager available:', { available: !!userPreferencesManager }, 'profile');
+        Logger.debug('🔍 DIAGNOSTIC: UserPreferencesManager initialized:', { initialized: userPreferencesManager?.isInitialized }, 'profile');
         // CRITICAL FIX: Use UserPreferencesManager (unified preference system) - ensure it saves to both Chrome storage and database
         if (userPreferencesManager && userPreferencesManager.isInitialized && typeof userPreferencesManager.savePreference === 'function') {
-            console.log('✅ PROFILE MANAGER: Using UserPreferencesManager to toggle theme');
+            Logger.debug('✅ PROFILE MANAGER: Using UserPreferencesManager to toggle theme', null, 'profile');
             // FIX: Save immediately (not batched) to ensure database save happens right away
             const saved = await userPreferencesManager.savePreference('theme', newTheme, { batch: false });
-            console.log('🔍 DIAGNOSTIC: UserPreferencesManager savePreference result:', saved);
+            Logger.debug('🔍 DIAGNOSTIC: UserPreferencesManager savePreference result:', saved, 'profile');
             // Verify it was saved to Chrome storage
             const chromeStorage = await getChromeStorage(['theme']);
-            console.log('🔍 DIAGNOSTIC: Theme in Chrome storage after save:', chromeStorage.theme);
-            console.log('✅ PROFILE MANAGER: Theme saved via UserPreferencesManager:', newTheme);
+            Logger.debug('🔍 DIAGNOSTIC: Theme in Chrome storage after save:', { theme: chromeStorage.theme }, 'profile');
+            Logger.debug('✅ PROFILE MANAGER: Theme saved via UserPreferencesManager:', { newTheme }, 'profile');
             // ROOT CAUSE FIX: Update ALL theme UI elements (profile menu AND settings tab) to keep them in sync
             this.updateAllThemeUI(newTheme);
-            console.log('✅ PROFILE MANAGER: All theme UI elements updated (profile menu + settings tab)');
+            Logger.debug('✅ PROFILE MANAGER: All theme UI elements updated (profile menu + settings tab)', null, 'profile');
         }
         else if (typeof updateThemeEverywhere === 'function') {
             // ROOT CAUSE FIX: updateThemeEverywhere is defined in this file, use it directly
-            console.log('⚠️ PROFILE MANAGER: UserPreferencesManager not available, using updateThemeEverywhere fallback');
+            Logger.warn('⚠️ PROFILE MANAGER: UserPreferencesManager not available, using updateThemeEverywhere fallback', 'profile');
             await updateThemeEverywhere(newTheme);
         }
         else {
             // Fallback: Update manually if function not available
-            console.warn('⚠️ PROFILE MANAGER: updateThemeEverywhere not available, using fallback');
+            Logger.warn('⚠️ PROFILE MANAGER: updateThemeEverywhere not available, using fallback', 'profile');
             // Update profile menu icon and text after theme change
             const themeIconMenu = document.getElementById('theme-icon-menu');
             const themeTextMenu = document.getElementById('theme-text-menu');
@@ -1604,7 +1633,7 @@ class ProfileManager {
             // ROOT CAUSE FIX: Removed localStorage - we only use Chrome storage and database
             // Update database
             const apiForTheme = getApi();
-            // ROOT CAUSE FIX: Get currentUser from stateManager instead of legacyContext
+            // Get currentUser from stateManager
             const currentUserForTheme = stateManagerInstance.getState('currentUser');
             if (currentUserForTheme && currentUserForTheme.id && apiForTheme) {
                 try {
@@ -1614,24 +1643,24 @@ class ProfileManager {
                             theme: newTheme
                         })
                     });
-                    console.log('✅ PROFILE MANAGER: Theme saved to database:', newTheme);
+                    Logger.debug('✅ PROFILE MANAGER: Theme saved to database:', { newTheme }, 'profile');
                     // Update stateManager with new theme
                     stateManagerInstance.setState('currentUser', { ...currentUserForTheme, theme: newTheme });
                 }
                 catch (error) {
-                    console.error('❌ PROFILE MANAGER: Error saving theme to database:', error);
+                    Logger.error('❌ PROFILE MANAGER: Error saving theme to database:', error, 'profile');
                 }
             }
-            console.log(`✅ PROFILE MANAGER: Switched to ${newTheme} theme`);
+            Logger.debug(`✅ PROFILE MANAGER: Switched to ${newTheme} theme`, { newTheme }, 'profile');
         }
     }
     /**
      * COMP METHOD: Perform logout
      */
     performLogout() {
-        console.log('🔧 PROFILE MANAGER: COMP METHOD - Performing logout');
+        Logger.debug('🔧 PROFILE MANAGER: COMP METHOD - Performing logout', null, 'profile');
         try {
-            // ROOT CAUSE FIX: Clear currentUser in stateManager instead of legacyContext
+            // Clear currentUser in stateManager
             stateManagerInstance.setState('currentUser', null);
             stateManagerInstance.setState('supabaseUser', null);
             // Clear storage
@@ -1639,55 +1668,62 @@ class ProfileManager {
                 chrome.storage.local.clear();
             }
             // Reload the extension
-            // ROOT CAUSE FIX: Use window.location instead of legacyContext
+            // Use window.location
             window.location.reload();
-            console.log('✅ PROFILE MANAGER: COMP METHOD - Logout completed');
+            Logger.debug('✅ PROFILE MANAGER: COMP METHOD - Logout completed', null, 'profile');
         }
         catch (error) {
-            console.error('❌ PROFILE MANAGER: COMP METHOD - Error during logout:', error);
+            Logger.error('❌ PROFILE MANAGER: COMP METHOD - Error during logout:', error, 'profile');
         }
     }
     /**
      * Handle user profile updates
      */
     async handleUserUpdate(user) {
-        console.log('User profile updated', user);
-        // SD1 CRITICAL DEBUG: Log what user data is being set for profile avatar
-        console.log('🔍 SD1 PROFILE DEBUG: === PROFILE MANAGER USER UPDATE ===');
-        console.log('🔍 SD1 PROFILE DEBUG: User email:', user?.email);
-        console.log('🔍 SD1 PROFILE DEBUG: User name:', user?.name);
-        console.log('🔍 SD1 PROFILE DEBUG: User avatarUrl:', user?.avatarUrl);
-        console.log('🔍 SD1 PROFILE DEBUG: User auraColor (before fetch):', user?.auraColor);
-        console.log('🔍 SD1 PROFILE DEBUG: Full user object:', user);
-        console.log('🔍 SD1 PROFILE DEBUG: === END PROFILE MANAGER USER UPDATE ===');
+        Logger.debug('User profile updated', user, 'profile');
+        if (Logger.isDebugEnabled('profile')) {
+            Logger.debug('🔍 SD1 PROFILE DEBUG: ProfileManager user update snapshot', {
+                email: user?.email || null,
+                name: user?.name || null,
+                avatarUrl: user?.avatarUrl || null,
+                auraColorBeforeFetch: user?.auraColor || null,
+                payload: user ?? null
+            }, 'profile');
+        }
         this.profileData = user;
         // ROOT CAUSE FIX: Sync Chrome storage with database when user updates
         // Note: syncStorageWithDatabase should be imported from proper module if needed
+        // TypeScript migration: Convert promise chain to async/await for better error handling
         const win = window;
         if (win.syncStorageWithDatabase && typeof win.syncStorageWithDatabase === 'function') {
-            win.syncStorageWithDatabase().catch((err) => {
-                console.warn('⚠️ PROFILE_MANAGER: Error syncing storage with database:', err);
-            });
+            (async () => {
+                try {
+                    await win.syncStorageWithDatabase();
+                }
+                catch (err) {
+                    Logger.warn('⚠️ PROFILE_MANAGER: Error syncing storage with database:', err, 'profile');
+                }
+            })();
         }
         // CRITICAL: Ensure we have auraColor for profile avatar
         // First priority: from user object (if included in update)
         if (this.profileData && this.profileData.auraColor) {
-            console.log('✅ PROFILE_MANAGER: Using auraColor from user object:', this.profileData.auraColor);
+            Logger.debug('✅ PROFILE_MANAGER: Using auraColor from user object:', this.profileData.auraColor, 'profile');
         }
         // Second priority: from stateManager currentUser (should have been set during auth)
-        // ROOT CAUSE FIX: Get currentUser from stateManager instead of legacyContext
+        // Get currentUser from stateManager
         const currentUserForAura = stateManagerInstance.getState('currentUser');
         if (currentUserForAura?.auraColor) {
             if (this.profileData) {
                 this.profileData.auraColor = currentUserForAura.auraColor;
-                console.log('✅ PROFILE_MANAGER: Using auraColor from stateManager currentUser:', currentUserForAura.auraColor);
+                Logger.debug('✅ PROFILE_MANAGER: Using auraColor from stateManager currentUser:', currentUserForAura.auraColor, 'profile');
             }
         }
         // Third priority: fetch from API if user ID is available
         else if (this.profileData && this.profileData.id) {
             const api = ensureApi('fetch auraColor for profileData');
             if (api) {
-                console.log('🔍 PROFILE_MANAGER: Fetching auraColor from API for user:', this.profileData.id);
+                Logger.debug('🔍 PROFILE_MANAGER: Fetching auraColor from API for user:', this.profileData.id, 'profile');
                 try {
                     const userResponse = await api.request(`/v1/users/${this.profileData.id}`, {
                         method: 'GET'
@@ -1701,20 +1737,20 @@ class ProfileManager {
                             if (currentUserForUpdate) {
                                 stateManagerInstance.setState('currentUser', { ...currentUserForUpdate, auraColor });
                             }
-                            console.log('✅ PROFILE_MANAGER: Fetched auraColor from API:', auraColor);
+                            Logger.debug('✅ PROFILE_MANAGER: Fetched auraColor from API:', auraColor, 'profile');
                         }
                         else {
-                            console.log('ℹ️ PROFILE_MANAGER: No auraColor found in API response');
+                            Logger.debug('ℹ️ PROFILE_MANAGER: No auraColor found in API response', null, 'profile');
                         }
                     }
                 }
                 catch (error) {
-                    console.warn('⚠️ PROFILE_MANAGER: Failed to fetch auraColor from API:', error);
+                    Logger.warn('⚠️ PROFILE_MANAGER: Failed to fetch auraColor from API', error, 'profile');
                 }
             }
         }
         else {
-            console.log('ℹ️ PROFILE_MANAGER: No auraColor available yet (may be set later)');
+            Logger.debug('ℹ️ PROFILE_MANAGER: No auraColor available yet (may be set later)', null, 'profile');
         }
         this.updateProfileUI();
         // Notify callbacks
@@ -1723,7 +1759,7 @@ class ProfileManager {
                 callback(user);
             }
             catch (error) {
-                console.error('Profile callback error', error, 'profile');
+                Logger.error('Profile callback error', error, 'profile');
             }
         });
     }
@@ -1731,7 +1767,7 @@ class ProfileManager {
      * Handle avatar updates
      */
     async handleAvatarUpdate(avatarData) {
-        console.log('Avatar updated', avatarData);
+        Logger.debug('Avatar updated', avatarData, 'profile');
         if (this.profileData) {
             this.profileData.avatarUrl = avatarData.avatarUrl;
             this.profileData.avatarSource = avatarData.source;
@@ -1742,13 +1778,13 @@ class ProfileManager {
      * Handle aura color updates
      */
     async handleAuraColorUpdate(auraData) {
-        console.log('🔧 PROFILE_MANAGER: Handling aura color update:', auraData);
+        Logger.debug('🔧 PROFILE_MANAGER: Handling aura color update:', auraData, 'profile');
         const color = auraData.color || auraData.auraColor;
         const user = auraData.user;
         // Update profile data if it's the current user
         if (this.profileData && user && (this.profileData.id === user.id || this.profileData.id === user.userId)) {
             this.profileData.auraColor = color;
-            console.log('🔧 PROFILE_MANAGER: Updated profile data aura color:', color);
+            Logger.debug('🔧 PROFILE_MANAGER: Updated profile data aura color:', color, 'profile');
             // Refresh the profile avatar with the new aura color
             await this.updateUserAvatar();
         }
@@ -1757,34 +1793,35 @@ class ProfileManager {
      * Handle authentication UI updates
      */
     async handleAuthUIUpdate(authData) {
-        console.log('🔧 PROFILE_MANAGER: Handling auth UI update:', authData?.isAuthenticated);
+        Logger.debug('🔧 PROFILE_MANAGER: Handling auth UI update:', authData?.isAuthenticated, 'profile');
         if (authData.isAuthenticated && authData.user) {
-            // SD1 CRITICAL DEBUG: Log what user data is being set for profile avatar
-            console.log('🔍 SD1 PROFILE DEBUG: === PROFILE MANAGER AUTH UPDATE ===');
-            console.log('🔍 SD1 PROFILE DEBUG: Auth user email:', authData.user?.email);
-            console.log('🔍 SD1 PROFILE DEBUG: Auth user name:', authData.user?.name);
-            console.log('🔍 SD1 PROFILE DEBUG: Auth user avatarUrl:', authData.user?.avatarUrl);
-            console.log('🔍 SD1 PROFILE DEBUG: Auth user auraColor (before fetch):', authData.user?.auraColor);
-            console.log('🔍 SD1 PROFILE DEBUG: Full auth user object:', authData.user);
-            console.log('🔍 SD1 PROFILE DEBUG: === END PROFILE MANAGER AUTH UPDATE ===');
+            if (Logger.isDebugEnabled('profile')) {
+                Logger.debug('🔍 SD1 PROFILE DEBUG: ProfileManager auth update snapshot', {
+                    email: authData.user?.email || null,
+                    name: authData.user?.name || null,
+                    avatarUrl: authData.user?.avatarUrl || null,
+                    auraColorBeforeFetch: authData.user?.auraColor || null,
+                    payload: authData.user ?? null
+                }, 'profile');
+            }
             this.profileData = authData.user;
             // CRITICAL: Ensure we have auraColor for profile avatar
             // First priority: from authData.user (if included in auth response)
             if (this.profileData && this.profileData.auraColor) {
-                console.log('✅ PROFILE_MANAGER: Using auraColor from authData.user:', this.profileData.auraColor);
+                Logger.debug('✅ PROFILE_MANAGER: Using auraColor from authData.user:', this.profileData.auraColor, 'profile');
             }
-            // Second priority: from stateManager (TypeScript migration - no legacyContext.currentUser)
+            // Second priority: from stateManager (TypeScript migration - no window.currentUser)
             else if (this.profileData) {
                 const currentUserFromState = stateManagerInstance.getState('currentUser');
                 if (currentUserFromState?.auraColor) {
                     this.profileData.auraColor = currentUserFromState.auraColor;
-                    console.log('✅ PROFILE_MANAGER: Using auraColor from stateManager:', currentUserFromState.auraColor);
+                    Logger.debug('✅ PROFILE_MANAGER: Using auraColor from stateManager:', currentUserFromState.auraColor, 'profile');
                 }
                 // Third priority: fetch from API if user ID is available
                 else if (this.profileData.id) {
                     const api = ensureApi('fetch auraColor after auth');
                     if (api) {
-                        console.log('🔍 PROFILE_MANAGER: Fetching auraColor from API for user:', this.profileData.id);
+                        Logger.debug('🔍 PROFILE_MANAGER: Fetching auraColor from API for user:', this.profileData.id, 'profile');
                         try {
                             const userResponse = await api.request(`/v1/users/${this.profileData.id}`, {
                                 method: 'GET'
@@ -1793,30 +1830,29 @@ class ProfileManager {
                                 const auraColor = typeof userResponse.auraColor === 'string' ? userResponse.auraColor : undefined;
                                 if (auraColor) {
                                     this.profileData.auraColor = auraColor;
-                                    // ROOT CAUSE FIX: Update stateManager (TypeScript migration - no legacyContext.currentUser)
                                     const currentUserForAura = stateManagerInstance.getState('currentUser');
                                     if (currentUserForAura) {
                                         stateManagerInstance.setState('currentUser', { ...currentUserForAura, auraColor: auraColor });
                                     }
-                                    console.log('✅ PROFILE_MANAGER: Fetched auraColor from API:', auraColor);
+                                    Logger.debug('✅ PROFILE_MANAGER: Fetched auraColor from API:', auraColor, 'profile');
                                 }
                                 else {
-                                    console.log('ℹ️ PROFILE_MANAGER: No auraColor found in API response');
+                                    Logger.debug('ℹ️ PROFILE_MANAGER: No auraColor found in API response', null, 'profile');
                                 }
                             }
                         }
                         catch (error) {
-                            console.warn('⚠️ PROFILE_MANAGER: Failed to fetch auraColor from API:', error);
+                            Logger.warn('⚠️ PROFILE_MANAGER: Failed to fetch auraColor from API:', error, 'profile');
                         }
                     }
                 }
                 else {
-                    console.log('ℹ️ PROFILE_MANAGER: No auraColor available yet (may be set later)');
+                    Logger.debug('ℹ️ PROFILE_MANAGER: No auraColor available yet (may be set later)', null, 'profile');
                 }
             }
             // If authentication just completed, we need to initialize the profile avatar
             if (!this.isAuthenticated) {
-                console.log('🔧 PROFILE_MANAGER: Authentication completed, initializing profile avatar...');
+                Logger.debug('🔧 PROFILE_MANAGER: Authentication completed, initializing profile avatar...', 'profile');
                 this.isAuthenticated = true;
                 // ROOT CAUSE FIX: Initialize UserPreferencesManager FIRST (before avatar) to ensure theme is loaded correctly
                 await this.initializeUserPreferencesManager(authData.user);
@@ -1827,7 +1863,7 @@ class ProfileManager {
             }
             else {
                 // ROOT CAUSE FIX: If already authenticated but user data updated, refresh avatar
-                console.log('🔧 PROFILE_MANAGER: User data updated, refreshing profile avatar...');
+                Logger.debug('🔧 PROFILE_MANAGER: User data updated, refreshing profile avatar...', 'profile');
                 // ROOT CAUSE FIX: Ensure UserPreferencesManager is initialized even if already authenticated
                 await this.initializeUserPreferencesManager(authData.user);
                 await this.setupProfileMenuAndAuraModal(); // This will update existing avatar if currentUser is now available
@@ -1843,21 +1879,21 @@ class ProfileManager {
      */
     async updateProfileUI() {
         if (!this.profileData) {
-            console.warn('No profile data available for UI update', null, 'profile');
+            Logger.warn('No profile data available for UI update', null, 'profile');
             return;
         }
-        console.log('Updating profile UI', {
+        Logger.debug('Updating profile UI', {
             user: this.profileData.email,
             hasAvatar: !!this.profileData.avatarUrl,
             auraColor: this.profileData.auraColor
-        });
+        }, 'profile');
         try {
             this.updateUserInfo();
             await this.updateUserAvatar(); // CRITICAL: Wait for avatar update to complete
             this.updateUserMenu();
         }
         catch (error) {
-            console.error('Profile UI update failed', error, 'profile');
+            Logger.error('Profile UI update failed', error, 'profile');
         }
     }
     /**
@@ -1880,34 +1916,35 @@ class ProfileManager {
                 this.profileData?.email ||
                 'User';
             userMenuName.textContent = displayName;
-            console.log('✅ PROFILE_MANAGER: Updated user menu name:', displayName);
+            Logger.debug('✅ PROFILE_MANAGER: Updated user menu name:', displayName, 'profile');
         }
     }
     /**
      * Update user avatar display
      */
     async updateUserAvatar() {
-        console.log('🔧 PROFILE_MANAGER: updateUserAvatar called at', new Date().toISOString());
+        Logger.debug('🔧 PROFILE_MANAGER: updateUserAvatar called at', new Date().toISOString(), 'profile');
         const userAvatarContainer = document.getElementById('user-avatar-container');
         if (!userAvatarContainer) {
-            console.warn('User avatar container not found', null, 'profile');
+            Logger.warn('User avatar container not found', null, 'profile');
             return;
         }
-        console.log('🔧 PROFILE_MANAGER: Updating user avatar with data:', {
+        Logger.debug('🔧 PROFILE_MANAGER: Updating user avatar with data:', {
             avatarUrl: this.profileData?.avatarUrl,
             auraColor: this.profileData?.auraColor,
             profileDataId: this.profileData?.id,
             timestamp: new Date().toISOString()
-        });
+        }, 'profile');
         // ROOT CAUSE FIX: Use getCurrentUserAuraColor() for latest aura color (prioritizes Chrome storage, then database)
         let auraColorValue = null;
-        if (typeof legacyContext.getCurrentUserAuraColor === 'function') {
+        const win = window;
+        if (typeof win.getCurrentUserAuraColor === 'function') {
             try {
-                auraColorValue = await legacyContext.getCurrentUserAuraColor();
-                console.log('🎨 PROFILE_MANAGER: Got aura color from getCurrentUserAuraColor():', auraColorValue);
+                auraColorValue = await win.getCurrentUserAuraColor();
+                Logger.debug('🎨 PROFILE_MANAGER: Got aura color from getCurrentUserAuraColor():', auraColorValue, 'profile');
             }
             catch (error) {
-                console.warn('⚠️ PROFILE_MANAGER: Error calling getCurrentUserAuraColor():', error);
+                Logger.warn('⚠️ PROFILE_MANAGER: Error calling getCurrentUserAuraColor():', error, 'profile');
             }
         }
         // Fallback to profileData if getCurrentUserAuraColor not available
@@ -1921,27 +1958,28 @@ class ProfileManager {
                 const cachedAuraColor = storageResult.userAuraColor || storageResult.auraColor;
                 if (cachedAuraColor && cachedAuraColor !== '#ffffff' && cachedAuraColor !== 'white' && cachedAuraColor !== '#fff') {
                     auraColorValue = cachedAuraColor;
-                    console.log('🎨 PROFILE_MANAGER: Using aura color from Chrome storage (CACHE):', auraColorValue);
+                    Logger.debug('🎨 PROFILE_MANAGER: Using aura color from Chrome storage (CACHE):', auraColorValue, 'profile');
                 }
             }
             catch (error) {
-                console.warn('⚠️ PROFILE_MANAGER: Could not read from Chrome storage:', error);
+                Logger.warn('⚠️ PROFILE_MANAGER: Could not read from Chrome storage:', error, 'profile');
             }
         }
         // CRITICAL FIX: Check pre-render data as SECONDARY source (database value)
-        if (!auraColorValue && legacyContext.preRenderInitializer?.getPreRenderData) {
-            const preRenderData = legacyContext.preRenderInitializer.getPreRenderData();
+        const winWithPreRender = window;
+        if (!auraColorValue && winWithPreRender.preRenderInitializer?.getPreRenderData) {
+            const preRenderData = winWithPreRender.preRenderInitializer.getPreRenderData();
             if (preRenderData.auraColor) {
                 auraColorValue = preRenderData.auraColor;
-                console.log('🎨 PROFILE_MANAGER: Using aura color from pre-render data (DATABASE):', auraColorValue);
+                Logger.debug('🎨 PROFILE_MANAGER: Using aura color from pre-render data (DATABASE):', auraColorValue, 'profile');
                 // CRITICAL FIX: Cache database value in Chrome storage for next time
                 if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
                     try {
                         await setChromeStorage({ userAuraColor: auraColorValue, auraColor: auraColorValue });
-                        console.log('💾 PROFILE_MANAGER: Cached aura color in Chrome storage:', auraColorValue);
+                        Logger.debug('💾 PROFILE_MANAGER: Cached aura color in Chrome storage:', auraColorValue, 'profile');
                     }
                     catch (error) {
-                        console.warn('⚠️ PROFILE_MANAGER: Could not cache to Chrome storage:', error);
+                        Logger.warn('⚠️ PROFILE_MANAGER: Could not cache to Chrome storage:', error, 'profile');
                     }
                 }
             }
@@ -1951,31 +1989,31 @@ class ProfileManager {
             const currentUserForAura = stateManagerInstance.getState('currentUser');
             if (currentUserForAura?.auraColor) {
                 auraColorValue = currentUserForAura.auraColor;
-                console.log('✅ PROFILE_MANAGER: Using auraColor from stateManager currentUser:', auraColorValue);
+                Logger.debug('✅ PROFILE_MANAGER: Using auraColor from stateManager currentUser:', auraColorValue, 'profile');
             }
         }
         // CRITICAL FIX: Resolve Promise if auraColor is a Promise
-        if (auraColorValue && typeof auraColorValue === 'object' && typeof auraColorValue.then === 'function') {
-            console.log('🔧 PROFILE_MANAGER: auraColor is a Promise, awaiting resolution...');
+        if (auraColorValue && typeof auraColorValue === 'object' && 'then' in auraColorValue && typeof auraColorValue.then === 'function') {
+            Logger.debug('🔧 PROFILE_MANAGER: auraColor is a Promise, awaiting resolution...', 'profile');
             try {
                 auraColorValue = await auraColorValue;
-                console.log(`✅ PROFILE_MANAGER: Resolved auraColor Promise: ${auraColorValue}`);
+                Logger.debug(`✅ PROFILE_MANAGER: Resolved auraColor Promise: ${auraColorValue}`, null, 'profile');
             }
             catch (e) {
-                console.warn(`⚠️ PROFILE_MANAGER: Error resolving auraColor Promise:`, e);
+                Logger.warn(`⚠️ PROFILE_MANAGER: Error resolving auraColor Promise:`, e, 'profile');
                 auraColorValue = null; // Treat as missing, will fetch from API
             }
         }
         // CRITICAL FIX: Validate auraColor - treat #ffffff as missing
         if (auraColorValue === '#ffffff' || auraColorValue === 'white' || auraColorValue === '#fff') {
-            console.log('⚠️ PROFILE_MANAGER: auraColor is fallback white, treating as missing (will fetch from API)');
+            Logger.debug('⚠️ PROFILE_MANAGER: auraColor is fallback white, treating as missing (will fetch from API)', null, 'profile');
             auraColorValue = null;
         }
         // CRITICAL FIX: Fetch from API if still missing
         if (!auraColorValue && this.profileData && this.profileData.id) {
             const api = ensureApi('fetch auraColor for profile avatar');
             if (api) {
-                console.log('🔍 PROFILE_MANAGER: Fetching auraColor from API for profile avatar...');
+                Logger.debug('🔍 PROFILE_MANAGER: Fetching auraColor from API for profile avatar...', null, 'profile');
                 try {
                     const userResponse = await api.request(`/v1/users/${this.profileData.id}`, {
                         method: 'GET'
@@ -1987,30 +2025,38 @@ class ProfileManager {
                             if (apiAuraColor !== '#ffffff' && apiAuraColor !== 'white' && apiAuraColor !== '#fff' && this.profileData) {
                                 auraColorValue = apiAuraColor;
                                 this.profileData.auraColor = apiAuraColor;
-                                // Update legacyContext.currentUser for consistency
-                                if (legacyContext.currentUser) {
-                                    legacyContext.currentUser.auraColor = apiAuraColor;
+                                // Update stateManager currentUser for consistency (TypeScript migration)
+                                const currentUser = stateManagerInstance.getState('currentUser');
+                                if (currentUser) {
+                                    const updatedUser = { ...currentUser, auraColor: apiAuraColor };
+                                    stateManagerInstance.setState('currentUser', updatedUser);
+                                    // ES6 pattern: Update stateManager instead of window.currentUser
+                                    const currentUserForUpdate = stateManagerInstance.getState('currentUser');
+                                    if (currentUserForUpdate) {
+                                        const updatedUser = { ...currentUserForUpdate, auraColor: apiAuraColor };
+                                        stateManagerInstance.setState('currentUser', updatedUser);
+                                    }
                                 }
                                 // CRITICAL FIX: Cache API value in Chrome storage for instant display next time
                                 if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
                                     try {
                                         await setChromeStorage({ userAuraColor: apiAuraColor, auraColor: apiAuraColor });
-                                        console.log('💾 PROFILE_MANAGER: Cached API aura color in Chrome storage:', apiAuraColor);
+                                        Logger.debug('💾 PROFILE_MANAGER: Cached API aura color in Chrome storage:', apiAuraColor, 'profile');
                                     }
                                     catch (error) {
-                                        console.warn('⚠️ PROFILE_MANAGER: Could not cache API value to Chrome storage:', error);
+                                        Logger.warn('⚠️ PROFILE_MANAGER: Could not cache API value to Chrome storage:', error, 'profile');
                                     }
                                 }
-                                console.log('✅ PROFILE_MANAGER: Fetched auraColor from API for profile avatar:', apiAuraColor);
+                                Logger.debug('✅ PROFILE_MANAGER: Fetched auraColor from API for profile avatar:', apiAuraColor, 'profile');
                             }
                             else {
-                                console.log('⚠️ PROFILE_MANAGER: API returned fallback white, treating as missing');
+                                Logger.debug('⚠️ PROFILE_MANAGER: API returned fallback white, treating as missing', 'profile');
                             }
                         }
                     }
                 }
                 catch (error) {
-                    console.warn('⚠️ PROFILE_MANAGER: Could not fetch auraColor from API for profile avatar:', error);
+                    Logger.warn('⚠️ PROFILE_MANAGER: Could not fetch auraColor from API for profile avatar:', error, 'profile');
                 }
             }
         }
@@ -2019,7 +2065,7 @@ class ProfileManager {
             this.profileData.auraColor = auraColorValue;
         }
         if (!this.profileData) {
-            console.warn('Cannot update avatar: no profile data');
+            Logger.warn('Cannot update avatar: no profile data', null, 'profile');
             return;
         }
         try {
@@ -2036,19 +2082,19 @@ class ProfileManager {
             };
             // ROOT CAUSE FIX: Use imported AvatarUtils directly (TypeScript import)
             if (typeof AvatarUtils.createUnifiedAvatar === 'function') {
-                console.log('🔧 PROFILE_MANAGER: Calling AvatarUtils.createUnifiedAvatar with:', {
+                Logger.debug('🔧 PROFILE_MANAGER: Calling AvatarUtils.createUnifiedAvatar with:', {
                     userId: userForAvatar.id,
                     auraColor: userForAvatar.auraColor,
                     avatarUrl: userForAvatar.avatarUrl,
                     source: auraColorValue ? 'resolved' : 'profileData'
-                });
+                }, 'profile');
                 // ROOT CAUSE FIX: Ensure availability is set for status dots
                 // ROOT CAUSE FIX: Prioritize stateManager currentUser.availability/globalAvailability (most up-to-date)
                 const currentUserForAvailability = stateManagerInstance.getState('currentUser');
                 if (currentUserForAvailability && String(currentUserForAvailability.id || currentUserForAvailability.userId) === String(userForAvatar.id || userForAvatar.userId)) {
                     // Current user: use stateManager currentUser.availability/globalAvailability (most up-to-date from database)
                     userForAvatar.availability = currentUserForAvailability.availability || currentUserForAvailability.globalAvailability || userForAvatar.availability;
-                    console.log(`🔍 PROFILE_MANAGER: Using currentUser.availability for profile avatar: ${userForAvatar.availability}`);
+                    Logger.debug(`🔍 PROFILE_MANAGER: Using currentUser.availability for profile avatar: ${userForAvatar.availability}`, null, 'profile');
                 }
                 if (!userForAvatar.availability) {
                     // ROOT CAUSE FIX: Try to get from stateManager currentUser first
@@ -2077,26 +2123,26 @@ class ProfileManager {
                 });
                 // ROOT CAUSE FIX: Wrap AvatarUtils HTML in .user-avatar div for consistency
                 userAvatarContainer.innerHTML = `<div class="user-avatar">${avatarHTML}</div>`;
-                console.log('✅ PROFILE_MANAGER: Avatar updated using AvatarUtils with auraColor:', this.profileData?.auraColor);
-                console.log('📄 PROFILE_MANAGER: Generated avatar HTML:', avatarHTML.substring(0, 200) + '...');
+                Logger.debug('✅ PROFILE_MANAGER: Avatar updated using AvatarUtils with auraColor:', this.profileData?.auraColor, 'profile');
+                Logger.debug('📄 PROFILE_MANAGER: Generated avatar HTML', avatarHTML.substring(0, 200) + '...', 'profile');
                 // Log what was actually inserted and check for aura element
-                console.log('🔧 PROFILE_MANAGER: updateUserAvatar - Container updated, checking for aura element...');
+                Logger.debug('🔧 PROFILE_MANAGER: updateUserAvatar - Container updated, checking for aura element...', 'profile');
                 const auraElement = userAvatarContainer.querySelector('.avatar-aura');
                 if (auraElement) {
-                    console.log('✅ PROFILE_MANAGER: updateUserAvatar - Aura element found with background:', auraElement.style.backgroundColor);
+                    Logger.debug('✅ PROFILE_MANAGER: updateUserAvatar - Aura element found with background:', auraElement.style.backgroundColor, 'profile');
                 }
                 else {
-                    console.log('⚠️ PROFILE_MANAGER: updateUserAvatar - Aura element NOT found in avatar HTML');
-                    console.log('⚠️ PROFILE_MANAGER: updateUserAvatar - Full container HTML:', userAvatarContainer.innerHTML);
+                    Logger.debug('⚠️ PROFILE_MANAGER: updateUserAvatar - Aura element NOT found in avatar HTML', null, 'profile');
+                    Logger.debug('⚠️ PROFILE_MANAGER: updateUserAvatar - Full container HTML:', userAvatarContainer.innerHTML, 'profile');
                 }
             }
             else {
-                console.warn('AvatarUtils not available, using fallback', null, 'profile');
+                Logger.warn('AvatarUtils not available, using fallback', 'profile');
                 this.createFallbackAvatar();
             }
         }
         catch (error) {
-            console.error('Avatar update failed', error, 'profile');
+            Logger.error('Avatar update failed', error, 'profile');
             this.createFallbackAvatar();
         }
     }
@@ -2107,16 +2153,21 @@ class ProfileManager {
         const userAvatarContainer = document.getElementById('user-avatar-container');
         if (!userAvatarContainer)
             return;
-        // ROOT CAUSE FIX: Get currentUser from stateManager instead of legacyContext
+        // Get currentUser from stateManager
         const currentUserFromState = stateManagerInstance.getState('currentUser');
-        const currentUser = ensureLegacyUser(currentUserFromState);
+        const currentUser = ensureUser(currentUserFromState);
+        if (!currentUser) {
+            Logger.warn('⚠️ PROFILE: No valid user for fallback HTML', null, 'profile');
+            return ''; // UUID ONLY - can't generate fallback without valid user UUID
+        }
         const fallbackHTML = `
       <div class="user-avatar" style="width: 32px; height: 32px; border-radius: 50%; background: #007bff; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 14px;">
         ${(currentUser.displayName || currentUser.name || 'U').charAt(0).toUpperCase()}
       </div>
     `;
         userAvatarContainer.innerHTML = fallbackHTML;
-        console.log('🔧 PROFILE MANAGER: COMP METHOD - Fallback avatar created');
+        Logger.debug('🔧 PROFILE MANAGER: COMP METHOD - Fallback avatar created', null, 'profile');
+        return fallbackHTML;
     }
     /**
      * Update user menu display
@@ -2140,7 +2191,7 @@ class ProfileManager {
      * Clear profile UI when user signs out
      */
     clearProfileUI() {
-        console.log('Clearing profile UI', null);
+        Logger.debug('Clearing profile UI', null, 'profile');
         const userInfoDiv = document.getElementById('user-info');
         if (userInfoDiv) {
             userInfoDiv.style.display = 'none';
@@ -2156,13 +2207,13 @@ class ProfileManager {
      */
     updateAuraColor(color) {
         if (!this.profileData) {
-            console.warn('Cannot update aura color: no profile data', null, 'profile');
+            Logger.warn('Cannot update aura color: no profile data', null, 'profile');
             return false;
         }
-        console.log('Updating aura color', {
+        Logger.debug('Updating aura color', {
             oldColor: this.profileData.auraColor,
             newColor: color
-        });
+        }, 'profile');
         this.profileData.auraColor = color;
         // Update avatar with new aura color
         this.updateUserAvatar();
@@ -2179,20 +2230,21 @@ class ProfileManager {
      * Refresh profile avatar with latest data
      */
     refreshProfileAvatar() {
-        console.log('Refreshing profile avatar', null);
+        Logger.debug('Refreshing profile avatar', null, 'profile');
         if (!this.profileData) {
-            console.warn('No profile data for avatar refresh', null, 'profile');
+            Logger.warn('No profile data for avatar refresh', null, 'profile');
             return;
         }
         // Try to get latest avatar from visibility data
+        // UUID ONLY - match by id, not email
         const visibilityData = getVisibilityDataUnfiltered();
-        if (visibilityData?.active && this.profileData) {
-            const userInVisibility = visibilityData.active.find((u) => u.email === this.profileData.email || u.userId === this.profileData.email);
+        if (visibilityData?.active && this.profileData && this.profileData.id) {
+            const userInVisibility = visibilityData.active.find((u) => u.id === this.profileData.id);
             if (userInVisibility && userInVisibility.avatarUrl) {
-                console.log('Found updated avatar in visibility data', {
+                Logger.debug('Found updated avatar in visibility data', {
                     oldAvatar: this.profileData.avatarUrl,
                     newAvatar: userInVisibility.avatarUrl
-                });
+                }, 'profile');
                 this.profileData.avatarUrl = userInVisibility.avatarUrl;
                 this.updateUserAvatar();
             }
@@ -2262,9 +2314,9 @@ class ProfileManager {
 // ===== GLOBAL AVATAR FUNCTIONS =====
 // ROOT CAUSE FIX: Unified function to update aura color in BOTH Chrome storage AND database
 async function updateAuraColorEverywhere(color) {
-    console.log('🔄 AURA_UPDATE: Updating aura color everywhere:', color);
+    Logger.debug('🔄 AURA_UPDATE: Updating aura color everywhere:', color, 'profile');
     if (!color || !color.startsWith('#')) {
-        console.error('❌ AURA_UPDATE: Invalid color format:', color);
+        Logger.error('❌ AURA_UPDATE: Invalid color format:', color, 'profile');
         return false;
     }
     try {
@@ -2272,10 +2324,10 @@ async function updateAuraColorEverywhere(color) {
         if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
             try {
                 await setChromeStorage({ userAuraColor: color, auraColor: color });
-                console.log('✅ AURA_UPDATE: Saved to Chrome storage:', color);
+                Logger.debug('✅ AURA_UPDATE: Saved to Chrome storage:', color, 'profile');
             }
             catch (error) {
-                console.error('❌ AURA_UPDATE: Error saving to Chrome storage:', error);
+                Logger.error('❌ AURA_UPDATE: Error saving to Chrome storage:', error, 'profile');
             }
         }
         // ROOT CAUSE FIX: Step 2: Update database via API
@@ -2291,25 +2343,25 @@ async function updateAuraColorEverywhere(color) {
                         })
                     });
                     if (result) {
-                        console.log('✅ AURA_UPDATE: Saved to database:', color);
+                        Logger.debug('✅ AURA_UPDATE: Saved to database:', color, 'profile');
                     }
                     else {
-                        console.error('❌ AURA_UPDATE: Database update returned no result');
+                        Logger.error('❌ AURA_UPDATE: Database update returned no result', null, 'profile');
                     }
                 }
                 catch (error) {
-                    console.error('❌ AURA_UPDATE: Error saving to database:', error);
+                    Logger.error('❌ AURA_UPDATE: Error saving to database:', error, 'profile');
                     // Don't throw - Chrome storage update succeeded
                 }
             }
         }
         else {
-            console.warn('⚠️ AURA_UPDATE: Cannot update database - missing user or API');
+            Logger.warn('⚠️ AURA_UPDATE: Cannot update database - missing user or API', null, 'profile');
         }
         // ROOT CAUSE FIX: Step 3: Update stateManager currentUser immediately
         if (currentUserForAuraUpdate) {
             stateManagerInstance.setState('currentUser', { ...currentUserForAuraUpdate, auraColor: color });
-            console.log('✅ AURA_UPDATE: Updated stateManager currentUser');
+            Logger.debug('✅ AURA_UPDATE: Updated stateManager currentUser', null, 'profile');
         }
         // Step 4: Update visibility cache immediately to prevent stale data
         const visibilityData = getVisibilityDataUnfiltered();
@@ -2317,7 +2369,7 @@ async function updateAuraColorEverywhere(color) {
             const currentUserInVisibility = visibilityData.active.find((u) => String(u.id || u.userId) === String(currentUserForAuraUpdate?.id));
             if (currentUserInVisibility) {
                 currentUserInVisibility.auraColor = color;
-                console.log('✅ AURA_UPDATE: Updated visibility cache');
+                Logger.debug('✅ AURA_UPDATE: Updated visibility cache', null, 'profile');
             }
         }
         const visibilityDataFiltered = getVisibilityDataFiltered();
@@ -2338,25 +2390,25 @@ async function updateAuraColorEverywhere(color) {
         }
         // ROOT CAUSE FIX: Step 6: Force refresh all message avatars to show new color
         if (typeof win.refreshAllMessageAvatars === 'function') {
-            console.log('🔄 AURA_UPDATE: Refreshing all message avatars with new aura color');
+            Logger.debug('🔄 AURA_UPDATE: Refreshing all message avatars with new aura color', null, 'profile');
             await win.refreshAllMessageAvatars();
         }
         // ROOT CAUSE FIX: Step 7: Refresh visibility avatars
         if (typeof win.refreshVisibilityAvatars === 'function') {
-            console.log('🔄 AURA_UPDATE: Refreshing visibility avatars');
+            Logger.debug('🔄 AURA_UPDATE: Refreshing visibility avatars', null, 'profile');
             await win.refreshVisibilityAvatars();
         }
-        console.log('✅ AURA_UPDATE: Aura color update complete');
+        Logger.debug('✅ AURA_UPDATE: Aura color update complete', null, 'profile');
         return true;
     }
     catch (error) {
-        console.error('❌ AURA_UPDATE: Error updating aura color:', error);
+        Logger.error('❌ AURA_UPDATE: Error updating aura color:', error, 'profile');
         return false;
     }
 }
 // COMP METHOD: Get current user's aura color (Chrome storage first, then database fallback)
 async function getCurrentUserAuraColor() {
-    console.log('🔍 AURA_MODAL: Getting current user aura color (stateManager FIRST, then Chrome storage, then database)');
+    Logger.debug('🔍 AURA_MODAL: Getting current user aura color (stateManager FIRST, then Chrome storage, then database)', null, 'profile');
     // ROOT CAUSE FIX: Check stateManager FIRST (most up-to-date, from API)
     const currentUserForAura = stateManagerInstance.getState('currentUser');
     if (currentUserForAura && currentUserForAura.auraColor) {
@@ -2369,15 +2421,15 @@ async function getCurrentUserAuraColor() {
             auraColor !== 'fff' &&
             auraColor !== 'white' &&
             auraColor.length > 0) {
-            console.log(`✅ AURA_MODAL: Found auraColor in stateManager currentUser: ${auraColor}`);
+            Logger.debug(`✅ AURA_MODAL: Found auraColor in stateManager currentUser: ${auraColor}`, null, 'profile');
             return auraColor;
         }
         else {
-            console.log(`⚠️ AURA_MODAL: stateManager has auraColor but it's fallback/white: ${auraColor}`);
+            Logger.debug(`⚠️ AURA_MODAL: stateManager has auraColor but it's fallback/white: ${auraColor}`, null, 'profile');
         }
     }
     else {
-        console.log(`⚠️ AURA_MODAL: stateManager currentUser missing or no auraColor`);
+        Logger.debug(`⚠️ AURA_MODAL: stateManager currentUser missing or no auraColor`, null, 'profile');
     }
     // ROOT CAUSE FIX: Fallback 1: Check Chrome storage (persisted value)
     if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
@@ -2385,36 +2437,30 @@ async function getCurrentUserAuraColor() {
             const storageResult = await getChromeStorage(['userAuraColor', 'auraColor']);
             const cachedAuraColor = storageResult.userAuraColor || storageResult.auraColor;
             if (cachedAuraColor && cachedAuraColor !== '#ffffff' && cachedAuraColor !== 'ffffff' && cachedAuraColor !== AVATAR_FALLBACK_COLOR) {
-                console.log(`✅ AURA_MODAL: Found aura color in Chrome storage: ${cachedAuraColor}`);
+                Logger.debug(`✅ AURA_MODAL: Found aura color in Chrome storage: ${cachedAuraColor}`, null, 'profile');
                 return cachedAuraColor;
             }
         }
         catch (error) {
-            console.warn('⚠️ AURA_MODAL: Error reading Chrome storage:', error);
+            Logger.warn('⚠️ AURA_MODAL: Error reading Chrome storage:', error, 'profile');
         }
     }
-    // ROOT CAUSE FIX: Fallback 2: Try to get from visibility data (database)
+    // UUID ONLY - match by id, not email
     const visibilityDataFiltered = getVisibilityDataFiltered();
-    if (visibilityDataFiltered?.active) {
-        const currentUserEmail = currentUserForAura?.email;
-        if (currentUserEmail) {
-            const userData = visibilityDataFiltered.active.find((u) => u.email === currentUserEmail);
-            if (userData && userData.auraColor && userData.auraColor !== AVATAR_FALLBACK_COLOR) {
-                console.log(`✅ AURA_MODAL: Found database auraColor in visibility data: ${userData.auraColor}`);
-                return userData.auraColor;
-            }
+    if (visibilityDataFiltered?.active && currentUserForAura?.id) {
+        const userData = visibilityDataFiltered.active.find((u) => u.id === currentUserForAura.id);
+        if (userData && userData.auraColor && userData.auraColor !== AVATAR_FALLBACK_COLOR) {
+            Logger.debug(`✅ AURA_MODAL: Found database auraColor in visibility data: ${userData.auraColor}`, null, 'profile');
+            return userData.auraColor;
         }
     }
-    // ROOT CAUSE FIX: Fallback 3: Try to get from unfiltered visibility data (database)
+    // UUID ONLY - match by id, not email
     const visibilityData = getVisibilityDataUnfiltered();
-    if (visibilityData?.active) {
-        const currentUserEmail = currentUserForAura?.email;
-        if (currentUserEmail) {
-            const userData = visibilityData.active.find((u) => u.email === currentUserEmail);
-            if (userData && userData.auraColor && userData.auraColor !== AVATAR_FALLBACK_COLOR) {
-                console.log(`✅ AURA_MODAL: Found database auraColor in unfiltered visibility data: ${userData.auraColor}`);
-                return userData.auraColor;
-            }
+    if (visibilityData?.active && currentUserForAura?.id) {
+        const userData = visibilityData.active.find((u) => u.id === currentUserForAura.id);
+        if (userData && userData.auraColor && userData.auraColor !== AVATAR_FALLBACK_COLOR) {
+            Logger.debug(`✅ AURA_MODAL: Found database auraColor in unfiltered visibility data: ${userData.auraColor}`, null, 'profile');
+            return userData.auraColor;
         }
     }
     // ROOT CAUSE FIX: Fallback 4: Try to fetch from database via API
@@ -2428,7 +2474,7 @@ async function getCurrentUserAuraColor() {
                 if (userData && typeof userData === 'object' && 'auraColor' in userData) {
                     const dbColor = typeof userData.auraColor === 'string' ? userData.auraColor : undefined;
                     if (dbColor && dbColor !== AVATAR_FALLBACK_COLOR) {
-                        console.log(`✅ AURA_MODAL: Fetched aura color from database API: ${dbColor}`);
+                        Logger.debug(`✅ AURA_MODAL: Fetched aura color from database API: ${dbColor}`, null, 'profile');
                         // Cache it in Chrome storage for next time
                         if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
                             await setChromeStorage({ userAuraColor: dbColor, auraColor: dbColor });
@@ -2438,85 +2484,86 @@ async function getCurrentUserAuraColor() {
                 }
             }
             catch (error) {
-                console.error('❌ AURA_MODAL: Error fetching aura color from database:', error);
+                Logger.error('❌ AURA_MODAL: Error fetching aura color from database:', error, 'profile');
             }
         }
     }
     // Final fallback to default
-    console.log('⚠️ AURA_MODAL: No aura color found, using default');
+    Logger.debug('⚠️ AURA_MODAL: No aura color found, using default', 'profile');
     return AVATAR_FALLBACK_COLOR;
 }
 // COMP METHOD: Get aura color from database, never use hardcoded colors
 function getCurrentUserAvatarBgColor() {
-    console.log('🔍 AURA_FIX: Getting current user aura color from database');
+    Logger.debug('🔍 AURA_FIX: Getting current user aura color from database', null, 'profile');
     // First, try to get from currentUser if it has a real database color
-    if (legacyContext.currentUser && legacyContext.currentUser.auraColor && legacyContext.currentUser.auraColor !== AVATAR_FALLBACK_COLOR) {
-        console.log(`✅ AURA_FIX: Found database aura color in currentUser: ${legacyContext.currentUser.auraColor}`);
-        return legacyContext.currentUser.auraColor;
+    const currentUser = stateManagerInstance.getState('currentUser');
+    if (currentUser && currentUser.auraColor && currentUser.auraColor !== AVATAR_FALLBACK_COLOR) {
+        Logger.debug(`✅ AURA_FIX: Found database aura color in currentUser: ${currentUser.auraColor}`, null, 'profile');
+        return currentUser.auraColor;
     }
-    // Try to get from visibility data (database)
+    // UUID ONLY - match by id, not email
     const visibilityDataFiltered2 = getVisibilityDataFiltered();
-    if (visibilityDataFiltered2?.active) {
-        const currentUserEmail = legacyContext.currentUser?.email;
-        if (currentUserEmail) {
-            const userData = visibilityDataFiltered2.active.find((u) => u.email === currentUserEmail);
-            if (userData && userData.auraColor && userData.auraColor !== AVATAR_FALLBACK_COLOR) {
-                console.log(`✅ AURA_FIX: Found database aura color in visibility data: ${userData.auraColor}`);
-                return userData.auraColor;
-            }
+    const currentUserForVisibility = stateManagerInstance.getState('currentUser');
+    if (visibilityDataFiltered2?.active && currentUserForVisibility?.id) {
+        const userData = visibilityDataFiltered2.active.find((u) => u.id === currentUserForVisibility.id);
+        if (userData && userData.auraColor && userData.auraColor !== AVATAR_FALLBACK_COLOR) {
+            Logger.debug(`✅ AURA_FIX: Found database aura color in visibility data: ${userData.auraColor}`, null, 'profile');
+            return userData.auraColor;
         }
     }
-    // Try to load from storage if not in database
-    if (typeof legacyContext.getState === 'function') {
-        try {
-            const storedColor = legacyContext.getState('userAvatarBgColor');
-            if (storedColor && storedColor !== AVATAR_FALLBACK_COLOR) {
-                console.log('🔧 AURA_FIX: Loading aura color from storage:', storedColor);
-                return storedColor;
-            }
+    // Try to load from storage if not in database (ES6 pattern - use stateManager)
+    try {
+        const storedColor = stateManagerInstance.getState('userAvatarBgColor');
+        if (typeof storedColor === 'string' && storedColor !== AVATAR_FALLBACK_COLOR) {
+            Logger.debug('🔧 AURA_FIX: Loading aura color from storage:', storedColor, 'profile');
+            return storedColor;
         }
-        catch (error) {
-            console.log('🔧 AURA_FIX: Could not load aura color from storage:', error);
-        }
+    }
+    catch (error) {
+        Logger.debug('🔧 AURA_FIX: Could not load aura color from storage:', error, 'profile');
     }
     // COMP METHOD: Never use hardcoded colors - use white fallback
-    console.log('⚠️ AURA_FIX: No database aura color found, using white fallback (no hardcoded colors)');
+    Logger.debug('⚠️ AURA_FIX: No database aura color found, using white fallback (no hardcoded colors)', null, 'profile');
     return AVATAR_FALLBACK_COLOR;
 }
-function getCurrentUserAvatarColor() {
-    if (legacyContext.currentUser && legacyContext.currentUser.auraColor) {
-        return legacyContext.currentUser.auraColor;
+async function getCurrentUserAvatarColor() {
+    const currentUser = stateManagerInstance.getState('currentUser');
+    if (currentUser && typeof currentUser.auraColor === 'string' && currentUser.auraColor.length) {
+        return currentUser.auraColor;
     }
     return AVATAR_FALLBACK_COLOR; // Default white
 }
 function setCustomAvatarColor(color) {
-    if (legacyContext.currentUser) {
-        legacyContext.currentUser.auraColor = color;
-        // Update profile if ProfileManager instance exists
-        if (legacyContext.ProfileManager && typeof legacyContext.ProfileManager === 'object' && 'updateProfile' in legacyContext.ProfileManager && typeof legacyContext.ProfileManager.updateProfile === 'function') {
-            legacyContext.ProfileManager.updateProfile(legacyContext.currentUser);
-        }
+    const currentUser = stateManagerInstance.getState('currentUser');
+    if (currentUser) {
+        const updatedUser = { ...currentUser, auraColor: color };
+        stateManagerInstance.setState('currentUser', updatedUser);
+        // Dispatch event for profile update (ES6 pattern)
+        window.dispatchEvent(new CustomEvent('profileUpdated', {
+            detail: { user: updatedUser }
+        }));
     }
 }
 function resetCustomAvatarColor() {
-    if (legacyContext.currentUser) {
-        legacyContext.currentUser.auraColor = AVATAR_FALLBACK_COLOR; // Default white
-        // Update profile if ProfileManager instance exists
-        if (legacyContext.ProfileManager && typeof legacyContext.ProfileManager === 'object' && 'updateProfile' in legacyContext.ProfileManager && typeof legacyContext.ProfileManager.updateProfile === 'function') {
-            legacyContext.ProfileManager.updateProfile(legacyContext.currentUser);
-        }
+    const currentUser = stateManagerInstance.getState('currentUser');
+    if (currentUser) {
+        const updatedUser = { ...currentUser, auraColor: AVATAR_FALLBACK_COLOR };
+        stateManagerInstance.setState('currentUser', updatedUser);
+        // Dispatch event for profile update (ES6 pattern)
+        window.dispatchEvent(new CustomEvent('profileUpdated', {
+            detail: { user: updatedUser }
+        }));
     }
 }
 // ===== PROFILE MENU FUNCTIONS (FROM COMP) =====
 function handleAvatarClick(e) {
-    const userAvatarContainer = document.getElementById('user-avatar-container');
     const userMenu = document.getElementById('user-menu');
     if (!userMenu) {
-        console.warn('User menu not found');
+        Logger.warn('User menu not found', null, 'profile');
         return;
     }
-    console.log('👤 Profile avatar clicked!');
-    console.log('🔍 Current menu display:', userMenu.style.display);
+    Logger.debug('👤 Profile avatar clicked!', null, 'profile');
+    Logger.debug('🔍 Current menu display:', userMenu.style.display, 'profile');
     e.stopPropagation();
     // Toggle menu visibility
     if (userMenu.style.display === 'none' || userMenu.style.display === '') {
@@ -2534,7 +2581,7 @@ function handleClickOutside(e) {
         if (userAvatarContainer && userMenu && userMenu.style.display !== 'none') {
             const target = e.target;
             if (target && !userAvatarContainer.contains(target) && !userMenu.contains(target)) {
-                console.log('🖱️ Clicked outside, hiding menu');
+                Logger.debug('🖱️ Clicked outside, hiding menu', 'profile');
                 userMenu.style.display = 'none';
             }
         }
@@ -2547,15 +2594,16 @@ function addProfileAvatarClickHandler() {
         // Remove any existing click listeners to avoid duplicates
         userAvatarContainer.removeEventListener('click', handleAvatarClick);
         userAvatarContainer.addEventListener('click', handleAvatarClick);
-        // Add click-outside listener only once
-        if (!legacyContext.clickOutsideListenerAdded) {
+        // Add click-outside listener only once (ES6 pattern - module-level flag)
+        let clickOutsideListenerAdded = false;
+        if (!clickOutsideListenerAdded) {
             document.addEventListener('click', handleClickOutside);
-            legacyContext.clickOutsideListenerAdded = true;
+            clickOutsideListenerAdded = true;
         }
-        console.log('✅ Profile avatar click handler added');
+        Logger.debug('✅ Profile avatar click handler added', null, 'profile');
     }
     else {
-        console.log('❌ Profile avatar container or menu not found');
+        Logger.debug('❌ Profile avatar container or menu not found', null, 'profile');
     }
 }
 // ===== PROFILE MENU ITEM HANDLERS (FROM COMP) =====
@@ -2563,189 +2611,219 @@ function addAuraButtonClickHandler() {
     const auraBtn = document.getElementById('aura-btn');
     if (auraBtn) {
         auraBtn.addEventListener('click', (e) => {
-            console.log('🎨 Aura button clicked!');
+            Logger.debug('🎨 Aura button clicked!', null, 'profile');
             e.stopPropagation(); // Prevent menu from closing
-            if (typeof legacyContext.showColorPickerModal === 'function') {
-                legacyContext.showColorPickerModal();
-            }
-            else {
-                console.log('❌ showColorPickerModal not available');
+            // ES6 pattern: Dispatch DOM event instead of calling window function
+            window.dispatchEvent(new CustomEvent('showColorPickerModal', {
+                detail: { source: 'ProfileManager' }
+            }));
+            // Optional: Try to call function if available (graceful degradation)
+            const win = window;
+            if (typeof win.showColorPickerModal === 'function') {
+                win.showColorPickerModal();
             }
         });
-        console.log('✅ Aura button click handler added');
+        Logger.debug('✅ Aura button click handler added', null, 'profile');
     }
     else {
-        console.log('❌ Aura button not found');
+        Logger.debug('❌ Aura button not found', null, 'profile');
     }
 }
 function addLogoutButtonClickHandler() {
     const logoutBtn = document.getElementById('logout-btn');
     if (logoutBtn) {
         logoutBtn.addEventListener('click', (e) => {
-            console.log('🚪 COMP METHOD: Logout button clicked!');
+            Logger.debug('🚪 COMP METHOD: Logout button clicked!', null, 'profile');
             e.stopPropagation(); // Prevent menu from closing
-            if (typeof legacyContext.logout === 'function') {
-                legacyContext.logout();
-            }
-            else if (typeof legacyContext.performLogout === 'function') {
-                legacyContext.performLogout();
-            }
-            else {
-                console.log('❌ logout function not available, creating COMP method logout');
-                // COMP METHOD: Create logout function if not available
-                legacyContext.performLogout = async function () {
-                    console.log('🔧 LOGOUT: Performing logout');
-                    try {
-                        // Clear user data
-                        legacyContext.currentUser = undefined;
-                        legacyContext.supabaseUser = undefined;
-                        // Clear storage
-                        if (chrome?.storage?.local?.clear) {
-                            await chrome.storage.local.clear();
-                        }
-                        // Reload the extension
-                        // ROOT CAUSE FIX: Use window.location instead of legacyContext
-                        window.location.reload();
-                        console.log('✅ LOGOUT: Logout completed');
-                    }
-                    catch (error) {
-                        console.error('❌ LOGOUT: Error during logout:', error);
-                    }
-                };
-                if (legacyContext.performLogout && typeof legacyContext.performLogout === 'function') {
-                    legacyContext.performLogout();
+            // ES6 pattern: Use authManagerInstance for logout
+            if (authManagerInstance && typeof authManagerInstance.signOut === 'function') {
+                try {
+                    authManagerInstance.signOut();
+                }
+                catch (error) {
+                    Logger.error('❌ LOGOUT: Error during sign out', error, 'profile');
                 }
             }
+            else {
+                Logger.debug('❌ logout function not available, using fallback', 'profile');
+                // Fallback: Dispatch event and clear state
+                window.dispatchEvent(new CustomEvent('performLogout', {
+                    detail: { source: 'ProfileManager' }
+                }));
+                // Clear user data from state manager (ES6 pattern)
+                stateManagerInstance.setState('currentUser', null);
+                stateManagerInstance.setState('supabaseUser', null);
+                // Clear storage
+                if (chrome?.storage?.local?.clear) {
+                    chrome.storage.local.clear(() => {
+                        if (chrome.runtime?.lastError) {
+                            Logger.error('❌ LOGOUT: Error clearing storage', chrome.runtime.lastError, 'profile');
+                        }
+                    });
+                }
+                // Reload the extension
+                window.location.reload();
+            }
         });
-        console.log('✅ COMP METHOD: Logout button click handler added');
+        Logger.debug('✅ COMP METHOD: Logout button click handler added', null, 'profile');
     }
     else {
-        console.log('❌ Logout button not found');
+        Logger.debug('❌ Logout button not found', null, 'profile');
     }
 }
 function addAllProfileMenuHandlers() {
-    console.log('🎯 PROFILE_MENU: Adding all profile menu handlers...');
+    Logger.debug('🎯 PROFILE_MENU: Adding all profile menu handlers...', null, 'profile');
     addAuraButtonClickHandler();
     addLogoutButtonClickHandler();
     // ROOT CAUSE FIX: Ensure visibility settings button handler is added
-    const profileManager = legacyContext.profileManager || (legacyContext.ProfileManager && typeof legacyContext.ProfileManager === 'object' && 'instance' in legacyContext.ProfileManager ? legacyContext.ProfileManager.instance : undefined);
-    if (profileManager) {
-        const visibilityBtn = document.getElementById('visibility-settings-btn');
-        if (visibilityBtn) {
-            // Check if handler is already attached
-            if (!visibilityBtn.dataset.handlerAttached) {
-                console.log('🔧 PROFILE_MENU: Visibility button found but handler not attached, attaching now...');
-                // Remove any existing handlers first
-                visibilityBtn.onclick = null;
-                if (profileManager && typeof profileManager === 'object' && 'visibilitySettingsHandler' in profileManager && profileManager.visibilitySettingsHandler) {
-                    visibilityBtn.removeEventListener('click', profileManager.visibilitySettingsHandler);
+    // ES6 pattern: ProfileManager is available via ES6 exports, not window
+    // TODO: Refactor to use ES6 import when ProfileManager is properly exported
+    // This section is temporarily disabled until ProfileManager is properly exported as ES6 module
+    /*
+    const profileManager = null; // Will be replaced with ES6 import when available
+    const visibilityBtn = document.getElementById('visibility-settings-btn') as HTMLButtonElement | null;
+    if (visibilityBtn && profileManager) {
+        // Check if handler is already attached
+        if (!visibilityBtn.dataset.handlerAttached) {
+          Logger.debug('🔧 PROFILE_MENU: Visibility button found but handler not attached, attaching now...', 'profile');
+          
+          // Remove any existing handlers first
+          visibilityBtn.onclick = null;
+          if (profileManager && typeof profileManager === 'object' && 'visibilitySettingsHandler' in profileManager && profileManager.visibilitySettingsHandler) {
+            visibilityBtn.removeEventListener('click', profileManager.visibilitySettingsHandler as EventListener);
+          }
+          
+          // Create handler function if it doesn't exist
+          if (!profileManager || typeof profileManager !== 'object' || !('visibilitySettingsHandler' in profileManager) || !profileManager.visibilitySettingsHandler) {
+            if (profileManager && typeof profileManager === 'object') {
+              (profileManager as { visibilitySettingsHandler?: (e: Event) => void }).visibilitySettingsHandler = (e: Event) => {
+                e.preventDefault();
+                e.stopPropagation();
+                Logger.debug('🔧 PROFILE MANAGER: COMP METHOD - Visibility settings button clicked', null, 'profile');
+                if (profileManager && typeof profileManager === 'object' && 'hideUserMenu' in profileManager && typeof (profileManager as { hideUserMenu: unknown }).hideUserMenu === 'function') {
+                  (profileManager as { hideUserMenu: () => void }).hideUserMenu();
                 }
-                // Create handler function if it doesn't exist
-                if (!profileManager || typeof profileManager !== 'object' || !('visibilitySettingsHandler' in profileManager) || !profileManager.visibilitySettingsHandler) {
-                    if (profileManager && typeof profileManager === 'object') {
-                        profileManager.visibilitySettingsHandler = (e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            console.log('🔧 PROFILE MANAGER: COMP METHOD - Visibility settings button clicked');
-                            if (profileManager && typeof profileManager === 'object' && 'hideUserMenu' in profileManager && typeof profileManager.hideUserMenu === 'function') {
-                                profileManager.hideUserMenu();
-                            }
-                            // ROOT CAUSE FIX: Switch to settings tab (not visibility tab)
-                            let switched = false;
-                            const selectors = [
-                                'button[data-tab="settings-tab"]',
-                                '.main-nav-tab[data-tab="settings-tab"]',
-                                'button[aria-controls="settings-tab"]',
-                                '[data-tab="settings-tab"]',
-                                '.nav-tab[data-tab="settings-tab"]'
-                            ];
-                            for (const selector of selectors) {
-                                const button = document.querySelector(selector);
-                                if (button) {
-                                    button.click();
-                                    console.log(`✅ PROFILE MANAGER: Switched to settings tab via selector: ${selector}`);
-                                    switched = true;
-                                    break;
-                                }
-                            }
-                            // Method 2: Direct tab activation
-                            if (!switched) {
-                                const settingsTab = document.getElementById('settings-tab');
-                                const allTabs = document.querySelectorAll('.main-tab-content');
-                                const allTabButtons = document.querySelectorAll('.main-nav-tab, button[data-tab]');
-                                if (settingsTab) {
-                                    allTabs.forEach(tab => tab.classList.remove('active'));
-                                    settingsTab.classList.add('active');
-                                    allTabButtons.forEach(btn => {
-                                        btn.classList.remove('active');
-                                        if (btn.getAttribute('data-tab') === 'settings-tab' || btn.getAttribute('aria-controls') === 'settings-tab') {
-                                            btn.classList.add('active');
-                                        }
-                                    });
-                                    console.log('✅ PROFILE MANAGER: Directly activated settings tab');
-                                    switched = true;
-                                    // ROOT CAUSE FIX: Ensure event listeners are attached when settings tab opens
-                                    // Use setTimeout to avoid blocking, and wrap in async IIFE
-                                    setTimeout(async () => {
-                                        try {
-                                            // @ts-ignore - Dynamic import of JS module without type declarations
-                                            const module = await import('../../extension/features/VisibilitySettingsManager.js');
-                                            const visibilitySettingsManager = module?.visibilitySettingsManagerInstance;
-                                            if (visibilitySettingsManager && typeof visibilitySettingsManager.ensureEventListeners === 'function') {
-                                                await visibilitySettingsManager.ensureEventListeners();
-                                                console.log('✅ PROFILE MANAGER: Ensured VisibilitySettingsManager event listeners are attached.');
-                                            }
-                                            else {
-                                                console.warn('⚠️ PROFILE MANAGER: visibilitySettingsManagerInstance not available or ensureEventListeners not a function');
-                                            }
-                                        }
-                                        catch (error) {
-                                            console.warn('⚠️ PROFILE MANAGER: Failed to import VisibilitySettingsManager:', error);
-                                        }
-                                    }, 100);
-                                }
-                            }
-                            // Method 3: Dispatch custom event
-                            if (!switched) {
-                                const tabSwitchEvent = new CustomEvent('tabSwitch', { detail: { tabId: 'settings-tab' } });
-                                legacyContext.dispatchEvent(tabSwitchEvent);
-                                console.log('✅ PROFILE MANAGER: Dispatched tab switch event for settings tab');
-                            }
-                        };
-                    }
+              
+              // ROOT CAUSE FIX: Switch to settings tab (not visibility tab)
+              let switched = false;
+              const selectors = [
+                'button[data-tab="settings-tab"]',
+                '.main-nav-tab[data-tab="settings-tab"]',
+                'button[aria-controls="settings-tab"]',
+                '[data-tab="settings-tab"]',
+                '.nav-tab[data-tab="settings-tab"]'
+              ];
+              
+              for (const selector of selectors) {
+                const button = document.querySelector(selector) as HTMLElement | null;
+                if (button) {
+                  button.click();
+                  Logger.debug('✅ PROFILE MANAGER: Switched to settings tab via selector', { selector }, 'profile');
+                  switched = true;
+                  break;
                 }
-                // Attach handler
-                if (profileManager && typeof profileManager === 'object' && 'visibilitySettingsHandler' in profileManager && profileManager.visibilitySettingsHandler) {
-                    visibilityBtn.addEventListener('click', profileManager.visibilitySettingsHandler);
+              }
+              
+              // Method 2: Direct tab activation
+              if (!switched) {
+                const settingsTab = document.getElementById('settings-tab');
+                const allTabs = document.querySelectorAll('.main-tab-content');
+                const allTabButtons = document.querySelectorAll('.main-nav-tab, button[data-tab]');
+                
+            if (settingsTab) {
+              allTabs.forEach(tab => tab.classList.remove('active'));
+              settingsTab.classList.add('active');
+              allTabButtons.forEach(btn => {
+                const btnElement = btn as HTMLElement;
+                btnElement.classList.remove('active');
+                // ROOT CAUSE FIX: Remove forced styles from inactive tabs
+                btnElement.style.removeProperty('border-bottom');
+                btnElement.style.removeProperty('border-bottom-color');
+                btnElement.style.removeProperty('border-bottom-width');
+                btnElement.style.removeProperty('border-bottom-style');
+                btnElement.style.removeProperty('color');
+                btnElement.style.removeProperty('font-weight');
+                
+                if (btnElement.getAttribute('data-tab') === 'settings-tab' || btnElement.getAttribute('aria-controls') === 'settings-tab') {
+                  btnElement.classList.add('active');
+                  // ROOT CAUSE FIX: Force selector line via JavaScript since CSS isn't applying
+                  const SELECTOR_LINE_COLOR = '#1D9BF0'; // X's neon blue
+                  const SELECTOR_LINE_WIDTH = '4px';
+                  btnElement.style.setProperty('border-bottom', `${SELECTOR_LINE_WIDTH} solid ${SELECTOR_LINE_COLOR}`, 'important');
+                  btnElement.style.setProperty('border-bottom-color', SELECTOR_LINE_COLOR, 'important');
+                  btnElement.style.setProperty('border-bottom-width', SELECTOR_LINE_WIDTH, 'important');
+                  btnElement.style.setProperty('border-bottom-style', 'solid', 'important');
+                  btnElement.style.setProperty('color', SELECTOR_LINE_COLOR, 'important');
+                  btnElement.style.setProperty('font-weight', '700', 'important');
                 }
-                visibilityBtn.dataset.handlerAttached = 'true';
-                // Ensure button is active and clickable
-                visibilityBtn.style.pointerEvents = 'auto';
-                visibilityBtn.style.cursor = 'pointer';
-                visibilityBtn.style.opacity = '1';
-                visibilityBtn.disabled = false;
-                console.log('✅ PROFILE_MENU: Visibility button handler attached and activated');
+              });
+              Logger.debug('✅ PROFILE MANAGER: Directly activated settings tab', null, 'profile');
+              switched = true;
+              
+              // ROOT CAUSE FIX: Ensure event listeners are attached when settings tab opens
+              // Use setTimeout to avoid blocking, and wrap in async IIFE
+              setTimeout(async () => {
+                try {
+                  // Dynamic import - VisibilitySettingsManager is in extension/features at runtime
+              // @ts-expect-error - Dynamic runtime import, types not available at compile time
+              const module = await import('../../extension/features/VisibilitySettingsManager.js').catch(() =>
+                // @ts-expect-error - Dynamic runtime import, types not available at compile time
+                import('../../features/VisibilitySettingsManager.js')
+              ) as { visibilitySettingsManagerInstance?: { ensureEventListeners?: () => Promise<void> } };
+                  const visibilitySettingsManager = module?.visibilitySettingsManagerInstance;
+                  if (visibilitySettingsManager && typeof visibilitySettingsManager.ensureEventListeners === 'function') {
+                    await visibilitySettingsManager.ensureEventListeners();
+                    Logger.debug('✅ PROFILE MANAGER: Ensured VisibilitySettingsManager event listeners are attached', null, 'profile');
+                  } else {
+                    Logger.warn('⚠️ PROFILE MANAGER: visibilitySettingsManagerInstance not available or ensureEventListeners not a function', null, 'profile');
+                  }
+                } catch (error) {
+                  Logger.warn('⚠️ PROFILE MANAGER: Failed to import VisibilitySettingsManager', error, 'profile');
+                }
+              }, 100);
             }
-            else {
-                console.log('✅ PROFILE_MENU: Visibility button handler already attached');
+              }
+              
+              // Method 3: Dispatch custom event
+              if (!switched) {
+                const tabSwitchEvent = new CustomEvent('tabSwitch', { detail: { tabId: 'settings-tab' } });
+                window.dispatchEvent(tabSwitchEvent);
+                Logger.debug('✅ PROFILE MANAGER: Dispatched tab switch event for settings tab', null, 'profile');
+              }
+              };
             }
+          }
+          
+          // Attach handler
+          if (profileManager && typeof profileManager === 'object' && 'visibilitySettingsHandler' in profileManager && profileManager.visibilitySettingsHandler) {
+            visibilityBtn.addEventListener('click', profileManager.visibilitySettingsHandler as EventListener);
+          }
+          visibilityBtn.dataset.handlerAttached = 'true';
+          
+          // Ensure button is active and clickable
+          visibilityBtn.style.pointerEvents = 'auto';
+          visibilityBtn.style.cursor = 'pointer';
+          visibilityBtn.style.opacity = '1';
+          visibilityBtn.disabled = false;
+          
+          Logger.debug('✅ PROFILE_MENU: Visibility button handler attached and activated', null, 'profile');
+        } else {
+          Logger.debug('✅ PROFILE_MENU: Visibility button handler already attached', null, 'profile');
         }
-        else {
-            console.warn('⚠️ PROFILE_MENU: Visibility button not found in DOM');
-        }
+      } else {
+        Logger.warn('⚠️ PROFILE_MENU: Visibility button not found in DOM', null, 'profile');
+      }
     }
-    else {
-        console.warn('⚠️ PROFILE_MENU: ProfileManager instance not found');
-    }
-    console.log('✅ PROFILE_MENU: All profile menu handlers added');
+    */
+    Logger.debug('✅ PROFILE_MENU: All profile menu handlers added', null, 'profile');
 }
 // ===== AURA COLOR MODAL (FROM COMP) =====
 function showColorPickerModal() {
-    console.log('🎨 Opening color picker modal...');
+    Logger.debug('🎨 Opening color picker modal...', null, 'profile');
     // Check if modal already exists and is visible
     const existingModal = document.getElementById('color-picker-modal');
     if (existingModal) {
-        console.log('🎨 Modal already exists, showing it');
+        Logger.debug('🎨 Modal already exists, showing it', 'profile');
         existingModal.style.display = 'flex';
         return;
     }
@@ -2784,17 +2862,22 @@ function showColorPickerModal() {
         const resetBtn = document.getElementById('color-picker-reset');
         const saveBtn = document.getElementById('color-picker-save');
         if (!modal || !colorInput || !previewCircle || !previewText || !closeBtn || !resetBtn || !saveBtn) {
-            console.error('❌ Modal elements not found after creation');
+            Logger.error('❌ Modal elements not found after creation', null, 'profile');
             return;
         }
         // Get current color and set initial values
         const currentColor = getCurrentUserAvatarBgColor();
-        const currentHex = currentColor.replace('#', '');
+        const currentHex = typeof currentColor === 'string' ? currentColor.replace('#', '') : 'ffffff';
         colorInput.value = currentHex;
         updateColorPreview(currentHex);
         // Remove any existing event listeners to prevent duplicates
         const newColorInput = colorInput.cloneNode(true);
-        colorInput.parentNode.replaceChild(newColorInput, colorInput);
+        const parentNode = colorInput.parentNode;
+        if (!parentNode) {
+            Logger.error('❌ PROFILE: Color input has no parent node', null, 'profile');
+            return;
+        }
+        parentNode.replaceChild(newColorInput, colorInput);
         // Event listeners
         newColorInput.addEventListener('input', (e) => {
             const inputEl = e.target;
@@ -2807,9 +2890,10 @@ function showColorPickerModal() {
                 closeColorPickerModal();
         });
         resetBtn.addEventListener('click', () => {
-            // Get the dynamic default color (based on user's name) - use legacyContext.currentUser
+            // Get the dynamic default color (based on user's name)
+            // ES6 pattern: Get from stateManager instead of window.currentUser
             let defaultColor = AVATAR_FALLBACK_COLOR; // Fallback
-            const user = legacyContext.currentUser;
+            const user = stateManagerInstance.getState('currentUser');
             if (user) {
                 const userMetadata = user.user_metadata;
                 const name = userMetadata?.full_name || user.name || user.email || 'User';
@@ -2822,20 +2906,23 @@ function showColorPickerModal() {
         saveBtn.addEventListener('click', async () => {
             const hex = newColorInput.value.replace('#', '');
             if (isValidHex(hex)) {
-                console.log('🎨 Saving aura color:', '#' + hex);
+                Logger.debug('🎨 Saving aura color:', '#' + hex, 'profile');
                 const auraColor = '#' + hex;
-                console.log('🎨 Setting aura color:', auraColor);
+                Logger.debug('🎨 Setting aura color:', auraColor, 'profile');
                 // Apply aura color to profile avatar using unified system
-                if (legacyContext.currentUser) {
-                    legacyContext.currentUser.auraColor = auraColor;
-                    if (typeof legacyContext.updateUI === 'function') {
-                        legacyContext.updateUI(legacyContext.currentUser);
-                    }
+                // ES6 pattern: Update stateManager instead of window.currentUser
+                const currentUser = stateManagerInstance.getState('currentUser');
+                if (currentUser) {
+                    currentUser.auraColor = auraColor;
+                    stateManagerInstance.setState('currentUser', currentUser);
+                    // ES6 pattern: Dispatch event instead of calling window function
+                    window.dispatchEvent(new CustomEvent('updateUI', {
+                        detail: { user: currentUser, source: 'ProfileManager' }
+                    }));
                 }
                 // Save aura color to storage
-                if (typeof legacyContext.setState === 'function') {
-                    legacyContext.setState('userAvatarBgColor', auraColor);
-                }
+                // ES6 pattern: Use stateManager instead of window.setState
+                stateManagerInstance.setState('userAvatarBgColor', auraColor);
                 closeColorPickerModal();
             }
             else {
@@ -2845,7 +2932,7 @@ function showColorPickerModal() {
         // Focus the input
         newColorInput.focus();
         newColorInput.select();
-        console.log('🎨 Modal setup complete');
+        Logger.debug('🎨 Modal setup complete', null, 'profile');
     }, 50);
 }
 function closeColorPickerModal() {
@@ -2877,9 +2964,9 @@ function getAvatarColor(name) {
 }
 // ROOT CAUSE FIX: Unified function to update availability status in BOTH Chrome storage AND database
 async function updateAvailabilityEverywhere(availability) {
-    console.log('🔄 STATUS_UPDATE: Updating availability everywhere:', availability);
+    Logger.debug('🔄 STATUS_UPDATE: Updating availability everywhere', { availability }, 'profile');
     if (!availability || !['AVAILABLE', 'BUSY', 'AWAY', 'OFFLINE'].includes(availability)) {
-        console.error('❌ STATUS_UPDATE: Invalid availability:', availability);
+        Logger.error('❌ STATUS_UPDATE: Invalid availability', { availability }, 'profile');
         return false;
     }
     try {
@@ -2891,10 +2978,10 @@ async function updateAvailabilityEverywhere(availability) {
                     availability: availability,
                     globalAvailability: availability
                 });
-                console.log('✅ STATUS_UPDATE: Saved to Chrome storage:', availability);
+                Logger.debug('✅ STATUS_UPDATE: Saved to Chrome storage', { availability }, 'profile');
             }
             catch (error) {
-                console.error('❌ STATUS_UPDATE: Error saving to Chrome storage:', error);
+                Logger.error('❌ STATUS_UPDATE: Error saving to Chrome storage', error, 'profile');
             }
         }
         // ROOT CAUSE FIX: Step 2: Update database via API
@@ -2911,26 +2998,26 @@ async function updateAvailabilityEverywhere(availability) {
                         })
                     });
                     if (result && typeof result === 'object' && 'success' in result && result.success) {
-                        console.log('✅ STATUS_UPDATE: Saved to database:', availability);
+                        Logger.debug('✅ STATUS_UPDATE: Saved to database', { availability }, 'profile');
                     }
                     else {
-                        console.error('❌ STATUS_UPDATE: Database update returned no result');
+                        Logger.error('❌ STATUS_UPDATE: Database update returned no result', null, 'profile');
                     }
                 }
                 catch (error) {
-                    console.error('❌ STATUS_UPDATE: Error saving to database:', error);
+                    Logger.error('❌ STATUS_UPDATE: Error saving to database', error, 'profile');
                     // Don't throw - Chrome storage update succeeded
                 }
             }
         }
         else {
-            console.warn('⚠️ STATUS_UPDATE: Cannot update database - missing user or API');
+            Logger.warn('⚠️ STATUS_UPDATE: Cannot update database - missing user or API', null, 'profile');
         }
         // ROOT CAUSE FIX: Step 3: Update stateManager currentUser immediately
         const currentUserForStatusUpdate = stateManagerInstance.getState('currentUser');
         if (currentUserForStatusUpdate) {
             stateManagerInstance.setState('currentUser', { ...currentUserForStatusUpdate, availability, globalAvailability: availability });
-            console.log('✅ STATUS_UPDATE: Updated stateManager currentUser');
+            Logger.debug('✅ STATUS_UPDATE: Updated stateManager currentUser', null, 'profile');
         }
         // ROOT CAUSE FIX: Step 4: Update visibility cache immediately to prevent stale data
         const visibilityData = getVisibilityDataUnfiltered();
@@ -2938,7 +3025,7 @@ async function updateAvailabilityEverywhere(availability) {
             const currentUserInVisibility = visibilityData.active.find((u) => String(u.id || u.userId) === String(currentUserForStatusUpdate.id));
             if (currentUserInVisibility) {
                 currentUserInVisibility.availability = availability;
-                console.log('✅ STATUS_UPDATE: Updated visibility cache');
+                Logger.debug('✅ STATUS_UPDATE: Updated visibility cache', null, 'profile');
             }
         }
         const visibilityDataFiltered3 = getVisibilityDataFiltered();
@@ -2949,32 +3036,43 @@ async function updateAvailabilityEverywhere(availability) {
             }
         }
         // Step 5: Refresh profile avatar to show new status dot
-        const profileManagerInstance = (legacyContext.profileManager || (legacyContext.ProfileManager && legacyContext.ProfileManager.instance));
+        // ES6 pattern: ProfileManager available via ES6 exports
+        // TODO: Replace with ES6 import when ProfileManager is properly exported
+        const profileManagerInstance = null;
         if (profileManagerInstance && typeof profileManagerInstance.updateUserAvatar === 'function') {
             try {
-                console.log('🔄 STATUS_UPDATE: Refreshing profile avatar with new status');
+                Logger.debug('🔄 STATUS_UPDATE: Refreshing profile avatar with new status', null, 'profile');
                 await profileManagerInstance.updateUserAvatar();
-                console.log('✅ STATUS_UPDATE: Profile avatar refreshed');
+                Logger.debug('✅ STATUS_UPDATE: Profile avatar refreshed', null, 'profile');
             }
             catch (error) {
-                console.warn('⚠️ STATUS_UPDATE: Error refreshing profile avatar:', error);
+                Logger.warn('⚠️ STATUS_UPDATE: Error refreshing profile avatar', error, 'profile');
             }
         }
         // Step 6: Force refresh all message avatars to show new status
-        if (typeof legacyContext.refreshAllMessageAvatars === 'function') {
-            console.log('🔄 STATUS_UPDATE: Refreshing all message avatars with new status');
-            await legacyContext.refreshAllMessageAvatars();
+        // ES6 pattern: Dispatch DOM events for avatar refresh
+        window.dispatchEvent(new CustomEvent('avatarRefreshRequested', {
+            detail: { type: 'all', source: 'ProfileManager' }
+        }));
+        // Optional: Try to call functions if available (graceful degradation)
+        const win = window;
+        if (typeof win.refreshAllMessageAvatars === 'function') {
+            Logger.debug('🔄 STATUS_UPDATE: Refreshing all message avatars with new status', null, 'profile');
+            await win.refreshAllMessageAvatars();
         }
         // Step 7: Refresh visibility avatars
-        if (typeof legacyContext.refreshVisibilityAvatars === 'function') {
-            console.log('🔄 STATUS_UPDATE: Refreshing visibility avatars');
-            await legacyContext.refreshVisibilityAvatars();
+        window.dispatchEvent(new CustomEvent('avatarRefreshRequested', {
+            detail: { type: 'visibility', source: 'ProfileManager' }
+        }));
+        if (typeof win.refreshVisibilityAvatars === 'function') {
+            Logger.debug('🔄 STATUS_UPDATE: Refreshing visibility avatars', null, 'profile');
+            await win.refreshVisibilityAvatars();
         }
-        console.log('✅ STATUS_UPDATE: Availability update complete');
+        Logger.debug('✅ STATUS_UPDATE: Availability update complete', null, 'profile');
         return true;
     }
     catch (error) {
-        console.error('❌ STATUS_UPDATE: Error updating availability:', error);
+        Logger.error('❌ STATUS_UPDATE: Error updating availability', error, 'profile');
         return false;
     }
 }
@@ -2982,10 +3080,9 @@ async function updateAvailabilityEverywhere(availability) {
 async function updateThemeEverywhere(theme) {
     // ROOT CAUSE FIX: Log call stack to identify where this is being called from
     const stack = new Error().stack;
-    console.log('🔄 THEME_UPDATE: Updating theme everywhere:', theme);
-    console.log('🔍 THEME_UPDATE: Call stack:', stack?.split('\n').slice(1, 5).join('\n'));
+    Logger.debug('🔄 THEME_UPDATE: Updating theme everywhere', { theme, callStack: stack?.split('\n').slice(1, 5).join('\n') }, 'profile');
     if (!theme || !['light', 'dark', 'auto'].includes(theme)) {
-        console.error('❌ THEME_UPDATE: Invalid theme:', theme);
+        Logger.error('❌ THEME_UPDATE: Invalid theme', { theme }, 'profile');
         return false;
     }
     // ROOT CAUSE FIX: CRITICAL - Prevent resetting to 'light' if current DOM theme is 'dark'
@@ -3000,9 +3097,9 @@ async function updateThemeEverywhere(theme) {
             stack?.includes('VisibilitySettingsManager') ||
             stack?.includes('saveTheme');
         if (isFromPreferencesManager) {
-            console.warn('🚫 THEME_UPDATE: BLOCKING reset from dark to light - preserving current DOM theme');
-            console.warn('🚫 THEME_UPDATE: Current DOM theme is dark, requested theme is light, but this appears to be from preferences/settings loading');
-            console.warn('🚫 THEME_UPDATE: This is likely a fallback that should not happen - UserPreferencesManager should be initialized');
+            Logger.warn('🚫 THEME_UPDATE: BLOCKING reset from dark to light - preserving current DOM theme', null, 'profile');
+            Logger.warn('🚫 THEME_UPDATE: Current DOM theme is dark, requested theme is light, but this appears to be from preferences/settings loading', null, 'profile');
+            Logger.warn('🚫 THEME_UPDATE: This is likely a fallback that should not happen - UserPreferencesManager should be initialized', null, 'profile');
             return false; // Don't reset theme
         }
         // Even if not from preferences manager, check if Chrome storage has 'dark' (user's actual preference)
@@ -3014,12 +3111,12 @@ async function updateThemeEverywhere(theme) {
                     });
                 });
                 if (chromeStorage && chromeStorage.theme === 'dark') {
-                    console.warn('🚫 THEME_UPDATE: BLOCKING reset from dark to light - Chrome storage has dark theme');
+                    Logger.warn('🚫 THEME_UPDATE: BLOCKING reset from dark to light - Chrome storage has dark theme', null, 'profile');
                     return false; // Don't reset theme
                 }
             }
             catch (error) {
-                console.warn('⚠️ THEME_UPDATE: Error checking Chrome storage:', error);
+                Logger.warn('⚠️ THEME_UPDATE: Error checking Chrome storage', error, 'profile');
             }
         }
     }
@@ -3028,20 +3125,20 @@ async function updateThemeEverywhere(theme) {
         if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
             try {
                 await setChromeStorage({ theme: theme, userTheme: theme });
-                console.log('✅ THEME_UPDATE: Saved to Chrome storage:', theme);
+                Logger.debug('✅ THEME_UPDATE: Saved to Chrome storage:', theme, 'profile');
             }
             catch (error) {
-                console.error('❌ THEME_UPDATE: Error saving to Chrome storage:', error);
+                Logger.error('❌ THEME_UPDATE: Error saving to Chrome storage:', error, 'profile');
             }
         }
         // ROOT CAUSE FIX: Removed localStorage - we only use Chrome storage and database
         // Step 3: Update DOM immediately for instant feedback
         const currentDomBeforeUpdate = document.body.getAttribute('data-theme') || document.documentElement.getAttribute('data-theme');
-        console.log('🔍 THEME_UPDATE: ========================================');
-        console.log('🔍 THEME_UPDATE: About to set DOM theme');
-        console.log('🔍 THEME_UPDATE: Current DOM theme:', currentDomBeforeUpdate || 'NOT SET');
-        console.log('🔍 THEME_UPDATE: New theme:', theme);
-        console.log('🔍 THEME_UPDATE: ========================================');
+        Logger.debug('🔍 THEME_UPDATE: ========================================', null, 'profile');
+        Logger.debug('🔍 THEME_UPDATE: About to set DOM theme', null, 'profile');
+        Logger.debug('🔍 THEME_UPDATE: Current DOM theme:', currentDomBeforeUpdate || 'NOT SET', 'profile');
+        Logger.debug('🔍 THEME_UPDATE: New theme:', theme, 'profile');
+        Logger.debug('🔍 THEME_UPDATE: ========================================', null, 'profile');
         document.documentElement.setAttribute('data-theme', theme);
         document.body.setAttribute('data-theme', theme);
         // Step 4: Update database via API
@@ -3058,25 +3155,28 @@ async function updateThemeEverywhere(theme) {
                         })
                     });
                     if (result) {
-                        console.log('✅ THEME_UPDATE: Saved to database:', theme);
+                        Logger.debug('✅ THEME_UPDATE: Saved to database:', theme, 'profile');
                     }
                     else {
-                        console.error('❌ THEME_UPDATE: Database update returned no result');
+                        Logger.error('❌ THEME_UPDATE: Database update returned no result', null, 'profile');
                     }
                 }
                 catch (error) {
-                    console.error('❌ THEME_UPDATE: Error saving to database:', error);
+                    Logger.error('❌ THEME_UPDATE: Error saving to database:', error, 'profile');
                     // Don't throw - Chrome storage update succeeded
                 }
             }
         }
         else {
-            console.warn('⚠️ THEME_UPDATE: Cannot update database - missing user or API');
+            Logger.warn('⚠️ THEME_UPDATE: Cannot update database - missing user or API', null, 'profile');
         }
         // Step 5: Update local user object immediately
-        if (legacyContext.currentUser) {
-            legacyContext.currentUser.theme = theme;
-            console.log('✅ THEME_UPDATE: Updated legacyContext.currentUser');
+        // ES6 pattern: Update stateManager instead of window.currentUser
+        const currentUser = stateManagerInstance.getState('currentUser');
+        if (currentUser) {
+            currentUser.theme = theme;
+            stateManagerInstance.setState('currentUser', currentUser);
+            Logger.debug('✅ THEME_UPDATE: Updated stateManager.currentUser', null, 'profile');
         }
         // Step 6: Update profile menu theme icon and text (both IDs)
         const themeIcon = document.getElementById('theme-icon');
@@ -3100,42 +3200,50 @@ async function updateThemeEverywhere(theme) {
         if (themeToggle) {
             themeToggle.checked = theme === 'dark';
             // Trigger updateThemeStatus to update slider position
-            if (legacyContext.visibilitySettingsManager && typeof legacyContext.visibilitySettingsManager === 'object' && 'updateThemeStatus' in legacyContext.visibilitySettingsManager && typeof legacyContext.visibilitySettingsManager.updateThemeStatus === 'function') {
-                legacyContext.visibilitySettingsManager.updateThemeStatus();
+            // ES6 pattern: Dispatch event for visibility settings update
+            window.dispatchEvent(new CustomEvent('updateVisibilityThemeStatus', {
+                detail: { source: 'ProfileManager' }
+            }));
+            // Optional: Try to call manager if available (graceful degradation)
+            const win = window;
+            if (win.visibilitySettingsManager && typeof win.visibilitySettingsManager.updateThemeStatus === 'function') {
+                win.visibilitySettingsManager.updateThemeStatus();
             }
-            console.log('✅ THEME_UPDATE: Updated settings tab theme toggle');
+            Logger.debug('✅ THEME_UPDATE: Updated settings tab theme toggle', null, 'profile');
         }
-        console.log('✅ THEME_UPDATE: Theme update complete');
+        Logger.debug('✅ THEME_UPDATE: Theme update complete', null, 'profile');
         return true;
     }
     catch (error) {
-        console.error('❌ THEME_UPDATE: Error updating theme:', error);
+        Logger.error('❌ THEME_UPDATE: Error updating theme:', error, 'profile');
         return false;
     }
 }
 // ROOT CAUSE FIX: Get current user's theme (Chrome storage first, then database fallback)
 async function getCurrentUserTheme() {
-    console.log('🔍 THEME_GET: Getting current user theme (Chrome storage first, then database)');
+    Logger.debug('🔍 THEME_GET: Getting current user theme (Chrome storage first, then database)', null, 'profile');
     // ROOT CAUSE FIX: Check Chrome storage FIRST
     if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
         try {
             const storageResult = await getChromeStorage(['theme', 'userTheme']);
             const cachedTheme = storageResult.theme || storageResult.userTheme;
             if (cachedTheme && ['light', 'dark', 'auto'].includes(cachedTheme)) {
-                console.log(`✅ THEME_GET: Found theme in Chrome storage: ${cachedTheme}`);
+                Logger.debug(`✅ THEME_GET: Found theme in Chrome storage: ${cachedTheme}`, null, 'profile');
                 return cachedTheme;
             }
         }
         catch (error) {
-            console.warn('⚠️ THEME_GET: Error reading Chrome storage:', error);
+            Logger.warn('⚠️ THEME_GET: Error reading Chrome storage:', error, 'profile');
         }
     }
     // ROOT CAUSE FIX: Removed localStorage fallback - we only use Chrome storage and database
     // Fallback 1: Try to get from current user object (from database)
-    if (legacyContext.currentUser && legacyContext.currentUser.theme) {
-        const userTheme = legacyContext.currentUser.theme;
-        if (['light', 'dark', 'auto'].includes(userTheme)) {
-            console.log(`✅ THEME_GET: Found theme in currentUser: ${userTheme}`);
+    // ES6 pattern: Get from stateManager instead of window.currentUser
+    const currentUser = stateManagerInstance.getState('currentUser');
+    if (currentUser && currentUser.theme) {
+        const userTheme = currentUser.theme;
+        if (typeof userTheme === 'string' && ['light', 'dark', 'auto'].includes(userTheme)) {
+            Logger.debug(`✅ THEME_GET: Found theme in currentUser: ${userTheme}`, null, 'profile');
             return userTheme;
         }
     }
@@ -3149,7 +3257,7 @@ async function getCurrentUserTheme() {
                     method: 'GET'
                 });
                 if (userData && typeof userData === 'object' && 'theme' in userData && typeof userData.theme === 'string') {
-                    console.log(`✅ THEME_GET: Fetched theme from database API: ${userData.theme}`);
+                    Logger.debug(`✅ THEME_GET: Fetched theme from database API: ${userData.theme}`, null, 'profile');
                     // Cache it in Chrome storage for next time
                     if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
                         await setChromeStorage({ theme: userData.theme, userTheme: userData.theme });
@@ -3159,43 +3267,43 @@ async function getCurrentUserTheme() {
                 }
             }
             catch (error) {
-                console.warn('⚠️ THEME_GET: Error fetching from database API:', error);
+                Logger.warn('⚠️ THEME_GET: Error fetching from database API:', error, 'profile');
             }
         }
     }
     // Fallback 4: Check DOM attribute
     const domTheme = document.body.getAttribute('data-theme') || document.documentElement.getAttribute('data-theme');
     if (domTheme && ['light', 'dark', 'auto'].includes(domTheme)) {
-        console.log(`✅ THEME_GET: Found theme in DOM: ${domTheme}`);
+        Logger.debug(`✅ THEME_GET: Found theme in DOM: ${domTheme}`, null, 'profile');
         return domTheme;
     }
     // Final fallback to default
-    console.log('⚠️ THEME_GET: No theme found, using default: light');
+    Logger.debug('⚠️ THEME_GET: No theme found, using default: light', 'profile');
     return 'light';
 }
 // ROOT CAUSE FIX: Get current user's availability (Chrome storage first, then database fallback)
 async function getCurrentUserAvailability() {
-    console.log('🔍 STATUS_GET: Getting current user availability (Chrome storage first, then database)');
+    Logger.debug('🔍 STATUS_GET: Getting current user availability (Chrome storage first, then database)', null, 'profile');
     // ROOT CAUSE FIX: Check Chrome storage FIRST
     if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
         try {
             const storageResult = await getChromeStorage(['userAvailability', 'availability', 'globalAvailability']);
             const cachedAvailability = storageResult.userAvailability || storageResult.availability || storageResult.globalAvailability;
             if (cachedAvailability && ['AVAILABLE', 'BUSY', 'AWAY', 'OFFLINE'].includes(cachedAvailability)) {
-                console.log(`✅ STATUS_GET: Found availability in Chrome storage: ${cachedAvailability}`);
+                Logger.debug(`✅ STATUS_GET: Found availability in Chrome storage: ${cachedAvailability}`, null, 'profile');
                 return cachedAvailability;
             }
         }
         catch (error) {
-            console.warn('⚠️ STATUS_GET: Error reading Chrome storage:', error);
+            Logger.warn('⚠️ STATUS_GET: Error reading Chrome storage:', error, 'profile');
         }
     }
-    // ROOT CAUSE FIX: Fallback 1: Try to get from stateManager currentUser (from database)
+    // Fallback 1: Try to get from stateManager currentUser (from database)
     const currentUserForStatus = stateManagerInstance.getState('currentUser');
     if (currentUserForStatus) {
         const userAvailability = currentUserForStatus.availability || currentUserForStatus.globalAvailability;
         if (userAvailability && typeof userAvailability === 'string' && ['AVAILABLE', 'BUSY', 'AWAY', 'OFFLINE'].includes(userAvailability)) {
-            console.log(`✅ STATUS_GET: Found availability in currentUser: ${userAvailability}`);
+            Logger.debug(`✅ STATUS_GET: Found availability in currentUser: ${userAvailability}`, null, 'profile');
             return userAvailability;
         }
     }
@@ -3204,7 +3312,7 @@ async function getCurrentUserAvailability() {
     if (visibilityData?.active) {
         const currentUserInVisibility = visibilityData.active.find((u) => String(u.id || u.userId) === String(currentUserForStatus?.id));
         if (currentUserInVisibility && currentUserInVisibility.availability) {
-            console.log(`✅ STATUS_GET: Found availability in visibility data: ${currentUserInVisibility.availability}`);
+            Logger.debug(`✅ STATUS_GET: Found availability in visibility data: ${currentUserInVisibility.availability}`, null, 'profile');
             return currentUserInVisibility.availability;
         }
     }
@@ -3217,7 +3325,7 @@ async function getCurrentUserAvailability() {
                     method: 'GET'
                 });
                 if (statusData && typeof statusData === 'object' && 'availability' in statusData && typeof statusData.availability === 'string') {
-                    console.log(`✅ STATUS_GET: Fetched availability from database API: ${statusData.availability}`);
+                    Logger.debug(`✅ STATUS_GET: Fetched availability from database API: ${statusData.availability}`, null, 'profile');
                     // Cache it in Chrome storage for next time
                     if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
                         chrome.storage.local.set({
@@ -3230,21 +3338,30 @@ async function getCurrentUserAvailability() {
                 }
             }
             catch (error) {
-                console.warn('⚠️ STATUS_GET: Error fetching from database API:', error);
+                Logger.warn('⚠️ STATUS_GET: Error fetching from database API:', error, 'profile');
             }
         }
     }
     // Final fallback to default
-    console.log('⚠️ STATUS_GET: No availability found, using default: AVAILABLE');
+    Logger.debug('⚠️ STATUS_GET: No availability found, using default: AVAILABLE', 'profile');
     return 'AVAILABLE';
 }
-// Create singleton instance
-const profileManagerInstance = new ProfileManager();
-// ROOT CAUSE FIX: Export to window instead of legacyContext (TypeScript migration)
-if (typeof window !== 'undefined') {
+let profileManagerInstance = null;
+let profileManagerInitialized = false;
+const getProfileManagerInstance = () => {
+    if (!profileManagerInstance) {
+        profileManagerInstance = new ProfileManager();
+    }
+    return profileManagerInstance;
+};
+const bindProfileManagerToWindow = () => {
+    if (typeof window === 'undefined') {
+        return;
+    }
     const win = window;
+    const instance = getProfileManagerInstance();
     win.ProfileManager = ProfileManager;
-    win.profileManager = profileManagerInstance;
+    win.profileManager = instance;
     win.getCurrentUserAuraColor = getCurrentUserAuraColor;
     win.updateAuraColorEverywhere = updateAuraColorEverywhere;
     win.getCurrentUserTheme = getCurrentUserTheme;
@@ -3266,8 +3383,49 @@ if (typeof window !== 'undefined') {
     win.updateColorPreview = updateColorPreview;
     win.isValidHex = isValidHex;
     win.getAvatarColor = getAvatarColor;
+};
+const initializeProfileManager = () => {
+    if (profileManagerInitialized) {
+        return profileManagerInstance;
+    }
+    if (typeof window === 'undefined' || typeof document === 'undefined') {
+        Logger.debug('ℹ️ ProfileManager: Skipping bootstrap (no DOM context)', null, 'profile');
+        return null;
+    }
+    const instance = getProfileManagerInstance();
+    bindProfileManagerToWindow();
+    profileManagerInitialized = true;
+    return instance;
+};
+if (typeof window !== 'undefined') {
+    initializeProfileManager();
 }
-// Export as ES6 module
-export { ProfileManager, profileManagerInstance };
-export default ProfileManager;
-console.log('ProfileManager module loaded', null, 'profile');
+Logger.debug('ProfileManager module loaded', null, 'profile');
+const profileManagerApi = {
+    ProfileManager,
+    initializeProfileManager,
+    getProfileManagerInstance,
+    getCurrentUserAuraColor,
+    updateAuraColorEverywhere,
+    getCurrentUserTheme,
+    updateThemeEverywhere,
+    getCurrentUserAvailability,
+    updateAvailabilityEverywhere,
+    getCurrentUserAvatarBgColor,
+    getCurrentUserAvatarColor,
+    setCustomAvatarColor,
+    resetCustomAvatarColor,
+    handleAvatarClick,
+    handleClickOutside,
+    addProfileAvatarClickHandler,
+    addAuraButtonClickHandler,
+    addLogoutButtonClickHandler,
+    addAllProfileMenuHandlers,
+    showColorPickerModal,
+    closeColorPickerModal,
+    updateColorPreview,
+    isValidHex,
+    getAvatarColor
+};
+export { ProfileManager, initializeProfileManager, getProfileManagerInstance, getCurrentUserAuraColor, updateAuraColorEverywhere, getCurrentUserTheme, updateThemeEverywhere, getCurrentUserAvailability, updateAvailabilityEverywhere, getCurrentUserAvatarBgColor, getCurrentUserAvatarColor, setCustomAvatarColor, resetCustomAvatarColor, handleAvatarClick, handleClickOutside, addProfileAvatarClickHandler, addAuraButtonClickHandler, addLogoutButtonClickHandler, addAllProfileMenuHandlers, showColorPickerModal, closeColorPickerModal, updateColorPreview, isValidHex, getAvatarColor };
+export default profileManagerApi;

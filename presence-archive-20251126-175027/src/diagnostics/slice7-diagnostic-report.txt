@@ -1,0 +1,323 @@
+# SLICE 7 DIAGNOSTIC REPORT: Code Duplication & Architecture
+
+Generated: 2025-11-24T23:00:04.378Z
+
+## SUMMARY
+
+- **Total Duplicate Message Loading Functions**: 7
+- **Total Large Files (>1000 lines)**: 6
+- **Total Files with Tight Coupling**: 71
+- **Total Inconsistent Pattern Files**: 66
+
+## 1. DUPLICATE MESSAGE LOADING FUNCTIONS
+
+### components/MessageLoader.ts (239 lines)
+- Functions: messageLoad
+
+### features/AgentModule.ts (869 lines)
+- Functions: removeLoadingMessage
+
+### features/MessagesModule.ts (2611 lines)
+- Functions: loadChatHistory
+
+### features/MessagesModuleServiceIntegration.ts (158 lines)
+- Functions: loadChatHistory, messageLoad
+
+### services/MessageLoadingService.ts (139 lines)
+- Functions: initializeMessageLoad, getMessageLoad
+
+### sidepanel/Sidepanel.ts (93 lines)
+- Functions: loadChatHistory, messageLoad
+
+### utils/MESSAGE_LOADING_DIAGNOSTIC.ts (415 lines)
+- Functions: runMessageLoad
+
+## 2. DUPLICATE UI COMPONENTS
+
+### components/DraftSelectionModal.ts (277 lines)
+- Components: DraftSelectionModal, draftSelectionModal
+
+### components/GoVisibleModal.ts (200 lines)
+- Components: GoVisibleModal, goVisibleModal
+
+### components/MessageLoader.ts (239 lines)
+- Components: MessageLoader, messageLoader
+
+### components/UnifiedMessageDisplay.ts (700 lines)
+- Components: UnifiedMessageDisplay, userHoverModal, unifiedMessageDisplay
+
+### components/UnifiedMessageModal.ts (1378 lines)
+- Components: UnifiedMessageModal, unifiedMessageModal
+
+### features/AuthManager.ts (206 lines)
+- Components: createAuthPromptModal, updateAuthUI
+
+### features/AuthModule.ts (859 lines)
+- Components: createAuthPromptModal, magicLinkModal, updateUI
+
+### features/DisplayNameManager.ts (423 lines)
+- Components: Display, hasDisplay, newDisplay, bootstrapDisplay
+
+### features/MessagesModule.ts (2611 lines)
+- Components: publicSquareUUI, updateReactionDisplay, openReplyModal, openQuoteModal, unifiedMessageModal, isUUI
+
+### features/MessagesModuleServiceIntegration.ts (158 lines)
+- Components: messageRenderer
+
+### features/ProfileManager.ts (3675 lines)
+- Components: showColorPickerModal, existingModal, closeColorPickerModal
+
+### features/RealtimeManager.ts (1287 lines)
+- Components: updateUserAuraInUI
+
+### features/TabManager/TabDisplay.ts (172 lines)
+- Components: TabDisplay
+
+### features/TabManager/TabManagerModal.ts (424 lines)
+- Components: TabManagerModal
+
+### features/UIManager.ts (963 lines)
+- Components: UI, errorModal
+
+### features/UserHoverModal.ts (930 lines)
+- Components: UserHoverModal, existingModal, finalModal, userHoverModal
+
+### features/visibility/integration/buildGraphAdapter.ts (283 lines)
+- Components: BUI, visibilityUI
+
+### features/visibility/ui/VisibilityModal.ts (167 lines)
+- Components: VisibilityModal
+
+### features/visibility/ui/VisibilityUIEvents.ts (198 lines)
+- Components: VisibilityUI
+
+### features/visibility/utils/visibilityHelpers.ts (200 lines)
+- Components: formatLastSeenDisplay, formatTimeDisplay
+
+### services/MessageRendererService.ts (323 lines)
+- Components: MessageRenderer, initializeMessageRenderer, getMessageRenderer
+
+### sidepanel/buildGraph.ts (217 lines)
+- Components: visibilityUI
+
+### utils/ComprehensiveDiagnostic.ts (685 lines)
+- Components: visibilityModal
+
+### utils/DIAGNOSTIC_HEADLINE_DISPLAYNAME.ts (125 lines)
+- Components: diagnoseHeadlineDisplay
+
+### utils/Fallbacks.ts (68 lines)
+- Components: formatUserDisplay
+
+### utils/REPLY_DISPLAY_DIAGNOSTIC.ts (292 lines)
+- Components: diagnoseReplyDisplay, getReplyDisplay
+
+### utils/ROOT_CAUSE_DIAGNOSTIC_FRAMEWORK.ts (856 lines)
+- Components: testDisplay, verifyDisplay
+
+### utils/ReplyLoader.ts (215 lines)
+- Components: ReplyLoader
+
+### utils/UnifiedMessageRenderer.ts (396 lines)
+- Components: UnifiedMessageRenderer, replyCountDisplay, bookmarkCountDisplay, reactionCountDisplay
+
+### utils/XPatternSystem.ts (469 lines)
+- Components: XComponent, XModal
+
+## 3. STATE MANAGEMENT PATTERNS
+
+Pattern distribution:
+- StateManager: 27 files
+- window-state: 23 files
+- chrome-storage: 19 files
+- storage-api: 6 files
+
+## 4. LARGE FILES (>1000 lines)
+
+### features/ProfileManager.ts
+- Lines: 3675
+- Complexity: high
+
+### features/MessagesModule.ts
+- Lines: 2611
+- Complexity: medium
+
+### utils/UserPreferencesManager.ts
+- Lines: 1386
+- Complexity: low
+
+### components/UnifiedMessageModal.ts
+- Lines: 1378
+- Complexity: low
+
+### features/RealtimeManager.ts
+- Lines: 1287
+- Complexity: low
+
+### features/NotificationManager.ts
+- Lines: 1070
+- Complexity: low
+
+## 5. TIGHT COUPLING (Window Access)
+
+### utils/UnifiedStorageSync.ts
+- Window Accesses: 111
+- Patterns: window-access
+
+### features/ProfileManager.ts
+- Window Accesses: 80
+- Patterns: window-access
+
+### utils/ROOT_CAUSE_DIAGNOSTIC_FRAMEWORK.ts
+- Window Accesses: 67
+- Patterns: window-access
+
+### features/RealtimeManager.ts
+- Window Accesses: 62
+- Patterns: window-access
+
+### utils/ComprehensiveDiagnostic.ts
+- Window Accesses: 62
+- Patterns: window-access
+
+### features/AuthModule.ts
+- Window Accesses: 59
+- Patterns: window-access
+
+### utils/UserPreferencesManager.ts
+- Window Accesses: 59
+- Patterns: window-access
+
+### features/UserHoverModal.ts
+- Window Accesses: 34
+- Patterns: window-access
+
+### core/ContextMenuConfig.ts
+- Window Accesses: 27
+- Patterns: window-access
+
+### utils/FOCUS_MODE_REPLY_DIAGNOSTIC.ts
+- Window Accesses: 20
+- Patterns: window-access
+
+### features/MessagesModule.ts
+- Window Accesses: 17
+- Patterns: window-access, globalThis-access
+
+### utils/DIAGNOSTIC_HEADLINE_DISPLAYNAME.ts
+- Window Accesses: 16
+- Patterns: window-access
+
+### features/CommunityLoaders.ts
+- Window Accesses: 15
+- Patterns: window-access
+
+### core/CursorParkManager.ts
+- Window Accesses: 12
+- Patterns: window-access
+
+### utils/DIAGNOSTIC_LOADING_AND_REPLIES.ts
+- Window Accesses: 12
+- Patterns: window-access
+
+### utils/DIAGNOSTIC_THEME_SAVING.ts
+- Window Accesses: 12
+- Patterns: window-access
+
+### utils/REPLY_DISPLAY_DIAGNOSTIC.ts
+- Window Accesses: 9
+- Patterns: window-access
+
+### services/APIService.ts
+- Window Accesses: 8
+- Patterns: window-access
+
+### sidepanel/windowInjections.ts
+- Window Accesses: 8
+- Patterns: window-access
+
+### features/TabManager/initializeTabManager.ts
+- Window Accesses: 7
+- Patterns: window-access
+
+## 6. INCONSISTENT PATTERNS
+
+### Class-Based Files: 3
+### Function-Based Files: 57
+### Mixed Files: 66
+
+**Mixed Pattern Files (should be refactored):**
+- components/DraftSelectionModal.ts
+- components/GoVisibleModal.ts
+- components/MessageLoader.ts
+- components/OverlaySpinner.ts
+- components/UnifiedMessageDisplay.ts
+- components/UnifiedMessageModal.ts
+- core/BuildTracker.ts
+- core/CursorParkManager.ts
+- core/EventBus.ts
+- core/StateManager.ts
+- core/UnifiedContextMenu.ts
+- features/APIModule.ts
+- features/AgentModule.ts
+- features/AnchorHighlighter.ts
+- features/AuthManager.ts
+- features/AuthModule.ts
+- features/CursorVisualSettingsManager.ts
+- features/DisplayNameManager.ts
+- features/MessageSystemIntegration.ts
+- features/MessagesModule.ts
+- features/NotificationManager.ts
+- features/PeopleModule.ts
+- features/ProfileManager.ts
+- features/RealtimeManager.ts
+- features/SettingsHeadlineManager.ts
+- features/SubscriptionManager.ts
+- features/TabManager/AppStoreIntegration.ts
+- features/TabManager/TabConfiguration.ts
+- features/TabManager/TabDisplay.ts
+- features/TabManager/TabManager.test.ts
+- features/TabManager/TabManager.ts
+- features/TabManager/TabManagerModal.ts
+- features/UIManager.ts
+- features/UserHoverModal.ts
+- features/social-share/platforms/base/BasePlatformAdapter.ts
+- features/visibility/core/VisibilityManager.ts
+- features/visibility/core/VisibilityState.ts
+- features/visibility/services/VisibilityStorage.ts
+- features/visibility/ui/VisibilityModal.ts
+- features/visibility/ui/VisibilitySettings.ts
+- features/visibility/ui/VisibilityTab.ts
+- features/visibility/ui/VisibilityUIEvents.ts
+- services/APIService.ts
+- services/MessageActionListenersService.ts
+- services/MessageLoadingService.ts
+- services/MessageRendererService.ts
+- services/MessageStore.ts
+- services/RealtimeSubscriptionService.ts
+- services/SupabaseService.ts
+- sidepanel/controllers/BootController.ts
+- sidepanel/controllers/TabController.ts
+- utils/AvatarUtils.ts
+- utils/ComprehensiveDiagnostic.ts
+- utils/Logger.ts
+- utils/ROOT_CAUSE_DIAGNOSTIC_FRAMEWORK.ts
+- utils/ReplyLoader.ts
+- utils/StatusDotHelper.ts
+- utils/ThemeChangeTracker.ts
+- utils/UnifiedMessageRenderer.ts
+- utils/UrlNormalization.ts
+- utils/UserPreferencesManager.ts
+- utils/XPatternSystem.ts
+- utils/provenance/ProvenanceDiagnostic.ts
+- utils/provenance/ProvenanceLinkInjector.ts
+- utils/provenance/ProvenanceService.ts
+- utils/provenance/verify.ts
+
+## RECOMMENDATIONS
+
+1. **Extract Shared Utilities**: Create common message loading service, shared UI components library, reusable state management patterns
+2. **Break Down Large Files**: Split ProfileManager.ts and MessagesModule.ts into smaller, focused modules
+3. **Establish Architectural Patterns**: Document preferred patterns (classes vs functions), create module template
+4. **Improve Dependency Injection**: Replace window property access with proper dependency injection
+

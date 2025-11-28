@@ -3,7 +3,7 @@ module.exports = {
     {
       name: 'metalayer-api',
       script: 'app.js',
-      cwd: '/home/ubuntu/metalayer-initiative',
+      cwd: '/home/ubuntu/canopi',
       env: {
         PORT: 3002,
         NODE_ENV: 'production'

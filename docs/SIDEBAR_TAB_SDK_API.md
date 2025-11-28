@@ -63,11 +63,14 @@ if (canopi.version < "1.0.0") {
 
 Registers a tab module with the sidebar.
 
+**Sidebar Position**: Tabs can be positioned on either the left or right side of the screen. Use the `position` field to specify `'left'` or `'right'` (default: `'right'`). This allows developers to choose the best placement for their application based on user experience and workflow needs.
+
 ```typescript
 interface TabConfig {
   id: string;                    // Tab ID (from manifest)
   title: string;                  // Display title
   icon: string;                   // Icon identifier
+  position?: 'left' | 'right';    // Sidebar position (default: 'right')
   render: (container: HTMLElement, context: TabContext) => void | Promise<void>;
   onActivate?: (context: TabContext) => void | Promise<void>;
   onDeactivate?: (context: TabContext) => void | Promise<void>;
@@ -91,10 +94,12 @@ function registerTab(config: TabConfig): TabInstance;
 **Example:**
 
 ```javascript
+// Default position (right side)
 const tab = canopi.registerTab({
   id: 'archive',
   title: 'Archive',
   icon: 'archive-icon',
+  position: 'right', // Optional, 'right' is default
   
   render: async (container, context) => {
     container.innerHTML = `
@@ -791,11 +796,12 @@ Complete TypeScript definitions are available in [`types/canopi-sdk.d.ts`](./typ
 
 const { registerTab, bridge, permissions, storage, user, theme, diagnostics } = window.canopi;
 
-// Register the tab
+// Register the tab (defaults to right side)
 const tab = registerTab({
   id: 'archive',
   title: 'Archive',
   icon: 'archive-icon',
+  position: 'right', // Optional: 'left' or 'right' (default: 'right')
   
   render: async (container, context) => {
     container.innerHTML = `

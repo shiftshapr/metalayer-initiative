@@ -102,13 +102,14 @@ export interface TimelineMetadata {
     updatedAt?: string;
 }
 export interface TimelineFilters {
-    persistence: PersistenceType;
-    community: string | null;
+    persistence: PersistenceType | PersistenceType[];
+    communities: string[];
     activityTypes: ActivityType[];
     search: string | null;
 }
 export interface TimelineQueryOptions {
-    persistence?: PersistenceType;
+    persistence?: PersistenceType | PersistenceType[];
+    communities?: string[];
     community?: string | null;
     search?: string | null;
     activityTypes?: ActivityType[];

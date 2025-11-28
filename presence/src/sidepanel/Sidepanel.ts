@@ -22,7 +22,29 @@ type VisibilityRefresherFactory = (graph: ModuleGraph) => RefreshVisibilityTarge
 const getRealtimeControllerCtor = (): RealtimeControllerConstructor | undefined => undefined;
 const getVisibilityRefresherFactory = (): VisibilityRefresherFactory | undefined => undefined;
 import { loadChatHistory } from '../features/MessagesModule.js';
-import { setupTabNavigation, setupMessageInputEventListeners, initializeTheme } from '../features/UIManager.js';
+// UIManager is optional - will be loaded dynamically if needed
+let setupTabNavigation: any;
+let setupMessageInputEventListeners: any;
+let initializeTheme: any;
+
+// UIManager is optional - functions will be loaded dynamically when needed
+// Using Promise-based import to avoid top-level await and module resolution issues
+if (typeof window !== 'undefined') {
+  // Use a helper function to safely import UIManager
+  const loadUIManager = async (): Promise<void> => {
+    try {
+      // @ts-expect-error - UIManager may not exist, this is intentional
+      const uiModule = await import('../features/UIManager.js');
+      setupTabNavigation = uiModule.setupTabNavigation;
+      setupMessageInputEventListeners = uiModule.setupMessageInputEventListeners;
+      initializeTheme = uiModule.initializeTheme;
+    } catch {
+      // UIManager not available - functions will remain undefined
+    }
+  };
+  // Load asynchronously without blocking
+  loadUIManager();
+}
 
 const legacyWindow = getSidepanelWindow();
 

@@ -6,6 +6,9 @@ const session = require('express-session');
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 
+// Validate environment variables on startup
+const validateEnv = require('../config/validateEnv');
+validateEnv();
 
 const authRoutes = require('../routes/auth');
 const chatRoutes = require('../routes/chat');
@@ -17,10 +20,44 @@ const userRoutes = require('../routes/users');
 // Future: Blockchain, TEE, Agent orchestration routes
 
 const app = express();
-app.use(cors());
+
+// CORS configuration - uses environment variables
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
+  : [];
+
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) {
+      return callback(null, true);
+    }
+    
+    if (allowedOrigins.length === 0) {
+      console.warn('⚠️  WARNING: ALLOWED_ORIGINS not set. CORS is allowing all origins.');
+      return callback(null, true);
+    }
+    
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true
+}));
+
 app.use(bodyParser.json());
+
+// Session configuration
+// SESSION_SECRET is validated by validateEnv() on startup
+const sessionSecret = process.env.SESSION_SECRET;
+if (!sessionSecret) {
+  throw new Error('SESSION_SECRET environment variable is required. This should have been caught by validateEnv().');
+}
+
 app.use(session({
-  secret: process.env.SESSION_SECRET || 'your_secret_key',
+  secret: sessionSecret,
   resave: false,
   saveUninitialized: false,
 }));
@@ -36,10 +73,19 @@ passport.deserializeUser((obj, done) => {
 });
 
 // Google OAuth Strategy
+// GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_CALLBACK_URL are validated by validateEnv() on startup
+const googleClientId = process.env.GOOGLE_CLIENT_ID;
+const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
+const googleCallbackUrl = process.env.GOOGLE_CALLBACK_URL;
+
+if (!googleClientId || !googleClientSecret || !googleCallbackUrl) {
+  throw new Error('Google OAuth credentials are required. This should have been caught by validateEnv().');
+}
+
 passport.use(new GoogleStrategy({
-  clientID: process.env.GOOGLE_CLIENT_ID || 'GOOGLE_CLIENT_ID',
-  clientSecret: process.env.GOOGLE_CLIENT_SECRET || 'GOOGLE_CLIENT_SECRET',
-  callbackURL: process.env.GOOGLE_CALLBACK_URL || 'http://216.238.91.120:3001/auth/google/callback',
+  clientID: googleClientId,
+  clientSecret: googleClientSecret,
+  callbackURL: googleCallbackUrl,
 }, (accessToken, refreshToken, profile, done) => {
   // Here you would look up or create the user in your DB
   return done(null, profile);

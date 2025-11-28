@@ -17,11 +17,12 @@
  * - Action menu (three dots ⋯ on messages) - handled by getMessageActionMenu()
  * - Profile menu (clicking avatar) - handled by ProfileManager
  */
+import { handleError } from '../utils/ErrorHandler.js';
+import { Logger } from '../utils/Logger.js';
 class UnifiedContextMenu {
     constructor() {
         this.menu = null;
         this.currentConfig = null;
-        this.isVisible = false;
         /**
          * Handle clicks outside menu
          */
@@ -48,7 +49,6 @@ class UnifiedContextMenu {
         this.menu.style.zIndex = '10000';
         this.menu.innerHTML = this.renderMenu(config.options);
         document.body.appendChild(this.menu);
-        this.isVisible = true;
         // Setup event handlers
         this.setupMenuHandlers();
         // Adjust position if menu goes off-screen
@@ -66,7 +66,6 @@ class UnifiedContextMenu {
             this.menu.remove();
             this.menu = null;
         }
-        this.isVisible = false;
         this.currentConfig = null;
         document.removeEventListener('click', this.handleOutsideClick, true);
     }
@@ -101,14 +100,26 @@ class UnifiedContextMenu {
         const items = this.menu.querySelectorAll('.context-menu-item:not(.disabled)');
         items.forEach(item => {
             item.addEventListener('click', async (e) => {
-                e.stopPropagation();
-                const actionId = item.getAttribute('data-action-id');
-                if (actionId) {
-                    const option = this.findOption(this.currentConfig.options, actionId);
-                    if (option && !option.disabled) {
-                        await option.action();
-                        this.hide();
+                try {
+                    e.stopPropagation();
+                    const actionId = item.getAttribute('data-action-id');
+                    if (actionId) {
+                        const option = this.findOption(this.currentConfig.options, actionId);
+                        if (option && !option.disabled) {
+                            await option.action();
+                            this.hide();
+                        }
                     }
+                }
+                catch (error) {
+                    handleError(error, {
+                        log: true,
+                        logLevel: 'error',
+                        context: {
+                            operation: 'contextMenuAction',
+                            component: 'UnifiedContextMenu'
+                        }
+                    });
                 }
             });
         });
@@ -213,8 +224,10 @@ class UnifiedContextMenu {
                 const messageId = messageElement.dataset.messageId || '';
                 const win = window;
                 const currentUser = win.getCurrentUser?.() || win.stateManagerInstance?.getState('currentUser');
-                const messageAuthor = messageElement.querySelector('[data-author-email]')?.dataset.authorEmail;
-                const isOwner = currentUser?.email === messageAuthor;
+                // UUID ONLY - use data-author-id, not data-author-email
+                const messageAuthorId = messageElement.querySelector('[data-author-id]')?.dataset.authorId ||
+                    messageElement?.dataset.authorId;
+                const isOwner = currentUser?.id && messageAuthorId && currentUser.id === messageAuthorId;
                 const pageId = win.stateManagerInstance?.getState('currentUrlData')?.pageId || '';
                 // Import and use context menu config
                 import('./ContextMenuConfig.js').then(({ getMessageContextMenuOptions }) => {
@@ -318,14 +331,14 @@ if (typeof window !== 'undefined') {
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', () => {
             unifiedContextMenuInstance.autoRegisterCommonElements();
-            console.log('✅ UNIFIED_CONTEXT_MENU: Auto-registered right-click handlers');
+            Logger.debug('✅ UNIFIED_CONTEXT_MENU: Auto-registered right-click handlers', null, 'ui');
         });
     }
     else {
         unifiedContextMenuInstance.autoRegisterCommonElements();
-        console.log('✅ UNIFIED_CONTEXT_MENU: Auto-registered right-click handlers');
+        Logger.debug('✅ UNIFIED_CONTEXT_MENU: Auto-registered right-click handlers', null, 'ui');
     }
-    console.log('✅ UNIFIED_CONTEXT_MENU: Initialized and exported to window');
+    Logger.debug('✅ UNIFIED_CONTEXT_MENU: Initialized and exported to window', null, 'ui');
 }
 export { UnifiedContextMenu, unifiedContextMenuInstance };
 export default UnifiedContextMenu;

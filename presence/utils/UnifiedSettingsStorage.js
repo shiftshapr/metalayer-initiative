@@ -203,7 +203,7 @@ export class UnifiedSettingsStorage {
 const unifiedSettingsStorage = new UnifiedSettingsStorage();
 // Export for global access
 if (typeof window !== 'undefined') {
-    window.UnifiedSettingsStorage = UnifiedSettingsStorage;
+// Export removed - use ES6 imports instead
     window.unifiedSettingsStorage = unifiedSettingsStorage;
     // Also create convenience functions
     window.saveSetting = (key, value, options) => unifiedSettingsStorage.saveSetting(key, value, options);

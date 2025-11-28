@@ -1,156 +1,77 @@
 /**
- * Subscription System Type Definitions
- * Types for managing notification subscriptions
+ * Subscription Type Definitions
  */
-/**
- * Notification category - distinguishes personal vs subscription-based
- */
-export type NotificationCategory = 'personal' | 'subscription';
-/**
- * Subscription target types
- */
-export type SubscriptionTargetType = 'room' | 'thread' | 'user' | 'community' | 'timeline' | 'page' | 'topic' | 'search' | 'mention';
-/**
- * Subscription data
- */
-export interface Subscription {
-    /** Unique subscription ID */
-    id: string;
-    /** User ID who owns this subscription */
-    userId: string;
-    /** Type of target being subscribed to */
-    targetType: SubscriptionTargetType;
-    /** ID of the target (roomId, userId, communityId, etc.) */
-    targetId: string;
-    /** Optional: Name/description of target */
-    targetName?: string;
-    /** Whether subscription is active */
-    active: boolean;
-    /** Notification preferences for this subscription */
-    preferences: {
-        /** Enable notifications for this subscription */
-        enabled: boolean;
-        /** Notification priority override */
-        priority?: 'high' | 'medium' | 'low';
-        /** Enable sound */
-        sound: boolean;
-        /** Enable desktop notifications */
-        desktop: boolean;
-        /** Mute temporarily (until timestamp) */
-        mutedUntil?: number;
-        /** Specific notification types to enable/disable */
-        types?: {
-            [key: string]: boolean;
-        };
-    };
-    /** When subscription was created */
-    createdAt: number;
-    /** When subscription was last updated */
-    updatedAt: number;
-    /** Additional metadata */
-    metadata?: {
-        /** Auto-subscribed (e.g., when joining room) */
-        autoSubscribed?: boolean;
-        /** Subscription reason */
-        reason?: string;
-        /** Related subscriptions */
-        relatedSubscriptions?: string[];
-        [key: string]: any;
-    };
-}
-/**
- * Subscription filter for querying
- */
-export interface SubscriptionFilter {
-    /** Filter by target type */
-    targetType?: SubscriptionTargetType | SubscriptionTargetType[];
-    /** Filter by active status */
-    active?: boolean;
-    /** Filter by enabled status */
+export interface SubscriptionPreferences {
+    mutedUntil?: number;
+    notifyOnMention?: boolean;
+    notifyOnReply?: boolean;
     enabled?: boolean;
-    /** Filter by target ID */
-    targetId?: string;
-    /** Search by target name */
-    search?: string;
-    /** Include muted subscriptions */
-    includeMuted?: boolean;
-    /** Limit results */
-    limit?: number;
+    [key: string]: unknown;
 }
-/**
- * Subscription event types
- */
-export type SubscriptionEvent = 'subscription:created' | 'subscription:updated' | 'subscription:deleted' | 'subscription:muted' | 'subscription:unmuted' | 'subscription:enabled' | 'subscription:disabled';
-/**
- * Subscription event payload
- */
-export interface SubscriptionEventPayload {
-    event: SubscriptionEvent;
-    subscription: Subscription;
-    timestamp: number;
+export interface SubscriptionMetadata {
+    autoSubscribed?: boolean;
+    source?: string;
+    [key: string]: unknown;
 }
-/**
- * Subscription statistics
- */
-export interface SubscriptionStats {
-    /** Total subscriptions */
-    total: number;
-    /** Active subscriptions */
-    active: number;
-    /** Muted subscriptions */
-    muted: number;
-    /** By target type */
-    byType: {
-        [key in SubscriptionTargetType]?: number;
-    };
-    /** Auto-subscribed count */
-    autoSubscribed: number;
-}
-/**
- * Notification source - links notification to subscription or marks as personal
- */
-export interface NotificationSource {
-    /** Category: personal or subscription-based */
-    category: NotificationCategory;
-    /** If subscription-based, the subscription ID */
-    subscriptionId?: string;
-    /** If subscription-based, the target type */
-    targetType?: SubscriptionTargetType;
-    /** If subscription-based, the target ID */
-    targetId?: string;
-    /** If subscription-based, the target name */
-    targetName?: string;
-}
-/**
- * Subscription creation options
- */
-export interface CreateSubscriptionOptions {
-    targetType: SubscriptionTargetType;
+export interface Subscription {
+    id: string;
     targetId: string;
+    targetType: SubscriptionTargetType;
     targetName?: string;
-    preferences?: Partial<Subscription['preferences']>;
-    metadata?: Subscription['metadata'];
+    active: boolean;
+    preferences: SubscriptionPreferences;
+    metadata?: SubscriptionMetadata;
+    createdAt: number;
+    updatedAt: number;
+    [key: string]: unknown;
 }
-/**
- * Subscription update options
- */
+export type SubscriptionTargetType = 'room' | 'user' | 'community' | 'timeline' | 'message' | string;
+export interface SubscriptionFilter {
+    targetId?: string;
+    targetType?: SubscriptionTargetType;
+    active?: boolean;
+    search?: string;
+    includeMuted?: boolean;
+    [key: string]: unknown;
+}
+export type SubscriptionEvent = 'created' | 'updated' | 'deleted' | 'activated' | 'deactivated';
+export interface SubscriptionEventPayload {
+    subscription: Subscription;
+    event: SubscriptionEvent;
+    [key: string]: unknown;
+}
+export interface SubscriptionStats {
+    total: number;
+    active: number;
+    muted: number;
+    byType: Record<string, number>;
+    autoSubscribed: number;
+    [key: string]: unknown;
+}
+export interface CreateSubscriptionOptions {
+    targetId: string;
+    targetType: SubscriptionTargetType;
+    targetName?: string;
+    active?: boolean;
+    preferences?: Partial<SubscriptionPreferences>;
+    metadata?: SubscriptionMetadata;
+    [key: string]: unknown;
+}
 export interface UpdateSubscriptionOptions {
     active?: boolean;
-    preferences?: Partial<Subscription['preferences']>;
-    metadata?: Subscription['metadata'];
+    preferences?: Partial<SubscriptionPreferences>;
+    metadata?: Partial<SubscriptionMetadata>;
+    [key: string]: unknown;
 }
-/**
- * Bulk subscription operation result
- */
 export interface BulkSubscriptionResult {
-    /** Number of subscriptions affected */
-    count: number;
-    /** IDs of affected subscriptions */
-    subscriptionIds: string[];
-    /** Any errors that occurred */
-    errors?: Array<{
-        subscriptionId: string;
+    created: number;
+    updated: number;
+    failed: number;
+    errors: Array<{
+        id: string;
         error: string;
     }>;
+    [key: string]: unknown;
 }
+export type { PresenceData } from './index.js';
 //# sourceMappingURL=subscriptions.d.ts.map

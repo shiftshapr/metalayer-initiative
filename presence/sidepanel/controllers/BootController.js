@@ -89,18 +89,85 @@ export class BootController {
         await this.handleUserChange(initialUser);
     }
     async handleUserChange(user) {
-        this.currentUser = user ?? null;
+        // ROOT CAUSE FIX: Convert Google ID to UUID BEFORE setting currentUser
+        // Supabase auth user.id is NOT a UUID - it's a Google ID like "116467399993975200419"
+        // We MUST get the AppUser UUID from backend before setting currentUser
+        let userWithUUID = user;
+        if (user && user.id && user.email) {
+            // Check if user.id is a Google ID (not a UUID)
+            const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+            const isGoogleId = /^\d{15,21}$/.test(user.id);
+            
+            if (isGoogleId || !uuidRegex.test(user.id)) {
+                // This is a Google ID, we need to convert it to UUID
+                try {
+                    const api = this.graph.stateManager.getState('api') || window.api;
+                    if (api && api.request) {
+                        // Get or create AppUser - backend will return UUID
+                        const appUserResponse = await api.request(`/v1/users/${encodeURIComponent(user.email)}`, {
+                            method: 'POST',
+                            body: JSON.stringify({
+                                email: user.email,
+                                name: user.name || user.userMetadata?.fullName || user.email.split('@')[0],
+                                avatarUrl: user.picture || user.userMetadata?.avatarUrl
+                            })
+                        });
+                        
+                        const appUser = appUserResponse?.data || appUserResponse;
+                        if (appUser && appUser.id) {
+                            // AppUser.id is ALWAYS a UUID (from userService.getOrCreateUser)
+                            userWithUUID = { ...user, id: appUser.id };
+                            console.log('✅ BOOT: Converted Google ID to UUID:', user.id, '→', appUser.id);
+                            
+                            // Fetch complete user data with UUID
+                            try {
+                                const completeUserData = await api.request(`/v1/users/${appUser.id}`, {
+                                    method: 'GET'
+                                });
+                                
+                                if (completeUserData?.data) {
+                                    userWithUUID = {
+                                        ...userWithUUID,
+                                        auraColor: completeUserData.data.auraColor || userWithUUID.auraColor,
+                                        avatarUrl: completeUserData.data.avatarUrl || userWithUUID.avatarUrl
+                                    };
+                                }
+                            } catch (err) {
+                                console.warn('⚠️ BOOT: Failed to fetch complete user data:', err);
+                            }
+                        } else {
+                            console.warn('⚠️ BOOT: Failed to get AppUser UUID, keeping Google ID (will cause 400 errors)');
+                        }
+                    } else {
+                        console.warn('⚠️ BOOT: API not available, cannot convert Google ID to UUID');
+                    }
+                } catch (error) {
+                    console.error('❌ BOOT: Error converting Google ID to UUID:', error);
+                    // Continue with Google ID - will cause 400 errors but at least extension won't crash
+                }
+            }
+        }
+        
+        this.currentUser = userWithUUID ?? null;
         // ROOT CAUSE FIX: Use stateManager only (TypeScript migration - no window.currentUser)
-        await this.graph.stateManager.setState('currentUser', user ?? null);
-        if (!user) {
+        await this.graph.stateManager.setState('currentUser', userWithUUID ?? null);
+        if (!userWithUUID) {
             return;
         }
         const bootWin = window;
         if (bootWin.updateUI) {
-            await bootWin.updateUI(user);
+            await bootWin.updateUI(userWithUUID);
         }
         await this.ensureCommunitiesInitialized();
-        await this.options.loadChatHistory();
+        
+        // RED-LINE: Only load chat history when on discuss tab, NEVER on visibility tab
+        const activeSidepanelTab = this.getActiveSidepanelTab();
+        if (activeSidepanelTab === 'discuss-tab' || activeSidepanelTab === null) {
+            // Only load messages on discuss tab or if no tab is active (initial load)
+            await this.options.loadChatHistory();
+        }
+        // Visibility tab should NEVER trigger message loading
+        
         const urlData = await this.graph.stateManager.get('currentUrlData');
         await this.options.refreshVisibility(urlData?.pageId ?? null);
         await this.handlePendingContent();
@@ -185,5 +252,29 @@ export class BootController {
         catch (error) {
             this.graph.logger.warn?.('THEME_INIT', { error });
         }
+    }
+    
+    /**
+     * Get the currently active sidepanel tab
+     * @returns Tab ID string or null if not found
+     */
+    getActiveSidepanelTab() {
+        if (typeof document === 'undefined') {
+            return null;
+        }
+        
+        // Check tabContextManager first
+        const win = typeof window !== 'undefined' ? window : null;
+        if (win?.tabContextManager?.getActiveTab) {
+            const activeTab = win.tabContextManager.getActiveTab();
+            if (activeTab) {
+                return activeTab;
+            }
+        }
+        
+        // Fallback: check DOM for active tab
+        const activeTab = document.querySelector('.main-nav-tab.active');
+        const tabId = activeTab?.getAttribute('data-tab');
+        return tabId || null;
     }
 }

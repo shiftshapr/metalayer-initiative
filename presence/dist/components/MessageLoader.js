@@ -1,11 +1,11 @@
 import { messageStore } from '../services/MessageStore.js';
 import { overlaySpinner } from './OverlaySpinner.js';
+import { handleError } from '../utils/ErrorHandler.js';
+import { Logger } from '../utils/Logger.js';
 export class MessageLoader {
     constructor() {
         this.sentinelObserver = null;
         this.sentinelElement = null;
-        this.currentPageId = null;
-        this.currentParentId = null;
         this.isLoading = false;
     }
     /**
@@ -13,8 +13,6 @@ export class MessageLoader {
      */
     async loadDefault(options) {
         const { pageId, limit = 10, includeTopReply = true, communityId = 'abe5ec85-4ba6-456f-adaf-03d7d51cecf4', showSpinner = true, onUpdate, onError } = options;
-        this.currentPageId = pageId;
-        this.currentParentId = null;
         try {
             if (showSpinner) {
                 overlaySpinner.show('Loading messages…');
@@ -52,8 +50,6 @@ export class MessageLoader {
      */
     async loadFocus(options) {
         const { pageId, focusParentId, limit = 10, communityId = 'abe5ec85-4ba6-456f-adaf-03d7d51cecf4', showSpinner = true, onUpdate, onError } = options;
-        this.currentPageId = pageId;
-        this.currentParentId = focusParentId;
         try {
             if (showSpinner) {
                 overlaySpinner.show('Loading message thread…');
@@ -104,7 +100,7 @@ export class MessageLoader {
         this.cleanupLazyLoading();
         const messagesContainer = document.querySelector('.chat-messages');
         if (!messagesContainer) {
-            console.warn('MessageLoader: .chat-messages container not found');
+            Logger.warn('MessageLoader: .chat-messages container not found', null, 'messages');
             return;
         }
         this.sentinelElement = document.createElement('div');
@@ -132,7 +128,17 @@ export class MessageLoader {
                             }
                         }
                         catch (error) {
-                            console.error('MessageLoader: Error loading next page:', error);
+                            Logger.error('MessageLoader: Error loading next page', error, 'messages');
+                            handleError(error, {
+                                log: true,
+                                logLevel: 'error',
+                                context: {
+                                    operation: 'catch',
+                                    component: 'MessageLoader',
+                                    pageId
+                                }
+                            });
+                            ;
                             if (onError) {
                                 const err = error instanceof Error ? error : new Error(String(error));
                                 onError(err);
@@ -170,8 +176,6 @@ export class MessageLoader {
      */
     destroy() {
         this.cleanupLazyLoading();
-        this.currentPageId = null;
-        this.currentParentId = null;
     }
 }
 export const messageLoader = new MessageLoader();

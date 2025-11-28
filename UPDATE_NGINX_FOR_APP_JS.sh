@@ -4,7 +4,7 @@
 echo "🔧 Updating nginx configuration to use app.js on port 3002..."
 
 # Update share.canopi.live config
-sudo cp /home/ubuntu/metalayer-initiative/share.canopi.live.conf /etc/nginx/sites-available/share.canopi.live
+sudo cp /home/ubuntu/canopi/share.canopi.live.conf /etc/nginx/sites-available/share.canopi.live
 
 # Test nginx config
 echo "🧪 Testing nginx config..."

@@ -1,17 +1,22 @@
-/**
- * SETTINGS HEADLINE MANAGER - CRUD Operations for Settings Headline
- * Handles Create, Read, Update, Delete operations for user headline
- */
 declare class SettingsHeadlineManager {
+    private minLength;
     private maxLength;
     private currentHeadline;
     private originalHeadline;
     private isInitialized;
+    private isEditing;
+    private readonly storage;
     private headlineInput;
     private charCount;
+    private charMax;
     private saveBtn;
     private cancelBtn;
-    private deleteBtn;
+    private actionsDiv;
+    private menuContainer;
+    private menuBtn;
+    private menuDropdown;
+    private menuEdit;
+    private menuDelete;
     private statusDiv;
     /**
      * Initialize headline manager
@@ -26,9 +31,25 @@ declare class SettingsHeadlineManager {
      */
     private updateCharCount;
     /**
-     * READ: Load headline from storage
+     * READ: Load headline from storage/API
      */
     readHeadline(): Promise<void>;
+    /**
+     * Update UI state based on headline content
+     */
+    private updateUIState;
+    /**
+     * Start editing headline
+     */
+    private startEditing;
+    /**
+     * Toggle menu dropdown
+     */
+    private toggleMenu;
+    /**
+     * Hide menu dropdown
+     */
+    private hideMenu;
     /**
      * CREATE/UPDATE: Save headline
      */
@@ -45,10 +66,6 @@ declare class SettingsHeadlineManager {
      * Show status message
      */
     private showStatus;
-    /**
-     * Get authentication token
-     */
-    private getAuthToken;
 }
 export { SettingsHeadlineManager };
 //# sourceMappingURL=SettingsHeadlineManager.d.ts.map

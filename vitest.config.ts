@@ -12,10 +12,15 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      '@presence': path.resolve(__dirname, 'presence/src')
-    }
+      '@presence': path.resolve(__dirname, 'presence/extension')
+    },
+    extensions: ['.ts', '.tsx', '.js', '.jsx', '.json']
   }
 });
+
+
+
+
 
 
 

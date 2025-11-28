@@ -104,21 +104,32 @@ class VisibilitySettingsManager {
      * Set up event listeners
      */
     setupEventListeners() {
-        // Visibility toggle - CRITICAL FIX: Show modal if user is not visible and trying to enable
+        // Visibility toggle - CRITICAL FIX: Remove existing handler first, then attach fresh one
         if (this.visibilityToggle) {
-            const toggle = this.visibilityToggle; // Store reference for callback
-            toggle.addEventListener('change', async () => {
-                console.log('🔍 DIAGNOSTIC: Visibility toggle changed');
-                const isVisible = toggle.checked;
-                console.log('🔍 DIAGNOSTIC: Visibility toggle checked:', isVisible);
-                // FIX: Don't show modal when toggling to Yes - just save directly
-                // The modal should only appear when user explicitly clicks "Go Visible" button elsewhere
-                // When toggling in settings, assume user wants to enable visibility immediately
-                this.updateVisibilityStatus();
-                await this.saveVisibility();
-                console.log('🔍 DIAGNOSTIC: Visibility saved:', toggle.checked);
-            });
-            toggle.setAttribute('data-handler-attached', 'true');
+            // Remove any existing handlers by cloning (if not already done in loadSettings)
+            if (this.visibilityToggle.getAttribute('data-handler-attached') !== 'true') {
+                const toggle = this.visibilityToggle; // Store reference for callback
+                // Attach event listener with strict target validation
+                toggle.addEventListener('change', async (e) => {
+                    // CRITICAL FIX: Strict target validation - only process if event target is exactly the visibility toggle
+                    if (e.target !== toggle || toggle.id !== 'visibility-toggle') {
+                        console.warn('⚠️ VISIBILITY_SETTINGS: Visibility toggle event ignored - target mismatch');
+                        return;
+                    }
+                    e.stopPropagation();
+                    e.stopImmediatePropagation(); // Prevent other handlers from running
+                    console.log('🔍 DIAGNOSTIC: Visibility toggle changed');
+                    const isVisible = toggle.checked;
+                    console.log('🔍 DIAGNOSTIC: Visibility toggle checked:', isVisible);
+                    // FIX: Don't show modal when toggling to Yes - just save directly
+                    // The modal should only appear when user explicitly clicks "Go Visible" button elsewhere
+                    // When toggling in settings, assume user wants to enable visibility immediately
+                    this.updateVisibilityStatus();
+                    await this.saveVisibility();
+                    console.log('🔍 DIAGNOSTIC: Visibility saved:', toggle.checked);
+                });
+                toggle.setAttribute('data-handler-attached', 'true');
+            }
         }
         // Status select
         if (this.statusSelect) {
@@ -173,7 +184,7 @@ class VisibilitySettingsManager {
                 this.resetDisplayName();
             });
         }
-        // Theme toggle - CRITICAL FIX: Remove existing listener first, then attach new one
+        // Theme toggle - CRITICAL FIX: Remove existing listener first, then attach new one with strict target validation
         if (this.themeToggle) {
             // Remove any existing event listeners by cloning the element
             const newToggle = this.themeToggle.cloneNode(true);
@@ -182,21 +193,23 @@ class VisibilitySettingsManager {
             }
             this.themeToggle = newToggle;
             const toggle = this.themeToggle; // Store reference for callback
-            // Attach fresh event listener
+            // Attach fresh event listener with strict target validation to prevent affecting visibility
             toggle.addEventListener('change', async (e) => {
+                // CRITICAL FIX: Strict target validation - only process if event target is exactly the theme toggle
+                if (e.target !== toggle || toggle.id !== 'theme-toggle') {
+                    console.warn('⚠️ VISIBILITY_SETTINGS: Theme toggle event ignored - target mismatch');
+                    return;
+                }
                 e.stopPropagation();
+                e.stopImmediatePropagation(); // Prevent other handlers from running
                 console.log('🔍 DIAGNOSTIC: Settings tab theme toggle changed');
-                console.log('🔍 DIAGNOSTIC: Event object:', e);
-                console.log('🔍 DIAGNOSTIC: Toggle element:', toggle);
-                console.log('🔍 DIAGNOSTIC: Toggle checked:', toggle.checked);
                 const beforeTheme = document.body.getAttribute('data-theme') || document.documentElement.getAttribute('data-theme') || 'light';
                 console.log('🔍 DIAGNOSTIC: Theme before change:', beforeTheme);
-                // CRITICAL FIX: Save theme first, then update status
+                // CRITICAL FIX: Save theme first, then update status - do NOT touch visibility
                 await this.saveTheme();
                 this.updateThemeStatus();
                 const afterTheme = document.body.getAttribute('data-theme') || document.documentElement.getAttribute('data-theme') || 'light';
                 console.log('🔍 DIAGNOSTIC: Theme after change:', afterTheme);
-                console.log('🔍 DIAGNOSTIC: Theme changed:', beforeTheme !== afterTheme ? 'YES ✅' : 'NO ❌');
             });
             toggle.setAttribute('data-handler-attached', 'true');
             console.log('✅ VISIBILITY_SETTINGS: Theme toggle event listener attached');
@@ -268,8 +281,16 @@ class VisibilitySettingsManager {
                 const statusPref = await (getSetting || this.getSettingFallback)('status', 'AVAILABLE', { apiKey: 'status' });
                 status = typeof statusPref === 'string' ? statusPref : 'AVAILABLE';
             }
-            // Set visibility toggle
+            // Set visibility toggle - CRITICAL FIX: Set checked state BEFORE attaching handlers to prevent double-click issue
             if (this.visibilityToggle) {
+                // Remove any existing handlers first
+                const newToggle = this.visibilityToggle.cloneNode(true);
+                if (this.visibilityToggle.parentNode) {
+                    this.visibilityToggle.parentNode.replaceChild(newToggle, this.visibilityToggle);
+                }
+                this.visibilityToggle = newToggle;
+                
+                // Set checked state BEFORE attaching handlers
                 this.visibilityToggle.checked = isVisible;
                 console.log('✅ VISIBILITY_SETTINGS: Visibility toggle set to:', isVisible ? 'Yes (checked)' : 'No (unchecked)');
                 this.updateVisibilityStatus();
@@ -438,12 +459,17 @@ class VisibilitySettingsManager {
                 // Fallback to direct storage
                 await chrome.storage.local.set({ visibilityEnabled: isVisible });
             }
-            // CRITICAL FIX: Update currentUser in StateManager immediately for other components
+            // CRITICAL FIX: Update currentUser in StateManager AND window.currentUser immediately
             const currentUser = stateManagerInstance.getState('currentUser');
             if (currentUser) {
                 currentUser.isVisible = isVisible;
                 currentUser.visibilityEnabled = isVisible;
                 stateManagerInstance.setState('currentUser', currentUser);
+            }
+            // CRITICAL FIX: Also update window.currentUser directly for AppUser compatibility
+            if (window.currentUser) {
+                window.currentUser.isVisible = isVisible;
+                window.currentUser.visibilityEnabled = isVisible;
             }
             // CRITICAL FIX: Refresh visibility avatars to reflect the change
             if (visibilityManager && typeof visibilityManager.refreshVisibilityAvatars === 'function') {

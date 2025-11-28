@@ -1,8 +1,4 @@
 /**
- * Fallback utility functions
- * Helper functions for safe property access with defaults
- */
-/**
  * Returns a stable identifier for a user, falling back to email and finally a provided default.
  */
 export function getUserIdentity(source, fallback = 'unknown-user') {

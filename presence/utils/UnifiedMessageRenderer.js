@@ -212,7 +212,7 @@ export class UnifiedMessageRenderer {
 }
 // Export to window for backward compatibility
 if (typeof window !== 'undefined') {
-    window.UnifiedMessageRenderer = UnifiedMessageRenderer;
+    // Export removed - use ES6 imports
     console.log('✅ UnifiedMessageRenderer: Exported to window');
 }
 export default UnifiedMessageRenderer;

@@ -1,11 +1,22 @@
 /**
  * ENHANCED LOGGING SYSTEM - Centralized Logging
  * TypeScript + ES6 Module
+ *
+ * Production Mode: In production (NODE_ENV=production), DEBUG logs are stripped at build time
+ * or filtered at runtime. Only ERROR and WARN logs are emitted in production.
+ *
+ * Usage:
+ *   Logger.debug('Debug message', data, 'context');  // Only in development
+ *   Logger.info('Info message', data, 'context');    // Development only
+ *   Logger.warn('Warning message', data, 'context'); // Always logged
+ *   Logger.error('Error message', data, 'context');   // Always logged
  */
 class Logger {
     static setLevel(level) {
         const levelKey = level.toUpperCase();
-        this.currentLevel = this.LOG_LEVELS[levelKey] || this.LOG_LEVELS.DEBUG;
+        const levelValue = this.LOG_LEVELS[levelKey];
+        const debugLevel = this.LOG_LEVELS.DEBUG;
+        this.currentLevel = (levelValue !== undefined) ? levelValue : (debugLevel !== undefined ? debugLevel : 0);
     }
     static setEnabled(enabled) {
         this.isEnabled = enabled;
@@ -17,6 +28,10 @@ class Logger {
         const levelNum = this.LOG_LEVELS[levelKey];
         if (levelNum === undefined || levelNum > this.currentLevel)
             return;
+        // In production, skip DEBUG and INFO logs entirely (no console output, no history)
+        if (this.isProduction && (levelKey === 'DEBUG' || levelKey === 'INFO' || levelKey === 'SUCCESS')) {
+            return;
+        }
         const timestamp = new Date().toISOString();
         const logEntry = {
             timestamp,
@@ -26,17 +41,20 @@ class Logger {
             data,
             id: this.generateLogId()
         };
-        this.logHistory.push(logEntry);
-        if (this.logHistory.length > this.maxHistorySize) {
-            this.logHistory.shift();
+        // Only store in history if not production or if it's WARN/ERROR
+        if (!this.isProduction || levelKey === 'WARN' || levelKey === 'ERROR') {
+            this.logHistory.push(logEntry);
+            if (this.logHistory.length > this.maxHistorySize) {
+                this.logHistory.shift();
+            }
         }
         const formattedMessage = this.formatMessage(logEntry);
         switch (level.toUpperCase()) {
             case 'ERROR':
-                console.error(formattedMessage, data);
+                Logger.error(formattedMessage, data, 'general');
                 break;
             case 'WARN':
-                console.warn(formattedMessage, data);
+                Logger.warn(formattedMessage, data, 'general');
                 break;
             case 'INFO':
                 console.info(formattedMessage, data);
@@ -45,10 +63,10 @@ class Logger {
                 console.debug(formattedMessage, data);
                 break;
             case 'SUCCESS':
-                console.log(formattedMessage, data);
+                Logger.debug(formattedMessage, data, 'general');
                 break;
             default:
-                console.log(formattedMessage, data);
+                Logger.debug(formattedMessage, data, 'general');
         }
     }
     static formatMessage(logEntry) {
@@ -131,6 +149,43 @@ class Logger {
     static exportLogs() {
         return JSON.stringify(this.logHistory, null, 2);
     }
+    static normalizeContext(context) {
+        return (context || 'general').toLowerCase();
+    }
+    static configureDebugContexts(contexts) {
+        if (!Array.isArray(contexts) || contexts.length === 0) {
+            this.debugContextAllowlist = null;
+            return;
+        }
+        this.debugContextAllowlist = new Set(contexts
+            .map(ctx => (typeof ctx === 'string' ? this.normalizeContext(ctx) : null))
+            .filter((ctx) => Boolean(ctx)));
+    }
+    static loadDebugContextAllowlistFromWindow() {
+        if (typeof window === 'undefined')
+            return;
+        const win = window;
+        if (Array.isArray(win.__DEBUG_CONTEXTS__)) {
+            this.configureDebugContexts(win.__DEBUG_CONTEXTS__);
+        }
+    }
+    static isDebugEnabled(context = 'general') {
+        if (!this.isEnabled)
+            return false;
+        const normalizedContext = this.normalizeContext(context);
+        const debugLevel = this.LOG_LEVELS.DEBUG ?? 0;
+        const hasAllowlist = this.debugContextAllowlist && this.debugContextAllowlist.size > 0;
+        if (this.currentLevel > debugLevel) {
+            return false;
+        }
+        if (this.isProduction) {
+            return hasAllowlist ? this.debugContextAllowlist.has(normalizedContext) : false;
+        }
+        if (hasAllowlist) {
+            return this.debugContextAllowlist.has(normalizedContext);
+        }
+        return true;
+    }
     static time(label) {
         const start = performance.now();
         return {
@@ -157,6 +212,27 @@ class Logger {
             }
         };
     }
+    /**
+     * Check if Logger is in production mode
+     */
+    static isProductionMode() {
+        return this.isProduction;
+    }
+    /**
+     * Initialize Logger with environment-based settings
+     * Call this early in application startup
+     */
+    static initialize() {
+        this.loadDebugContextAllowlistFromWindow();
+        if (this.isProduction) {
+            this.setLevel('WARN'); // Only WARN and ERROR in production
+            Logger.info('Logger initialized in PRODUCTION mode - DEBUG/INFO logs disabled');
+        }
+        else {
+            this.setLevel('DEBUG'); // All logs in development
+            Logger.debug('Logger initialized in DEVELOPMENT mode - all logs enabled');
+        }
+    }
 }
 Logger.LOG_LEVELS = {
     DEBUG: 0,
@@ -165,20 +241,16 @@ Logger.LOG_LEVELS = {
     ERROR: 3,
     SUCCESS: 1
 };
-Logger.currentLevel = Logger.LOG_LEVELS.DEBUG;
+Logger.isProduction = (typeof process !== 'undefined' && process.env?.NODE_ENV === 'production') ||
+    (typeof window !== 'undefined' && window.__PRODUCTION__ === true);
+Logger.currentLevel = Logger.isProduction
+    ? Logger.LOG_LEVELS.WARN ?? 2
+    : Logger.LOG_LEVELS.DEBUG ?? 0;
 Logger.isEnabled = true;
 Logger.logHistory = [];
 Logger.maxHistorySize = 1000;
+Logger.debugContextAllowlist = null;
+// Auto-initialize on module load
+Logger.initialize();
 export { Logger };
 export default Logger;
-// Export Logger to window for module access
-if (typeof window !== 'undefined') {
-    window.Logger = Logger;
-    // Also set as a property that can be checked immediately
-    Object.defineProperty(window, 'Logger', {
-        value: Logger,
-        writable: false,
-        configurable: true,
-        enumerable: true
-    });
-}

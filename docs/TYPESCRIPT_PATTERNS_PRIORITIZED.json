@@ -1,0 +1,213 @@
+{
+  "timestamp": "2025-11-24T06:41:28.715Z",
+  "totalIssues": 54,
+  "filesAffected": 13,
+  "patterns": [
+    {
+      "pattern": "any-type-annotation",
+      "count": 20,
+      "files": 9,
+      "severity": "high",
+      "priority": 60,
+      "topFiles": [
+        "src/features/AgentModule.ts",
+        "src/features/CursorVisualSettingsManager.ts",
+        "src/features/DisplayNameManager.ts",
+        "src/features/SettingsHeadlineManager.ts",
+        "src/features/visibility/integration/buildGraphAdapter.ts"
+      ]
+    },
+    {
+      "pattern": "as-any-assertion",
+      "count": 14,
+      "files": 5,
+      "severity": "critical",
+      "priority": 56,
+      "topFiles": [
+        "src/features/APIModule.ts",
+        "src/features/AgentModule.ts",
+        "src/scripts/analyze-typescript-issues.ts",
+        "src/scripts/audit-typescript-best-practices.ts",
+        "src/scripts/verify-cleanup-safety.ts"
+      ]
+    },
+    {
+      "pattern": "function-param-any",
+      "count": 11,
+      "files": 7,
+      "severity": "high",
+      "priority": 33,
+      "topFiles": [
+        "src/features/AgentModule.ts",
+        "src/features/CursorVisualSettingsManager.ts",
+        "src/features/DisplayNameManager.ts",
+        "src/features/SettingsHeadlineManager.ts",
+        "src/features/visibility/services/VisibilityStorage.ts"
+      ]
+    },
+    {
+      "pattern": "ts-ignore",
+      "count": 4,
+      "files": 2,
+      "severity": "high",
+      "priority": 12,
+      "topFiles": [
+        "src/scripts/analyze-typescript-issues.ts",
+        "src/scripts/audit-typescript-best-practices.ts"
+      ]
+    },
+    {
+      "pattern": "ts-expect-error",
+      "count": 4,
+      "files": 2,
+      "severity": "medium",
+      "priority": 8,
+      "topFiles": [
+        "src/scripts/analyze-typescript-issues.ts",
+        "src/scripts/audit-typescript-best-practices.ts"
+      ]
+    },
+    {
+      "pattern": "window-as-any",
+      "count": 1,
+      "files": 1,
+      "severity": "high",
+      "priority": 3,
+      "topFiles": [
+        "src/scripts/analyze-typescript-issues.ts"
+      ]
+    }
+  ],
+  "filesByIssueCount": [
+    {
+      "file": "src/features/AgentModule.ts",
+      "total": 14,
+      "critical": 8,
+      "high": 6,
+      "patterns": [
+        "any-type-annotation",
+        "function-param-any",
+        "as-any-assertion"
+      ]
+    },
+    {
+      "file": "src/features/visibility/integration/buildGraphAdapter.ts",
+      "total": 7,
+      "critical": 0,
+      "high": 7,
+      "patterns": [
+        "any-type-annotation"
+      ]
+    },
+    {
+      "file": "src/features/visibility/services/VisibilityStorage.ts",
+      "total": 6,
+      "critical": 0,
+      "high": 6,
+      "patterns": [
+        "any-type-annotation",
+        "function-param-any"
+      ]
+    },
+    {
+      "file": "src/scripts/analyze-typescript-issues.ts",
+      "total": 6,
+      "critical": 1,
+      "high": 3,
+      "patterns": [
+        "ts-ignore",
+        "ts-expect-error",
+        "as-any-assertion",
+        "window-as-any"
+      ]
+    },
+    {
+      "file": "src/scripts/audit-typescript-best-practices.ts",
+      "total": 5,
+      "critical": 1,
+      "high": 2,
+      "patterns": [
+        "ts-ignore",
+        "ts-expect-error",
+        "as-any-assertion"
+      ]
+    },
+    {
+      "file": "src/features/APIModule.ts",
+      "total": 2,
+      "critical": 2,
+      "high": 0,
+      "patterns": [
+        "as-any-assertion"
+      ]
+    },
+    {
+      "file": "src/features/CursorVisualSettingsManager.ts",
+      "total": 2,
+      "critical": 0,
+      "high": 2,
+      "patterns": [
+        "any-type-annotation",
+        "function-param-any"
+      ]
+    },
+    {
+      "file": "src/features/DisplayNameManager.ts",
+      "total": 2,
+      "critical": 0,
+      "high": 2,
+      "patterns": [
+        "any-type-annotation",
+        "function-param-any"
+      ]
+    },
+    {
+      "file": "src/features/SettingsHeadlineManager.ts",
+      "total": 2,
+      "critical": 0,
+      "high": 2,
+      "patterns": [
+        "any-type-annotation",
+        "function-param-any"
+      ]
+    },
+    {
+      "file": "src/scripts/check-interface-exports.ts",
+      "total": 2,
+      "critical": 0,
+      "high": 2,
+      "patterns": [
+        "any-type-annotation",
+        "function-param-any"
+      ]
+    },
+    {
+      "file": "src/scripts/verify-cleanup-safety.ts",
+      "total": 2,
+      "critical": 2,
+      "high": 0,
+      "patterns": [
+        "as-any-assertion"
+      ]
+    },
+    {
+      "file": "src/sidepanel/Sidepanel.ts",
+      "total": 2,
+      "critical": 0,
+      "high": 2,
+      "patterns": [
+        "any-type-annotation"
+      ]
+    },
+    {
+      "file": "src/utils/DEFAULT_VS_FOCUS_MODE_DIAGNOSTIC.ts",
+      "total": 2,
+      "critical": 0,
+      "high": 2,
+      "patterns": [
+        "any-type-annotation",
+        "function-param-any"
+      ]
+    }
+  ]
+}

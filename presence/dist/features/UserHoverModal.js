@@ -11,6 +11,8 @@
  * - API integration for mutual communities
  * - Unified avatar system integration
  */
+import { stateManagerInstance } from '../core/StateManager.js';
+import { handleError } from '../utils/ErrorHandler.js';
 import { Logger } from '../utils/Logger.js';
 class UserHoverModal {
     constructor() {
@@ -18,30 +20,66 @@ class UserHoverModal {
         this.currentUserId = null;
         this.hoverTimeout = null;
         this.hideTimeout = null;
-        this.isVisible = false;
-        this.currentTarget = null;
-        this.logger = new Logger();
-        console.log('🔧 USER_HOVER_MODAL: Initializing...');
+        Logger.debug('🔧 USER_HOVER_MODAL: Initializing...', null, 'user-hover');
+    }
+    resolveViewerUserId(forceRefresh = false) {
+        if (!forceRefresh && this.currentUserId) {
+            return this.currentUserId;
+        }
+        try {
+            const stateUser = stateManagerInstance.getState('currentUser');
+            if (stateUser?.id) {
+                this.currentUserId = stateUser.id;
+                return this.currentUserId;
+            }
+        }
+        catch (error) {
+            handleError(error, {
+                log: true,
+                logLevel: 'warn',
+                context: { component: 'UserHoverModal', operation: 'resolveViewerUserId', note: 'stateManager lookup failed' }
+            });
+        }
+        if (window.currentUser?.id) {
+            this.currentUserId = window.currentUser.id;
+            return this.currentUserId;
+        }
+        this.currentUserId = null;
+        return null;
+    }
+    createErrorContext(operation, extra = {}) {
+        const viewerId = this.resolveViewerUserId();
+        return {
+            operation,
+            component: 'UserHoverModal',
+            userId: viewerId ?? undefined,
+            ...extra
+        };
+    }
+    getViewerUserId() {
+        return this.resolveViewerUserId();
     }
     /**
      * Initialize the hover modal system
      */
     async initialize() {
         try {
-            // Get current user ID
-            if (window.currentUser && window.currentUser.id) {
-                this.currentUserId = window.currentUser.id;
-            }
+            // Get current user ID from state or window
+            this.resolveViewerUserId(true);
             // Create modal HTML structure
             this.createModal();
             // Attach hover handlers to message avatars
             this.attachMessageAvatarHandlers();
             // Attach hover handlers to visibility avatars
             this.attachVisibilityAvatarHandlers();
-            console.log('✅ USER_HOVER_MODAL: Initialized successfully');
+            Logger.debug('✅ USER_HOVER_MODAL: Initialized successfully', null, 'user-hover');
         }
         catch (error) {
-            console.error('❌ USER_HOVER_MODAL: Initialization failed:', error);
+            handleError(error, {
+                log: true,
+                logLevel: 'error',
+                context: this.createErrorContext('initialize')
+            });
         }
     }
     /**
@@ -385,14 +423,14 @@ class UserHoverModal {
                 const uAvatarUrl = typeof u.avatarUrl === 'string' ? u.avatarUrl : undefined;
                 return uAvatarUrl === avatarUrl || (uAvatarUrl && typeof avatarUrl === 'string' && avatarUrl.includes(uAvatarUrl.split('/').pop() || ''));
             });
-            return found ? { id: found.id } : null;
+            return found && typeof found.id === 'string' ? { id: found.id } : null;
         }
         return null;
     }
     /**
      * Handle hover enter event
      */
-    handleHover(event, userId, targetElement) {
+    handleHover(_event, userId, targetElement) {
         // FIX: Don't show modal over profile avatar
         if (targetElement && (targetElement.closest('#user-avatar-container') ||
             targetElement.closest('.profile-avatar-container') ||
@@ -406,19 +444,27 @@ class UserHoverModal {
         if (this.hideTimeout) {
             clearTimeout(this.hideTimeout);
         }
-        // Set current target
-        this.currentTarget = targetElement;
+        // Set current target (stored for potential future use)
         // Show modal after short delay
         this.hoverTimeout = setTimeout(async () => {
-            if (targetElement) {
-                await this.showModal(userId, targetElement);
+            try {
+                if (targetElement) {
+                    await this.showModal(userId, targetElement);
+                }
+            }
+            catch (error) {
+                handleError(error, {
+                    log: true,
+                    logLevel: 'error',
+                    context: this.createErrorContext('handleHover.showModal', { targetUserId: userId })
+                });
             }
         }, 300); // 300ms delay before showing
     }
     /**
      * Handle hover leave event
      */
-    handleHoverOut(event, targetElement) {
+    handleHoverOut(event, _targetElement) {
         // Clear hover timeout
         if (this.hoverTimeout) {
             clearTimeout(this.hoverTimeout);
@@ -440,11 +486,11 @@ class UserHoverModal {
      */
     async showModal(userId, targetElement) {
         try {
-            console.log('🔍 USER_HOVER_MODAL: Showing modal for user:', userId);
+            Logger.debug('🔍 USER_HOVER_MODAL: Showing modal for user:', userId, 'user-hover');
             // Get user data
             const userData = await this.getUserData(userId);
             if (!userData) {
-                console.warn('⚠️ USER_HOVER_MODAL: No user data found for:', userId);
+                Logger.warn('⚠️ USER_HOVER_MODAL: No user data found for:', userId, 'user-hover');
                 return;
             }
             // Update modal content
@@ -455,13 +501,17 @@ class UserHoverModal {
             if (this.modal) {
                 this.modal.classList.add('visible');
             }
-            this.isVisible = true;
+            // Modal is now visible
             // Fetch mutual communities
             this.loadMutualCommunities(userId);
-            console.log('✅ USER_HOVER_MODAL: Modal shown');
+            Logger.debug('✅ USER_HOVER_MODAL: Modal shown', null, 'user-hover');
         }
         catch (error) {
-            console.error('❌ USER_HOVER_MODAL: Error showing modal:', error);
+            handleError(error, {
+                log: true,
+                logLevel: 'error',
+                context: this.createErrorContext('showModal', { targetUserId: userId })
+            });
         }
     }
     /**
@@ -470,8 +520,7 @@ class UserHoverModal {
     hideModal() {
         if (this.modal) {
             this.modal.classList.remove('visible');
-            this.isVisible = false;
-            this.currentTarget = null;
+            // Modal is now hidden
         }
     }
     /**
@@ -484,15 +533,14 @@ class UserHoverModal {
         if (window.currentVisibilityDataUnfiltered && window.currentVisibilityDataUnfiltered.active) {
             const userInVisibility = window.currentVisibilityDataUnfiltered.active.find((u) => (u.id === userId || u.userId === userId || u.user_id === userId));
             if (userInVisibility) {
-                const legacyUser = userInVisibility;
                 userData = {
-                    id: userInVisibility.id || legacyUser.userId || legacyUser.user_id || '',
-                    name: userInVisibility.name || legacyUser.handle || 'Unknown User',
-                    displayName: userInVisibility.displayName || legacyUser.display_name || null,
+                    id: userInVisibility.id || '',
+                    name: userInVisibility.name || 'Unknown User',
+                    displayName: userInVisibility.displayName || null,
                     avatarUrl: userInVisibility.avatarUrl,
-                    auraColor: userInVisibility.auraColor || legacyUser.aura_color,
-                    headline: legacyUser.headline || null,
-                    communities: legacyUser.communities
+                    auraColor: userInVisibility.auraColor,
+                    headline: userInVisibility.headline || null,
+                    communities: userInVisibility.communities
                 };
             }
         }
@@ -517,7 +565,11 @@ class UserHoverModal {
                 }
             }
             catch (error) {
-                console.warn('⚠️ USER_HOVER_MODAL: API fetch failed:', error);
+                handleError(error, {
+                    log: true,
+                    logLevel: 'warn',
+                    context: this.createErrorContext('getUserData.api', { targetUserId: userId })
+                });
                 // If API fails but we have visibility data, use that
                 if (!userData) {
                     return null;
@@ -573,7 +625,11 @@ class UserHoverModal {
                 avatarContainer.innerHTML = avatarHTML;
             }
             catch (error) {
-                console.error('❌ USER_HOVER_MODAL: Error creating avatar:', error);
+                handleError(error, {
+                    log: true,
+                    logLevel: 'error',
+                    context: this.createErrorContext('updateModalContent.avatar', { targetUserId: userData.id })
+                });
                 // Fallback to simple img
                 avatarContainer.innerHTML = `<img src="${userData.avatarUrl || ''}" alt="${userData.name}" style="width: 64px; height: 64px; border-radius: 50%;">`;
             }
@@ -642,19 +698,14 @@ class UserHoverModal {
         // Show loading state
         communitiesListEl.innerHTML = '<div class="user-hover-loading">Loading...</div>';
         try {
-            // Ensure currentUserId is set
-            if (!this.currentUserId) {
-                if (window.currentUser && window.currentUser.id) {
-                    this.currentUserId = window.currentUser.id;
-                }
-            }
+            const viewerId = this.resolveViewerUserId();
             // Use the new mutual communities endpoint
-            if (!this.currentUserId || !userId) {
+            if (!viewerId || !userId) {
                 communitiesListEl.innerHTML = '<div class="user-hover-loading">Unable to load communities</div>';
                 return;
             }
             if (window.api && typeof window.api.request === 'function') {
-                const response = await window.api.request(`/communities/mutual?userId1=${encodeURIComponent(this.currentUserId)}&userId2=${encodeURIComponent(userId)}`, {
+                const response = await window.api.request(`/communities/mutual?userId1=${encodeURIComponent(viewerId)}&userId2=${encodeURIComponent(userId)}`, {
                     method: 'GET'
                 });
                 const responseData = response;
@@ -668,7 +719,7 @@ class UserHoverModal {
                         // Community names come from text form, safe to use innerHTML
                         communitiesListEl.innerHTML = mutualCommunities.map((community) => `<div class="user-hover-community-item">${community.name || community.id}</div>`).join('');
                     }
-                    console.log('✅ USER_HOVER_MODAL: Loaded mutual communities:', mutualCommunities.length);
+                    Logger.debug('✅ USER_HOVER_MODAL: Loaded mutual communities:', mutualCommunities.length, 'user-hover');
                     return;
                 }
             }
@@ -676,7 +727,11 @@ class UserHoverModal {
             communitiesListEl.innerHTML = '<div class="user-hover-loading">Unable to load communities</div>';
         }
         catch (error) {
-            console.error('❌ USER_HOVER_MODAL: Error loading mutual communities:', error);
+            handleError(error, {
+                log: true,
+                logLevel: 'error',
+                context: this.createErrorContext('loadMutualCommunities', { targetUserId: userId })
+            });
             communitiesListEl.innerHTML = '<div class="user-hover-loading">Error loading communities</div>';
         }
     }
@@ -689,7 +744,7 @@ class UserHoverModal {
             if (window.getState && typeof window.getState === 'function') {
                 const communitiesData = await window.getState('communities');
                 if (communitiesData && Array.isArray(communitiesData) && communitiesData.length > 0) {
-                    console.log('✅ USER_HOVER_MODAL: Got communities from state:', communitiesData.length);
+                    Logger.debug('✅ USER_HOVER_MODAL: Got communities from state:', communitiesData.length, 'user-hover');
                     return communitiesData;
                 }
             }
@@ -697,14 +752,18 @@ class UserHoverModal {
             if (window.api && typeof window.api.getCommunities === 'function') {
                 const response = await window.api.getCommunities();
                 if (response && Array.isArray(response) && response.length > 0) {
-                    console.log('✅ USER_HOVER_MODAL: Got communities from API:', response.length);
+                    Logger.debug('✅ USER_HOVER_MODAL: Got communities from API:', response.length, 'user-hover');
                     return response;
                 }
             }
             return [];
         }
         catch (error) {
-            console.warn('⚠️ USER_HOVER_MODAL: Error getting current user communities:', error);
+            handleError(error, {
+                log: true,
+                logLevel: 'warn',
+                context: this.createErrorContext('getCurrentUserCommunities')
+            });
             return [];
         }
     }
@@ -716,11 +775,10 @@ class UserHoverModal {
             // Try to get from visibility data first (if user is visible)
             if (window.currentVisibilityDataUnfiltered && window.currentVisibilityDataUnfiltered.active) {
                 const userInVisibility = window.currentVisibilityDataUnfiltered.active.find((u) => (u.id === userId || u.userId === userId || u.user_id === userId));
-                const legacyUser = userInVisibility;
-                if (legacyUser && Array.isArray(legacyUser.communities)) {
-                    console.log('✅ USER_HOVER_MODAL: Got communities from visibility data:', legacyUser.communities.length);
+                if (userInVisibility && Array.isArray(userInVisibility.communities)) {
+                    Logger.debug('✅ USER_HOVER_MODAL: Got communities from visibility data:', userInVisibility.communities.length, 'user-hover');
                     const filtered = [];
-                    for (const c of legacyUser.communities) {
+                    for (const c of userInVisibility.communities) {
                         if (typeof c === 'object' && c !== null && 'id' in c && 'name' in c && typeof c.id === 'string' && typeof c.name === 'string') {
                             filtered.push({ id: c.id, name: c.name });
                         }
@@ -735,7 +793,7 @@ class UserHoverModal {
                     allow404: true
                 });
                 if (response && Array.isArray(response) && response.length > 0) {
-                    console.log('✅ USER_HOVER_MODAL: Got communities from user endpoint:', response.length);
+                    Logger.debug('✅ USER_HOVER_MODAL: Got communities from user endpoint:', response.length, 'user-hover');
                     return response;
                 }
                 // If response is an object with communities array
@@ -752,7 +810,11 @@ class UserHoverModal {
             return [];
         }
         catch (error) {
-            console.warn('⚠️ USER_HOVER_MODAL: Error getting user communities:', error);
+            handleError(error, {
+                log: true,
+                logLevel: 'warn',
+                context: this.createErrorContext('getUserCommunities', { targetUserId: userId })
+            });
             return [];
         }
     }
@@ -762,7 +824,7 @@ class UserHoverModal {
     findMutualCommunities(user1Communities, user2Communities) {
         if (!user1Communities || !user2Communities ||
             !Array.isArray(user1Communities) || !Array.isArray(user2Communities)) {
-            console.warn('⚠️ USER_HOVER_MODAL: Invalid communities arrays for comparison');
+            Logger.warn('⚠️ USER_HOVER_MODAL: Invalid communities arrays for comparison', null, 'user-hover');
             return [];
         }
         const user1Ids = new Set(user1Communities.map(c => c.id || c.community_id || c.communityId));
@@ -770,13 +832,13 @@ class UserHoverModal {
             const id = c.id || c.community_id || c.communityId;
             return id && user1Ids.has(id);
         });
-        console.log('🔍 USER_HOVER_MODAL: Comparing communities:', {
+        Logger.debug('🔍 USER_HOVER_MODAL: Comparing communities:', {
             user1Count: user1Communities.length,
             user2Count: user2Communities.length,
             mutualCount: mutual.length,
             user1Ids: Array.from(user1Ids),
             user2Ids: user2Communities.map(c => c.id || c.community_id || c.communityId)
-        });
+        }, 'user-hover');
         return mutual;
     }
 }
@@ -788,18 +850,19 @@ if (typeof window !== 'undefined') {
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', () => {
             userHoverModalInstance.initialize().catch(err => {
-                console.error('❌ USER_HOVER_MODAL: Failed to initialize:', err);
+                Logger.error('❌ USER_HOVER_MODAL: Failed to initialize:', err, 'user-hover');
             });
         });
     }
     else {
         userHoverModalInstance.initialize().catch(err => {
-            console.error('❌ USER_HOVER_MODAL: Failed to initialize:', err);
+            Logger.error('❌ USER_HOVER_MODAL: Failed to initialize:', err, 'user-hover');
         });
     }
     // Export to window for global access
-    window.userHoverModal = userHoverModalInstance;
-    console.log('✅ USER_HOVER_MODAL: Exported to window');
+    const win = window;
+    win.userHoverModal = userHoverModalInstance;
+    Logger.debug('✅ USER_HOVER_MODAL: Exported to window', null, 'user-hover');
 }
 // Export as ES6 module
 export { UserHoverModal, userHoverModalInstance };

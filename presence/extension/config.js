@@ -3,6 +3,14 @@
 
 (function() {
   'use strict';
+  
+  // Avatar fallback color configuration
+  let AVATAR_FALLBACK_COLOR = '#ffffff'; // Default fallback
+  
+  // Try to import if available (when loaded as module)
+  if (typeof window !== 'undefined' && window.AVATAR_FALLBACK_COLOR) {
+    AVATAR_FALLBACK_COLOR = window.AVATAR_FALLBACK_COLOR;
+  }
 
   class ConfigManager {
     constructor() {
@@ -20,8 +28,8 @@
         },
         // Production
         production: {
-          apiUrl: 'http://216.238.91.120:3002',
-          wsUrl: 'ws://216.238.91.120:3002/ws',
+          apiUrl: 'https://api.canopi.live',
+          wsUrl: 'wss://api.canopi.live/ws',
           supabaseUrl: 'https://zwxomzkmncwzwryvudwu.supabase.co',
           supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp3eG9temttbmN3endyeXZ1ZHd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk2Njg2ODQsImV4cCI6MjA3NTI0NDY4NH0.CoceGOzumiF6aYVGQSWily93snNYh9N9C4p8lrjrTyM',
           debugMode: false,
@@ -44,6 +52,15 @@
       
       this.currentEnvironment = this.detectEnvironment();
       this.activeConfig = this.config[this.currentEnvironment];
+      
+      // Export resolved API endpoints so TypeScript modules can consume them
+      if (typeof window !== 'undefined') {
+        window.API_BASE_URL = this.activeConfig.apiUrl;
+        if (!window.API_FALLBACK_URL) {
+          const productionApi = this.config.production?.apiUrl || 'https://api.themetalayer.org';
+          window.API_FALLBACK_URL = productionApi;
+        }
+      }
       
       console.log(`🔧 CONFIG: Environment detected: ${this.currentEnvironment}`);
       console.log(`🔧 CONFIG: API URL: ${this.activeConfig.apiUrl}`);
@@ -170,13 +187,16 @@
   // Expose commonly used config values
   window.METALAYER_API_URL = window.configManager.get('apiUrl');
   window.METALAYER_WS_URL = window.configManager.get('wsUrl');
+  window.API_BASE_URL = window.configManager.get('apiUrl');
   window.SUPABASE_URL = window.configManager.get('supabaseUrl');
   window.SUPABASE_ANON_KEY = window.configManager.get('supabaseAnonKey');
   window.DEBUG_MODE = window.configManager.get('debugMode');
   window.LOG_LEVEL = window.configManager.get('logLevel');
   
   // COMP METHOD: Single source of truth for avatar fallback color
-  window.AVATAR_FALLBACK_COLOR = '#ffffff';
+  // Export to window for files not yet migrated (temporary during migration)
+  window.AVATAR_FALLBACK_COLOR = AVATAR_FALLBACK_COLOR;
+  console.log('✅ CONFIG: AVATAR_FALLBACK_COLOR set:', AVATAR_FALLBACK_COLOR);
 
   console.log('✅ CONFIG: Modern configuration system initialized');
 })();

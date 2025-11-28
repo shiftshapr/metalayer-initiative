@@ -1,19 +1,32 @@
-#!/usr/bin/env sh
-. "$(dirname -- "$0")/_/husky.sh"
+#!/bin/sh
+# Pre-commit hook to prevent policy violations
 
-# Run TypeScript type checking before commit
-echo "🔍 Running TypeScript type check..."
-npm run type-check
+. "$(dirname "$0")/_/husky.sh"
 
-# If type check fails, prevent commit
-if [ $? -ne 0 ]; then
-  echo "❌ TypeScript errors found. Please fix errors before committing."
-  echo "💡 Run 'npm run check:quality' for detailed report"
+# Check for 'as any' in critical files
+CRITICAL_FILES=$(git diff --cached --name-only | grep -E "(auth|user|identif|match|filter)" | grep "\.ts$" || true)
+
+if [ -n "$CRITICAL_FILES" ]; then
+  for file in $CRITICAL_FILES; do
+    if git diff --cached "$file" | grep -q "as any\|as unknown"; then
+      echo "❌ ERROR: Type assertion (as any/as unknown) in critical file: $file"
+      echo "   Please fix or add comment explaining why it's safe."
+      echo "   Example: // @ts-expect-error - Reason: [explanation]"
+      exit 1
+    fi
+  done
+fi
+
+# Check for email-based matching
+if git diff --cached --name-only | grep "\.ts$" | xargs grep -l "\.eq('email'\|findUnique.*email\|user\.email\s*===" 2>/dev/null; then
+  echo "❌ ERROR: Email-based matching found. Use UUID only!"
   exit 1
 fi
 
-# Run code quality check (warnings only, doesn't block commit)
-echo "📊 Running code quality check..."
-npm run check:quality || echo "⚠️  Code quality warnings found (not blocking commit)"
+# Check for email headers
+if git diff --cached --name-only | grep "\.ts$" | xargs grep -l "x-user-email\|user-email" 2>/dev/null; then
+  echo "❌ ERROR: Email headers found. Use x-user-id only!"
+  exit 1
+fi
 
 echo "✅ Pre-commit checks passed"

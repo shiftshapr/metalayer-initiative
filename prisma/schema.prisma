@@ -131,6 +131,7 @@ model AppUser {
   auraIntensity         Decimal? @db.Decimal(3, 2) // Aura intensity (0.0 to 1.0)
   globalAvailability    Availability? // Global status (applies to all tabs by default)
   availabilityUpdatedAt DateTime? // When global status was last updated
+  tabConfiguration       Json? @map("tab_configuration") // Tab manager configuration (order, visibility, currentTab, etc.)
   Conversation          Conversation[]
   ModerationAction      ModerationAction[]
   Post                  Post[]

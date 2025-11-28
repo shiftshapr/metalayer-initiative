@@ -9,6 +9,7 @@ import { TabManagerModal } from './TabManagerModal.js';
 import { AppStoreIntegration } from './AppStoreIntegration.js';
 import { Logger } from '../../utils/Logger.js';
 import { handleError } from '../../utils/ErrorHandler.js';
+import { userPreferencesManager } from '../../utils/UserPreferencesManager.js';
 
 export interface TabHandlers {
   onAgentTab?: () => Promise<void>;
@@ -17,6 +18,7 @@ export interface TabHandlers {
   onRoomsTab?: () => Promise<void>;
   onDiscussTab?: () => Promise<void>;
   onSettingsTab?: () => Promise<void>;
+  onTimelinesTab?: () => Promise<void>;
 }
 
 export class TabManager {
@@ -49,11 +51,9 @@ export class TabManager {
     }
 
     try {
-      // Set preferences manager if available
-      if (typeof window !== 'undefined' && window.userPreferencesManager) {
-        this.config.setPreferencesManager(window.userPreferencesManager);
-        this.logger.debug?.('✅ TabManager: Connected to UserPreferencesManager');
-      }
+      // Set preferences manager from ES6 import
+      this.config.setPreferencesManager(userPreferencesManager);
+      this.logger.debug?.('✅ TabManager: Connected to UserPreferencesManager');
 
       // Initialize configuration
       await this.config.initialize();
@@ -71,6 +71,51 @@ export class TabManager {
 
       // Render initial state
       await this.refreshDisplay();
+
+      // Initialize manage tab content if it's the current tab on startup
+      const state = this.config.getState();
+      if (state.currentTab === 'manage-tab') {
+        try {
+          // Ensure manage-tab content exists and is active
+          let manageTabContent = document.getElementById('manage-tab');
+          if (!manageTabContent) {
+            const sidebarContent = document.querySelector('.sidebar-content');
+            if (sidebarContent) {
+              manageTabContent = document.createElement('div');
+              manageTabContent.id = 'manage-tab';
+              manageTabContent.className = 'main-tab-content';
+              sidebarContent.appendChild(manageTabContent);
+            }
+          }
+          
+          // Make sure it has the active class
+          if (manageTabContent) {
+            manageTabContent.classList.add('active');
+          }
+          
+          // Ensure modal is initialized and content is ready
+          if (!this.modal.getModal()) {
+            this.modal.initialize();
+          }
+          
+          // Render current state
+          const tabs = this.config.getTabs();
+          this.modal.renderTabList(tabs, state.currentTab);
+          
+          // Update visible tab count input
+          this.modal.open(state.visibleTabCount);
+          
+          // Load and render app store
+          const apps = this.appStore.getApps();
+          this.modal.renderAppStore(apps);
+          
+          this.logger.debug?.('✅ TabManager: Manage tab content initialized on startup');
+        } catch (error: unknown) {
+          handleError(error, {
+            context: { operation: 'initialize.manageTabOnStartup', component: 'TabManager' }
+          });
+        }
+      }
 
       // Listen for configuration changes
       this.setupConfigListeners();
@@ -102,9 +147,9 @@ export class TabManager {
       }
     });
 
-    // Manage button click handler
+    // Manage button click handler (no-op, handled via tab click)
     this.display.setManageClickHandler(() => {
-      this.openModal();
+      // Manage button is now handled via tab click handler
     });
   }
 
@@ -227,7 +272,8 @@ export class TabManager {
       if (!this.modal.getIsOpen()) return;
 
       const tabs = this.config.getTabs();
-      this.modal.renderTabList(tabs);
+      const state = this.config.getState();
+      this.modal.renderTabList(tabs, state.currentTab);
 
       // TODO: Load and render app store (Phase 2)
       const apps = this.appStore.getApps();
@@ -239,24 +285,6 @@ export class TabManager {
     }
   }
 
-  /**
-   * Open management modal
-   */
-  private openModal(): void {
-    const state = this.config.getState();
-    state.isModalOpen = true;
-
-    // Render current state
-    const tabs = this.config.getTabs();
-    this.modal.renderTabList(tabs);
-
-    // Update visible tab count input
-    this.modal.open(state.visibleTabCount);
-
-    // TODO: Load and render app store (Phase 2)
-    const apps = this.appStore.getApps();
-    this.modal.renderAppStore(apps);
-  }
 
   /**
    * Trigger tab switch in existing tab navigation system
@@ -329,6 +357,71 @@ export class TabManager {
               context: { operation: 'triggerTabSwitch.onVisibilityTab', component: 'TabManager', tabId }
             });
           }
+        } else if (tabId === 'rooms-tab' && this.handlers.onRoomsTab) {
+          try {
+            await this.handlers.onRoomsTab();
+            this.logger.debug?.('✅ TabManager: Rooms tab initialized');
+          } catch (error: unknown) {
+            handleError(error, {
+              context: { operation: 'triggerTabSwitch.onRoomsTab', component: 'TabManager', tabId }
+            });
+          }
+        } else if (tabId === 'timelines-tab' && this.handlers.onTimelinesTab) {
+          try {
+            await this.handlers.onTimelinesTab();
+            this.logger.debug?.('✅ TabManager: Timelines tab initialized');
+          } catch (error: unknown) {
+            handleError(error, {
+              context: { operation: 'triggerTabSwitch.onTimelinesTab', component: 'TabManager', tabId }
+            });
+          }
+        } else if (tabId === 'settings-tab' && this.handlers.onSettingsTab) {
+          try {
+            await this.handlers.onSettingsTab();
+            this.logger.debug?.('✅ TabManager: Settings tab initialized');
+          } catch (error: unknown) {
+            handleError(error, {
+              context: { operation: 'triggerTabSwitch.onSettingsTab', component: 'TabManager', tabId }
+            });
+          }
+        } else if (tabId === 'manage-tab') {
+          // Initialize tab manager content when manage-tab is clicked (tab-based, not modal)
+          try {
+            // Ensure manage-tab content exists and has proper structure
+            let manageTabContent = document.getElementById('manage-tab');
+            if (!manageTabContent) {
+              const sidebarContent = document.querySelector('.sidebar-content');
+              if (sidebarContent) {
+                manageTabContent = document.createElement('div');
+                manageTabContent.id = 'manage-tab';
+                manageTabContent.className = 'main-tab-content';
+                sidebarContent.appendChild(manageTabContent);
+              }
+            }
+            
+            // Ensure modal is initialized and content is ready
+            if (!this.modal.getModal()) {
+              this.modal.initialize();
+            }
+            
+            // Render current state
+            const tabs = this.config.getTabs();
+            const currentState = this.config.getState();
+            this.modal.renderTabList(tabs, currentState.currentTab);
+            
+            // Update visible tab count input
+            this.modal.open(currentState.visibleTabCount);
+            
+            // Load and render app store
+            const apps = this.appStore.getApps();
+            this.modal.renderAppStore(apps);
+            
+            this.logger.debug?.('✅ TabManager: Manage tab content initialized');
+          } catch (error: unknown) {
+            handleError(error, {
+              context: { operation: 'triggerTabSwitch.onManageTab', component: 'TabManager', tabId }
+            });
+          }
         }
       } else {
         this.logger.warn?.(`⚠️ TabManager: Tab content #${tabId} not found`);
@@ -375,6 +468,22 @@ export class TabManager {
    */
   getAppStore(): AppStoreIntegration {
     return this.appStore;
+  }
+
+  /**
+   * Get current state (for diagnostics and external access)
+   * CRITICAL FIX: Expose state for diagnostics (regression fix)
+   */
+  getState(): ReturnType<typeof this.config.getState> {
+    return this.config.getState();
+  }
+
+  /**
+   * Get active tab (alias for getCurrentTab for compatibility)
+   * CRITICAL FIX: Expose getActiveTab for compatibility with existing code (regression fix)
+   */
+  getActiveTab(): string | null {
+    return this.getCurrentTab();
   }
 }
 

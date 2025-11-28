@@ -1,0 +1,143 @@
+presence/src/utils/MESSAGE_LOADING_DIAGNOSTIC.ts:    const win = window as unknown as WindowWithDiagnostics;
+presence/src/utils/MESSAGE_LOADING_DIAGNOSTIC.ts:          const supabaseQuery = (win.supabase as unknown) as { from: (table: string) => { select: (columns: string) => { eq: (col: string, val: unknown) => { eq: (col: string, val: unknown) => { is: (col: string, val: unknown) => { order: (col: string, opts: { ascending: boolean }) => { limit: (count: number) => Promise<{ data: unknown[] | null; error: { message: string } | null }> } } } } } } };
+presence/src/utils/UserPreferencesManager.ts:  (window as unknown as { getPreference: (key: PreferenceKey) => Promise<PreferenceValue | null> }).getPreference = (key: PreferenceKey) => userPreferencesManager.getPreference(key);
+presence/src/utils/UserPreferencesManager.ts:  (window as unknown as { savePreference: (key: PreferenceKey, value: PreferenceValue, options?: SaveOptions) => Promise<boolean> }).savePreference = (key: PreferenceKey, value: PreferenceValue, options?: SaveOptions) => userPreferencesManager.savePreference(key, value, options);
+presence/src/utils/ROOT_CAUSE_DIAGNOSTIC_FRAMEWORK.ts:      metrics: ((manager as unknown) as { getMetrics?: () => { saves?: number; errors?: number; retries?: number } }).getMetrics ? ((manager as unknown) as { getMetrics: () => { saves?: number; errors?: number; retries?: number } }).getMetrics() : undefined,
+presence/src/utils/ROOT_CAUSE_DIAGNOSTIC_FRAMEWORK.ts:      batchQueueSize: ((manager as unknown) as { batchQueue?: unknown[] }).batchQueue ? ((manager as unknown) as { batchQueue: unknown[] }).batchQueue.length : 0,
+presence/src/utils/ROOT_CAUSE_DIAGNOSTIC_FRAMEWORK.ts:      retryQueueSize: ((manager as unknown) as { retryQueue?: unknown[] }).retryQueue ? ((manager as unknown) as { retryQueue: unknown[] }).retryQueue.length : 0
+presence/src/utils/ROOT_CAUSE_DIAGNOSTIC_FRAMEWORK.ts:  (window as unknown as { diagnosticFramework: RootCauseDiagnosticFramework }).diagnosticFramework = diagnosticFramework;
+presence/src/utils/DEFAULT_VS_FOCUS_MODE_DIAGNOSTIC.ts:  const win = window as unknown as WindowWithDiagnostics;
+presence/src/utils/DEFAULT_VS_FOCUS_MODE_DIAGNOSTIC.ts:  const win = window as unknown as WindowWithDiagnostics;
+presence/src/utils/REPLY_DISPLAY_DIAGNOSTIC.ts:    const supabaseQuery1 = (window.supabase as unknown) as { from: (table: string) => { select: (columns: string) => { eq: (col: string, val: unknown) => { is: (col: string, val: unknown) => Promise<{ data: unknown[] | null; error: { message: string; code?: string; details?: string; hint?: string } | null }> } } } };
+presence/src/utils/REPLY_DISPLAY_DIAGNOSTIC.ts:    const supabaseQuery2 = (window.supabase as unknown) as { from: (table: string) => { select: (columns: string) => { eq: (col: string, val: unknown) => { eq: (col: string, val: unknown) => { is: (col: string, val: unknown) => Promise<{ data: unknown[] | null; error: { message: string } | null }> } } } } };
+presence/src/utils/REPLY_DISPLAY_DIAGNOSTIC.ts:      const supabaseQuery3 = (window.supabase as unknown) as { from: (table: string) => { select: (columns: string) => { eq: (col: string, val: unknown) => { eq: (col: string, val: unknown) => { is: (col: string, val: unknown) => Promise<{ data: unknown[] | null; error: { message: string } | null }> } } } } };
+presence/src/utils/REPLY_DISPLAY_DIAGNOSTIC.ts:    const supabaseQuery4 = (window.supabase as unknown) as { from: (table: string) => { select: (columns: string) => { eq: (col: string, val: unknown) => { eq: (col: string, val: unknown) => { is: (col: string, val: unknown) => Promise<{ data: unknown[] | null; error: { message: string } | null }> } } } } };
+presence/src/utils/REPLY_DISPLAY_DIAGNOSTIC.ts:    const supabaseQuery5 = (window.supabase as unknown) as { from: (table: string) => { select: (columns: string) => { eq: (col: string, val: unknown) => { eq: (col: string, val: unknown) => { eq: (col: string, val: unknown) => { is: (col: string, val: unknown) => Promise<{ data: unknown[] | null; error: { message: string } | null }> } } } } } };
+presence/src/utils/REPLY_DISPLAY_DIAGNOSTIC.ts:    log('DIAGNOSTIC_COMPLETE', results as unknown as Record<string, unknown>);
+presence/src/utils/FOCUS_MODE_REPLY_DIAGNOSTIC.ts:    const supabaseQuery = (window.supabase as unknown) as { from: (table: string) => { select: (columns: string) => { eq: (col: string, val: unknown) => { single: () => Promise<{ data: Record<string, unknown> | null; error: { message: string } | null }> } } } };
+presence/src/utils/FOCUS_MODE_REPLY_DIAGNOSTIC.ts:    log('STEP_4_RESULT', resolutionSteps as unknown as Record<string, unknown>);
+presence/src/utils/FOCUS_MODE_REPLY_DIAGNOSTIC.ts:      const supabaseQuery = (window.supabase as unknown) as { from: (table: string) => { select: (columns: string) => { eq: (col: string, val: unknown) => { eq: (col: string, val: unknown) => { eq: (col: string, val: unknown) => { is: (col: string, val: unknown) => { order: (col: string, opts: { ascending: boolean }) => Promise<{ data: unknown[] | null; error: { message: string } | null }> } } } } } } };
+presence/src/utils/FOCUS_MODE_REPLY_DIAGNOSTIC.ts:    log('STEP_7_RESULT', focusModeState as unknown as Record<string, unknown>);
+presence/src/utils/FOCUS_MODE_REPLY_DIAGNOSTIC.ts:    log('DIAGNOSTIC_COMPLETE', results as unknown as Record<string, unknown>);
+presence/src/utils/provenance/ProvenanceService.ts:    const sendMessageWindow = (window as unknown) as Window & { sendMessageViaSupabase?: ((message: Partial<import('../../types/index.js').Message>) => Promise<import('../../types/index.js').Message>) | ((...args: unknown[]) => Promise<{ id?: string }>) };
+presence/src/utils/provenance/ProvenanceService.ts:    const deleteMessageWindow = (window as unknown) as Window & { handleDeleteMessage?: (messageId: string) => Promise<boolean> };
+presence/src/utils/provenance/ProvenanceService.ts:    const updateMessageWindow = (window as unknown) as Window & { updateMessageInChat?: (message: import('../../types/index.js').Message) => void };
+presence/src/utils/provenance/ProvenanceDiagnostic.ts:    const windowWithService = (window as unknown) as Window & { provenanceService?: import('./ProvenanceService').default };
+presence/src/utils/provenance/ProvenanceDiagnostic.ts:    const windowWithService = (window as unknown) as Window & { provenanceService?: import('./ProvenanceService').default };
+presence/src/utils/provenance/ProvenanceDiagnostic.ts:      const windowWithVerifier = (window as unknown) as Window & { provenanceVerifier?: { verifyArtifactChain: (artifacts: ProvenanceArtifact[]) => Promise<Array<VerificationResult & { artifactId: string; timestamp: string; action?: string }>> } };
+presence/src/utils/DIAGNOSTIC_LOADING_AND_REPLIES.ts:      const query = queryBuilder as unknown as SupabaseQuery;
+presence/src/utils/DIAGNOSTIC_LOADING_AND_REPLIES.ts:        const selectQuery = originalSelect.apply(this, args) as unknown as SupabaseQuery;
+presence/src/utils/DIAGNOSTIC_LOADING_AND_REPLIES.ts:          const selectQueryRecord = selectQuery as unknown as Record<string, (...args: unknown[]) => SupabaseQuery>;
+presence/src/utils/UnifiedStorageSync.ts:  ((window as unknown) as Window & { getCurrentUserAuraColor?: () => Promise<string> }).getCurrentUserAuraColor = getCurrentUserAuraColor;
+presence/src/utils/UnifiedStorageSync.ts:  ((window as unknown) as Window & { updateAuraColorEverywhere?: (color: string) => Promise<boolean> }).updateAuraColorEverywhere = updateAuraColorEverywhere;
+presence/src/utils/UnifiedStorageSync.ts:  ((window as unknown) as Window & { getCurrentUserAvailability?: () => Promise<'AVAILABLE' | 'BUSY' | 'AWAY' | 'OFFLINE'> }).getCurrentUserAvailability = getCurrentUserAvailability;
+presence/src/utils/UnifiedStorageSync.ts:  ((window as unknown) as Window & { updateAvailabilityEverywhere?: (availability: 'AVAILABLE' | 'BUSY' | 'AWAY' | 'OFFLINE') => Promise<boolean> }).updateAvailabilityEverywhere = updateAvailabilityEverywhere;
+presence/src/utils/UnifiedStorageSync.ts:  ((window as unknown) as Window & { getCurrentUserTheme?: () => Promise<'light' | 'dark' | 'auto'> }).getCurrentUserTheme = getCurrentUserTheme;
+presence/src/utils/UnifiedStorageSync.ts:  ((window as unknown) as Window & { syncStorageWithDatabase?: () => Promise<void> }).syncStorageWithDatabase = syncStorageWithDatabase;
+presence/src/utils/ComprehensiveDiagnostic.ts:          const supabaseQuery = (window.supabase as unknown) as { from: (table: string) => { select: (columns: string) => { is: (col: string, val: unknown) => { eq: (col: string, val: unknown) => { limit: (count: number) => Promise<{ data: unknown[] | null; error: { message: string } | null }> } } } } };
+presence/src/utils/ComprehensiveDiagnostic.ts:          const supabaseQuery = (window.supabase as unknown) as { from: (table: string) => { select: (columns: string) => { eq: (col: string, val: unknown) => { limit: (count: number) => Promise<{ data: unknown[] | null; error: { message: string } | null }> } } } };
+presence/src/utils/ComprehensiveDiagnostic.ts:            summary: (result as unknown) as Record<string, unknown>
+presence/src/utils/ReplyLoader.ts:      const supabaseQuery = (supabase as unknown) as { from: (table: string) => { select: (columns: string) => { eq: (col: string, val: unknown) => { eq: (col: string, val: unknown) => { eq: (col: string, val: unknown) => Promise<{ data: Array<{ id: string }> | null; error: { message: string } | null }> } } } } };
+presence/src/utils/ReplyLoader.ts:      const supabaseQuery = (supabase as unknown) as { from: (table: string) => { select: (columns: string) => { eq: (col: string, val: unknown) => { eq: (col: string, val: unknown) => { eq: (col: string, val: unknown) => { order: (col: string, opts: { ascending: boolean }) => Promise<{ data: Array<Record<string, unknown>> | null; error: { message: string } | null }> } } } } } };
+presence/src/utils/ReplyLoader.ts:          const supabaseQuery = (supabase as unknown) as { from: (table: string) => { select: (columns: string) => { eq: (col: string, val: unknown) => { eq: (col: string, val: unknown) => { eq: (col: string, val: unknown) => { order: (col: string, opts: { ascending: boolean }) => Promise<{ data: Array<Record<string, unknown>> | null; error: { message: string } | null }> } } } } } };
+presence/src/ui/diagnostics.ts:      logger.error?.(`❌ UI DIAGNOSTIC: ${label} failed`, error as unknown as LogData);
+presence/src/ui/tabNavigation.ts:        logger.warn('❌ TAB_NAVIGATION: Missing data-tab attribute on tab element', tab as unknown as LogData);
+presence/src/ui/tabNavigation.ts:            logger.error?.('❌ TAB_NAVIGATION: Agent tab initialization failed', error as unknown as LogData);
+presence/src/ui/tabNavigation.ts:            logger.error?.('❌ TAB_NAVIGATION: People tab initialization failed', error as unknown as LogData);
+presence/src/ui/tabNavigation.ts:            logger.error?.('❌ TAB_NAVIGATION: Settings tab initialization failed', error as unknown as LogData);
+presence/src/ui/tabNavigation.ts:        logger.warn('❌ TAB_NAVIGATION: Missing data-subtab attribute on sub-tab element', subTab as unknown as LogData);
+presence/src/features/AuthModule.ts:    const { data: { session }, error: _sessionError } = await ((supabase.auth as unknown) as { getSession: () => Promise<{ data: { session: { user: { id?: string }; expires_at: number } | null }; error: unknown }> }).getSession();
+presence/src/features/AuthModule.ts:        const api = (window as unknown as Window & { api?: { request: <T = unknown>(endpoint: string, options?: { method?: string; body?: string | Record<string, unknown>; headers?: Record<string, string> }) => Promise<{ data?: T; error?: unknown }> } }).api;
+presence/src/features/AuthModule.ts:        const appUser = (appUserResponse && typeof appUserResponse === 'object' && 'data' in appUserResponse ? (appUserResponse as { data?: unknown }).data : appUserResponse) as unknown as AppUser;
+presence/src/features/RealtimeManager.ts:    const supabase = ((window as unknown) as Window & { supabase?: SupabaseClient }).supabase;
+presence/src/features/RealtimeManager.ts:      const presenceChannel = supabase.channel(`presence:${pageId}`) as unknown as {
+presence/src/features/RealtimeManager.ts:        }) as unknown as { on: (event: string, filter: { event: string }, callback: (payload?: unknown) => void) => unknown; subscribe: (callback: () => void) => unknown };
+presence/src/features/RealtimeManager.ts:        }) as unknown as { on: (event: string, filter: { event: string }, callback: (payload?: unknown) => void) => unknown; subscribe: (callback: () => void) => unknown };
+presence/src/features/RealtimeManager.ts:        }) as unknown as { subscribe: (callback: () => void) => unknown };
+presence/src/features/RealtimeManager.ts:    const supabase = ((window as unknown) as Window & { supabase?: SupabaseClient }).supabase;
+presence/src/features/RealtimeManager.ts:      const channel = presenceChannel as unknown as { on: (event: string, filter: { event: string }, callback: () => void) => unknown; subscribe: (callback: (status: string) => Promise<void>) => unknown; presenceState?: () => unknown; track?: (data: unknown) => Promise<void> };
+presence/src/features/RealtimeManager.ts:        }) as unknown as { subscribe: (callback: (status: string) => Promise<void>) => unknown };
+presence/src/features/RealtimeManager.ts:    const supabase = ((window as unknown) as Window & { supabase?: SupabaseClient }).supabase;
+presence/src/features/RealtimeManager.ts:      const presenceChannel = supabase.channel('user-presence-changes') as unknown as {
+presence/src/features/RealtimeManager.ts:        ) as unknown as { on: (event: string, filter: { event: string; schema: string; table: string }, callback: (payload: unknown) => void) => unknown; subscribe: (callback: (status: string) => void) => unknown };
+presence/src/features/RealtimeManager.ts:        ) as unknown as { on: (event: string, filter: { event: string; schema: string; table: string }, callback: (payload: unknown) => void) => unknown; subscribe: (callback: (status: string) => void) => unknown };
+presence/src/features/RealtimeManager.ts:        ) as unknown as { subscribe: (callback: (status: string) => void) => unknown };
+presence/src/features/RealtimeManager.ts:      this.userPresenceChannel = presenceChannel as unknown as RealtimeChannel;
+presence/src/features/RealtimeManager.ts:    const supabase = ((window as unknown) as Window & { supabase?: SupabaseClient }).supabase;
+presence/src/features/RealtimeManager.ts:      const availabilityChannel = supabase.channel('availability-changes') as unknown as {
+presence/src/features/RealtimeManager.ts:        ) as unknown as { subscribe: (callback: (status: string) => void) => unknown };
+presence/src/features/RealtimeManager.ts:      this.availabilityChannel = availabilityChannel as unknown as RealtimeChannel;
+presence/src/features/RealtimeManager.ts:      const statusDotHelper = ((window as unknown) as Window & { StatusDotHelper?: { getStatusDotColor: (user: { availability: AvailabilityStatus; isActive: boolean }) => string | null } }).StatusDotHelper;
+presence/src/features/RealtimeManager.ts:          const winSupabase = ((window as unknown) as Window & { supabase?: SupabaseClient }).supabase;
+presence/src/features/RealtimeManager.ts:          const supabase = ((window as unknown) as Window & { supabase?: SupabaseClient }).supabase;
+presence/src/features/RealtimeManager.ts:    const supabase = ((window as unknown) as Window & { supabase?: SupabaseClient }).supabase;
+presence/src/features/RealtimeManager.ts:        Object.assign(winWithClient, { supabaseRealtimeClient: supabase as unknown as SupabaseRealtimeClientBridge });
+presence/src/features/RealtimeManager.ts:        const supabaseQuery = (supabase as unknown) as { from: (table: string) => { select: (columns: string) => { limit: (count: number) => Promise<{ data: unknown[] | null; error: { message: string } | null }> } } };
+presence/src/features/RealtimeManager.ts:    const winWithTimeout = window as unknown as Window & { [key: string]: unknown };
+presence/src/features/RealtimeManager.ts:    }, 500) as unknown; // 500ms debounce
+presence/src/features/NotificationManager.ts:            this.logger.error('Failed to initialize NotificationManager', error as unknown as LogData);
+presence/src/features/NotificationManager.ts:            this.logger.error('Error setting notification enabled state', error as unknown as LogData);
+presence/src/features/NotificationManager.ts:            this.logger.error('Error showing notification', error as unknown as LogData);
+presence/src/features/NotificationManager.ts:                await this.showNotification(notification.type, notification as unknown as NotificationDataInput);
+presence/src/features/NotificationManager.ts:                this.logger.error('Error processing queued notification', error as unknown as LogData);
+presence/src/features/NotificationManager.ts:            this.logger.error('Error showing desktop notification', error as unknown as LogData);
+presence/src/features/NotificationManager.ts:            this.logger.error('Error handling notification click', error as unknown as LogData);
+presence/src/features/NotificationManager.ts:            this.logger.error('Error navigating to anchor', error as unknown as LogData);
+presence/src/features/NotificationManager.ts:            this.logger.error('Error requesting notification permission', error as unknown as LogData);
+presence/src/features/NotificationManager.ts:            this.logger.error('Error updating settings', error as unknown as LogData);
+presence/src/features/NotificationManager.ts:            this.logger.error('Error marking notification as read', error as unknown as LogData);
+presence/src/features/NotificationManager.ts:            this.logger.error('Error marking all notifications as read', error as unknown as LogData);
+presence/src/features/NotificationManager.ts:            this.logger.error('Error clearing notifications', error as unknown as LogData);
+presence/src/features/NotificationManager.ts:            this.logger.debug('Could not play notification sound', error as unknown as LogData);
+presence/src/features/NotificationManager.ts:            this.logger.error('Error loading settings', error as unknown as LogData);
+presence/src/features/NotificationManager.ts:            this.logger.error('Error saving settings', error as unknown as LogData);
+presence/src/features/NotificationManager.ts:            this.logger.error('Error loading history', error as unknown as LogData);
+presence/src/features/NotificationManager.ts:            this.logger.error('Error saving history', error as unknown as LogData);
+presence/src/features/NotificationManager.ts:            this.logger.error('Error loading queue', error as unknown as LogData);
+presence/src/features/NotificationManager.ts:            this.logger.error('Error saving queue', error as unknown as LogData);
+presence/src/features/NotificationManager.ts:                    this.logger.error(`Error in event listener for ${event}`, error as unknown as LogData);
+presence/src/features/NotificationManager.ts:            this.logger.error('Error checking subscription', error as unknown as LogData);
+presence/src/features/UIManager.ts:              this.logger.warn?.('⚠️ UI_MANAGER: VisibilitySettings initialization failed', error as unknown as LogData);
+presence/src/features/UIManager.ts:      this.logger.warn?.('Falling back to basic avatar rendering', error as unknown as LogData);
+presence/src/features/UIManager.ts:        this.logger.error?.('UI callback error', error as unknown as LogData);
+presence/src/features/UIManager.ts:      this.logger.error?.('SEND_CHAT_MESSAGE: Failed to send message', error as unknown as LogData);
+presence/src/features/UIManager.ts:        this.logger.warn?.('THEME: Failed to load from API, falling back to default', error as unknown as LogData);
+presence/src/features/UIManager.ts:          this.logger.error?.('THEME: Error saving theme preference', error as unknown as LogData);
+presence/src/features/UIManager.ts:  const envWindow = (typeof window !== 'undefined' ? (window as unknown as UIManagerWindow) : undefined);
+presence/src/features/UIManager.ts:        Logger.error('SEND_CHAT_MESSAGE: sendMessageViaSupabase failed', error as unknown as LogData);
+presence/src/features/UIManager.ts:  const win = window as unknown as UIManagerWindow;
+presence/src/features/AnchorHighlighter.ts:      this.logger.info('Applying highlight', { style, duration } as unknown as LogData);
+presence/src/features/AnchorHighlighter.ts:        }, duration) as unknown as ReturnType<typeof setTimeout>;
+presence/src/features/AnchorHighlighter.ts:      this.logger.error('Error applying highlight', error as unknown as LogData);
+presence/src/features/AnchorHighlighter.ts:      this.logger.error('Error removing highlight', error as unknown as LogData);
+presence/src/features/AnchorHighlighter.ts:        }, newDuration) as unknown as ReturnType<typeof setTimeout>;
+presence/src/features/AnchorHighlighter.ts:      this.logger.error('Error injecting styles', error as unknown as LogData);
+presence/src/features/AnchorHighlighter.ts:        }, duration) as unknown as ReturnType<typeof setTimeout>;
+presence/src/features/AnchorHighlighter.ts:      this.logger.error('Error creating custom highlight', error as unknown as LogData);
+presence/src/features/MessagesModule.ts:        ${typeof window !== 'undefined' && (window as unknown as { XIcons?: { more?: (opts: { width: number; height: number }) => string } }).XIcons?.more ? ((window as unknown as { XIcons: { more: (opts: { width: number; height: number }) => string } }).XIcons.more({ width: 20, height: 20 })) : '<span class="action-dots" style="opacity: 1 !important; display: inline-block !important; visibility: visible !important; font-size: 16px !important; color: var(--text-secondary) !important; background: none !important;">⋯</span>'}
+presence/src/features/SubscriptionManager.ts:      this.logger.error('Failed to initialize SubscriptionManager', error as unknown as LogData);
+presence/src/features/SubscriptionManager.ts:      this.logger.error('Error creating subscription:', error as unknown as LogData);
+presence/src/features/SubscriptionManager.ts:      this.logger.error('Error updating subscription', error as unknown as LogData);
+presence/src/features/SubscriptionManager.ts:      this.logger.error('Error deleting subscription:', error as unknown as LogData);
+presence/src/features/SubscriptionManager.ts:      this.logger.error('Error muting subscription:', error as unknown as LogData);
+presence/src/features/SubscriptionManager.ts:      this.logger.error('Error unmuting subscription:', error as unknown as LogData);
+presence/src/features/SubscriptionManager.ts:      this.logger.error('Error enabling subscription:', error as unknown as LogData);
+presence/src/features/SubscriptionManager.ts:      this.logger.error('Error disabling subscription:', error as unknown as LogData);
+presence/src/features/SubscriptionManager.ts:      this.logger.error('Error loading subscriptions', error as unknown as LogData);
+presence/src/features/SubscriptionManager.ts:      this.logger.error('Error saving subscriptions', error as unknown as LogData);
+presence/src/features/SubscriptionManager.ts:          this.logger.error(`Error in event listener for ${event}:`, error as unknown as LogData);
+presence/src/features/TabManager/TabConfiguration.ts:            const parsed = JSON.parse(stored) as unknown;
+presence/src/sidepanel/buildGraph.ts:                    const supabase = supabaseClient as unknown as {
+presence/src/sidepanel/buildGraph.ts:                    const supabase = supabaseClient as unknown as {
+presence/src/core/auth/adapters/Web3AuthAdapter.ts:      const Web3AuthModal = (window as unknown as Window & { Web3AuthModal: { Web3Auth: new (config: unknown) => unknown } }).Web3AuthModal;
+presence/src/core/auth/AuthProvider.ts:              adapter = new Web3AuthAdapter(config.config as unknown as Web3AuthConfig);
+presence/src/core/auth/config.ts:      config: web3AuthConfig as unknown as Record<string, unknown>,
+presence/src/services/MessageRendererService.ts:      reactionCount: reactionCount || (Array.isArray((message as unknown as { reactions?: unknown[] }).reactions) ? ((message as unknown as { reactions: unknown[] }).reactions?.length || 0) : 0),
+presence/src/services/MessageLoadingService.ts:    } else if (typeof window !== 'undefined' && typeof (window as unknown as { loadChatHistory?: LoadChatHistoryFn }).loadChatHistory === 'function') {
+presence/src/services/MessageLoadingService.ts:      this.loadChatHistoryFn = (window as unknown as { loadChatHistory: LoadChatHistoryFn }).loadChatHistory.bind(window);
+presence/src/services/MessageLoadingService.ts:          const win = window as unknown as { loadChatHistory?: LoadChatHistoryFn };
+presence/src/services/RealtimeSubscriptionService.ts:      this.channels.set(pageId, channel as unknown as RealtimeChannel);
+presence/src/services/RealtimeSubscriptionService.ts:      const supabaseWithRemove = this.supabase as unknown as { removeChannel?: (channel: unknown) => void };
+presence/src/services/SupabaseRealtimeClientFix.ts:      const service = initializeRealtimeSubscriptionService(supabaseClient as unknown as RealtimeSupabaseClient);
+presence/src/services/APIService.ts:  // Store in stateManager (TypeScript migration) - store as unknown to avoid type mismatch
+presence/src/services/APIService.ts:    stateManagerInstance.setState('api', apiInstance as unknown);

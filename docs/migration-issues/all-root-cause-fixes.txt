@@ -1,0 +1,276 @@
+presence/src/utils/AvatarUtils.ts:52:    // ROOT CAUSE FIX: Try to get avatar URL from user object (check both avatarUrl and picture)
+presence/src/utils/UserPreferencesManager.ts:332:      // ROOT CAUSE FIX: For theme, prioritize Chrome storage > DOM > database > default
+presence/src/utils/UserPreferencesManager.ts:344:        // ROOT CAUSE FIX: Comprehensive logging for theme resolution
+presence/src/utils/UserPreferencesManager.ts:381:            // ROOT CAUSE FIX: Mark this as a default value so it doesn't get saved to database
+presence/src/utils/UserPreferencesManager.ts:407:      // ROOT CAUSE FIX: Log what theme will be applied before calling applyPreferencesToUI
+presence/src/utils/UserPreferencesManager.ts:413:      // ROOT CAUSE FIX: Always apply theme during initial load (ProfileManager no longer sets theme on startup)
+presence/src/utils/UserPreferencesManager.ts:493:        // ROOT CAUSE FIX: Do NOT set default for NULL values - NULL means "not set" and should not be saved back
+presence/src/utils/UserPreferencesManager.ts:544:    // ROOT CAUSE FIX: Never save default values to database - they're only for local fallback
+presence/src/utils/UserPreferencesManager.ts:577:      // ROOT CAUSE FIX: Only apply theme if this is a theme preference change, not other preferences
+presence/src/utils/UserPreferencesManager.ts:780:        // ROOT CAUSE FIX: tab_configuration is stored as JSON string in Chrome storage,
+presence/src/utils/UserPreferencesManager.ts:1009:   * ROOT CAUSE FIX: Only apply theme if DOM theme is not set (first load) or if theme preference was explicitly changed
+presence/src/utils/UserPreferencesManager.ts:1013:    // ROOT CAUSE FIX: NEVER override an existing DOM theme - DOM is the source of truth once set
+presence/src/utils/UserPreferencesManager.ts:1019:      // ROOT CAUSE FIX: ProfileManager no longer sets theme on startup, so we should always apply the resolved theme
+presence/src/utils/StatusDotHelper.ts:38:    // ROOT CAUSE FIX: Prioritize explicit availability over is_active
+presence/src/utils/StatusDotHelper.ts:133:    // ROOT CAUSE FIX: Get availability from user object, with proper fallback
+presence/src/utils/UnifiedMessageRenderer.ts:91:    // ROOT CAUSE FIX: Generate avatar HTML - ensure it's always generated, even for replies
+presence/src/utils/UnifiedMessageRenderer.ts:103:        // ROOT CAUSE FIX: Verify avatar was generated (not empty)
+presence/src/utils/UnifiedMessageRenderer.ts:116:        // ROOT CAUSE FIX: Always provide fallback avatar
+presence/src/utils/UnifiedMessageRenderer.ts:129:      // ROOT CAUSE FIX: Even if no author, provide placeholder avatar
+presence/src/utils/UnifiedMessageRenderer.ts:182:    // ROOT CAUSE FIX: Always show reply count if > 0, ensure it's visible
+presence/src/utils/UnifiedMessageRenderer.ts:231:      // ROOT CAUSE FIX: Ensure edit/delete buttons are always rendered when canEdit/canDelete is true
+presence/src/utils/UnifiedStorageSync.ts:71:// ROOT CAUSE FIX: Unified function to update aura color in BOTH Chrome storage AND database
+presence/src/utils/UnifiedStorageSync.ts:172:// ROOT CAUSE FIX: Get current user's aura color (Chrome storage first, then database fallback)
+presence/src/utils/UnifiedStorageSync.ts:246:// ROOT CAUSE FIX: Unified function to update availability status in BOTH Chrome storage AND database
+presence/src/utils/UnifiedStorageSync.ts:328:    // ROOT CAUSE FIX: Also refresh profile avatar when availability changes
+presence/src/utils/UnifiedStorageSync.ts:379:// ROOT CAUSE FIX: Get current user's availability (Chrome storage first, then database fallback)
+presence/src/utils/UnifiedStorageSync.ts:454:// ROOT CAUSE FIX: Unified function to update theme in BOTH Chrome storage AND database
+presence/src/utils/UnifiedStorageSync.ts:556:// ROOT CAUSE FIX: Get current user's theme (Chrome storage first, then database fallback)
+presence/src/utils/UnifiedStorageSync.ts:640:// ROOT CAUSE FIX: Sync Chrome storage with database on load
+presence/src/utils/UnifiedStorageSync.ts:727:        // ROOT CAUSE FIX: Also update visibility cache if it exists
+presence/src/utils/UnifiedStorageSync.ts:738:        // ROOT CAUSE FIX: Refresh profile avatar if it exists
+presence/src/utils/UserUtils.ts:24:    // ROOT CAUSE FIX: Use stateManager (TypeScript migration - no window.currentUser)
+presence/src/utils/UserUtils.ts:60:  // ROOT CAUSE FIX: Check stateManager first (TypeScript migration - no window.currentUser)
+presence/src/utils/UserUtils.ts:87:          // ROOT CAUSE FIX: Update stateManager (TypeScript migration - no window.currentUser)
+presence/src/utils/UserUtils.ts:107:          // ROOT CAUSE FIX: Update stateManager (TypeScript migration - no window.currentUser)
+presence/src/features/SettingsHeadlineManager.ts:185:    // Update color based on length (ROOT CAUSE FIX: Char count is now in separate div below input)
+presence/src/features/SettingsHeadlineManager.ts:323:      // ROOT CAUSE FIX: Min 20, max 1000 chars, null is ok
+presence/src/features/AuthModule.ts:175:    // ROOT CAUSE FIX: Fetch AppUser UUID from backend (AppUser table always has UUIDs)
+presence/src/features/AuthModule.ts:232:              // ROOT CAUSE FIX: Update stateManager with complete user data
+presence/src/features/AuthModule.ts:299:    // ROOT CAUSE FIX: Use stateManager (TypeScript migration - no window.currentUser)
+presence/src/features/AuthModule.ts:710:    // ROOT CAUSE FIX: Use stateManager (TypeScript migration - no window.currentUser)
+presence/src/features/AuthModule.ts:745:  // ROOT CAUSE FIX: Check stateManager first (TypeScript migration - no window.currentUser)
+presence/src/features/AuthModule.ts:772:          // ROOT CAUSE FIX: Update stateManager (TypeScript migration - no window.currentUser)
+presence/src/features/AuthModule.ts:795:          // ROOT CAUSE FIX: Update stateManager (TypeScript migration - no window.currentUser)
+presence/src/features/RealtimeManager.ts:903:  // ROOT CAUSE FIX: Declare currentPageId at function scope to avoid ReferenceError
+presence/src/features/RealtimeManager.ts:908:  // ROOT CAUSE FIX: Always refresh visibility after any presence change
+presence/src/features/RealtimeManager.ts:946:  // ROOT CAUSE FIX: Refresh visibility UI when presence changes affect current page
+presence/src/features/RealtimeManager.ts:1042:          // ROOT CAUSE FIX: Pass the full payload so addReactionToMessage can extract messageId correctly
+presence/src/features/RealtimeManager.ts:1073:          // ROOT CAUSE FIX: Pass the full payload so removeReactionFromMessage can extract messageId correctly
+presence/src/features/RealtimeManager.ts:1087:          // ROOT CAUSE FIX: removeReactionFromMessage is now async, await it
+presence/src/features/AuthManager.ts:32:    // ROOT CAUSE FIX: Preserve existing currentUser from stateManager instead of clearing it
+presence/src/features/AuthManager.ts:103:    // ROOT CAUSE FIX: Update stateManager (TypeScript migration - no window.currentUser)
+presence/src/features/AuthManager.ts:119:    // ROOT CAUSE FIX: Update stateManager (TypeScript migration - no window.currentUser)
+presence/src/features/UIManager.ts:408:    // ROOT CAUSE FIX: Use class-based tab switching (harmonize with tabNavigation.ts)
+presence/src/features/UIManager.ts:415:    // ROOT CAUSE FIX: Use class-based content switching instead of inline styles
+presence/src/features/UIManager.ts:428:        // ROOT CAUSE FIX: Remove inline display style to let CSS handle it
+presence/src/features/UIManager.ts:432:        // ROOT CAUSE FIX: Remove inline display style to let CSS handle it
+presence/src/features/ProfileManager.ts:49:  // ROOT CAUSE FIX: Get API from window (set by APIService.ts) or stateManager
+presence/src/features/ProfileManager.ts:117:// ROOT CAUSE FIX: Helper to ensure user object has required fields
+presence/src/features/ProfileManager.ts:162:    // ROOT CAUSE FIX: Do NOT load theme on startup - UserPreferencesManager will handle it
+presence/src/features/ProfileManager.ts:177:   * ROOT CAUSE FIX: Ensures theme persists across page reloads
+presence/src/features/ProfileManager.ts:310:      // ROOT CAUSE FIX: Initialize UserPreferencesManager when user becomes available
+presence/src/features/ProfileManager.ts:320:   * ROOT CAUSE FIX: Initialize UserPreferencesManager when user becomes available
+presence/src/features/ProfileManager.ts:379:          // ROOT CAUSE FIX: Reuse win variable from outer scope
+presence/src/features/ProfileManager.ts:404:    // ROOT CAUSE FIX: Reuse win variable from outer scope
+presence/src/features/ProfileManager.ts:545:      // ROOT CAUSE FIX: Use stateManagerInstance instead of window.getState
+presence/src/features/ProfileManager.ts:579:          // ROOT CAUSE FIX: API response is wrapped in APIResponse type, check data property
+presence/src/features/ProfileManager.ts:653:    // ROOT CAUSE FIX: Subscribe to stateManager currentUser updates (event-driven, NO POLLING)
+presence/src/features/ProfileManager.ts:713:   * ROOT CAUSE FIX: Ensure parent container #user-info is visible when user is authenticated
+presence/src/features/ProfileManager.ts:719:      // ROOT CAUSE FIX: Check computed style, not just inline style (may be hidden by CSS)
+presence/src/features/ProfileManager.ts:730:   * ROOT CAUSE FIX: Wait for currentUser if not available, retry when it becomes available
+presence/src/features/ProfileManager.ts:731:   * ROOT CAUSE FIX: Prevent multiple simultaneous calls to avoid redundant API requests
+presence/src/features/ProfileManager.ts:735:    // ROOT CAUSE FIX: Prevent multiple simultaneous calls - but allow retry if promise completed
+presence/src/features/ProfileManager.ts:764:    // ROOT CAUSE FIX: Get currentUser - if not available, StateManager subscription will trigger update when it arrives
+presence/src/features/ProfileManager.ts:772:      // ROOT CAUSE FIX: Reset promise before returning early so future calls can proceed
+presence/src/features/ProfileManager.ts:777:      // ROOT CAUSE FIX: Ensure parent container #user-info is visible
+presence/src/features/ProfileManager.ts:814:    // ROOT CAUSE FIX: Create/update user avatar if:
+presence/src/features/ProfileManager.ts:826:    // ROOT CAUSE FIX: Check if existing avatar has wrong aura color (white/fallback) and we now have correct color
+presence/src/features/ProfileManager.ts:854:      // ROOT CAUSE FIX: Use imported AvatarUtils directly (TypeScript import - no need to wait or check window)
+presence/src/features/ProfileManager.ts:856:      // ROOT CAUSE FIX: Re-check currentUser after waiting
+presence/src/features/ProfileManager.ts:863:          // ROOT CAUSE FIX: Prioritize stateManager's currentUser.auraColor (most up-to-date from API)
+presence/src/features/ProfileManager.ts:867:          // ROOT CAUSE FIX: Check stateManager FIRST (this is the source of truth after API fetch)
+presence/src/features/ProfileManager.ts:887:          // ROOT CAUSE FIX: Fallback to getCurrentUserAuraColor() if stateManager doesn't have it
+presence/src/features/ProfileManager.ts:917:          // ROOT CAUSE FIX: If still no valid color, check stateManager one more time (it may have been updated)
+presence/src/features/ProfileManager.ts:941:          // ROOT CAUSE FIX: Ensure auraColorValue is passed to AvatarUtils
+presence/src/features/ProfileManager.ts:949:          // ROOT CAUSE FIX: Override auraColor in sourceUser if we found a valid one
+presence/src/features/ProfileManager.ts:963:          // ROOT CAUSE FIX: Map picture to avatarUrl for AvatarUtils compatibility
+presence/src/features/ProfileManager.ts:972:          // ROOT CAUSE FIX: Get final aura color - prioritize auraColorValue, then stateManager, then profileData
+presence/src/features/ProfileManager.ts:996:            avatarUrl: avatarUrlFromPicture || undefined, // ROOT CAUSE FIX: Map picture -> avatarUrl
+presence/src/features/ProfileManager.ts:998:            auraColor: finalAuraColor || undefined // ROOT CAUSE FIX: Use finalAuraColor which includes stateManager check, convert null to undefined
+presence/src/features/ProfileManager.ts:1010:          // ROOT CAUSE FIX: Ensure availability is set for status dots
+presence/src/features/ProfileManager.ts:1033:          // ROOT CAUSE FIX: Use imported AvatarUtils directly (TypeScript import)
+presence/src/features/ProfileManager.ts:1036:            showStatus: true,  // ROOT CAUSE FIX: Enable status dots on profile avatar
+presence/src/features/ProfileManager.ts:1041:          // ROOT CAUSE FIX: Wrap AvatarUtils HTML in .user-avatar div for consistency with diagnostic expectations
+presence/src/features/ProfileManager.ts:1062:        // ROOT CAUSE FIX: Log detailed diagnostic info
+presence/src/features/ProfileManager.ts:1083:    // ROOT CAUSE FIX: Remove existing handler if it exists, then add new one
+presence/src/features/ProfileManager.ts:1091:    // ROOT CAUSE FIX: Add click handler with proper event handling
+presence/src/features/ProfileManager.ts:1105:        // ROOT CAUSE FIX: Reset promise on error so future calls can proceed
+presence/src/features/ProfileManager.ts:1108:        // ROOT CAUSE FIX: Always reset promise after completion (success or error)
+presence/src/features/ProfileManager.ts:1122:    // ROOT CAUSE FIX: Stop event propagation to prevent immediate click-outside handler
+presence/src/features/ProfileManager.ts:1139:      // ROOT CAUSE FIX: Ensure menu is positioned correctly
+presence/src/features/ProfileManager.ts:1145:        // ROOT CAUSE FIX: Update theme toggle display to show opposite of current theme
+presence/src/features/ProfileManager.ts:1155:        // ROOT CAUSE FIX: Add click-outside handler AFTER menu is shown, with longer delay
+presence/src/features/ProfileManager.ts:1160:          }, 500); // ROOT CAUSE FIX: Increased delay to 500ms to prevent immediate closing from same click event
+presence/src/features/ProfileManager.ts:1207:    // ROOT CAUSE FIX: Use imported AvatarUtils directly (TypeScript import)
+presence/src/features/ProfileManager.ts:1262:    // ROOT CAUSE FIX: Add to avatar container with proper positioning
+presence/src/features/ProfileManager.ts:1272:      // ROOT CAUSE FIX: Position menu correctly
+presence/src/features/ProfileManager.ts:1285:    // ROOT CAUSE FIX: Add click-outside handler
+presence/src/features/ProfileManager.ts:1324:   * ROOT CAUSE FIX: Update BOTH theme-icon/theme-text (sidepanel.html) AND theme-icon-menu/theme-text-menu (dynamic menu)
+presence/src/features/ProfileManager.ts:1355:   * ROOT CAUSE FIX: Unified function to update ALL theme UI elements (profile menu AND settings tab)
+presence/src/features/ProfileManager.ts:1432:        // ROOT CAUSE FIX: Switch to settings tab (not visibility tab)
+presence/src/features/ProfileManager.ts:1486:          // ROOT CAUSE FIX: Ensure VisibilitySettingsManager event listeners are attached
+presence/src/features/ProfileManager.ts:1507:      // ROOT CAUSE FIX: Ensure button is active and clickable
+presence/src/features/ProfileManager.ts:1585:   * ROOT CAUSE FIX: Add click-outside handler to close menu
+presence/src/features/ProfileManager.ts:1741:          // ROOT CAUSE FIX: Update BOTH Chrome storage AND database
+presence/src/features/ProfileManager.ts:1806:      // ROOT CAUSE FIX: Update ALL theme UI elements (profile menu AND settings tab) to keep them in sync
+presence/src/features/ProfileManager.ts:1810:      // ROOT CAUSE FIX: updateThemeEverywhere is defined in this file, use it directly
+presence/src/features/ProfileManager.ts:1848:      // ROOT CAUSE FIX: Removed localStorage - we only use Chrome storage and database
+presence/src/features/ProfileManager.ts:1921:    // ROOT CAUSE FIX: Sync Chrome storage with database when user updates
+presence/src/features/ProfileManager.ts:1957:              // ROOT CAUSE FIX: Also update stateManager currentUser for consistency
+presence/src/features/ProfileManager.ts:2090:        // ROOT CAUSE FIX: Initialize UserPreferencesManager FIRST (before avatar) to ensure theme is loaded correctly
+presence/src/features/ProfileManager.ts:2093:        // ROOT CAUSE FIX: Force avatar recreation by calling setupProfileMenuAndAuraModal directly
+presence/src/features/ProfileManager.ts:2098:        // ROOT CAUSE FIX: If already authenticated but user data updated, refresh avatar
+presence/src/features/ProfileManager.ts:2101:        // ROOT CAUSE FIX: Ensure UserPreferencesManager is initialized even if already authenticated
+presence/src/features/ProfileManager.ts:2182:    // ROOT CAUSE FIX: Use getCurrentUserAuraColor() for latest aura color (prioritizes Chrome storage, then database)
+presence/src/features/ProfileManager.ts:2234:    // ROOT CAUSE FIX: Fallback to stateManager currentUser if pre-render data not available
+presence/src/features/ProfileManager.ts:2319:      // ROOT CAUSE FIX: Map picture to avatarUrl for AvatarUtils compatibility
+presence/src/features/ProfileManager.ts:2324:        avatarUrl: pictureUrl, // ROOT CAUSE FIX: Map picture -> avatarUrl
+presence/src/features/ProfileManager.ts:2329:      // ROOT CAUSE FIX: Use imported AvatarUtils directly (TypeScript import)
+presence/src/features/ProfileManager.ts:2338:        // ROOT CAUSE FIX: Ensure availability is set for status dots
+presence/src/features/ProfileManager.ts:2339:        // ROOT CAUSE FIX: Prioritize stateManager currentUser.availability/globalAvailability (most up-to-date)
+presence/src/features/ProfileManager.ts:2348:          // ROOT CAUSE FIX: Try to get from stateManager currentUser first
+presence/src/features/ProfileManager.ts:2371:          showStatus: true,  // ROOT CAUSE FIX: Enable status dots on profile avatar
+presence/src/features/ProfileManager.ts:2375:        // ROOT CAUSE FIX: Wrap AvatarUtils HTML in .user-avatar div for consistency
+presence/src/features/ProfileManager.ts:2590:// ROOT CAUSE FIX: Unified function to update aura color in BOTH Chrome storage AND database
+presence/src/features/ProfileManager.ts:2610:    // ROOT CAUSE FIX: Step 2: Update database via API
+presence/src/features/ProfileManager.ts:2637:    // ROOT CAUSE FIX: Step 3: Update stateManager currentUser immediately
+presence/src/features/ProfileManager.ts:2665:    // ROOT CAUSE FIX: Step 5: Trigger real-time update and avatar refresh
+presence/src/features/ProfileManager.ts:2679:    // ROOT CAUSE FIX: Step 6: Force refresh all message avatars to show new color
+presence/src/features/ProfileManager.ts:2685:    // ROOT CAUSE FIX: Step 7: Refresh visibility avatars
+presence/src/features/ProfileManager.ts:2703:  // ROOT CAUSE FIX: Check stateManager FIRST (most up-to-date, from API)
+presence/src/features/ProfileManager.ts:2724:  // ROOT CAUSE FIX: Fallback 1: Check Chrome storage (persisted value)
+presence/src/features/ProfileManager.ts:2761:  // ROOT CAUSE FIX: Fallback 4: Try to fetch from database via API
+presence/src/features/ProfileManager.ts:2984:  // ROOT CAUSE FIX: Ensure visibility settings button handler is added
+presence/src/features/ProfileManager.ts:3010:            // ROOT CAUSE FIX: Switch to settings tab (not visibility tab)
+presence/src/features/ProfileManager.ts:3048:            // ROOT CAUSE FIX: Ensure event listeners are attached when settings tab opens
+presence/src/features/ProfileManager.ts:3259:// ROOT CAUSE FIX: Unified function to update availability status in BOTH Chrome storage AND database
+presence/src/features/ProfileManager.ts:3283:    // ROOT CAUSE FIX: Step 2: Update database via API
+presence/src/features/ProfileManager.ts:3311:    // ROOT CAUSE FIX: Step 3: Update stateManager currentUser immediately
+presence/src/features/ProfileManager.ts:3318:    // ROOT CAUSE FIX: Step 4: Update visibility cache immediately to prevent stale data
+presence/src/features/ProfileManager.ts:3372:// ROOT CAUSE FIX: Unified function to update theme in BOTH Chrome storage AND database
+presence/src/features/ProfileManager.ts:3374:  // ROOT CAUSE FIX: Log call stack to identify where this is being called from
+presence/src/features/ProfileManager.ts:3383:  // ROOT CAUSE FIX: CRITICAL - Prevent resetting to 'light' if current DOM theme is 'dark'
+presence/src/features/ProfileManager.ts:3431:    // ROOT CAUSE FIX: Removed localStorage - we only use Chrome storage and database
+presence/src/features/ProfileManager.ts:3444:    // ROOT CAUSE FIX: Get currentUser from stateManager
+presence/src/features/ProfileManager.ts:3515:// ROOT CAUSE FIX: Get current user's theme (Chrome storage first, then database fallback)
+presence/src/features/ProfileManager.ts:3519:  // ROOT CAUSE FIX: Check Chrome storage FIRST
+presence/src/features/ProfileManager.ts:3534:  // ROOT CAUSE FIX: Removed localStorage fallback - we only use Chrome storage and database
+presence/src/features/ProfileManager.ts:3544:  // ROOT CAUSE FIX: Fallback 3: Try to fetch from database via API
+presence/src/features/ProfileManager.ts:3559:          // ROOT CAUSE FIX: Removed localStorage - we only use Chrome storage and database
+presence/src/features/ProfileManager.ts:3580:// ROOT CAUSE FIX: Get current user's availability (Chrome storage first, then database fallback)
+presence/src/features/ProfileManager.ts:3584:  // ROOT CAUSE FIX: Check Chrome storage FIRST
+presence/src/features/ProfileManager.ts:3609:  // ROOT CAUSE FIX: Fallback 2: Try to get from visibility data (database)
+presence/src/features/ProfileManager.ts:3621:  // ROOT CAUSE FIX: Fallback 3: Try to fetch from database via API
+presence/src/features/MessagesModule.ts:120: * ROOT CAUSE FIX: This prevents sidepanel URLs from being used as pageIds
+presence/src/features/MessagesModule.ts:124:    // ROOT CAUSE FIX: Never return sidepanel or chrome-extension URLs
+presence/src/features/MessagesModule.ts:154:        // ROOT CAUSE FIX: Track if we're in initial load to prevent duplicate processing
+presence/src/features/MessagesModule.ts:161:                // ROOT CAUSE FIX: During initial load, skip onMessageUpdate callback
+presence/src/features/MessagesModule.ts:362:        // ROOT CAUSE FIX: Calculate permissions and format time properly
+presence/src/features/MessagesModule.ts:371:        // Format time using formatMessageTime - ROOT CAUSE FIX: Convert Date to string if needed
+presence/src/features/MessagesModule.ts:381:        // ROOT CAUSE FIX: Ensure formattedTime is a string (not a Promise or other type)
+presence/src/features/MessagesModule.ts:388:            // ROOT CAUSE FIX: UnifiedMessageRenderer should import getMessageActionMenu directly
+presence/src/features/MessagesModule.ts:453:        // ROOT CAUSE FIX: Verify icons and info are present in the generated HTML
+presence/src/features/MessagesModule.ts:460:            // ROOT CAUSE FIX: If missing, inject the action menu manually
+presence/src/features/MessagesModule.ts:484:            // ROOT CAUSE FIX: Get createUnifiedMessageElement from window (set by UnifiedMessageDisplay module)
+presence/src/features/MessagesModule.ts:522:    // ROOT CAUSE FIX: If no communities found after retries, use Public Square UUID
+presence/src/features/MessagesModule.ts:547:        // ROOT CAUSE FIX: Get addMessageToChat from window (set by MessagesModule exports)
+presence/src/features/MessagesModule.ts:669:        // ROOT CAUSE FIX: Get addMessageActionListeners from window
+presence/src/features/MessagesModule.ts:680:        // ROOT CAUSE FIX: Get loadMessageReactions from window
+presence/src/features/MessagesModule.ts:809:            // ROOT CAUSE FIX: Get community name (same logic as renderMessageElement)
+presence/src/features/MessagesModule.ts:884:    // ROOT CAUSE FIX: Try multiple selectors and containers to find message element
+presence/src/features/MessagesModule.ts:903:        // ROOT CAUSE FIX: Log available message IDs for debugging
+presence/src/features/MessagesModule.ts:1144:    // Action menu (three dots) - ROOT CAUSE FIX: Proper toggle and positioning
+presence/src/features/MessagesModule.ts:1158:            // Toggle dropdown - ROOT CAUSE FIX: Check computed style, not inline style
+presence/src/features/MessagesModule.ts:1168:                    // ROOT CAUSE FIX: Position dropdown to stay on screen with proper viewport bounds checking
+presence/src/features/MessagesModule.ts:1204:                    // Check if dropdown goes off right edge - ROOT CAUSE FIX: Better positioning logic
+presence/src/features/MessagesModule.ts:1239:        // ROOT CAUSE FIX: Close dropdown when clicking outside (use capture phase for better detection)
+presence/src/features/MessagesModule.ts:1604:        // ROOT CAUSE FIX: Validate that pageId is not a sidepanel pageId
+presence/src/features/MessagesModule.ts:1628:            // ROOT CAUSE FIX: Don't block message loading if communities aren't ready
+presence/src/features/MessagesModule.ts:1635:        // ROOT CAUSE FIX: Auto-initialize message system if not initialized
+presence/src/features/MessagesModule.ts:1681:        // ROOT CAUSE FIX: Mark as initial load to prevent onMessageUpdate from adding messages
+presence/src/features/MessagesModule.ts:1712:        // ROOT CAUSE FIX: Use actual pageId from currentUrlData (not normalizedUrl)
+presence/src/features/MessagesModule.ts:1735:        // ROOT CAUSE FIX: Mark initial load as complete AFTER getting messages but BEFORE rendering
+presence/src/features/MessagesModule.ts:1896:        // ROOT CAUSE FIX: Mark initial load as complete after rendering
+presence/src/features/MessagesModule.ts:2073:    // ROOT CAUSE FIX: Ensure background is never transparent - use explicit color values
+presence/src/features/MessagesModule.ts:2980:    // ROOT CAUSE FIX: Click handler to open UnifiedMessageModal
+presence/src/features/visibility/integration/buildGraphAdapter.ts:56:      // ROOT CAUSE FIX: Use correct table name (user_presence) and field (is_active)
+presence/src/features/visibility/integration/buildGraphAdapter.ts:106:// ROOT CAUSE FIX: Initialize manager with UUID (user_id), not email
+presence/src/features/visibility/integration/buildGraphAdapter.ts:175:        // ROOT CAUSE FIX: Use correct table name (user_presence) and field (is_active)
+presence/src/features/visibility/integration/createVisibilityRefresher.ts:31:      // ROOT CAUSE FIX: Check if VisibilityManager is initialized before refreshing
+presence/src/features/visibility/ui/VisibilityUIEvents.ts:165:    // ROOT CAUSE FIX: Actually call refreshVisibilityAvatars when tab opens
+presence/src/features/visibility/core/VisibilityManager.ts:31:  private currentUserId: string | null = null; // ROOT CAUSE FIX: Use UUID, not email
+presence/src/features/visibility/core/VisibilityManager.ts:50:   * Initialize visibility manager - ROOT CAUSE FIX: Use AppUser UUID (user_id from database), not Google ID
+presence/src/features/visibility/core/VisibilityManager.ts:92:      // ROOT CAUSE FIX: If not active, try to initialize using currentUserId (UUID) from state
+presence/src/features/visibility/core/VisibilityManager.ts:145:        // Filter out current user - ROOT CAUSE FIX: Use email for filtering since UUIDs may not match
+presence/src/features/visibility/core/VisibilityManager.ts:316:      currentUserId: this.currentUserId, // ROOT CAUSE FIX: Return UUID
+presence/src/features/visibility/core/VisibilityManager.ts:329:      this.currentUserId = null; // ROOT CAUSE FIX: Clear UUID
+presence/src/features/TabManager/TabManager.ts:75:      // ROOT CAUSE FIX: Ensure discuss-tab is active by default if no tab is set
+presence/src/features/TabManager/TabManager.ts:257:   * ROOT CAUSE FIX: Ensure manage-tab can be switched away from (navigation not stuck)
+presence/src/features/TabManager/TabManager.ts:265:      // ROOT CAUSE FIX: Remove active class from ALL tabs including manage-tab
+presence/src/features/TabManager/TabDisplay.ts:117:   * ROOT CAUSE FIX: Ensure manage-tab is permanent (always far right, cannot move/remove)
+presence/src/features/TabManager/TabDisplay.ts:122:    // ROOT CAUSE FIX: Check if manage button already exists to prevent duplicates
+presence/src/features/TabManager/TabDisplay.ts:129:      // ROOT CAUSE FIX: Ensure existing button has all required attributes
+presence/src/features/TabManager/TabDisplay.ts:149:    // ROOT CAUSE FIX: Add permanent attribute to prevent removal/movement
+presence/src/features/TabManager/TabDisplay.ts:153:    // ROOT CAUSE FIX: Use same structure as other tabs (label span) for consistent text positioning
+presence/src/features/TabManager/TabDisplay.ts:169:    // ROOT CAUSE FIX: Always append to end (far right) - CSS margin-left: auto will push it right
+presence/src/features/TabManager/TabDisplay.ts:194:   * ROOT CAUSE FIX: Ensure manage-tab selector line displays correctly
+presence/src/features/TabManager/TabManagerModal.ts:25:   * ROOT CAUSE FIX: Ensure manage-tab content exists before creating modal
+presence/src/features/TabManager/TabManagerModal.ts:28:    // ROOT CAUSE FIX: Ensure manage-tab content exists in HTML
+presence/src/features/TabManager/TabManagerModal.ts:37:   * ROOT CAUSE FIX: Create manage-tab content if it doesn't exist
+presence/src/features/MessageSystemIntegration.ts:175:      // ROOT CAUSE FIX: Prevent duplicate onUpdate callbacks
+presence/src/features/DisplayNameManager.ts:183:    // Update color based on length (ROOT CAUSE FIX: Char count is now in separate div below input)
+presence/src/features/DisplayNameManager.ts:319:      // ROOT CAUSE FIX: Min 4, max 16 chars, null is ok
+presence/src/sidepanel/controllers/BootController.ts:123:    // ROOT CAUSE FIX: Use stateManager only (TypeScript migration - no window.currentUser)
+presence/src/sidepanel/controllers/BootController.ts:129:    // ROOT CAUSE FIX: Initialize VisibilityManager with AppUser UUID
+presence/src/sidepanel/controllers/TabController.ts:59:    // ROOT CAUSE FIX: Delay initial capture to ensure BootController has initialized communities
+presence/src/sidepanel/controllers/TabController.ts:123:    // ROOT CAUSE FIX: Ensure communities are initialized before loading messages
+presence/src/sidepanel/windowInjections.ts:54:  // ROOT CAUSE FIX: Inject getActiveSidepanelTab into window for consistent tab detection
+presence/src/sidepanel/buildGraph.ts:81:                    // ROOT CAUSE FIX: Two-step query approach - avoids AppUser relation syntax issues
+presence/src/sidepanel/buildGraph.ts:163:                        // ROOT CAUSE FIX: user_id (UUID) is always present - use it to get email if AppUser relation failed
+presence/src/core/UnifiedContextMenu.ts:241:   * ROOT CAUSE FIX: Our custom context menu should NEVER appear in sidebar - only on webpage
+presence/src/core/UnifiedContextMenu.ts:249:      // ROOT CAUSE FIX: Check if we're in sidebar - if so, don't show our custom menu, but allow default
+presence/src/core/UnifiedContextMenu.ts:260:        // ROOT CAUSE FIX: Only prevent default and show custom menu on web pages, not in sidebar
+presence/src/core/UnifiedContextMenu.ts:284:          // ROOT CAUSE FIX: Pass target element to context for sidebar detection
+presence/src/core/UnifiedContextMenu.ts:297:        // ROOT CAUSE FIX: Only prevent default and show custom menu on web pages, not in sidebar
+presence/src/core/UnifiedContextMenu.ts:309:          // ROOT CAUSE FIX: Pass target element to context for sidebar detection
+presence/src/core/UnifiedContextMenu.ts:322:        // ROOT CAUSE FIX: Only prevent default and show custom menu on web pages, not in sidebar
+presence/src/core/UnifiedContextMenu.ts:333:          // ROOT CAUSE FIX: Pass target element to context for sidebar detection
+presence/src/core/UnifiedContextMenu.ts:344:      // ROOT CAUSE FIX: Only prevent default and show custom menu on web pages, not in sidebar
+presence/src/core/UnifiedContextMenu.ts:360:        // ROOT CAUSE FIX: Pass target element to context for sidebar detection
+presence/src/core/UserModule.ts:40:  // ROOT CAUSE FIX: Use stateManager (TypeScript migration - no window.currentUser)
+presence/src/core/UserModule.ts:49:  // ROOT CAUSE FIX: Update stateManager (TypeScript migration - no window.currentUser)
+presence/src/core/ContextMenuConfig.ts:38: * ROOT CAUSE FIX: Hide park/unpark menu if cursor is in sidebar
+presence/src/core/ContextMenuConfig.ts:47:  // ROOT CAUSE FIX: Check if cursor is in sidebar
+presence/src/core/ContextMenuConfig.ts:75:  // ROOT CAUSE FIX: Only show park/unpark if cursor is NOT in sidebar
+presence/src/core/ContextMenuConfig.ts:152: * ROOT CAUSE FIX: Hide park/unpark menu if cursor is in sidebar
+presence/src/core/ContextMenuConfig.ts:160:  // ROOT CAUSE FIX: Check if cursor is in sidebar
+presence/src/core/ContextMenuConfig.ts:175:  // ROOT CAUSE FIX: Only show park/unpark if cursor is NOT in sidebar
+presence/src/core/ContextMenuConfig.ts:211: * ROOT CAUSE FIX: Hide park/unpark menu if cursor is in sidebar
+presence/src/core/ContextMenuConfig.ts:219:  // ROOT CAUSE FIX: Check if cursor is in sidebar
+presence/src/core/ContextMenuConfig.ts:224:  // ROOT CAUSE FIX: Only show park/unpark if cursor is NOT in sidebar
+presence/src/core/ContextMenuConfig.ts:270: * ROOT CAUSE FIX: Park/unpark menu should not display if cursor is in sidebar
+presence/src/core/ContextMenuConfig.ts:273: * ROOT CAUSE FIX: Check if cursor/click is within the sidebar/sidepanel
+presence/src/core/ContextMenuConfig.ts:324: * ROOT CAUSE FIX: Hide park/unpark menu if cursor is in sidebar
+presence/src/core/ContextMenuConfig.ts:333:  // ROOT CAUSE FIX: Check if cursor is in sidebar
+presence/src/core/ContextMenuConfig.ts:338:  // ROOT CAUSE FIX: Only show park/unpark if cursor is NOT in sidebar
+presence/src/components/UnifiedMessageDisplay.ts:58:   * ROOT CAUSE FIX: Ensure container is cleared and messages are properly appended
+presence/src/components/UnifiedMessageDisplay.ts:143:   * ROOT CAUSE FIX: Check for duplicates before appending
+presence/src/components/UnifiedMessageDisplay.ts:199:      // ROOT CAUSE FIX: Ensure data-message-id is set for reaction updates
+presence/src/services/SupabaseRealtimeClientFix.ts:4: * ROOT CAUSE FIX: SupabaseRealtimeClient.getPageUsers() fallback query doesn't include
+presence/src/services/SupabaseRealtimeClientFix.ts:193:      // ROOT CAUSE FIX: Use explicit foreign key syntax AppUser:user_id(*) like messages query
+presence/src/services/SupabaseRealtimeClientFix.ts:194:      // ROOT CAUSE FIX: Two-step query approach - avoids AppUser relation syntax issues
+presence/src/services/APIService.ts:72:      // ROOT CAUSE FIX: Use stateManagerInstance (TypeScript migration - no longer using window.currentUser)
+presence/src/services/APIService.ts:123:            // ROOT CAUSE FIX: Use direct fetch() instead of window.api.request() 
+presence/src/services/APIService.ts:125:            // ROOT CAUSE FIX: Include email in header for Google ID lookup
+presence/src/services/APIService.ts:174:            // ROOT CAUSE FIX: Handle connection refused gracefully
+presence/src/services/APIService.ts:242:      // ROOT CAUSE FIX: Add timeout and better error handling for connection refused
+presence/src/services/APIService.ts:313:      // ROOT CAUSE FIX: Handle connection refused gracefully without crashing
+presence/src/services/SupabaseService.ts:211:    // ROOT CAUSE FIX: Check stateManager (TypeScript migration - no window.currentUser)
+presence/src/services/SupabaseService.ts:247:            // ROOT CAUSE FIX: Update stateManager (TypeScript migration - no window.currentUser)
+presence/src/services/SupabaseService.ts:288:   * ROOT CAUSE FIX: Implement getPageUsers for VisibilityManager
+presence/src/services/SupabaseService.ts:300:      // Query user_presence table for users on this page (ROOT CAUSE FIX: table name was wrong)
+presence/src/services/SupabaseService.ts:301:      // ROOT CAUSE FIX: Filter by is_active = true to only get active users (not time-filtered)
+presence/src/services/SupabaseService.ts:306:      // ROOT CAUSE FIX: Two-step query approach - avoids AppUser relation syntax issues
+presence/src/services/SupabaseService.ts:464:   * ROOT CAUSE FIX: Implement getUserProfile for VisibilityManager
+presence/src/services/SupabaseService.ts:519:   * ROOT CAUSE FIX: Implement on() method for VisibilityManager

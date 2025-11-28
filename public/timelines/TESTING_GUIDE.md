@@ -234,3 +234,7 @@ echo "✅ All tests passed!"
 5. Timeline page loads and displays activities
 6. All features work (profile selection, filters, navigation)
 
+
+
+
+

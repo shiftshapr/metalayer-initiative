@@ -23,34 +23,18 @@ const authenticateUser = async (req, res, next) => {
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   const validUuid = typeof rawUserId === 'string' && uuidRegex.test(rawUserId);
 
-  if (!validUuid && !rawUserEmail) {
-    return res.status(401).json({ error: 'Unauthorized: X-User-Id (UUID) or X-User-Email required' });
+  if (!validUuid) {
+    return res.status(401).json({ error: 'Unauthorized: X-User-Id (UUID) is required' });
   }
 
   try {
-    let user = null;
-    
-    // ROOT CAUSE FIX: If UUID header is provided, it MUST match an AppUser
-    // DO NOT fall back to email - this causes ID mismatches
-    if (validUuid) {
-      user = await prisma.appUser.findUnique({ where: { id: rawUserId } });
-      if (!user) {
-        // UUID provided but not found - this is an error, don't fall back to email
-        return res.status(401).json({ 
-          error: 'User not found', 
-          details: 'X-User-Id header contains valid UUID format but user not found in database. Use correct AppUser UUID or use X-User-Email header instead.' 
-        });
-      }
-    } else if (rawUserEmail) {
-      // Only use email lookup if UUID was not provided
-      user = await prisma.appUser.findUnique({ where: { email: rawUserEmail } });
-      if (!user) {
-        return res.status(401).json({ error: 'User not found in database' });
-      }
-    }
+    const user = await prisma.appUser.findUnique({ where: { id: rawUserId } });
     
     if (!user) {
-      return res.status(401).json({ error: 'User not found in database' });
+      return res.status(401).json({ 
+        error: 'User not found', 
+        details: 'X-User-Id header contains valid UUID format but user not found in database. Frontend must send correct AppUser UUID.' 
+      });
     }
     
     req.user = { id: user.id, email: user.email, name: userName, avatarUrl: userAvatarUrl };

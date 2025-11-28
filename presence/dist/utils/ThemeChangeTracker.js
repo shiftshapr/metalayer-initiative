@@ -2,6 +2,7 @@
  * Theme Change Tracker
  * Comprehensive logging for all theme changes to identify root cause
  */
+import { Logger } from './Logger.js';
 class ThemeChangeTracker {
     constructor() {
         this.observer = null;
@@ -9,14 +10,13 @@ class ThemeChangeTracker {
     }
     startTracking() {
         if (this.isTracking) {
-            console.log('🔍 THEME_TRACKER: Already tracking');
+            Logger.debug('🔍 THEME_TRACKER: Already tracking', null, 'theme');
             return;
         }
         this.isTracking = true;
-        console.log('🔍 THEME_TRACKER: Starting theme change tracking...');
+        Logger.debug('🔍 THEME_TRACKER: Starting theme change tracking...', null, 'theme');
         // Track all setAttribute calls on document.body and document.documentElement
         const originalSetAttribute = Element.prototype.setAttribute;
-        const self = this;
         Element.prototype.setAttribute = function (name, value) {
             // Check if this is a theme attribute change on body or html element
             if (name === 'data-theme') {
@@ -26,15 +26,15 @@ class ThemeChangeTracker {
                     const oldValue = this.getAttribute('data-theme');
                     const stack = new Error().stack;
                     const caller = stack?.split('\n')[2]?.trim() || 'unknown';
-                    console.log('🔍 THEME_TRACKER: ========================================');
-                    console.log('🔍 THEME_TRACKER: data-theme attribute SET');
-                    console.log('🔍 THEME_TRACKER: Element:', isBody ? 'document.body' : 'document.documentElement');
-                    console.log('🔍 THEME_TRACKER: Old value:', oldValue || 'NOT SET');
-                    console.log('🔍 THEME_TRACKER: New value:', value);
-                    console.log('🔍 THEME_TRACKER: Caller:', caller);
-                    console.log('🔍 THEME_TRACKER: Full stack:', stack?.split('\n').slice(1, 15).join('\n'));
-                    console.log('🔍 THEME_TRACKER: Timestamp:', new Date().toISOString());
-                    console.log('🔍 THEME_TRACKER: ========================================');
+                    Logger.debug('🔍 THEME_TRACKER: ========================================', null, 'theme');
+                    Logger.debug('🔍 THEME_TRACKER: data-theme attribute SET', null, 'theme');
+                    Logger.debug('🔍 THEME_TRACKER: Element:', isBody ? 'document.body' : 'document.documentElement', 'theme');
+                    Logger.debug('🔍 THEME_TRACKER: Old value:', oldValue || 'NOT SET', 'theme');
+                    Logger.debug('🔍 THEME_TRACKER: New value:', value, 'theme');
+                    Logger.debug('🔍 THEME_TRACKER: Caller:', caller, 'theme');
+                    Logger.debug('🔍 THEME_TRACKER: Full stack:', stack?.split('\n').slice(1, 15).join('\n'), 'theme');
+                    Logger.debug('🔍 THEME_TRACKER: Timestamp:', new Date().toISOString(), 'theme');
+                    Logger.debug('🔍 THEME_TRACKER: ========================================', null, 'theme');
                 }
             }
             return originalSetAttribute.call(this, name, value);
@@ -47,28 +47,31 @@ class ThemeChangeTracker {
                     const newValue = target.getAttribute('data-theme');
                     const oldValue = mutation.oldValue;
                     const stack = new Error().stack;
-                    console.log('🔍 THEME_TRACKER: ========================================');
-                    console.log('🔍 THEME_TRACKER: data-theme attribute CHANGED (MutationObserver)');
-                    console.log('🔍 THEME_TRACKER: Element:', target === document.body ? 'document.body' : target === document.documentElement ? 'document.documentElement' : target.tagName);
-                    console.log('🔍 THEME_TRACKER: Old value:', oldValue || 'NOT SET');
-                    console.log('🔍 THEME_TRACKER: New value:', newValue || 'NOT SET');
-                    console.log('🔍 THEME_TRACKER: Call stack:', stack?.split('\n').slice(1, 15).join('\n'));
-                    console.log('🔍 THEME_TRACKER: Timestamp:', new Date().toISOString());
-                    console.log('🔍 THEME_TRACKER: ========================================');
+                    Logger.debug('🔍 THEME_TRACKER: ========================================', null, 'theme');
+                    Logger.debug('🔍 THEME_TRACKER: MutationObserver detected theme change', null, 'theme');
+                    Logger.debug('🔍 THEME_TRACKER: Old value:', oldValue || 'NOT SET', 'theme');
+                    Logger.debug('🔍 THEME_TRACKER: New value:', newValue || 'NOT SET', 'theme');
+                    Logger.debug('🔍 THEME_TRACKER: Stack:', stack?.split('\n').slice(1, 15).join('\n'), 'theme');
+                    Logger.debug('🔍 THEME_TRACKER: Timestamp:', new Date().toISOString(), 'theme');
+                    Logger.debug('🔍 THEME_TRACKER: ========================================', null, 'theme');
                 }
             });
         });
-        this.observer.observe(document.body, {
-            attributes: true,
-            attributeOldValue: true,
-            attributeFilter: ['data-theme']
-        });
-        this.observer.observe(document.documentElement, {
-            attributes: true,
-            attributeOldValue: true,
-            attributeFilter: ['data-theme']
-        });
-        console.log('✅ THEME_TRACKER: Theme change tracking started');
+        // Observe body and documentElement
+        if (document.body) {
+            this.observer.observe(document.body, {
+                attributes: true,
+                attributeOldValue: true,
+                attributeFilter: ['data-theme']
+            });
+        }
+        if (document.documentElement) {
+            this.observer.observe(document.documentElement, {
+                attributes: true,
+                attributeOldValue: true,
+                attributeFilter: ['data-theme']
+            });
+        }
     }
     stopTracking() {
         if (!this.isTracking) {
@@ -79,22 +82,9 @@ class ThemeChangeTracker {
             this.observer.disconnect();
             this.observer = null;
         }
-        console.log('🔍 THEME_TRACKER: Theme change tracking stopped');
+        Logger.debug('🔍 THEME_TRACKER: Stopped tracking', null, 'theme');
     }
 }
-// Create singleton instance
-const themeChangeTracker = new ThemeChangeTracker();
-// Auto-start tracking when module loads
-if (typeof window !== 'undefined') {
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => {
-            themeChangeTracker.startTracking();
-        });
-    }
-    else {
-        themeChangeTracker.startTracking();
-    }
-    window.themeChangeTracker = themeChangeTracker;
-}
-export { ThemeChangeTracker, themeChangeTracker };
+export const themeChangeTracker = new ThemeChangeTracker();
+export { ThemeChangeTracker };
 export default themeChangeTracker;

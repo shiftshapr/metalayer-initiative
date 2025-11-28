@@ -9,3 +9,7 @@ CREATE INDEX IF NOT EXISTS idx_messages_status ON messages(status) WHERE status 
 CREATE INDEX IF NOT EXISTS idx_messages_user_drafts ON messages(user_id, status) WHERE status = 'draft';
 
 
+
+
+
+

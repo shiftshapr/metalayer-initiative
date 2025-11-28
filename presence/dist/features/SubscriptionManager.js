@@ -3,6 +3,7 @@
  * Manages user subscriptions to rooms, users, communities, timelines, etc.
  */
 import { Logger } from '../utils/Logger.js';
+import { handleError } from '../utils/ErrorHandler.js';
 /**
  * SubscriptionManager class
  * Manages notification subscriptions for various targets
@@ -148,9 +149,23 @@ export class SubscriptionManager {
      * Unsubscribe by target
      */
     async unsubscribeByTarget(targetType, targetId) {
-        const subscription = this.findSubscription(targetType, targetId);
-        if (subscription) {
-            await this.unsubscribe(subscription.id);
+        try {
+            const subscription = this.findSubscription(targetType, targetId);
+            if (subscription) {
+                await this.unsubscribe(subscription.id);
+            }
+        }
+        catch (error) {
+            handleError(error, {
+                log: true,
+                logLevel: 'error',
+                context: {
+                    operation: 'unsubscribeByTarget',
+                    component: 'SubscriptionManager',
+                    targetType,
+                    targetId
+                }
+            });
         }
     }
     /**
@@ -307,7 +322,7 @@ export class SubscriptionManager {
         };
         for (const target of targets) {
             try {
-                const subscription = await this.subscribe(target);
+                await this.subscribe(target);
                 result.created++;
                 if (!result.errors)
                     result.errors = [];

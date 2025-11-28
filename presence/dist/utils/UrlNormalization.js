@@ -1,4 +1,5 @@
-export default class UrlNormalization {
+import { handleError } from './ErrorHandler.js';
+class UrlNormalization {
     constructor() {
         this.defaultRules = [
             {
@@ -58,15 +59,25 @@ export default class UrlNormalization {
             }
             return {
                 normalizedUrl,
-                pageId: this.generatePageId(normalizedUrl)
+                pageId: this.generatePageId(normalizedUrl),
+                canonicalUrl: normalizedUrl
             };
         }
         catch (error) {
-            console.error('Error normalizing URL:', error);
+            handleError(error, {
+                log: true,
+                logLevel: 'error',
+                context: {
+                    operation: 'catch',
+                    component: 'UrlNormalization'
+                }
+            });
+            ;
             const normalizedUrl = this.applyDefaultNormalization(url);
             return {
                 normalizedUrl,
-                pageId: this.generatePageId(normalizedUrl)
+                pageId: this.generatePageId(normalizedUrl),
+                canonicalUrl: normalizedUrl
             };
         }
     }
@@ -94,7 +105,15 @@ export default class UrlNormalization {
             return rule.pattern.test(url);
         }
         catch (error) {
-            console.error('Error matching rule pattern:', error);
+            handleError(error, {
+                log: true,
+                logLevel: 'error',
+                context: {
+                    operation: 'catch',
+                    component: 'UrlNormalization'
+                }
+            });
+            ;
             return false;
         }
     }
@@ -119,12 +138,22 @@ export default class UrlNormalization {
             }
         }
         catch (error) {
-            console.error('Error applying rule:', error);
+            handleError(error, {
+                log: true,
+                logLevel: 'error',
+                context: {
+                    operation: 'catch',
+                    component: 'UrlNormalization'
+                }
+            });
+            ;
             return url;
         }
     }
     preserveQueryKeysForChrome(url, queryKeys) {
-        const [baseUrl, queryString] = url.split('?');
+        const parts = url.split('?');
+        const baseUrl = parts[0] ?? url;
+        const queryString = parts[1];
         if (!queryString) {
             return baseUrl;
         }
@@ -171,3 +200,11 @@ export default class UrlNormalization {
         return url.replace(/[^a-zA-Z0-9]/g, '_');
     }
 }
+// Create singleton instance
+const urlNormalizationInstance = new UrlNormalization();
+// Export function that matches the expected signature
+export async function normalizeUrl(rawUrl) {
+    return urlNormalizationInstance.normalizeUrl(rawUrl);
+}
+// Also export the class for advanced usage
+export { UrlNormalization };

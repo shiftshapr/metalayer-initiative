@@ -831,7 +831,7 @@ function setupSupabaseEventHandlers() {
         console.log('💬 SUPABASE: From:', messageWithEmail.user_email);
         console.log('💬 SUPABASE: Content:', messageWithEmail.content?.substring(0, 50) + '...');
         
-        // NEW MESSAGE SYSTEM: Dispatch realtime-message event for MessageStore
+        // Dispatch realtime-message event for MessageStore
         // MessageStore listens for this event and will update the UI via onMessageUpdate
         if (typeof window !== 'undefined') {
             const realtimeEvent = new CustomEvent('realtime-message', {
@@ -839,18 +839,6 @@ function setupSupabaseEventHandlers() {
             });
             window.dispatchEvent(realtimeEvent);
             console.log('💬 SUPABASE: Dispatched realtime-message event for MessageStore');
-        }
-        
-        // LEGACY FALLBACK: Also try old system for backward compatibility
-        const convertSupabaseMessageToAPIFormat = window.convertSupabaseMessageToAPIFormat;
-        if (convertSupabaseMessageToAPIFormat) {
-            const convertedMessage = await convertSupabaseMessageToAPIFormat(message);
-            console.log('💬 SUPABASE: Converted message (legacy):', convertedMessage);
-            // Add message to chat immediately (legacy)
-            const addMessageToChat = window.addMessageToChat;
-            if (addMessageToChat) {
-                await addMessageToChat(convertedMessage);
-            }
         }
         
         // Show notification for new message

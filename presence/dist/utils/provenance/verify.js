@@ -4,10 +4,11 @@
  * Standalone utility for verifying provenance artifact signatures
  * Can be used in browser or exported for CLI use
  */
+// Error handling imports removed - not used in this verification utility
+import { Logger } from '../Logger.js';
 class ProvenanceVerifier {
-    constructor() {
-        this.publicKeys = new Map();
-    }
+    // Public keys cache for future use
+    // private publicKeys: Map<string, CryptoKey> = new Map();
     /**
      * Verify a provenance artifact signature
      * @param artifact - The provenance artifact to verify
@@ -106,6 +107,6 @@ class ProvenanceVerifier {
 if (typeof window !== 'undefined') {
     // Use Object.assign to avoid strict type checking issues
     Object.assign(window, { provenanceVerifier: new ProvenanceVerifier() });
-    console.log('[Provenance] Verifier available at window.provenanceVerifier');
+    Logger.debug('[Provenance] Verifier available at window.provenanceVerifier', null, 'provenance');
 }
 export default ProvenanceVerifier;

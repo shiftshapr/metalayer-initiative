@@ -1,0 +1,52 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+# ============================================================================
+# RED-LINE CHECK: Prevent editing extension/, dist/, build/ directories
+# ============================================================================
+echo "🔍 Checking for forbidden directory edits (RED-LINE)..."
+
+VIOLATION_FOUND=false
+
+for file in $(git diff --cached --name-only); do
+  if echo "$file" | grep -qE "^(extension|dist|build)/"; then
+    # Allow .md files and config files
+    if ! echo "$file" | grep -qE "\.(md|gitignore|gitattributes)$"; then
+      echo "═══════════════════════════════════════════════════════════"
+      echo "❌ RED-LINE VIOLATION: Attempting to commit changes to build directory"
+      echo "═══════════════════════════════════════════════════════════"
+      echo ""
+      echo "File: $file"
+      echo ""
+      echo "🚫 RULE: Never edit extension/, dist/, build/"
+      echo "✅ RULE: Edit src/ only, then build"
+      echo ""
+      echo "📋 Architecture:"
+      echo "   src/ → (build) → extension/"
+      echo "   src/ → (compile) → dist/"
+      echo ""
+      echo "💡 What to do:"
+      echo "   1. Find or create source file in src/"
+      echo "   2. Edit src/ file"
+      echo "   3. Build to generate extension/ files"
+      echo ""
+      echo "This commit has been BLOCKED."
+      echo "═══════════════════════════════════════════════════════════"
+      VIOLATION_FOUND=true
+    fi
+  fi
+done
+
+if [ "$VIOLATION_FOUND" = "true" ]; then
+  exit 1
+fi
+
+# ============================================================================
+# Validate diagnostic scripts
+# ============================================================================
+echo "🔍 Validating diagnostic scripts..."
+if command -v node >/dev/null 2>&1; then
+  node validate-diagnostics.js 2>/dev/null || {
+    echo "⚠️  Diagnostic validation failed (non-blocking)"
+  }
+fi

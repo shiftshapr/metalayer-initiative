@@ -4,10 +4,11 @@
  * Non-invasive diagnostic UI for viewing provenance artifacts
  * Follows the pattern of other diagnostic utilities
  */
+// Error handling imports removed - not used in this diagnostic file
+import { Logger } from '../Logger.js';
 class ProvenanceDiagnostic {
     constructor() {
         this.isVisible = false;
-        this.currentMessageId = null;
         this.overlay = null;
     }
     /**
@@ -16,7 +17,7 @@ class ProvenanceDiagnostic {
     async initialize() {
         const windowWithService = window;
         if (!windowWithService.provenanceService) {
-            console.warn('[ProvenanceDiagnostic] ProvenanceService not available');
+            Logger.warn('[ProvenanceDiagnostic] ProvenanceService not available', null, 'provenance');
             return;
         }
         // Create overlay container
@@ -24,7 +25,7 @@ class ProvenanceDiagnostic {
         // Add to window for console access
         if (typeof window !== 'undefined') {
             Object.assign(window, { provenanceDiagnostic: this });
-            console.log('[ProvenanceDiagnostic] Available at window.provenanceDiagnostic');
+            Logger.debug('[ProvenanceDiagnostic] Available at window.provenanceDiagnostic', null, 'provenance');
         }
     }
     /**
@@ -132,10 +133,9 @@ class ProvenanceDiagnostic {
         const windowWithService = window;
         const service = windowWithService.provenanceService;
         if (!service) {
-            console.warn('[ProvenanceDiagnostic] Service not available');
+            Logger.warn('[ProvenanceDiagnostic] Service not available', null, 'provenance');
             return;
         }
-        this.currentMessageId = messageId;
         this.show();
         const content = document.getElementById('provenance-content');
         if (!content)
@@ -283,6 +283,6 @@ class ProvenanceDiagnostic {
 // Export for browser use
 if (typeof window !== 'undefined') {
     Object.assign(window, { provenanceDiagnostic: new ProvenanceDiagnostic() });
-    console.log('[ProvenanceDiagnostic] Available at window.provenanceDiagnostic');
+    Logger.debug('[ProvenanceDiagnostic] Available at window.provenanceDiagnostic', null, 'provenance');
 }
 export default ProvenanceDiagnostic;

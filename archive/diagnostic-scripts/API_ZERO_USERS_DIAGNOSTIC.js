@@ -87,7 +87,7 @@
   console.log('   - "Date filter is excluding all users"');
   console.log('   - Prisma query errors');
   console.log('\nTo check backend logs, run on server:');
-  console.log('   tail -100 /home/ubuntu/metalayer-initiative/server.log | grep PRESENCE_SERVICE');
+  console.log('   tail -100 /home/ubuntu/canopi/server.log | grep PRESENCE_SERVICE');
   
   console.log('\n--- Step 4: Server Restart Check ---');
   console.log('⚠️ IMPORTANT: Backend code changes require server restart!');

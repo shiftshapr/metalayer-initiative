@@ -220,11 +220,13 @@ class DisplayNameManager {
 
       // If UserPreferencesManager wasn't ready, retry when it becomes available
       const { userPreferencesManager } = getSettingContracts();
-      if (!userPreferencesManager?.isInitialized) {
+      const prefsMgr = userPreferencesManager as { isInitialized?: boolean } | null | undefined;
+      if (!prefsMgr?.isInitialized) {
         Logger.debug('🔄 DISPLAY_NAME: UserPreferencesManager not ready, will retry when available', 'display-name');
         const retryHandler = async (): Promise<void> => {
           const contracts = getSettingContracts();
-          if (contracts.userPreferencesManager?.isInitialized) {
+          const prefsMgr = contracts.userPreferencesManager as { isInitialized?: boolean } | null | undefined;
+          if (prefsMgr?.isInitialized) {
             window.removeEventListener('preferenceLoaded', retryHandler);
             Logger.debug('🔄 DISPLAY_NAME: UserPreferencesManager now ready, re-reading display name', 'display-name');
             await this.readDisplayName();

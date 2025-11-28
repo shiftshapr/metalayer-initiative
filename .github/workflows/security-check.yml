@@ -1,0 +1,59 @@
+name: Security Check
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'app.js'
+      - 'server/app.js'
+      - 'config/validateEnv.js'
+      - 'scripts/diagnose-slice6-security.js'
+      - '.github/workflows/security-check.yml'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'app.js'
+      - 'server/app.js'
+      - 'config/validateEnv.js'
+      - 'scripts/diagnose-slice6-security.js'
+      - '.github/workflows/security-check.yml'
+  schedule:
+    # Run daily at 3 AM UTC
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+jobs:
+  security-check:
+    name: Security Configuration Check
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Run security diagnostic
+        run: npm run security:check
+        continue-on-error: false
+      
+      - name: Upload security report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-check-report
+          path: |
+            scripts/diagnose-slice6-security.js
+          retention-days: 30
+
+
+
+
+

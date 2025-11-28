@@ -154,7 +154,7 @@ export class ReplyLoader {
 }
 // Export to window for backward compatibility
 if (typeof window !== 'undefined') {
-    window.ReplyLoader = ReplyLoader;
+    // Export removed - use ES6 imports
     console.log('✅ ReplyLoader: Exported to window');
 }
 export default ReplyLoader;

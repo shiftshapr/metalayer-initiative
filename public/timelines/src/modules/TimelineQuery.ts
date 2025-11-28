@@ -34,9 +34,15 @@ export class TimelineQuery {
     const params = new URLSearchParams();
     
     if (options.persistence) {
-      params.set('persistence', options.persistence);
+      const persistenceValue = Array.isArray(options.persistence) 
+        ? options.persistence.join(',') 
+        : options.persistence;
+      params.set('persistence', persistenceValue);
     }
-    if (options.community) {
+    if (options.communities && options.communities.length > 0) {
+      params.set('communities', options.communities.join(','));
+    } else if (options.community) {
+      // Backward compatibility
       params.set('community', options.community);
     }
     if (options.search) {

@@ -223,6 +223,7 @@ const tab = registerTab({
   id: 'archive',
   title: 'Archive',
   icon: 'archive-icon',
+  position: 'right', // Optional: 'left' or 'right' (default: 'right')
   
   render: async (container, context) => {
     // Render tab UI

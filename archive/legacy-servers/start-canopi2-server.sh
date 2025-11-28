@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start canopi2-server.js on port 3003
 
-cd /home/ubuntu/metalayer-initiative
+cd /home/ubuntu/canopi
 
 # Check if already running
 if lsof -i :3003 > /dev/null 2>&1; then

@@ -284,7 +284,7 @@ export class MessageVisibilityManager {
 }
 // Export to window for backward compatibility
 if (typeof window !== 'undefined') {
-    window.MessageVisibilityManager = MessageVisibilityManager;
+    // Export removed - use ES6 imports
     console.log('✅ MessageVisibilityManager: Exported to window');
 }
 export default MessageVisibilityManager;

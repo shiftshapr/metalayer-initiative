@@ -1,30 +1,19 @@
 import { AvatarUtils } from '../utils/AvatarUtils.js';
 import { AVATAR_FALLBACK_COLOR } from '../core/ConfigModule.js';
-import { updateVisibleTab as updateVisibleTabService } from './VisibilityManager.js';
+// updateVisibleTab removed - use VisibilityTab component from visibility/ui/
+// import { VisibilityTab } from './visibility/ui/VisibilityTab.js';
 import { initializePeopleTab } from './PeopleModule.js';
 import autoResize from '../ui/autoResize.js';
 import attachTabNavigation from '../ui/tabNavigation.js';
 import { createDiagnosticsController } from '../ui/diagnostics.js';
-import { sendLegacyMessage, reloadLegacyChatHistory } from '../ui/messagingBridge.js';
 import { Logger } from '../utils/Logger.js';
 import { getCurrentUser } from '../core/UserModule.js';
 const DEFAULT_MAX_TEXTAREA_HEIGHT = 120;
-const createFallbackAvatar = (user) => {
-    const displayName = user?.name || user?.email || 'User';
-    const initial = displayName.charAt(0).toUpperCase();
-    return `
-    <div class="user-avatar" style="width: 32px; height: 32px; border-radius: 50%; background: #007bff; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 14px;">
-      ${initial}
-    </div>
-  `;
-};
 export class UIManager {
     constructor(deps) {
-        this.deps = deps;
         this.eventListeners = new Map();
         this.uiCallbacks = [];
         this.document = deps.env.document;
-        this.window = deps.env.window;
         this.avatarUtils = deps.avatarUtils;
         this.logger = deps.logger;
         this.visibility = deps.visibility;
@@ -64,6 +53,23 @@ export class UIManager {
                 },
                 onPeopleTab: async () => {
                     await this.navigation?.initializePeopleTab?.();
+                },
+                onSettingsTab: async () => {
+                    // Initialize VisibilitySettings when Settings tab opens
+                    const win = typeof window !== 'undefined' ? window : null;
+                    if (win?.__CANOPI_MODULE_GRAPH__?.visibilitySettings) {
+                        try {
+                            await win.__CANOPI_MODULE_GRAPH__.visibilitySettings.initialize();
+                            this.logger.debug?.('✅ UI_MANAGER: VisibilitySettings initialized');
+                        }
+                        catch (error) {
+                            this.logger.warn?.('⚠️ UI_MANAGER: VisibilitySettings initialization failed', error);
+                            // Try ensureEventListeners as fallback
+                            if (win.__CANOPI_MODULE_GRAPH__.visibilitySettings.ensureEventListeners) {
+                                await win.__CANOPI_MODULE_GRAPH__.visibilitySettings.ensureEventListeners();
+                            }
+                        }
+                    }
                 }
             },
             addListener: (element, event, handler) => this.addEventListener(element, event, handler)
@@ -578,8 +584,9 @@ export class UIManager {
                     method: 'GET',
                     headers: { 'X-User-Id': currentUser.id }
                 });
-                if (response?.preferences?.theme) {
-                    savedTheme = response.preferences.theme;
+                const themeFromApi = response?.data?.preferences?.theme;
+                if (themeFromApi) {
+                    savedTheme = themeFromApi;
                 }
             }
             catch (error) {
@@ -676,18 +683,25 @@ function createDefaultDependencies() {
     const envWindow = (typeof window !== 'undefined' ? window : undefined);
     const envDocument = typeof document !== 'undefined' ? document : undefined;
     const messaging = {
-        sendMessage: async (content, metadata) => {
+        sendMessage: async (content, _metadata) => {
             try {
-                const result = await sendLegacyMessage(content);
-                return result;
+                if (envWindow?.sendMessageViaSupabase) {
+                    const data = await envWindow.sendMessageViaSupabase({ content });
+                    return data ? { success: true, data } : { success: false };
+                }
+                return { success: false };
             }
             catch (error) {
-                Logger.error('SEND_CHAT_MESSAGE: sendLegacyMessage failed', error);
+                Logger.error('SEND_CHAT_MESSAGE: sendMessageViaSupabase failed', error);
                 return { success: false };
             }
         },
         addMessageToChat: envWindow?.addMessageToChat,
-        loadChatHistory: () => reloadLegacyChatHistory()
+        loadChatHistory: async () => {
+            if (envWindow?.loadChatHistory) {
+                await envWindow.loadChatHistory();
+            }
+        }
     };
     const navigation = {
         initializeAgentTab: envWindow?.initializeAgentTab,
@@ -695,22 +709,28 @@ function createDefaultDependencies() {
     };
     const visibility = {
         updateVisibleTab: async (users) => {
-            // Convert to VisibilityUser[] format expected by updateVisibleTabService
-            // VisibilityManager.VisibilityUser requires id: string (not optional)
-            const visibilityUsers = Array.isArray(users) ? users.map(u => {
-                if (u && typeof u === 'object') {
-                    const id = 'id' in u ? u.id : ('userId' in u ? u.userId : undefined);
-                    return {
-                        id: id || String(u) || '',
-                        email: 'email' in u ? u.email : undefined,
-                        name: 'name' in u ? u.name : undefined,
-                        isActive: 'isActive' in u ? u.isActive : undefined,
-                        ...u
-                    };
-                }
-                return { id: String(u || ''), ...(typeof u === 'object' && u !== null ? u : {}) };
-            }) : [];
-            return await updateVisibleTabService(visibilityUsers);
+            // NOTE: updateVisibleTab is deprecated - use VisibilityTab component instead
+            // This is a temporary stub for UIManager compatibility
+            // TODO: Update UIManager to use VisibilityTab component directly
+            Logger.warn('⚠️ UIManager: updateVisibleTab is deprecated. Use VisibilityTab component from visibility/ui/', null, 'general');
+            // Try to use VisibilityState if available
+            const win = envWindow;
+            if (win?.visibilityState?.setUsers) {
+                const visibilityUsers = Array.isArray(users) ? users.map(u => {
+                    if (u && typeof u === 'object') {
+                        const id = 'id' in u ? u.id : ('userId' in u ? u.userId : undefined);
+                        return {
+                            id: id || String(u) || '',
+                            email: 'email' in u ? u.email : undefined,
+                            name: 'name' in u ? u.name : undefined,
+                            isActive: 'isActive' in u ? u.isActive : undefined,
+                            ...u
+                        };
+                    }
+                    return { id: String(u || ''), ...(typeof u === 'object' && u !== null ? u : {}) };
+                }) : [];
+                win.visibilityState.setUsers(visibilityUsers);
+            }
         }
     };
     const theme = {
@@ -730,26 +750,35 @@ function createDefaultDependencies() {
         theme
     };
 }
-const uiManagerInstance = new UIManager(createDefaultDependencies());
-const diagnosticsController = createDiagnosticsController({
-    updateVisualHierarchy: () => uiManagerInstance.runUpdateVisualHierarchyDiagnostic(),
-    debugHierarchy: () => uiManagerInstance.runDebugHierarchyDiagnostic(),
-    forceRefreshCSS: () => uiManagerInstance.runForceRefreshCSSDiagnostic()
-}, Logger);
-export const updateVisualHierarchy = () => diagnosticsController.updateVisualHierarchy();
-export const debugHierarchy = () => diagnosticsController.debugHierarchy();
-export const forceRefreshCSS = () => diagnosticsController.forceRefreshCSS();
-export const setupTabNavigation = () => uiManagerInstance.setupTabNavigation();
-export const setupMessageInputEventListeners = () => uiManagerInstance.setupMessageInputEventListeners();
-export const initializeTheme = () => uiManagerInstance.initializeTheme();
-export const setTheme = (theme) => uiManagerInstance.setTheme(theme);
-export const toggleTheme = () => uiManagerInstance.toggleTheme();
-export default uiManagerInstance;
-if (typeof window !== 'undefined') {
+let uiManagerInstance = null;
+let diagnosticsController = null;
+let windowBindingsRegistered = false;
+const getUIManagerInstance = () => {
+    if (!uiManagerInstance) {
+        uiManagerInstance = new UIManager(createDefaultDependencies());
+    }
+    return uiManagerInstance;
+};
+const ensureDiagnosticsController = () => {
+    if (!diagnosticsController) {
+        const instance = getUIManagerInstance();
+        diagnosticsController = createDiagnosticsController({
+            updateVisualHierarchy: () => instance.runUpdateVisualHierarchyDiagnostic(),
+            debugHierarchy: () => instance.runDebugHierarchyDiagnostic(),
+            forceRefreshCSS: () => instance.runForceRefreshCSSDiagnostic()
+        }, Logger);
+    }
+    return diagnosticsController;
+};
+const registerWindowBindings = (instance) => {
+    if (typeof window === 'undefined') {
+        return;
+    }
     const win = window;
     Object.assign(win, {
         UIManager,
-        uiManager: uiManagerInstance,
+        uiManager: instance,
+        initializeUIManager,
         updateVisualHierarchy,
         debugHierarchy,
         forceRefreshCSS,
@@ -760,4 +789,39 @@ if (typeof window !== 'undefined') {
         setTheme,
         toggleTheme
     });
-}
+    windowBindingsRegistered = true;
+};
+const updateVisualHierarchy = () => ensureDiagnosticsController().updateVisualHierarchy();
+const debugHierarchy = () => ensureDiagnosticsController().debugHierarchy();
+const forceRefreshCSS = () => ensureDiagnosticsController().forceRefreshCSS();
+const setupTabNavigation = () => getUIManagerInstance().setupTabNavigation();
+const setupMessageInputEventListeners = () => getUIManagerInstance().setupMessageInputEventListeners();
+const initializeTheme = () => getUIManagerInstance().initializeTheme();
+const setTheme = (theme) => getUIManagerInstance().setTheme(theme);
+const toggleTheme = () => getUIManagerInstance().toggleTheme();
+const initializeUIManager = () => {
+    if (typeof window === 'undefined' || typeof document === 'undefined') {
+        Logger.debug('ℹ️ UIManager: Skipping bootstrap (no DOM available)', null, 'presence');
+        return null;
+    }
+    const instance = getUIManagerInstance();
+    if (!windowBindingsRegistered) {
+        registerWindowBindings(instance);
+    }
+    return instance;
+};
+const uiManagerApi = {
+    initializeUIManager,
+    getUIManagerInstance,
+    updateVisualHierarchy,
+    debugHierarchy,
+    forceRefreshCSS,
+    setupTabNavigation,
+    setupMessageInputEventListeners,
+    initializeTheme,
+    setTheme,
+    toggleTheme
+};
+export { initializeUIManager, getUIManagerInstance, updateVisualHierarchy, debugHierarchy, forceRefreshCSS, setupTabNavigation, setupMessageInputEventListeners, initializeTheme, setTheme, toggleTheme };
+export default uiManagerApi;
+initializeUIManager();

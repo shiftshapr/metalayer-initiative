@@ -4,40 +4,149 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Timeline - Canopi</title>
+  <base href="/timelines/">
   
   <!-- Load Supabase Configuration -->
   <script src="../presence/config.js"></script>
   <script src="../presence/lib/supabase.min.js"></script>
   
+  <!-- Load SupabaseService as module (required by timeline-app.js) -->
+  <script type="module">
+    // Pre-load SupabaseService as module so timeline-app.js can import it
+    import { SupabaseService } from '../presence/services/SupabaseService.js';
+    // Make available globally for backward compatibility
+    window.SupabaseService = SupabaseService;
+  </script>
+  
   <!-- Load Extension Styles (for consistency) -->
   <link rel="stylesheet" href="../presence/sidepanel.css">
   
   <!-- Timeline-specific styles -->
-  <link rel="stylesheet" href="/timelines/styles/timeline.css">
+  <link rel="stylesheet" href="styles/timeline.css">
 </head>
 <body>
-  <div id="timeline-app" class="timeline-container">
-    <!-- Header -->
-    <header class="timeline-header">
-      <div class="timeline-header-content">
-        <h1 class="timeline-title">Timeline</h1>
-        <div class="timeline-header-actions">
-          <button id="add-profile-btn" class="btn-secondary">Add Profile</button>
-          <select id="persistence-select" class="select-input">
-            <option value="all">All Time</option>
-            <option value="1y">Last Year</option>
-            <option value="30d">Last 30 Days</option>
-            <option value="7d">Last 7 Days</option>
-            <option value="1d">Last 24 Hours</option>
-          </select>
+  <div id="timeline-app" class="three-column-layout">
+    <!-- Column A: Left Sidebar Navigation -->
+    <aside class="column-a sidebar-left">
+      <!-- Overmark Logo -->
+      <div class="overmark-container">
+        <img src="/presence/extension/overmark/Overmark circular.png" alt="Overmark" class="overmark-logo">
+        <div class="canopi-text">Canopi Live</div>
+      </div>
+      <nav class="main-nav">
+        <a href="/timelines" class="nav-item active" data-nav="home">
+          <span class="nav-icon">🏠</span>
+          <span class="nav-label">Home</span>
+        </a>
+        <a href="/canopies" class="nav-item" data-nav="canopies">
+          <span class="nav-icon">🌳</span>
+          <span class="nav-label">Canopies</span>
+        </a>
+        <a href="/timelines" class="nav-item" data-nav="timelines">
+          <span class="nav-icon">📅</span>
+          <span class="nav-label">Timelines</span>
+        </a>
+        <a href="/bookmarks" class="nav-item" data-nav="bookmarks">
+          <span class="nav-icon">🔖</span>
+          <span class="nav-label">Bookmarks</span>
+        </a>
+        <a href="/profile" class="nav-item" data-nav="profile">
+          <span class="nav-icon">👤</span>
+          <span class="nav-label">Profile</span>
+        </a>
+      </nav>
+    </aside>
+
+    <!-- Column B: Main Feed (extensible for multiple feeds) -->
+    <main class="column-b feed-container">
+      <!-- Feed Header with Filter Buttons -->
+      <header class="feed-header">
+        <div class="feed-filter-buttons" id="feed-filter-buttons">
+          <button class="feed-filter-btn active" data-filter="my">My</button>
+          <button class="feed-filter-btn" data-filter="shared">Shared with Me</button>
+          <div id="communities-filter-container" class="feed-filter-multiselect"></div>
+          <div id="rooms-filter-container" class="feed-filter-multiselect"></div>
+        </div>
+      </header>
+
+      <!-- Feed Content Area -->
+      <div class="feed-content" id="feed-content">
+        <!-- Single Profile View -->
+        <div id="single-profile-view" class="timeline-view">
+          <div id="timeline-items" class="timeline-items">
+            <!-- Timeline items will be rendered here -->
+            <div class="loading-state">Loading timeline...</div>
+          </div>
+        </div>
+
+        <!-- Multi-Profile View (hidden by default) -->
+        <div id="multi-profile-view" class="timeline-view hidden">
+          <div id="multi-profile-columns" class="multi-profile-columns">
+            <!-- Profile columns will be rendered here -->
+          </div>
+        </div>
+
+        <!-- Empty State -->
+        <div id="empty-state" class="empty-state hidden">
+          <p>No timeline activities found.</p>
+        </div>
+
+        <!-- Error State -->
+        <div id="error-state" class="error-state hidden">
+          <p>Error loading timeline. Please try again.</p>
         </div>
       </div>
-    </header>
+    </main>
 
-    <!-- Filters -->
-    <div class="timeline-filters" id="timeline-filters">
-      <!-- Filters will be rendered here by TimelineFilters component -->
-    </div>
+    <!-- Column C: Right Sidebar -->
+    <aside class="column-c sidebar-right">
+      <!-- Search -->
+      <section class="sidebar-section">
+        <div class="search-container">
+          <input type="text" id="global-search" class="search-input" placeholder="Search timelines...">
+        </div>
+      </section>
+
+      <!-- Rewards -->
+      <section class="sidebar-section">
+        <h3 class="sidebar-title">Rewards</h3>
+        <div id="rewards" class="sidebar-list">
+          <div class="loading-state">Loading...</div>
+        </div>
+      </section>
+
+      <!-- Top Canopies -->
+      <section class="sidebar-section">
+        <h3 class="sidebar-title">Top Canopies</h3>
+        <div id="top-canopies" class="sidebar-list">
+          <div class="loading-state">Loading...</div>
+        </div>
+      </section>
+
+      <!-- Top Timeline -->
+      <section class="sidebar-section">
+        <h3 class="sidebar-title">Top Timeline</h3>
+        <div id="top-timeline" class="sidebar-list">
+          <div class="loading-state">Loading...</div>
+        </div>
+      </section>
+
+      <!-- Top Posts -->
+      <section class="sidebar-section">
+        <h3 class="sidebar-title">Top Posts</h3>
+        <div id="top-posts" class="sidebar-list">
+          <div class="loading-state">Loading...</div>
+        </div>
+      </section>
+
+      <!-- Top Bridgers -->
+      <section class="sidebar-section">
+        <h3 class="sidebar-title">Top Bridgers</h3>
+        <div id="top-bridgers" class="sidebar-list">
+          <div class="loading-state">Loading...</div>
+        </div>
+      </section>
+    </aside>
 
     <!-- Profile Selector Modal (hidden by default) -->
     <div id="profile-selector-modal" class="modal hidden">
@@ -51,34 +160,6 @@
       </div>
     </div>
 
-    <!-- Main Timeline View -->
-    <main class="timeline-main">
-      <!-- Single Profile View -->
-      <div id="single-profile-view" class="timeline-view">
-        <div id="timeline-items" class="timeline-items">
-          <!-- Timeline items will be rendered here -->
-          <div class="loading-state">Loading timeline...</div>
-        </div>
-      </div>
-
-      <!-- Multi-Profile View (hidden by default) -->
-      <div id="multi-profile-view" class="timeline-view hidden">
-        <div id="multi-profile-columns" class="multi-profile-columns">
-          <!-- Profile columns will be rendered here -->
-        </div>
-      </div>
-
-      <!-- Empty State -->
-      <div id="empty-state" class="empty-state hidden">
-        <p>No timeline activities found.</p>
-      </div>
-
-      <!-- Error State -->
-      <div id="error-state" class="error-state hidden">
-        <p>Error loading timeline. Please try again.</p>
-      </div>
-    </main>
-
     <!-- Loading Indicator -->
     <div id="loading-indicator" class="loading-indicator hidden">
       <div class="spinner"></div>
@@ -87,7 +168,7 @@
 
   <!-- Load Timeline Modules -->
   <!-- TypeScript: Load compiled version from dist/ -->
-  <script type="module" src="/timelines/dist/timeline-app.js"></script>
+  <script type="module" src="dist/timeline-app.js"></script>
   <script>
     // Error handling for module loading
     window.addEventListener('error', (e) => {

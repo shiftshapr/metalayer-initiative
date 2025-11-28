@@ -20,7 +20,7 @@ echo "📦 Step 1: Creating database backup..."
 
 # Step 2: Run Prisma migration
 echo "📝 Step 2: Running Prisma migration..."
-cd /home/ubuntu/metalayer-initiative
+cd /home/ubuntu/canopi
 npx prisma migrate dev --name add_metacommunity --create-only
 
 # Step 3: Review migration (optional - uncomment to review)

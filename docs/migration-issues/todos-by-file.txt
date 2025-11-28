@@ -1,0 +1,15 @@
+     11 presence/src/components/UnifiedMessageModal.ts
+      9 presence/src/features/TabManager/AppStoreIntegration.ts
+      6 presence/src/core/ContextMenuConfig.ts
+      2 presence/src/sidepanel/Sidepanel.ts
+      2 presence/src/features/TabManager/TabManagerModal.ts
+      2 presence/src/core/CursorParkManager.ts
+      1 presence/src/utils/ErrorHandler.ts
+      1 presence/src/features/visibility/core/VisibilityState.ts
+      1 presence/src/features/UIManager.ts
+      1 presence/src/features/TabManager/TabManager.ts
+      1 presence/src/features/TabManager/TabDisplay.ts
+      1 presence/src/features/PeopleModule.ts
+      1 presence/src/features/CommunitiesModule.ts
+      1 presence/src/features/AuthModule.ts
+      1 presence/src/features/AgentModule.ts
