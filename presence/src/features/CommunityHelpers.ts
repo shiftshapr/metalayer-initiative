@@ -137,21 +137,31 @@ export async function updateCommunityDropdown(communities: Community[]): Promise
           }, 'community');
         }
         
+        // CRITICAL FIX: Hide logo until it loads to prevent broken image flash
+        primaryCommunityLogoEl.style.display = 'none';
+        primaryCommunityLogoEl.style.visibility = 'hidden';
+        primaryCommunityLogoEl.style.opacity = '0';
+        
         // Set the logo URL with error handling (CSP compliant - no inline handlers)
         primaryCommunityLogoEl.addEventListener('error', () => {
           Logger.error(`❌ COMMUNITIES: Failed to load logo image: ${cleanedLogoUrl}`, null, 'community');
           primaryCommunityLogoEl.style.display = 'none';
-        });
+          primaryCommunityLogoEl.style.visibility = 'hidden';
+          primaryCommunityLogoEl.style.opacity = '0';
+        }, { once: true });
+        
         primaryCommunityLogoEl.addEventListener('load', () => {
           Logger.debug(`✅ COMMUNITIES: Logo image loaded successfully: ${cleanedLogoUrl}`, null, 'community');
-        });
+          // Show logo only after successful load
+          primaryCommunityLogoEl.style.display = 'block';
+          primaryCommunityLogoEl.style.visibility = 'visible';
+          primaryCommunityLogoEl.style.opacity = '1';
+          primaryCommunityLogoEl.style.cssText += 'display: block !important; visibility: visible !important; opacity: 1 !important; width: 24px !important; height: 24px !important;';
+        }, { once: true });
+        
         primaryCommunityLogoEl.src = cleanedLogoUrl;
-        primaryCommunityLogoEl.style.display = 'block';
-        primaryCommunityLogoEl.style.visibility = 'visible';
-        primaryCommunityLogoEl.style.opacity = '1';
-        primaryCommunityLogoEl.style.cssText += 'display: block !important; visibility: visible !important; opacity: 1 !important; width: 24px !important; height: 24px !important;';
         primaryCommunityLogoEl.alt = `${primaryCommunity.name} logo`;
-        Logger.debug(`✅ COMMUNITIES: Set community logo to: ${logoUrl}`, null, 'community');
+        Logger.debug(`✅ COMMUNITIES: Set community logo to: ${cleanedLogoUrl} (hidden until load)`, null, 'community');
       }
     } else {
       // No logoUrl - hide the logo
@@ -319,10 +329,32 @@ export async function updateCommunityDropdown(communities: Community[]): Promise
           } catch (error) {
             Logger.debug('⚠️ COMMUNITIES: Failed to reload avatars (non-critical):', error, 'community');
           }
+          // ROOT CAUSE FIX: pageId should always be available - get from state
+          // TabController ensures currentUrlData is set immediately on initialization
           try {
-            await loadChatHistory('', activeCommunities);
+            const currentUrlData = getState('currentUrlData') as { pageId?: string; rawUrl?: string } | null;
+            const pageId = currentUrlData?.pageId;
+            
+            if (!pageId) {
+              Logger.warn(`⚠️ COMMUNITIES: No pageId available in currentUrlData - TabController should have set it`, {
+                currentUrlData,
+                hasCurrentUrlData: !!currentUrlData
+              }, 'community');
+              // Don't call loadChatHistory without pageId - this should never happen
+              return;
+            }
+            
+            // Validate pageId is not a chrome/sidepanel URL (should never happen if TabController works correctly)
+            if (pageId.includes('sidepanel') || pageId.startsWith('chrome-extension://') || pageId.startsWith('chrome://')) {
+              Logger.warn(`⚠️ COMMUNITIES: Invalid pageId (chrome/sidepanel URL) - TabController should filter these: ${pageId}`, null, 'community');
+              return;
+            }
+            
+            // pageId is valid - reload chat history
+            await loadChatHistory(pageId, activeCommunities);
+            Logger.debug(`✅ COMMUNITIES: Reloaded chat history for pageId: ${pageId}`, null, 'community');
           } catch (error) {
-            Logger.debug('⚠️ COMMUNITIES: Failed to reload chat history (non-critical):', error, 'community');
+            Logger.warn('⚠️ COMMUNITIES: Failed to reload chat history:', error, 'community');
           }
         } catch (error: unknown) {
           handleError(error, {
@@ -337,12 +369,24 @@ export async function updateCommunityDropdown(communities: Community[]): Promise
       });
     }
     
-    // Add event listener to three-dot menu button
+    // Add event listener to three-dot menu button (only for non-primary communities)
     if (!isPrimary) {
       const menuBtn = li.querySelector('.community-menu-btn') as HTMLButtonElement;
       const menuDropdown = li.querySelector('.community-menu-dropdown') as HTMLElement;
       
       if (menuBtn && menuDropdown) {
+        // CRITICAL FIX: Ensure menu button is visible
+        menuBtn.style.display = 'flex';
+        menuBtn.style.visibility = 'visible';
+        menuBtn.style.opacity = '1';
+        
+        Logger.debug(`🔍 COMMUNITIES: Attaching menu button handler for ${community.name}`, {
+          menuBtnExists: !!menuBtn,
+          menuDropdownExists: !!menuDropdown,
+          menuBtnDisplay: window.getComputedStyle(menuBtn).display,
+          menuBtnVisibility: window.getComputedStyle(menuBtn).visibility
+        }, 'community');
+        
         menuBtn.addEventListener('click', (e: Event) => {
           e.stopPropagation();
           
@@ -355,8 +399,12 @@ export async function updateCommunityDropdown(communities: Community[]): Promise
           
           // Toggle this dropdown
           const isVisible = menuDropdown.style.display === 'block' || 
-                           (menuDropdown.style.display === '' && getComputedStyle(menuDropdown).display === 'block');
+                           (menuDropdown.style.display === '' && window.getComputedStyle(menuDropdown).display === 'block');
           menuDropdown.style.display = isVisible ? 'none' : 'block';
+          menuDropdown.style.visibility = isVisible ? 'hidden' : 'visible';
+          menuDropdown.style.opacity = isVisible ? '0' : '1';
+          
+          Logger.debug(`🔍 COMMUNITIES: Menu dropdown toggled for ${community.name}: ${isVisible ? 'hidden' : 'visible'}`, null, 'community');
         });
         
         // Add event listener to "Make Primary" button

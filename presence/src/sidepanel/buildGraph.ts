@@ -5,22 +5,31 @@
  * This is the single source of truth for module initialization order
  */
 
-import type { ModuleGraph } from './types.js';
+import type { 
+  ModuleGraph,
+  SupabaseService,
+  CommunitiesModule,
+  AuthManager,
+  LifecycleManager,
+  EventBus,
+  UIManager,
+  VisibilityManager,
+  SupabaseModuleImport,
+  AuthModuleImport,
+  LifecycleModuleImport,
+  EventBusModuleImport,
+  UIManagerModuleImport,
+  VisibilityModuleImport,
+  VisibilityStateModuleImport,
+  CommunitiesModuleImport
+} from '../types/moduleGraph.js';
 import { getMessageLoadingService, initializeMessageLoadingService, type MessageLoadingService } from '../services/MessageLoadingService.js';
 import { Logger } from '../utils/Logger.js';
+import type { StateManager } from '../types/index.js';
+import type { IVisibilityRealtime } from '../features/visibility/core/VisibilityManager.js';
 
 // Import StateManager - use dynamic import to handle path resolution
 // From sidepanel/ to core/ is ../core/
-
-// Import optional modules - use any for now to avoid circular dependency issues
-// These will be properly typed when modules are available
-type VisibilityManagerType = any;
-type SupabaseServiceType = any;
-type CommunitiesModuleType = any;
-type AuthManagerType = any;
-type LifecycleManagerType = any;
-type EventBusType = any;
-type UIManagerType = any;
 
 // Note: Optional modules are loaded dynamically in buildModuleGraph
 // This avoids circular dependencies and allows modules to be optional
@@ -46,7 +55,7 @@ export async function buildModuleGraph(): Promise<ModuleGraph> {
   Logger.debug('Building module graph...', null, 'module-graph');
 
   // Import StateManager dynamically
-  let stateManager: any;
+  let stateManager: StateManager;
   try {
     const stateManagerModule = await import('../core/StateManager.js');
     stateManager = stateManagerModule.stateManagerInstance;
@@ -112,13 +121,13 @@ export async function buildModuleGraph(): Promise<ModuleGraph> {
   }
 
   // Initialize optional modules
-  let visibilityManager: VisibilityManagerType | undefined;
-  let supabaseService: SupabaseServiceType | undefined;
-  let communitiesModule: CommunitiesModuleType | undefined;
-  let authManager: AuthManagerType | undefined;
-  let lifecycleManager: LifecycleManagerType | undefined;
-  let eventBus: EventBusType | undefined;
-  let uiManager: UIManagerType | undefined;
+  let visibilityManager: VisibilityManager | undefined;
+  let supabaseService: SupabaseService | undefined;
+  let communitiesModule: CommunitiesModule | undefined;
+  let authManager: AuthManager | undefined;
+  let lifecycleManager: LifecycleManager | undefined;
+  let eventBus: EventBus | undefined;
+  let uiManager: UIManager | undefined;
 
   // Try to load optional modules dynamically
   // These are optional and may not exist, so we catch errors gracefully
@@ -126,7 +135,7 @@ export async function buildModuleGraph(): Promise<ModuleGraph> {
   // Initialize SupabaseService if available
   // CRITICAL FIX: Must call initialize() to create Supabase client with auth property
   // ROOT CAUSE FIX: SupabaseService.js is in root services/, not src/services/
-  const supabaseModule = await safeImport<{ supabaseServiceInstance?: any }>('../../services/SupabaseService.js');
+  const supabaseModule = await safeImport<SupabaseModuleImport>('../../services/SupabaseService.js');
   if (supabaseModule?.supabaseServiceInstance) {
     supabaseService = supabaseModule.supabaseServiceInstance;
     // CRITICAL: Initialize SupabaseService to create client with auth property
@@ -144,10 +153,10 @@ export async function buildModuleGraph(): Promise<ModuleGraph> {
   // BootController uses graph.communitiesModule?.initialize() which suggests it might be a module with initialize method
   // For now, we'll leave it undefined and let BootController handle it
   try {
-    const communitiesModuleImport = await import('../features/CommunityLoaders.js').catch(() => null);
+    const communitiesModuleImport = await import('../features/CommunityLoaders.js').catch(() => null) as CommunitiesModuleImport | null;
     // Check if there's an initialize function or module instance
-    if (communitiesModuleImport && typeof (communitiesModuleImport as any).initialize === 'function') {
-      communitiesModule = communitiesModuleImport as any;
+    if (communitiesModuleImport && typeof communitiesModuleImport.initialize === 'function') {
+      communitiesModule = communitiesModuleImport as CommunitiesModule;
       Logger.debug('CommunitiesModule available', null, 'module-graph');
     }
   } catch (error) {
@@ -156,7 +165,7 @@ export async function buildModuleGraph(): Promise<ModuleGraph> {
 
   // Initialize AuthManager if available
   // CRITICAL FIX: AuthManager is in features/, not core/auth/
-  const authModule = await safeImport<{ authManagerInstance?: any }>('../features/AuthManager.js');
+  const authModule = await safeImport<AuthModuleImport>('../features/AuthManager.js');
   if (authModule?.authManagerInstance) {
     authManager = authModule.authManagerInstance;
     Logger.debug('AuthManager initialized', null, 'module-graph');
@@ -165,7 +174,7 @@ export async function buildModuleGraph(): Promise<ModuleGraph> {
   }
 
   // Initialize LifecycleManager if available
-  const lifecycleModule = await safeImport<{ lifecycleManagerInstance?: any }>('../core/LifecycleManager.js');
+  const lifecycleModule = await safeImport<LifecycleModuleImport>('../core/LifecycleManager.js');
   if (lifecycleModule?.lifecycleManagerInstance) {
     lifecycleManager = lifecycleModule.lifecycleManagerInstance;
     Logger.debug('LifecycleManager initialized', null, 'module-graph');
@@ -174,7 +183,7 @@ export async function buildModuleGraph(): Promise<ModuleGraph> {
   }
 
   // Initialize EventBus if available
-  const eventBusModule = await safeImport<{ eventBusInstance?: any }>('../core/EventBus.js');
+  const eventBusModule = await safeImport<EventBusModuleImport>('../core/EventBus.js');
   if (eventBusModule?.eventBusInstance) {
     eventBus = eventBusModule.eventBusInstance;
     Logger.debug('EventBus initialized', null, 'module-graph');
@@ -183,7 +192,7 @@ export async function buildModuleGraph(): Promise<ModuleGraph> {
   }
 
   // Initialize UIManager if available
-  const uiModule = await safeImport<{ uiManagerInstance?: any }>('../features/UIManager.js');
+  const uiModule = await safeImport<UIManagerModuleImport>('../features/UIManager.js');
   if (uiModule?.uiManagerInstance) {
     uiManager = uiModule.uiManagerInstance;
     Logger.debug('UIManager initialized', null, 'module-graph');
@@ -193,18 +202,21 @@ export async function buildModuleGraph(): Promise<ModuleGraph> {
 
   // VisibilityManager - create instance with realtime service
   // Realtime service is provided by SupabaseService (has getPageUsers method)
-  const visibilityModule = await safeImport<{ VisibilityManager?: any }>('../features/visibility/core/VisibilityManager.js');
-  const visibilityStateModule = await safeImport<{ VisibilityState?: any }>('../features/visibility/core/VisibilityState.js');
+  const visibilityModule = await safeImport<VisibilityModuleImport>('../features/visibility/core/VisibilityManager.js');
+  const visibilityStateModule = await safeImport<VisibilityStateModuleImport>('../features/visibility/core/VisibilityState.js');
   
   if (visibilityModule?.VisibilityManager && visibilityStateModule?.VisibilityState && supabaseService) {
     // Create VisibilityState instance
-    const VisibilityState = visibilityStateModule.VisibilityState;
-    const visibilityState = new VisibilityState();
+    const VisibilityStateClass = visibilityStateModule.VisibilityState;
+    const visibilityState = new VisibilityStateClass();
     
     // SupabaseService implements IVisibilityRealtime interface (has getPageUsers, getUserProfile, on methods)
     // Create VisibilityManager instance - it will be initialized later in BootController when user is authenticated
-    visibilityManager = new visibilityModule.VisibilityManager(
-      supabaseService as any, // SupabaseService implements IVisibilityRealtime
+    const VisibilityManagerClass = visibilityModule.VisibilityManager;
+    // SupabaseService implements IVisibilityRealtime interface
+    // Type assertion needed because SupabaseService interface doesn't explicitly extend IVisibilityRealtime
+    visibilityManager = new VisibilityManagerClass(
+      supabaseService as unknown as IVisibilityRealtime,
       Logger,
       visibilityState
     );
@@ -218,7 +230,7 @@ export async function buildModuleGraph(): Promise<ModuleGraph> {
   const graph: ModuleGraph = {
     stateManager,
     messageLoadingService,
-    visibilityManager: visibilityManager as any, // Will be set later in BootController
+    visibilityManager,
     supabaseService,
     logger: Logger,
     communitiesModule,

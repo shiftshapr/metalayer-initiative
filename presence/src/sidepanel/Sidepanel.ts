@@ -23,9 +23,13 @@ const getRealtimeControllerCtor = (): RealtimeControllerConstructor | undefined 
 const getVisibilityRefresherFactory = (): VisibilityRefresherFactory | undefined => undefined;
 import { loadChatHistory } from '../features/MessagesModule.js';
 // UIManager is optional - will be loaded dynamically if needed
-let setupTabNavigation: any;
-let setupMessageInputEventListeners: any;
-let initializeTheme: any;
+type SetupTabNavigationFn = () => void | Promise<void>;
+type SetupMessageInputEventListenersFn = () => void | Promise<void>;
+type InitializeThemeFn = () => void | Promise<void>;
+
+let setupTabNavigation: SetupTabNavigationFn | undefined;
+let setupMessageInputEventListeners: SetupMessageInputEventListenersFn | undefined;
+let initializeTheme: InitializeThemeFn | undefined;
 
 // UIManager is optional - functions will be loaded dynamically when needed
 // Using Promise-based import to avoid top-level await and module resolution issues

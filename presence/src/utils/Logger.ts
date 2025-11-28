@@ -243,10 +243,10 @@ class Logger {
       return false;
     }
     if (this.isProduction) {
-      return hasAllowlist ? this.debugContextAllowlist!.has(normalizedContext) : false;
+      return hasAllowlist && this.debugContextAllowlist ? this.debugContextAllowlist.has(normalizedContext) : false;
     }
-    if (hasAllowlist) {
-      return this.debugContextAllowlist!.has(normalizedContext);
+    if (hasAllowlist && this.debugContextAllowlist) {
+      return this.debugContextAllowlist.has(normalizedContext);
     }
     return true;
   }

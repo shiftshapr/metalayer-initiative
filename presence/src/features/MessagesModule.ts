@@ -6,17 +6,25 @@
  * 
  * TypeScript + ES6 Module
  */
-import type { Message, User } from '../types/index.js';
+import type { Message, User, RawMessagePayload } from '../types/index.js';
+import type { 
+  MessageSystemIntegration, 
+  UnifiedMessageDisplay, 
+  MessageLoader,
+  ResolvedAuthor,
+  NormalizedMessage,
+  ReactionsData
+} from '../types/messageHelpers.js';
 import { waitForCondition } from '../utils/AsyncCoordination.js';
 // MessageLoader not found - using fallback
-const MessageLoader = {} as any;
+const MessageLoader = {} as { new (): MessageLoader };
 import { AVATAR_FALLBACK_COLOR } from '../core/ConfigModule.js';
 import { stateManagerInstance } from '../core/StateManager.js';
 import { ensureMessageContent, formatAuthorName, formatUserHandle } from '../utils/Fallbacks.js';
 // MessageSystemIntegration not found - using fallback
-const initializeMessageSystemIntegration = () => {};
+const initializeMessageSystemIntegration = (): Promise<MessageSystemIntegration | null> => Promise.resolve(null);
 // UnifiedMessageDisplay not found - using fallback
-const UnifiedMessageDisplay = {} as any;
+const UnifiedMessageDisplay = {} as { new (): UnifiedMessageDisplay };
 import { UnifiedMessageRenderer } from '../utils/UnifiedMessageRenderer.js';
 // REMOVED: VisibilityModule and UserResolutionService don't exist
 // Using direct state checks and DOM queries instead
@@ -35,11 +43,10 @@ let isInitialMessageLoad = false;
 let initialMessageLoadComplete = false;
 
 // Helper to get window functions (set by other modules)
-const getWindowFunction = (name: string): any => {
+const getWindowFunction = (name: string): unknown => {
     if (typeof window === 'undefined')
         return undefined;
-    const win = window as any;
-    return win[name];
+    return (window as Record<string, unknown>)[name];
 };
 // Helper to get API instance
 const getApi = () => {
@@ -51,7 +58,7 @@ const getCurrentChatData = () => {
     const data = stateManagerInstance.getState('chat.data');
     return Array.isArray(data) ? data : [];
 };
-const setCurrentChatData = (messages: any[]) => {
+const setCurrentChatData = (messages: Message[]): void => {
     stateManagerInstance.setState('chat.data', messages);
 };
 interface UrlData {
@@ -106,11 +113,11 @@ const getCurrentLocationHref = () => {
 // Use visibilityModuleInstance.getCurrentVisibilityData() instead
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 // New message system integration
-let messageSystemIntegration: any = null;
+let messageSystemIntegration: MessageSystemIntegration | null = null;
 // eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/ban-ts-comment
 // @ts-ignore - unused variable, kept for potential future use
-let unifiedMessageDisplay: any | null = null;
-let messageLoaderInstance: any = null;
+let unifiedMessageDisplay: UnifiedMessageDisplay | null = null;
+let messageLoaderInstance: MessageLoader | null = null;
 /**
  * Initialize the new message system
  */
@@ -125,15 +132,17 @@ async function initializeNewMessageSystem() {
             console.warn('⚠️ initializeNewMessageSystem: Supabase client not available');
             return;
         }
-        if (!messageLoaderInstance) {
-            messageLoaderInstance = new MessageLoader();
+        if (!messageLoaderInstance && typeof MessageLoader === 'function') {
+            messageLoaderInstance = new MessageLoader() as MessageLoader;
             console.log('✅ initializeNewMessageSystem: MessageLoader instance created');
         }
         // ROOT CAUSE FIX: Track if we're in initial load to prevent duplicate processing
         // Note: Variables removed - will be re-added when needed for duplicate processing prevention
         // Initialize integration
         messageSystemIntegration = await initializeMessageSystemIntegration();
-        unifiedMessageDisplay = new UnifiedMessageDisplay();
+        if (typeof UnifiedMessageDisplay === 'function') {
+            unifiedMessageDisplay = new UnifiedMessageDisplay() as UnifiedMessageDisplay;
+        }
         console.log('✅ New message system initialized');
     }
     catch (error) {
@@ -147,7 +156,7 @@ const isFocusModeContainer = (container: Element | null): boolean => {
     return (container.classList.contains('focus-messages-container') ||
         container.getAttribute('data-focus-mode') === 'true');
 };
-const getMessageTimestampValue = (value: any): number => {
+const getMessageTimestampValue = (value: unknown): number => {
     if (value instanceof Date) {
         return value.getTime();
     }
@@ -159,21 +168,33 @@ const getMessageTimestampValue = (value: any): number => {
     }
     return Date.now();
 };
-const resolveAuthorFromPayload = (rawMessage: any, authorId: string | undefined): any => {
+const resolveAuthorFromPayload = (rawMessage: RawMessagePayload, authorId: string | undefined): ResolvedAuthor => {
     const authorSource = (rawMessage.author ??
         rawMessage.AppUser ??
         rawMessage.user ??
-        getCurrentUser());
+        getCurrentUser()) as User | null | undefined;
+    const sourceId = (authorSource && typeof authorSource === 'object' && 'id' in authorSource) 
+        ? String(authorSource.id) 
+        : undefined;
+    const sourceEmail = (authorSource && typeof authorSource === 'object' && 'email' in authorSource)
+        ? (typeof authorSource.email === 'string' ? authorSource.email : undefined)
+        : undefined;
+    const sourceAvatarUrl = (authorSource && typeof authorSource === 'object' && 'avatarUrl' in authorSource)
+        ? (typeof authorSource.avatarUrl === 'string' ? authorSource.avatarUrl : undefined)
+        : undefined;
+    const sourceAuraColor = (authorSource && typeof authorSource === 'object' && 'auraColor' in authorSource)
+        ? (typeof authorSource.auraColor === 'string' ? authorSource.auraColor : AVATAR_FALLBACK_COLOR)
+        : AVATAR_FALLBACK_COLOR;
     return {
-        id: authorSource?.id || authorId,
+        id: sourceId || authorId || 'unknown-user',
         name: formatAuthorName(authorSource),
         handle: formatUserHandle(authorSource),
-        email: authorSource?.email,
-        avatarUrl: authorSource?.avatarUrl ?? undefined,
-        auraColor: authorSource?.auraColor || AVATAR_FALLBACK_COLOR
+        email: sourceEmail,
+        avatarUrl: sourceAvatarUrl,
+        auraColor: sourceAuraColor
     };
 };
-const normalizeMessagePayload = (rawMessage: any): any => {
+const normalizeMessagePayload = (rawMessage: RawMessagePayload): NormalizedMessage => {
     const urlData = getCurrentUrlData();
     const fallbackCommunities = getActiveCommunities();
     // Type-safe access to AppUser property
@@ -183,20 +204,21 @@ const normalizeMessagePayload = (rawMessage: any): any => {
         rawMessage.userId ||
         (typeof rawMessage.user_id === 'string' ? rawMessage.user_id : undefined) ||
         appUser?.id ||
-        (getCurrentUser() as any)?.id ||
+        (getCurrentUser() as User | null)?.id ||
         'unknown-user';
     // Type-safe access to string properties
-    const getStringValue = (value: any): string | undefined => {
+    const getStringValue = (value: unknown): string | undefined => {
         return typeof value === 'string' ? value : undefined;
     };
-    const getStringOrDate = (value: any): Date | string | undefined => {
+    const getStringOrDate = (value: unknown): Date | string | undefined => {
         if (value instanceof Date)
             return value;
         if (typeof value === 'string')
             return value;
         return new Date().toISOString();
     };
-    const normalized = {
+    const resolvedAuthor = resolveAuthorFromPayload(rawMessage, String(resolvedAuthorId));
+    const normalized: NormalizedMessage = {
         id: String(rawMessage.id ||
             rawMessage.messageId ||
             getStringValue(rawMessage.uuid) ||
@@ -207,7 +229,7 @@ const normalizeMessagePayload = (rawMessage: any): any => {
         }),
         parentId: rawMessage.parentId ?? getStringValue(rawMessage.parent_id) ?? getStringValue(rawMessage.replyTo) ?? null,
         authorId: String(resolvedAuthorId),
-        author: resolveAuthorFromPayload(rawMessage, String(resolvedAuthorId)),
+        author: resolvedAuthor as User, // ResolvedAuthor is compatible with User
         communityId: String(rawMessage.communityId ||
             getStringValue(rawMessage.community_id) ||
             fallbackCommunities[0] ||
@@ -224,21 +246,21 @@ const normalizeMessagePayload = (rawMessage: any): any => {
         normalizedUrl: rawMessage.normalizedUrl ?? urlData?.normalizedUrl ?? null,
         createdAt: getStringOrDate(rawMessage.createdAt ??
             rawMessage.created_at ??
-            rawMessage.timestamp),
+            rawMessage.timestamp) ?? new Date().toISOString(),
         updatedAt: getStringOrDate(rawMessage.updatedAt ??
             rawMessage.updated_at ??
             rawMessage.modified_at ??
             rawMessage.createdAt ??
-            rawMessage.created_at),
+            rawMessage.created_at) ?? new Date().toISOString(),
         reactions: Array.isArray(rawMessage.reactions) ? rawMessage.reactions : [],
         optionalContent: getStringValue(rawMessage.optionalContent) ?? getStringValue(rawMessage.optional_content) ?? null,
         uri: rawMessage.uri ?? getStringValue(rawMessage.url) ?? getStringValue(rawMessage.messageUrl) ?? null,
         threadId: rawMessage.threadId ?? getStringValue(rawMessage.thread_id) ?? undefined,
         deletedAt: rawMessage.deletedAt ? getStringOrDate(rawMessage.deletedAt) : (getStringValue(rawMessage.deleted_at) ? getStringOrDate(rawMessage.deleted_at) : null),
-        isBookmarked: typeof rawMessage.isBookmarked === 'boolean' ? rawMessage.isBookmarked : undefined,
+        isBookmarked: typeof rawMessage.isBookmarked === 'boolean' ? rawMessage.isBookmarked : (rawMessage.isBookmarked === null ? undefined : undefined),
         bookmarkCount: typeof rawMessage.bookmarkCount === 'number' ? rawMessage.bookmarkCount : undefined,
         shareCount: rawMessage.shareCount,
-        isShared: rawMessage.isShared
+        isShared: typeof rawMessage.isShared === 'boolean' ? rawMessage.isShared : undefined
     };
     return normalized;
 };
@@ -246,7 +268,7 @@ const renderMessageElement = async (message: Message, chatContainer: Element | n
     const isReply = !!message.parentId;
     const isFocusMode = isFocusModeContainer(chatContainer);
     // ROOT CAUSE FIX: Calculate permissions and format time properly
-    const currentUser = getCurrentUser() as any;
+    const currentUser = getCurrentUser() as User | null;
     const isOwner = currentUser && (currentUser.id === message.authorId ||
         currentUser.id === message.author?.id ||
         currentUser.email === message.authorEmail);
@@ -263,7 +285,7 @@ const renderMessageElement = async (message: Message, chatContainer: Element | n
                 ? message.createdAt.toISOString()
                 : String(message.createdAt))
         : null;
-    const formattedTime = formatMessageTime(createdAtStr);
+    const formattedTime = formatMessageTime(createdAtStr ?? undefined);
     // ROOT CAUSE FIX: Ensure formattedTime is a string (not a Promise or other type)
     const safeFormattedTime = typeof formattedTime === 'string' ? formattedTime : String(formattedTime || '');
     if (typeof formattedTime !== 'string') {
@@ -277,7 +299,7 @@ const renderMessageElement = async (message: Message, chatContainer: Element | n
         let communityName = '';
         if (message.communityId) {
             // Try to get community name from CommunitiesModule or stateManager
-            const communitiesModule = getWindowFunction('CommunitiesModule');
+            const communitiesModule = getWindowFunction('CommunitiesModule') as { getCommunityName?: (id: string) => string | Promise<string> } | null | undefined;
             if (communitiesModule && typeof communitiesModule.getCommunityName === 'function') {
                 const name = communitiesModule.getCommunityName(message.communityId);
                 communityName = typeof name === 'string' ? name : (name instanceof Promise ? await name : '');
@@ -312,8 +334,8 @@ const renderMessageElement = async (message: Message, chatContainer: Element | n
             hasUserReplied: false,
             hasUserReposted: false,
             hasUserShared: false,
-            canEdit,
-            canDelete
+            canEdit: canEdit ?? false,
+            canDelete: canDelete ?? false
         });
         const messageDiv = document.createElement('div');
         messageDiv.className = isReply ? 'message message-reply thread-reply' : 'message thread-starter';
@@ -367,8 +389,8 @@ const renderMessageElement = async (message: Message, chatContainer: Element | n
         return messageDiv;
     }
     // ROOT CAUSE FIX: Get createUnifiedMessageElement from window (set by UnifiedMessageDisplay module)
-    const createUnifiedMessageElementFn = getWindowFunction('createUnifiedMessageElement');
-    if (createUnifiedMessageElementFn) {
+    const createUnifiedMessageElementFn = getWindowFunction('createUnifiedMessageElement') as ((message: Message) => HTMLElement | Promise<HTMLElement>) | null | undefined;
+    if (createUnifiedMessageElementFn && typeof createUnifiedMessageElementFn === 'function') {
         const polymorphic = createUnifiedMessageElementFn(message);
         const element = (polymorphic instanceof Promise ? await polymorphic : polymorphic) as HTMLElement;
         element.dataset.createdAt = `${getMessageTimestampValue(message.createdAt)}`;
@@ -408,7 +430,7 @@ const resolveActiveCommunitiesWithRetry = async (initial: string[] | undefined):
  * Update message in chat
  * COMP METHOD: Matches original implementation with full DOM updates
  */
-function updateMessageInChat(updatedMessage: any): void {
+async function updateMessageInChat(updatedMessage: Message): Promise<void> {
     console.log('🔄 UPDATE_MESSAGE: Updating message in chat:', updatedMessage.id);
     const chatMessages = getChatMessagesContainer();
     if (!chatMessages) {
@@ -420,9 +442,9 @@ function updateMessageInChat(updatedMessage: any): void {
     if (!messageElement) {
         console.log('⚠️ UPDATE_MESSAGE: Message not found in DOM, adding as new message');
         // ROOT CAUSE FIX: Get addMessageToChat from window (set by MessagesModule exports)
-        const addMessageToChatFn = getWindowFunction('addMessageToChat');
-        if (addMessageToChatFn) {
-            addMessageToChatFn(updatedMessage);
+        const addMessageToChatFn = getWindowFunction('addMessageToChat') as ((message: Message) => Promise<void>) | null | undefined;
+        if (addMessageToChatFn && typeof addMessageToChatFn === 'function') {
+            await addMessageToChatFn(updatedMessage);
         }
         return;
     }
@@ -456,7 +478,7 @@ function updateMessageInChat(updatedMessage: any): void {
  * Remove message from chat
  * COMP METHOD: Matches original implementation with full DOM removal
  */
-function removeMessageFromChat(deletedMessage: any): void {
+function removeMessageFromChat(deletedMessage: Message): void {
     console.log('🗑️ REMOVE_MESSAGE: Removing message from chat:', deletedMessage.id);
     const chatMessages = getChatMessagesContainer();
     if (!chatMessages) {
@@ -499,7 +521,7 @@ function removeMessageFromChat(deletedMessage: any): void {
 /**
  * Add or update a single message in the chat container
  */
-async function addMessageToChat(rawMessage: any): Promise<void> {
+async function addMessageToChat(rawMessage: RawMessagePayload): Promise<void> {
     console.log('🔍 ADD_MESSAGE: Called with rawMessage:', rawMessage);
     const chatMessages = getChatMessagesContainer();
     if (!chatMessages) {
@@ -542,8 +564,8 @@ async function addMessageToChat(rawMessage: any): Promise<void> {
         }
         console.log('✅ ADD_MESSAGE: Appended message to DOM:', message.id);
         // ROOT CAUSE FIX: Get addMessageActionListeners from window
-        const addMessageActionListenersFn = getWindowFunction('addMessageActionListeners');
-        if (addMessageActionListenersFn) {
+        const addMessageActionListenersFn = getWindowFunction('addMessageActionListeners') as ((element: HTMLElement, message: Message) => void) | null | undefined;
+        if (addMessageActionListenersFn && typeof addMessageActionListenersFn === 'function' && messageElement) {
             addMessageActionListenersFn(messageElement, message);
             console.log('✅ ADD_MESSAGE: Attached action listeners for:', message.id);
         }
@@ -551,8 +573,8 @@ async function addMessageToChat(rawMessage: any): Promise<void> {
             console.warn('⚠️ ADD_MESSAGE: addMessageActionListeners not available');
         }
         // ROOT CAUSE FIX: Get loadMessageReactions from window
-        const loadMessageReactionsFn = getWindowFunction('loadMessageReactions');
-        if (loadMessageReactionsFn) {
+        const loadMessageReactionsFn = getWindowFunction('loadMessageReactions') as ((messageId: string, reactionBtn?: HTMLElement | null) => Promise<void>) | null | undefined;
+        if (loadMessageReactionsFn && typeof loadMessageReactionsFn === 'function') {
             try {
                 await loadMessageReactionsFn(message.id);
             }
@@ -591,14 +613,14 @@ function getSenderName(userId: string | undefined): string {
         return cachedMessage.author.name || cachedMessage.author.handle || 'Unknown User';
     }
     // Try to get from current user
-    const currentUser = getCurrentUser() as any;
+    const currentUser = getCurrentUser() as User | null;
     if (currentUser?.id === userId) {
         return currentUser.name || currentUser.email?.split('@')[0] || 'Unknown User';
     }
     // Try to get from visibility state (if available)
     const visibilityData = stateManagerInstance.getState('visibility.data');
     if (visibilityData && Array.isArray(visibilityData)) {
-        const user = visibilityData.find((u: any) => u.id === userId);
+        const user = visibilityData.find((u: { id?: string }) => u.id === userId);
         if (user) {
             return user.name || user.email?.split('@')[0] || 'Unknown User';
         }
@@ -620,7 +642,7 @@ function convertUrlsToLinks(text: string | undefined): string {
  * Format message time display
  * COMP METHOD: Matches original implementation
  */
-function formatMessageTime(createdAt: any): string {
+function formatMessageTime(createdAt: Date | string | undefined): string {
     if (!createdAt)
         return 'Unknown';
     const messageDate = new Date(createdAt);
@@ -655,7 +677,7 @@ function canUserEditMessage(message: Message): boolean {
     // Check if current user is the author and message is less than 1 hour old
     const messageTime = new Date(message.createdAt || '');
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-    const currentUserEmail = (getCurrentUser() as any)?.email ?? null;
+    const currentUserEmail = (getCurrentUser() as User | null)?.email ?? null;
     const authorEmail = message.authorEmail || (message.author && message.author.email);
     return authorEmail === currentUserEmail && messageTime.getTime() > oneHourAgo.getTime();
 }
@@ -669,7 +691,7 @@ async function createUnifiedMessageElement(message: Message): Promise<HTMLElemen
         // ROOT CAUSE FIX: Get community name (same logic as renderMessageElement)
         let communityName = '';
         if (message.communityId) {
-            const communitiesModule = getWindowFunction('CommunitiesModule');
+            const communitiesModule = getWindowFunction('CommunitiesModule') as { getCommunityName?: (id: string) => string | Promise<string> } | null | undefined;
             if (communitiesModule && typeof communitiesModule.getCommunityName === 'function') {
                 const name = communitiesModule.getCommunityName(message.communityId);
                 communityName = typeof name === 'string' ? name : (name instanceof Promise ? await name : '');
@@ -725,7 +747,7 @@ async function createUnifiedMessageElement(message: Message): Promise<HTMLElemen
 /**
  * Update reaction display for a message
  */
-function updateReactionDisplay(messageId: string, reactions: any): void {
+function updateReactionDisplay(messageId: string, reactions: ReactionsData): void {
     // ROOT CAUSE FIX: Try multiple selectors and containers to find message element
     let messageDiv = document.querySelector(`[data-message-id="${messageId}"]`);
     // If not found, try searching in chat containers
@@ -757,7 +779,7 @@ function updateReactionDisplay(messageId: string, reactions: any): void {
         return;
     // Update reaction count
     const countElement = reactionButton.querySelector('.icon-count') as HTMLElement | null;
-    const reactionCount = reactions?.length || 0;
+    const reactionCount = (reactions?.reactions && Array.isArray(reactions.reactions)) ? reactions.reactions.length : 0;
     if (countElement) {
         if (reactionCount > 0) {
             countElement.textContent = reactionCount.toString();
@@ -819,7 +841,7 @@ async function loadMessageReactions(messageId: string, reactionBtn: HTMLElement 
             console.warn('⚠️ loadMessageReactions: No API or Supabase client available');
         }
         // Update reaction display
-        updateReactionDisplay(messageId, reactions);
+        updateReactionDisplay(messageId, { reactions: Array.isArray(reactions) ? reactions : [] });
         // If reactionBtn provided, update it directly (COMP METHOD)
         if (reactionBtn) {
             const countElement = reactionBtn.querySelector('.icon-count') as HTMLElement | null;
@@ -1116,7 +1138,9 @@ async function handleMessageFocus(messageOrId: Message | string): Promise<void> 
         const activeCommunities = getActiveCommunities();
         // Use first active community or fallback to Public Square
         const communityId = activeCommunities[0] || PUBLIC_SQUARE_UUID;
-        const result = await messageSystemIntegration.loadFocusMode(pageId, message.parentId, { communityId });
+        const result = messageSystemIntegration && typeof messageSystemIntegration.loadFocusMode === 'function'
+            ? await messageSystemIntegration.loadFocusMode(pageId, message.parentId, { communityId })
+            : null;
         // Render in focus mode
         const container = getChatMessagesContainer();
         if (!container) {
@@ -1149,14 +1173,14 @@ async function handleMessageFocus(messageOrId: Message | string): Promise<void> 
                     container.appendChild(parentElement);
                     
                     // Attach action listeners (same as UnifiedMessageDisplay)
-                    const addMessageActionListenersFn = getWindowFunction('addMessageActionListeners');
-                    if (addMessageActionListenersFn) {
+                    const addMessageActionListenersFn = getWindowFunction('addMessageActionListeners') as ((element: HTMLElement, message: Message) => void) | null | undefined;
+                    if (addMessageActionListenersFn && typeof addMessageActionListenersFn === 'function') {
                         addMessageActionListenersFn(parentElement, parentMessage);
                     }
                     
                     // Load reactions (same as UnifiedMessageDisplay)
-                    const loadMessageReactionsFn = getWindowFunction('loadMessageReactions');
-                    if (loadMessageReactionsFn) {
+                    const loadMessageReactionsFn = getWindowFunction('loadMessageReactions') as ((messageId: string, reactionBtn?: HTMLElement | null) => Promise<void>) | null | undefined;
+                    if (loadMessageReactionsFn && typeof loadMessageReactionsFn === 'function') {
                         try {
                             await loadMessageReactionsFn(parentMessage.id);
                         } catch (reactionError) {
@@ -1167,7 +1191,7 @@ async function handleMessageFocus(messageOrId: Message | string): Promise<void> 
                     // CRITICAL: Attach avatar hover handlers (same as UnifiedMessageDisplay)
                     const avatarContainer = parentElement.querySelector('.avatar-container');
                     if (avatarContainer && parentMessage.author) {
-                        const win = typeof window !== 'undefined' ? window as Window & { userHoverModal?: { show?: (user: any, element: HTMLElement) => void } } : undefined;
+                        const win = typeof window !== 'undefined' ? window as Window & { userHoverModal?: { show?: (user: User, element: HTMLElement) => void } } : undefined;
                         const userHoverModal = win?.userHoverModal;
                         if (userHoverModal && userHoverModal.show) {
                             const showFn = userHoverModal.show;
@@ -1204,14 +1228,14 @@ async function handleMessageFocus(messageOrId: Message | string): Promise<void> 
                     container.appendChild(messageElement);
                     
                     // Attach action listeners (same as UnifiedMessageDisplay)
-                    const addMessageActionListenersFn = getWindowFunction('addMessageActionListeners');
-                    if (addMessageActionListenersFn) {
+                    const addMessageActionListenersFn = getWindowFunction('addMessageActionListeners') as ((element: HTMLElement, message: Message) => void) | null | undefined;
+                    if (addMessageActionListenersFn && typeof addMessageActionListenersFn === 'function' && messageElement) {
                         addMessageActionListenersFn(messageElement, msg);
                     }
                     
                     // Load reactions (same as UnifiedMessageDisplay)
-                    const loadMessageReactionsFn = getWindowFunction('loadMessageReactions');
-                    if (loadMessageReactionsFn) {
+                    const loadMessageReactionsFn = getWindowFunction('loadMessageReactions') as ((messageId: string, reactionBtn?: HTMLElement | null) => Promise<void>) | null | undefined;
+                    if (loadMessageReactionsFn && typeof loadMessageReactionsFn === 'function') {
                         try {
                             await loadMessageReactionsFn(msg.id);
                         } catch (reactionError) {
@@ -1222,7 +1246,7 @@ async function handleMessageFocus(messageOrId: Message | string): Promise<void> 
                     // CRITICAL: Attach avatar hover handlers (same as UnifiedMessageDisplay)
                     const avatarContainer = messageElement.querySelector('.avatar-container');
                     if (avatarContainer && msg.author) {
-                        const win = typeof window !== 'undefined' ? window as Window & { userHoverModal?: { show?: (user: any, element: HTMLElement) => void } } : undefined;
+                        const win = typeof window !== 'undefined' ? window as Window & { userHoverModal?: { show?: (user: User, element: HTMLElement) => void } } : undefined;
                         const userHoverModal = win?.userHoverModal;
                         if (userHoverModal && userHoverModal.show) {
                             const showFn = userHoverModal.show;
@@ -1752,8 +1776,8 @@ async function handleDeleteMessage(message: Message): Promise<void> {
             return;
         }
         // Use robustIntegration for deletion
-        const robustIntegration = getWindowFunction('robustIntegration');
-        if (robustIntegration?.isInitialized && robustIntegration.deleteMessage) {
+        const robustIntegration = getWindowFunction('robustIntegration') as { isInitialized?: boolean; deleteMessage?: (id: string) => Promise<void> } | null | undefined;
+        if (robustIntegration?.isInitialized && robustIntegration.deleteMessage && typeof robustIntegration.deleteMessage === 'function') {
             await robustIntegration.deleteMessage(message.id);
         }
         else {
@@ -1939,13 +1963,17 @@ async function sendMessageViaSupabase(content: string, parentId: string | null =
  * Get sender avatar HTML
  * COMP METHOD: Matches original implementation
  */
-async function getSenderAvatar(author: any): Promise<string> {
+async function getSenderAvatar(author: User | ResolvedAuthor | undefined): Promise<string> {
     const displayName = formatAuthorName(author);
     if (!author)
         return getSenderInitial(displayName);
+    // Convert ResolvedAuthor to User if needed
+    const userAuthor: User = (author as ResolvedAuthor).id && !('userId' in author) 
+        ? { ...author, userId: (author as ResolvedAuthor).id } as User
+        : author as User;
     // ES6 pattern: Use imported AvatarUtils module
     if (AvatarUtils && typeof AvatarUtils.createUnifiedAvatar === 'function') {
-        const avatarHTML = await AvatarUtils.createUnifiedAvatar(author, 'message', {
+        const avatarHTML = await AvatarUtils.createUnifiedAvatar(userAuthor, 'message', {
             size: 32,
             showStatus: true,
             showAura: true,
@@ -2183,12 +2211,18 @@ async function focusOnMessage(message: Message): Promise<void> {
  * Parse message URL
  * COMP METHOD: Matches original implementation
  */
-function parseMessageUrl(url: string): any {
+interface ParsedMessageUrl {
+    messageId: string | null;
+    conversationId: string | null;
+    isValid: boolean;
+}
+
+function parseMessageUrl(url: string): ParsedMessageUrl | null {
     const messageIdMatch = url.match(/\/message\/([a-f0-9-]+)/i);
     const conversationIdMatch = url.match(/\/conversation\/([a-f0-9-]+)/i);
     return {
-        messageId: messageIdMatch ? messageIdMatch[1] : null,
-        conversationId: conversationIdMatch ? conversationIdMatch[1] : null,
+        messageId: (messageIdMatch && messageIdMatch[1]) ? messageIdMatch[1] : null,
+        conversationId: (conversationIdMatch && conversationIdMatch[1]) ? conversationIdMatch[1] : null,
         isValid: !!(messageIdMatch || conversationIdMatch)
     };
 }
@@ -2200,25 +2234,26 @@ async function handleIncomingMessageUrl(): Promise<void> {
     console.log('🔗 INCOMING_URL: Checking for incoming message URL...');
     const currentUrl = getCurrentLocationHref();
     const messageData = parseMessageUrl(currentUrl);
-    if (messageData.isValid && messageData.messageId) {
-        console.log(`🔗 INCOMING_URL: Found messageId in URL: ${messageData.messageId}`);
+    if (messageData && messageData.isValid && messageData.messageId) {
+        const messageId = messageData.messageId;
+        console.log(`🔗 INCOMING_URL: Found messageId in URL: ${messageId}`);
         // BEST PRACTICE: Wait for message element using event-based approach instead of setTimeout
         try {
             await waitForCondition(
-                () => document.querySelector(`[data-message-id="${messageData.messageId}"]`) !== null,
+                () => document.querySelector(`[data-message-id="${messageId}"]`) !== null,
                 {
                     timeout: 5000, // 5 seconds max wait
                     interval: 100
                 }
             );
-            const messageElement = document.querySelector(`[data-message-id="${messageData.messageId}"]`);
+            const messageElement = document.querySelector(`[data-message-id="${messageId}"]`);
             if (messageElement) {
-                await focusOnMessage({ id: messageData.messageId } as Message);
+                await focusOnMessage({ id: messageId } as Message);
             } else {
-                console.warn('🔗 INCOMING_URL: Message not found in current view:', messageData.messageId);
+                console.warn('🔗 INCOMING_URL: Message not found in current view:', messageId);
             }
         } catch (error: unknown) {
-            console.warn('🔗 INCOMING_URL: Message element not found after waiting:', messageData.messageId);
+            console.warn('🔗 INCOMING_URL: Message element not found after waiting:', messageId);
         }
     }
     else {
@@ -2288,7 +2323,7 @@ async function handleReaction(message: Message): Promise<void> {
             if (!response) {
                 return;
             }
-            const responseData = response.data as { reactions?: any[] } | null | undefined;
+            const responseData = response.data as { reactions?: ReactionsData['reactions'] } | null | undefined;
             const existingReactions = responseData?.reactions || [];
             // CRITICAL FIX: The API returns reactions with user_id as UUID (converted from Google ID)
             // We need to check if the current user has already reacted
@@ -2321,8 +2356,8 @@ async function handleReaction(message: Message): Promise<void> {
                 console.error('❌ handleReaction: Response:', toggleResponse);
             }
             // CRITICAL FIX: Always reload reactions display after toggle
-            const loadMessageReactionsFn = getWindowFunction('loadMessageReactions');
-            if (loadMessageReactionsFn) {
+            const loadMessageReactionsFn = getWindowFunction('loadMessageReactions') as ((messageId: string, reactionBtn?: HTMLElement | null) => Promise<void>) | null | undefined;
+            if (loadMessageReactionsFn && typeof loadMessageReactionsFn === 'function') {
                 try {
                     await loadMessageReactionsFn(message.id);
                     console.log('✅ REACTION: Reloaded reactions display');
@@ -2403,11 +2438,11 @@ function setupMessageInputEventListeners(): void {
             }
             chatTextarea.addEventListener('click', async (e) => {
                 e.preventDefault();
-                const stateManager = getWindowFunction('stateManagerInstance') as { getState?: (key: string) => any } | null;
-                const currentUrlData = stateManager && typeof stateManager.getState === 'function' ? stateManager.getState('currentUrlData') : null;
-                const activeCommunities = stateManager && typeof stateManager.getState === 'function' ? stateManager.getState('ui.activeCommunities') : null;
-                const pageId = currentUrlData?.pageId || '';
-                const communityId = activeCommunities?.[0];
+                const stateManager = getWindowFunction('stateManagerInstance') as { getState?: (key: string) => unknown } | null;
+                const currentUrlData = stateManager && typeof stateManager.getState === 'function' ? stateManager.getState('currentUrlData') as { pageId?: string } | null | undefined : null;
+                const activeCommunities = stateManager && typeof stateManager.getState === 'function' ? stateManager.getState('ui.activeCommunities') as string[] | null | undefined : null;
+                const pageId = (currentUrlData && typeof currentUrlData === 'object' && 'pageId' in currentUrlData) ? (typeof currentUrlData.pageId === 'string' ? currentUrlData.pageId : '') : '';
+                const communityId = (Array.isArray(activeCommunities) && activeCommunities.length > 0) ? activeCommunities[0] : undefined;
                 console.log('💬 MESSAGE_INPUT: Opening UnifiedMessageModal for new message');
                 await openModal({
                     mode: 'new',

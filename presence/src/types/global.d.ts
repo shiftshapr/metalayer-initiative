@@ -88,10 +88,10 @@ declare global {
     
     // API and services
     api?: {
-      request: <T = unknown>(endpoint: string, options?: any) => Promise<ApiResponse<T> | null>;
+      request: <T = unknown>(endpoint: string, options?: Record<string, unknown>) => Promise<ApiResponse<T> | null>;
       getChatHistory?: (communityId: string, conversationId: string | null, uri: string) => Promise<unknown>;
       getReactions?: (messageId: string) => Promise<unknown>;
-      [key: string]: any;
+      [key: string]: unknown;
     };
     supabase?: SupabaseClient;
     

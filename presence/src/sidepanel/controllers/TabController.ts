@@ -66,21 +66,66 @@ export class TabController implements SidepanelController {
 
     // CRITICAL FIX: Capture active tab IMMEDIATELY to set currentUrlData as soon as possible
     // This ensures pageId is available for message loading
+    // ROOT CAUSE FIX: When sidepanel is active, find the most recent web page tab
     try {
       const activeTabs = await this.queryTabs({ active: true, currentWindow: true });
+      let tabUrl: string | null = null;
+      
       if (activeTabs && activeTabs.length > 0 && activeTabs[0]?.url) {
-        const tabUrl = activeTabs[0].url;
-        if (tabUrl && !tabUrl.startsWith('chrome://') && !tabUrl.startsWith('chrome-extension://')) {
-          // Set currentUrlData immediately (synchronously if possible)
-          const normalized = await this.normalizeUrl(tabUrl);
-          await this.persistCurrentUrl(normalized);
-          
+        const activeTabUrl = activeTabs[0].url;
+        // If active tab is a web page (not chrome:// or chrome-extension://), use it
+        if (activeTabUrl && !activeTabUrl.startsWith('chrome://') && !activeTabUrl.startsWith('chrome-extension://')) {
+          tabUrl = activeTabUrl;
+        } else {
+          // ROOT CAUSE FIX: Active tab is sidepanel/chrome page - find the most recent web page tab
           if (this.options.graph.logger && typeof this.options.graph.logger.debug === 'function') {
-            this.options.graph.logger.debug('TAB_CTRL_INIT_IMMEDIATE_URL', { 
-              pageId: normalized.pageId,
-              rawUrl: normalized.rawUrl 
+            this.options.graph.logger.debug('TAB_CTRL_INIT_FINDING_WEB_TAB', { 
+              message: 'Active tab is sidepanel/chrome, finding web page tab',
+              activeTabUrl: activeTabUrl?.substring(0, 50)
             });
           }
+          
+          // Query all tabs in current window, find the most recent web page
+          const allTabs = await this.queryTabs({ currentWindow: true });
+          if (allTabs && allTabs.length > 0) {
+            // Find the most recent web page tab (not chrome:// or chrome-extension://)
+            // Sort by lastAccessed (most recent first) and find first valid web page
+            const webPageTabs = allTabs
+              .filter(tab => tab.url && 
+                !tab.url.startsWith('chrome://') && 
+                !tab.url.startsWith('chrome-extension://') &&
+                tab.lastAccessed !== undefined)
+              .sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0));
+            
+            if (webPageTabs.length > 0 && webPageTabs[0]) {
+              tabUrl = webPageTabs[0].url || null;
+              if (this.options.graph.logger && typeof this.options.graph.logger.debug === 'function') {
+                this.options.graph.logger.debug('TAB_CTRL_INIT_FOUND_WEB_TAB', { 
+                  tabUrl: tabUrl?.substring(0, 50),
+                  tabId: webPageTabs[0]?.id
+                });
+              }
+            }
+          }
+        }
+      }
+      
+      // Set currentUrlData if we found a valid web page URL
+      if (tabUrl) {
+        const normalized = await this.normalizeUrl(tabUrl);
+        await this.persistCurrentUrl(normalized);
+        
+        if (this.options.graph.logger && typeof this.options.graph.logger.debug === 'function') {
+          this.options.graph.logger.debug('TAB_CTRL_INIT_IMMEDIATE_URL', { 
+            pageId: normalized.pageId,
+            rawUrl: normalized.rawUrl 
+          });
+        }
+      } else {
+        if (this.options.graph.logger && typeof this.options.graph.logger.warn === 'function') {
+          this.options.graph.logger.warn('TAB_CTRL_INIT_NO_WEB_TAB', { 
+            message: 'No valid web page tab found to set pageId'
+          });
         }
       }
     } catch (error) {
@@ -104,7 +149,7 @@ export class TabController implements SidepanelController {
     // Wait for communities to be ready (BootController should have initialized them)
     await this.ensureCommunitiesReady();
     
-    if (this.options.graph.logger && typeof this.options.graph.logger.debug === 'function') {
+    if (this.options.graph?.logger && typeof this.options.graph.logger.debug === 'function') {
       this.options.graph.logger.debug('TAB_CTRL_INIT', { message: 'Communities ready, capturing active tab...' });
     }
     
@@ -226,32 +271,54 @@ export class TabController implements SidepanelController {
       }
       
       // Query for active tab immediately - chrome.tabs should be available if we got here
-      const [tab] = await this.queryTabs({ active: true, currentWindow: true });
+      const [activeTab] = await this.queryTabs({ active: true, currentWindow: true });
       
-      if (!tab) {
-        if (this.options.graph.logger && typeof this.options.graph.logger.warn === 'function') {
-          this.options.graph.logger.warn('TAB_CTRL_CAPTURE', { 
-            message: 'No active tab found'
-          });
+      let tabUrl: string | null = null;
+      
+      if (activeTab?.url) {
+        // If active tab is a web page (not chrome:// or chrome-extension://), use it
+        if (!activeTab.url.startsWith('chrome://') && !activeTab.url.startsWith('chrome-extension://')) {
+          tabUrl = activeTab.url;
+        } else {
+          // ROOT CAUSE FIX: Active tab is sidepanel/chrome page - find the most recent web page tab
+          if (this.options.graph.logger && typeof this.options.graph.logger.debug === 'function') {
+            this.options.graph.logger.debug('TAB_CTRL_CAPTURE_FINDING_WEB_TAB', { 
+              message: 'Active tab is sidepanel/chrome, finding web page tab',
+              activeTabUrl: activeTab.url?.substring(0, 50)
+            });
+          }
+          
+          // Query all tabs in current window, find the most recent web page
+          const allTabs = await this.queryTabs({ currentWindow: true });
+          if (allTabs && allTabs.length > 0) {
+            // Find the most recent web page tab (not chrome:// or chrome-extension://)
+            // Sort by lastAccessed (most recent first) and find first valid web page
+            const webPageTabs = allTabs
+              .filter(tab => tab.url && 
+                !tab.url.startsWith('chrome://') && 
+                !tab.url.startsWith('chrome-extension://') &&
+                tab.lastAccessed !== undefined)
+              .sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0));
+            
+            if (webPageTabs.length > 0 && webPageTabs[0]) {
+              tabUrl = webPageTabs[0].url || null;
+              if (this.options.graph.logger && typeof this.options.graph.logger.debug === 'function') {
+                this.options.graph.logger.debug('TAB_CTRL_CAPTURE_FOUND_WEB_TAB', { 
+                  tabUrl: tabUrl?.substring(0, 50),
+                  tabId: webPageTabs[0]?.id
+                });
+              }
+            }
+          }
         }
-        return;
       }
       
-      if (this.options.graph.logger && typeof this.options.graph.logger.debug === 'function') {
-        this.options.graph.logger.debug('TAB_CTRL_CAPTURE', { 
-          message: 'Tab found', 
-          tabId: tab.id,
-          hasUrl: !!tab.url,
-          url: tab.url?.substring(0, 50)
-        });
-      }
-      
-      if (!tab.url) {
+      if (!tabUrl) {
         if (this.options.graph.logger && typeof this.options.graph.logger.warn === 'function') {
           this.options.graph.logger.warn('TAB_CTRL_CAPTURE', { 
-            message: 'Active tab has no URL', 
-            tabId: tab.id,
-            tabStatus: tab.status
+            message: 'No valid web page tab found',
+            activeTabId: activeTab?.id,
+            activeTabUrl: activeTab?.url?.substring(0, 50)
           });
         }
         return;
@@ -260,12 +327,12 @@ export class TabController implements SidepanelController {
       if (this.options.graph.logger && typeof this.options.graph.logger.debug === 'function') {
         this.options.graph.logger.debug('TAB_CTRL_CAPTURE', { 
           message: 'Processing URL', 
-          url: tab.url
+          url: tabUrl.substring(0, 50)
         });
       }
       
       // Process URL immediately
-      await this.processUrl(tab.url);
+      await this.processUrl(tabUrl);
     } catch (error: unknown) {
       if (this.options.graph.logger && typeof this.options.graph.logger.error === 'function') {
         this.options.graph.logger.error('TAB_CTRL_CAPTURE', { 

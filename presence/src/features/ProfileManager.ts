@@ -52,7 +52,7 @@ const getApi = () => {
   return apiServiceInstance;
 };
 
-const ensureApi = (context: string) => {
+const ensureApi = (context: string): { request: <T = unknown>(endpoint: string, options?: Record<string, unknown>) => Promise<{ data?: T; error?: string; status: number } | null> } | null => {
   const api = getApi();
   if (!api) {
     Logger.warn(`⚠️ PROFILE_MANAGER: API not available (${context})`, null, 'profile');
@@ -89,7 +89,11 @@ const getUserPreferencesManager = () => {
 
 const getChromeStorage = <T extends Record<string, unknown>>(keys: string[]): Promise<T> => {
   return new Promise((resolve) => {
-    chrome.storage!.local!.get(keys, (result) => {
+    if (!chrome.storage?.local) {
+      resolve({} as T);
+      return;
+    }
+    chrome.storage.local.get(keys, (result) => {
       resolve((result || {}) as T);
     });
   });
@@ -97,7 +101,11 @@ const getChromeStorage = <T extends Record<string, unknown>>(keys: string[]): Pr
 
 const setChromeStorage = (items: Record<string, unknown>): Promise<void> => {
   return new Promise((resolve, reject) => {
-    chrome.storage!.local!.set(items, () => {
+    if (!chrome.storage?.local) {
+      reject(new Error('Chrome storage not available'));
+      return;
+    }
+    chrome.storage.local.set(items, () => {
       if (chrome.runtime?.lastError) {
         reject(chrome.runtime.lastError);
       } else {
@@ -1787,7 +1795,7 @@ class ProfileManager {
     
     // CRITICAL FIX: Get theme from UserPreferencesManager first, then DOM, then default
     let currentTheme: string = 'light';
-    if (userPreferencesManager && userPreferencesManager.isInitialized && typeof userPreferencesManager.getPreference === 'function') {
+    if (userPreferencesManager && 'isInitialized' in userPreferencesManager && userPreferencesManager.isInitialized && typeof userPreferencesManager.getPreference === 'function') {
       const storedTheme = await userPreferencesManager.getPreference('theme');
       if (storedTheme === 'dark' || storedTheme === 'light') {
         currentTheme = storedTheme;
@@ -1812,7 +1820,7 @@ class ProfileManager {
     if (userPreferencesManager && userPreferencesManager.isInitialized && typeof userPreferencesManager.savePreference === 'function') {
       Logger.debug('✅ PROFILE MANAGER: Using UserPreferencesManager to toggle theme', null, 'profile');
       // FIX: Save immediately (not batched) to ensure database save happens right away
-      const saved = await userPreferencesManager.savePreference('theme', newTheme, { batch: false });
+      const saved = await (userPreferencesManager.savePreference as (key: string, value: string | number | boolean, options?: { batch?: boolean }) => Promise<boolean>)('theme', newTheme, { batch: false });
       Logger.debug('🔍 DIAGNOSTIC: UserPreferencesManager savePreference result:', saved, 'profile');
       
       // Verify it was saved to Chrome storage
@@ -2619,7 +2627,7 @@ class ProfileManager {
 
 // ===== GLOBAL AVATAR FUNCTIONS =====
 // ROOT CAUSE FIX: Unified function to update aura color in BOTH Chrome storage AND database
-async function updateAuraColorEverywhere(color: string) {
+async function updateAuraColorEverywhere(color: string): Promise<boolean> {
   Logger.debug('🔄 AURA_UPDATE: Updating aura color everywhere:', color, 'profile');
   
   if (!color || !color.startsWith('#')) {
@@ -2728,7 +2736,7 @@ async function updateAuraColorEverywhere(color: string) {
 }
 
 // COMP METHOD: Get current user's aura color (Chrome storage first, then database fallback)
-async function getCurrentUserAuraColor() {
+async function getCurrentUserAuraColor(): Promise<string> {
   Logger.debug('🔍 AURA_MODAL: Getting current user aura color (stateManager FIRST, then Chrome storage, then database)', null, 'profile');
   
   // ROOT CAUSE FIX: Check stateManager FIRST (most up-to-date, from API)
@@ -2863,7 +2871,7 @@ async function getCurrentUserAvatarColor(): Promise<string> {
   return AVATAR_FALLBACK_COLOR; // Default white
 }
 
-function setCustomAvatarColor(color: string) {
+function setCustomAvatarColor(color: string): void {
   const currentUser = stateManagerInstance.getState('currentUser') as User | null;
   if (currentUser) {
     const updatedUser = { ...currentUser, auraColor: color };
@@ -2875,7 +2883,7 @@ function setCustomAvatarColor(color: string) {
   }
 }
 
-function resetCustomAvatarColor() {
+function resetCustomAvatarColor(): void {
   const currentUser = stateManagerInstance.getState('currentUser') as User | null;
   if (currentUser) {
     const updatedUser = { ...currentUser, auraColor: AVATAR_FALLBACK_COLOR };
@@ -2888,7 +2896,7 @@ function resetCustomAvatarColor() {
 }
 
 // ===== PROFILE MENU FUNCTIONS (FROM COMP) =====
-function handleAvatarClick(e: Event) {
+function handleAvatarClick(e: Event): void {
   const userMenu = document.getElementById('user-menu');
   
   if (!userMenu) {
@@ -2908,7 +2916,7 @@ function handleAvatarClick(e: Event) {
   }
 }
 
-function handleClickOutside(e: Event) {
+function handleClickOutside(e: Event): void {
   const userAvatarContainer = document.getElementById('user-avatar-container');
   const userMenu = document.getElementById('user-menu');
   
@@ -2924,7 +2932,7 @@ function handleClickOutside(e: Event) {
   }, 100);
 }
 
-function addProfileAvatarClickHandler() {
+function addProfileAvatarClickHandler(): void {
   const userAvatarContainer = document.getElementById('user-avatar-container');
   const userMenu = document.getElementById('user-menu');
   if (userAvatarContainer && userMenu) {
@@ -2946,7 +2954,7 @@ function addProfileAvatarClickHandler() {
 }
 
 // ===== PROFILE MENU ITEM HANDLERS (FROM COMP) =====
-function addAuraButtonClickHandler() {
+function addAuraButtonClickHandler(): void {
   const auraBtn = document.getElementById('aura-btn');
   if (auraBtn) {
     auraBtn.addEventListener('click', (e) => {
@@ -2969,7 +2977,7 @@ function addAuraButtonClickHandler() {
 }
 
 
-function addLogoutButtonClickHandler() {
+function addLogoutButtonClickHandler(): void {
   const logoutBtn = document.getElementById('logout-btn') as HTMLButtonElement | null;
   if (logoutBtn) {
     logoutBtn.addEventListener('click', (e) => {
@@ -3011,7 +3019,7 @@ function addLogoutButtonClickHandler() {
   }
 }
 
-function addAllProfileMenuHandlers() {
+function addAllProfileMenuHandlers(): void {
   Logger.debug('🎯 PROFILE_MENU: Adding all profile menu handlers...', null, 'profile');
   addAuraButtonClickHandler();
   addLogoutButtonClickHandler();
@@ -3161,7 +3169,7 @@ function addAllProfileMenuHandlers() {
 }
 
 // ===== AURA COLOR MODAL (FROM COMP) =====
-function showColorPickerModal() {
+function showColorPickerModal(): void {
   Logger.debug('🎨 Opening color picker modal...', null, 'profile');
   
   // Check if modal already exists and is visible
@@ -3293,14 +3301,14 @@ function showColorPickerModal() {
   }, 50);
 }
 
-function closeColorPickerModal() {
+function closeColorPickerModal(): void {
   const modal = document.getElementById('color-picker-modal');
   if (modal) {
     modal.style.display = 'none';
   }
 }
 
-function updateColorPreview(hex: string) {
+function updateColorPreview(hex: string): void {
   const previewCircle = document.getElementById('color-preview-circle');
   const previewText = document.getElementById('color-preview-text');
   
@@ -3311,11 +3319,11 @@ function updateColorPreview(hex: string) {
   }
 }
 
-function isValidHex(hex: string) {
+function isValidHex(hex: string): boolean {
   return /^[A-Fa-f0-9]{6}$/.test(hex);
 }
 
-function getAvatarColor(name: string) {
+function getAvatarColor(name: string): string {
   // Simple hash function to generate consistent colors
   let hash = 0;
   for (let i = 0; i < name.length; i++) {
@@ -3607,7 +3615,7 @@ async function updateThemeEverywhere(theme: string) {
 }
 
 // ROOT CAUSE FIX: Get current user's theme (Chrome storage first, then database fallback)
-async function getCurrentUserTheme() {
+async function getCurrentUserTheme(): Promise<string> {
   Logger.debug('🔍 THEME_GET: Getting current user theme (Chrome storage first, then database)', null, 'profile');
   
   // ROOT CAUSE FIX: Check Chrome storage FIRST
@@ -3674,7 +3682,7 @@ async function getCurrentUserTheme() {
 }
 
 // ROOT CAUSE FIX: Get current user's availability (Chrome storage first, then database fallback)
-async function getCurrentUserAvailability() {
+async function getCurrentUserAvailability(): Promise<string> {
   Logger.debug('🔍 STATUS_GET: Getting current user availability (Chrome storage first, then database)', null, 'profile');
   
   // ROOT CAUSE FIX: Check Chrome storage FIRST
@@ -3708,7 +3716,7 @@ async function getCurrentUserAvailability() {
     const currentUserInVisibility = visibilityData.active.find((u: User) => 
       String(u.id || (u as User).userId) === String(currentUserForStatus?.id)
     );
-    if (currentUserInVisibility && currentUserInVisibility.availability) {
+    if (currentUserInVisibility && currentUserInVisibility.availability && typeof currentUserInVisibility.availability === 'string') {
       Logger.debug(`✅ STATUS_GET: Found availability in visibility data: ${currentUserInVisibility.availability}`, null, 'profile');
       return currentUserInVisibility.availability;
     }

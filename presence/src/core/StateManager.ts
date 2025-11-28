@@ -210,7 +210,10 @@ class StateManager {
     if (!this.subscribers.has(path)) {
       this.subscribers.set(path, new Set());
     }
-    this.subscribers.get(path)!.add(callback);
+    const subscriberSet = this.subscribers.get(path);
+    if (subscriberSet) {
+      subscriberSet.add(callback);
+    }
     return () => {
       const pathSubscribers = this.subscribers.get(path);
       if (pathSubscribers) {

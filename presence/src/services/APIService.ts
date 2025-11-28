@@ -124,8 +124,7 @@ class MetaLayerAPI {
             if (user) {
               user.auraColor = undefined;
             }
-          
-    }
+          }
         }
         // CRITICAL FIX: Check currentUser.auraColor directly before API call
         // This handles cases where auraColor is set after the copy
@@ -148,12 +147,10 @@ class MetaLayerAPI {
               message: 'API requires UUID, not Google ID or email. UUID conversion must happen first.'
             }, 'api');
             // Don't make API call with Google ID - it will fail
-            // Return user object as-is (this is not an API response, just returning the user object)
-            return user as any;
-          }
-          
-          Logger.debug('🔍 USER_IDENTITY: 🎨 AuraColor missing, fetching immediately...', 'api');
-          try {
+            // Continue with the user object as-is (will be returned at end of function)
+          } else {
+            Logger.debug('🔍 USER_IDENTITY: 🎨 AuraColor missing, fetching immediately...', 'api');
+            try {
             // ROOT CAUSE FIX: Use direct fetch() instead of window.api.request() 
             // This breaks the recursion chain - fetch() doesn't invoke request() again
             // UUID ONLY - user.id is now guaranteed to be UUID (validated above)
@@ -203,8 +200,7 @@ class MetaLayerAPI {
             } else {
               Logger.warn('🔍 USER_IDENTITY: ⚠️ Failed to fetch auraColor', { status: response.status }, 'api');
             }
-          }
-          catch (error: unknown) {
+          } catch (error: unknown) {
             // ROOT CAUSE FIX: Handle connection refused gracefully
             if (error instanceof Error && (error.name === 'AbortError' || error.message.includes('Failed to fetch') || error.message.includes('ERR_CONNECTION_REFUSED'))) {
               handleError(error, {
@@ -225,49 +221,48 @@ class MetaLayerAPI {
             }
         });;
             }
-          
-    }
-        }
-      }
-      else if (typeof window !== 'undefined' && (window as Window & { authManager?: { getCurrentUser: () => Promise<{ id?: string; email?: string } | null> } }).authManager) {
-        const authManager = (window as Window & { authManager?: { getCurrentUser: () => Promise<{ id?: string; email?: string } | null> } }).authManager;
-        if (authManager && typeof authManager.getCurrentUser === 'function') {
-          const authUser = await authManager.getCurrentUser();
-          if (authUser && authUser.id) {
-            // CRITICAL: Verify authUser.id is UUID before using it
-            const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-            const isUUID = uuidRegex.test(authUser.id);
-            
-            if (!isUUID) {
-              Logger.error('🔍 USER_IDENTITY: CRITICAL - authManager returned Google ID, not UUID', {
-                userId: authUser.id,
-                email: authUser.email,
-                message: 'API requires UUID. UUID conversion must happen in BootController.handleUserChange() first.',
-                action: 'Rejecting API call'
-              }, 'api');
-              
-              // Reject API call with clear error
-              return {
-                status: 400,
-                error: `Invalid user ID format: ${authUser.id}. UUID required, not Google ID.`,
-                data: undefined
-              } as APIResponse<T>;
-            }
-            
-            user = { id: authUser.id, email: authUser.email }; // Now guaranteed to be UUID
           }
-          Logger.debug('🔍 USER_IDENTITY: ✅ Using authManager for authentication', { userId: user?.id, isUUID: true }, 'api');
         }
       }
-      // UUID ONLY - getCurrentUserEmail fallback removed
-      // If no user.id (UUID) is available, we cannot authenticate
-      // This ensures UUID-only policy is enforced
-      else {
-        Logger.debug('🔍 USER_IDENTITY: ❌ No user authentication available', null, 'api');
-      }
-      Logger.debug('🔍 USER_IDENTITY: === END API USER IDENTITY TRACE ===', null, 'api');
     }
-    catch (error: unknown) {
+    if (typeof window !== 'undefined' && (window as Window & { authManager?: { getCurrentUser: () => Promise<{ id?: string; email?: string } | null> } }).authManager) {
+      const authManager = (window as Window & { authManager?: { getCurrentUser: () => Promise<{ id?: string; email?: string } | null> } }).authManager;
+      if (authManager && typeof authManager.getCurrentUser === 'function') {
+        const authUser = await authManager.getCurrentUser();
+        if (authUser && authUser.id) {
+          // CRITICAL: Verify authUser.id is UUID before using it
+          const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+          const isUUID = uuidRegex.test(authUser.id);
+          
+          if (!isUUID) {
+            Logger.error('🔍 USER_IDENTITY: CRITICAL - authManager returned Google ID, not UUID', {
+              userId: authUser.id,
+              email: authUser.email,
+              message: 'API requires UUID. UUID conversion must happen in BootController.handleUserChange() first.',
+              action: 'Rejecting API call'
+            }, 'api');
+            
+            // Reject API call with clear error
+            return {
+              status: 400,
+              error: `Invalid user ID format: ${authUser.id}. UUID required, not Google ID.`,
+              data: undefined
+            } as APIResponse<T>;
+          }
+          
+          user = { id: authUser.id, email: authUser.email }; // Now guaranteed to be UUID
+        }
+        Logger.debug('🔍 USER_IDENTITY: ✅ Using authManager for authentication', { userId: user?.id, isUUID: true }, 'api');
+      }
+    }
+    // UUID ONLY - getCurrentUserEmail fallback removed
+    // If no user.id (UUID) is available, we cannot authenticate
+    // This ensures UUID-only policy is enforced
+    if (!user?.id) {
+      Logger.debug('🔍 USER_IDENTITY: ❌ No user authentication available', null, 'api');
+    }
+      Logger.debug('🔍 USER_IDENTITY: === END API USER IDENTITY TRACE ===', null, 'api');
+    } catch (error: unknown) {
       Logger.debug('🔍 USER_IDENTITY: ❌ Error getting user authentication', error, 'api');
     }
     // Derive identifiers early for consistent headers

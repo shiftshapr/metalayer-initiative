@@ -533,7 +533,10 @@ export class SubscriptionManager {
     if (!this.eventListeners.has(event)) {
       this.eventListeners.set(event, new Set());
     }
-    this.eventListeners.get(event)!.add(callback);
+    const listenerSet = this.eventListeners.get(event);
+    if (listenerSet) {
+      listenerSet.add(callback);
+    }
   }
 
   /**

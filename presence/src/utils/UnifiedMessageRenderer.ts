@@ -9,13 +9,13 @@
 import { AvatarUtils } from './AvatarUtils.js';
 import { AVATAR_FALLBACK_COLOR } from '../core/ConfigModule.js';
 import { XIcons } from './XIconLibrary.js';
-import type { Message } from '../types/index.js';
+import type { Message, User } from '../types/index.js';
 import { convertUrlsToLinksSafely } from './HtmlSanitizer.js';
 
 interface MessageOptions {
   isReply?: boolean;
   isFocusMode?: boolean;
-  author?: any;
+  author?: User | null;
   communityName?: string;
   formattedTime?: string;
   reactionCount?: number;
@@ -388,7 +388,7 @@ export class UnifiedMessageRenderer {
 
 // Export to window for backward compatibility
 if (typeof window !== 'undefined') {
-  (window as any).UnifiedMessageRenderer = UnifiedMessageRenderer;
+  (window as Window & { UnifiedMessageRenderer?: typeof UnifiedMessageRenderer }).UnifiedMessageRenderer = UnifiedMessageRenderer;
   console.log('✅ UnifiedMessageRenderer: Exported to window');
 }
 

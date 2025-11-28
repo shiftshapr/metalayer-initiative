@@ -591,8 +591,9 @@ export class NotificationManager {
                 history = history.filter(n => n.read === filter.read);
             }
             if (filter.timeRange && filter.timeRange.start && filter.timeRange.end) {
-                history = history.filter(n => n.timestamp >= filter.timeRange!.start &&
-                    n.timestamp <= filter.timeRange!.end);
+                const timeRange = filter.timeRange;
+                history = history.filter(n => n.timestamp >= timeRange.start &&
+                    n.timestamp <= timeRange.end);
             }
             // Sort
             if (filter.sortBy) {
