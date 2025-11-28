@@ -151,7 +151,10 @@ class StateManager {
         if (!this.subscribers.has(path)) {
             this.subscribers.set(path, new Set());
         }
-        this.subscribers.get(path).add(callback);
+        const subscriberSet = this.subscribers.get(path);
+        if (subscriberSet) {
+            subscriberSet.add(callback);
+        }
         return () => {
             const pathSubscribers = this.subscribers.get(path);
             if (pathSubscribers) {
@@ -381,9 +384,6 @@ export const setActiveCommunitiesState = (communities, persist = false) => {
     const normalized = normalizeCommunityIds(communities);
     stateManagerInstance.setState('ui.activeCommunities', normalized, persist);
     stateManagerInstance.setState('activeCommunities', normalized, persist);
-    if (typeof window !== 'undefined') {
-        window.activeCommunities = [...normalized];
-    }
 };
 // Export stateManagerInstance to window for diagnostic scripts and module access
 if (typeof window !== 'undefined') {

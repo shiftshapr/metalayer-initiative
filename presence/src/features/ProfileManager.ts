@@ -261,10 +261,18 @@ class ProfileManager {
 
       Logger.debug('🔧 PROFILE_MANAGER: Waiting for pre-render initialization...', null, 'profile');
 
+      // CRITICAL FIX: Add short timeout (500ms) to prevent long delays
+      // If pre-render takes too long, proceed anyway with available data
+      const preRenderTimeout = setTimeout(() => {
+        Logger.warn('⏰ PROFILE_MANAGER: PreRenderInitializer timeout reached (500ms), proceeding anyway', 'profile');
+        resolve();
+      }, 500);
+
       // Listen for pre-render events
       const checkPreRender = () => {
-      const win = window as Window & { preRenderInitializer?: PreRenderInitializer };
-      if (win.preRenderInitializer?.isInitialized) {
+        const win = window as Window & { preRenderInitializer?: PreRenderInitializer };
+        if (win.preRenderInitializer?.isInitialized) {
+          clearTimeout(preRenderTimeout);
           Logger.debug('🔧 PROFILE_MANAGER: Pre-render initialization completed', null, 'profile');
           const preRenderData = win.preRenderInitializer.getPreRenderData();
           Logger.debug('🔧 PROFILE_MANAGER: Pre-render data', {
@@ -283,13 +291,13 @@ class ProfileManager {
       document.addEventListener('preRenderComplete', checkPreRender, { once: true });
     });
 
-    // Add timeout as fallback (30 seconds max)
+    // Add timeout as fallback (reduced from 30s to 1s to prevent long delays)
+    // CRITICAL FIX: Reduce timeout to prevent 1+ second delays in avatar display
     const timeout = new Promise<void>((resolve) => {
       setTimeout(() => {
-        Logger.warn('🔧 PROFILE_MANAGER: Timeout waiting for full initialization (30s)', null, 'profile');
-        Logger.warn('🔧 PROFILE_MANAGER: Proceeding with available data...', null, 'profile');
+        Logger.warn('🔧 PROFILE_MANAGER: Timeout waiting for full initialization (1s) - proceeding with available data', null, 'profile');
         resolve();
-      }, 30000);
+      }, 1000);
     });
 
     // Wait for all promises to resolve (auth + pre-render + timeout fallback)
@@ -1041,6 +1049,7 @@ class ProfileManager {
           Logger.debug('🔧 PROFILE MANAGER: COMP METHOD - Avatar HTML generated, updating container', { timestamp: new Date().toISOString() }, 'profile');
           // ROOT CAUSE FIX: Wrap AvatarUtils HTML in .user-avatar div for consistency with diagnostic expectations
           // AvatarUtils returns .avatar-container, but we wrap it in .user-avatar for ProfileManager
+          // SECURITY: avatarHTML from AvatarUtils.createUnifiedAvatar() is already sanitized (userName and URLs are escaped)
           userAvatarContainer.innerHTML = `<div class="user-avatar">${avatarHTML}</div>`;
 
           // Log what was actually inserted
@@ -3433,24 +3442,11 @@ async function updateAvailabilityEverywhere(availability: string) {
     window.dispatchEvent(new CustomEvent('avatarRefreshRequested', {
       detail: { type: 'all', source: 'ProfileManager' }
     }));
-    // Optional: Try to call functions if available (graceful degradation)
-    const win = window as Window & { 
-      refreshAllMessageAvatars?: () => Promise<void>;
-      refreshVisibilityAvatars?: () => Promise<void>;
-    };
-    if (typeof win.refreshAllMessageAvatars === 'function') {
-      Logger.debug('🔄 STATUS_UPDATE: Refreshing all message avatars with new status', null, 'profile');
-      await win.refreshAllMessageAvatars();
-    }
     
     // Step 7: Refresh visibility avatars
     window.dispatchEvent(new CustomEvent('avatarRefreshRequested', {
       detail: { type: 'visibility', source: 'ProfileManager' }
     }));
-    if (typeof win.refreshVisibilityAvatars === 'function') {
-      Logger.debug('🔄 STATUS_UPDATE: Refreshing visibility avatars', null, 'profile');
-      await win.refreshVisibilityAvatars();
-    }
     
     Logger.debug('✅ STATUS_UPDATE: Availability update complete', null, 'profile');
     return true;
@@ -3596,13 +3592,6 @@ async function updateThemeEverywhere(theme: string) {
       window.dispatchEvent(new CustomEvent('updateVisibilityThemeStatus', {
         detail: { source: 'ProfileManager' }
       }));
-      // Optional: Try to call manager if available (graceful degradation)
-      const win = window as Window & { 
-        visibilitySettingsManager?: { updateThemeStatus?: () => void };
-      };
-      if (win.visibilitySettingsManager && typeof win.visibilitySettingsManager.updateThemeStatus === 'function') {
-        win.visibilitySettingsManager.updateThemeStatus();
-      }
       Logger.debug('✅ THEME_UPDATE: Updated settings tab theme toggle', null, 'profile');
     }
     

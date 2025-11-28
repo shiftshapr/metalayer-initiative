@@ -25,7 +25,7 @@ import { loadChatHistory } from '../features/MessagesModule.js';
 // UIManager is optional - will be loaded dynamically if needed
 type SetupTabNavigationFn = () => void | Promise<void>;
 type SetupMessageInputEventListenersFn = () => void | Promise<void>;
-type InitializeThemeFn = () => void | Promise<void>;
+type InitializeThemeFn = () => Promise<void>;
 
 let setupTabNavigation: SetupTabNavigationFn | undefined;
 let setupMessageInputEventListeners: SetupMessageInputEventListenersFn | undefined;
@@ -97,9 +97,9 @@ if (legacyWindow.__CANOPI_SIDEPANEL_READY__) {
             const bootController = new BootController(graph, {
                 realtimeController,
                 loadChatHistory: loadChatHistoryWrapper,
-                setupTabNavigation,
-                setupMessageInputEventListeners,
-                initializeTheme,
+                setupTabNavigation: setupTabNavigation || (() => {}),
+                setupMessageInputEventListeners: setupMessageInputEventListeners || (() => {}),
+                initializeTheme: initializeTheme || (async () => {}),
                 refreshVisibility,
                 messageLoadingService: messageLoadingService ? { loadMessages: messageLoadingService.loadMessages } : undefined // Use service if available
             });

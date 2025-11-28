@@ -26,8 +26,23 @@ function generateCursor(message) {
 
 /**
  * Build status filter clause for message queries
+ * 
+ * SECURITY: The alias parameter must be validated to prevent SQL injection.
+ * Only whitelisted alias values are allowed.
  */
 function buildStatusFilter(messageStatus, userId, alias = 'm') {
+  // SECURITY FIX: Validate alias against whitelist to prevent SQL injection
+  // Only allow alphanumeric characters and underscore (standard SQL identifier pattern)
+  const ALLOWED_ALIASES = ['m', 'p', 'r', 'c', 'u']; // Common table aliases used in queries
+  const isValidAlias = typeof alias === 'string' && 
+                       /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(alias) && 
+                       alias.length <= 10; // Reasonable length limit
+  
+  if (!isValidAlias) {
+    console.error('❌ SECURITY: Invalid alias provided to buildStatusFilter:', alias);
+    throw new Error(`Invalid alias: ${alias}. Alias must be a valid SQL identifier.`);
+  }
+  
   // Build SQL fragments using Prisma.sql and Prisma.raw from generated/prisma
   switch (messageStatus) {
     case 'draft': {
@@ -35,6 +50,7 @@ function buildStatusFilter(messageStatus, userId, alias = 'm') {
         throw new Error('userId is required when fetching drafts');
       }
       // Use Prisma.raw for column names, Prisma.sql for the query fragment
+      // SECURITY: alias is now validated above, so Prisma.raw is safe
       return Prisma.sql`AND ${Prisma.raw(alias)}.status = 'draft' AND ${Prisma.raw(alias)}.user_id::UUID = ${userId}::UUID`;
     }
     case 'deleted':

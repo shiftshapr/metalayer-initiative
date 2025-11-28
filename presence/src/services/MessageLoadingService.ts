@@ -39,13 +39,8 @@ export class MessageLoadingService {
         fnName: options.loadChatHistory?.name || 'anonymous',
         isFunction: typeof options.loadChatHistory === 'function'
       }, 'messages');
-    } else if (typeof window !== 'undefined' && typeof (window as unknown as { loadChatHistory?: LoadChatHistoryFn }).loadChatHistory === 'function') {
-      this.loadChatHistoryFn = (window as unknown as { loadChatHistory: LoadChatHistoryFn }).loadChatHistory.bind(window);
-      Logger.debug('MessageLoadingService: Using loadChatHistory from window', { 
-        fnType: typeof this.loadChatHistoryFn,
-        fnName: this.loadChatHistoryFn?.name || 'anonymous'
-      }, 'messages');
     } else {
+      throw new Error('MessageLoadingService: loadChatHistory function is required');
       // REFACTOR: Lazy-load from window when actually called (loadChatHistory might not be on window yet)
       // This allows MessageLoadingService to be created before MessagesModule exports to window
       this.loadChatHistoryFn = async (pageIdOrRawUrl?: string | null, activeCommunities?: string[]) => {

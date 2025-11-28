@@ -28,7 +28,8 @@ type PreferenceKey =
   | 'displayName'
   | 'tabConfiguration'
   | 'visibilityTraceLimit'
-  | 'primaryCommunity';
+  | 'primaryCommunity'
+  | 'activeCommunities';
 type Theme = 'light' | 'dark' | 'auto';
 type Availability = 'AVAILABLE' | 'BUSY' | 'AWAY' | 'OFFLINE';
 type PreferenceValue = string | number | boolean;
@@ -44,6 +45,7 @@ interface Preferences {
   tabConfiguration: string; // JSON stringified TabManagerState
   visibilityTraceLimit: number; // 0 = hide traces, -1 = unlimited, positive = days
   primaryCommunity: string; // UUID of primary community
+  activeCommunities: string; // JSON stringified array of community UUIDs
 }
 
 type PreferenceValidator<T extends PreferenceValue> = (value: unknown) => value is T;
@@ -232,6 +234,25 @@ export class UserPreferencesManager {
           if (value === '') return true; // Allow empty string as default
           const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
           return uuidRegex.test(value);
+        },
+        uiComponents: ['communities', 'header']
+      },
+      activeCommunities: {
+        chromeKey: 'activeCommunities',
+        dbColumn: 'active_communities', // Store as JSON string in AppUser table
+        defaultValue: '[]',
+        validator: (value: unknown): value is string => {
+          // Must be a valid JSON array of UUIDs
+          if (typeof value !== 'string') return false;
+          try {
+            const parsed = JSON.parse(value);
+            if (!Array.isArray(parsed)) return false;
+            // Validate all items are UUIDs
+            const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+            return parsed.every((item: unknown) => typeof item === 'string' && uuidRegex.test(item));
+          } catch {
+            return false;
+          }
         },
         uiComponents: ['communities', 'header']
       }
@@ -1157,10 +1178,6 @@ export class UserPreferencesManager {
         window.dispatchEvent(new CustomEvent('headlineUpdated', {
           detail: { headline: this.preferences.headline }
         }));
-        // Optional: Try to call manager if available (graceful degradation)
-        // ES6 pattern: Optional check for backward compatibility during migration
-        const win = window as Window & { settingsHeadlineManager?: { updateCharCount?: () => void } };
-        win.settingsHeadlineManager?.updateCharCount?.();
       }
     }
 
@@ -1173,10 +1190,6 @@ export class UserPreferencesManager {
         window.dispatchEvent(new CustomEvent('displayNameUpdated', {
           detail: { displayName: this.preferences.displayName }
         }));
-        // Optional: Try to call manager if available (graceful degradation)
-        // ES6 pattern: Optional check for backward compatibility during migration
-        const win2 = window as Window & { displayNameManager?: { updateCharCount?: () => void } };
-        win2.displayNameManager?.updateCharCount?.();
       }
     }
 
@@ -1189,18 +1202,6 @@ export class UserPreferencesManager {
           auraIntensity: this.preferences.auraIntensity
         }
       }));
-      // Optional: Try to call functions if available (graceful degradation during migration)
-      // ES6 pattern: Optional checks for backward compatibility
-      const win3 = window as Window & { 
-        refreshAllMessageAvatars?: () => void | Promise<void>;
-        refreshVisibilityAvatars?: () => void | Promise<void>;
-      };
-      if (typeof win3.refreshAllMessageAvatars === 'function') {
-        win3.refreshAllMessageAvatars();
-      }
-      if (typeof win3.refreshVisibilityAvatars === 'function') {
-        win3.refreshVisibilityAvatars();
-      }
     }
 
     Logger.debug('✅ USER_PREFERENCES_MANAGER: Applied preferences to UI', null, 'preferences');

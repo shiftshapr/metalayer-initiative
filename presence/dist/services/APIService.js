@@ -123,86 +123,87 @@ class MetaLayerAPI {
                             message: 'API requires UUID, not Google ID or email. UUID conversion must happen first.'
                         }, 'api');
                         // Don't make API call with Google ID - it will fail
-                        // Return user object as-is (this is not an API response, just returning the user object)
-                        return user;
+                        // Continue with the user object as-is (will be returned at end of function)
                     }
-                    Logger.debug('🔍 USER_IDENTITY: 🎨 AuraColor missing, fetching immediately...', 'api');
-                    try {
-                        // ROOT CAUSE FIX: Use direct fetch() instead of window.api.request() 
-                        // This breaks the recursion chain - fetch() doesn't invoke request() again
-                        // UUID ONLY - user.id is now guaranteed to be UUID (validated above)
-                        const fetchUrl = this._buildUrl(`/v1/users/${user.id}`);
-                        const controller = new AbortController();
-                        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
-                        const headers = {
-                            'Content-Type': 'application/json'
-                        };
-                        // UUID ONLY - no email headers needed
-                        const response = await fetch(fetchUrl, {
-                            method: 'GET',
-                            headers,
-                            signal: controller.signal
-                        });
-                        clearTimeout(timeoutId);
-                        if (response.ok) {
-                            const userData = await response.json();
-                            const auraColor = userData.auraColor || userData.data?.auraColor;
-                            const avatarUrl = userData.avatarUrl || userData.data?.avatarUrl;
-                            // Update the user object with fetched data
-                            if (auraColor && user) {
-                                user.auraColor = auraColor;
-                                // Also update currentUser in stateManager to prevent future fetches
-                                if (currentUserRaw) {
-                                    const updatedUser = { ...currentUserRaw, auraColor: auraColor };
-                                    // Update stateManager (TypeScript migration)
-                                    if (stateManagerInstance?.setState) {
-                                        stateManagerInstance.setState('currentUser', updatedUser);
+                    else {
+                        Logger.debug('🔍 USER_IDENTITY: 🎨 AuraColor missing, fetching immediately...', 'api');
+                        try {
+                            // ROOT CAUSE FIX: Use direct fetch() instead of window.api.request() 
+                            // This breaks the recursion chain - fetch() doesn't invoke request() again
+                            // UUID ONLY - user.id is now guaranteed to be UUID (validated above)
+                            const fetchUrl = this._buildUrl(`/v1/users/${user.id}`);
+                            const controller = new AbortController();
+                            const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+                            const headers = {
+                                'Content-Type': 'application/json'
+                            };
+                            // UUID ONLY - no email headers needed
+                            const response = await fetch(fetchUrl, {
+                                method: 'GET',
+                                headers,
+                                signal: controller.signal
+                            });
+                            clearTimeout(timeoutId);
+                            if (response.ok) {
+                                const userData = await response.json();
+                                const auraColor = userData.auraColor || userData.data?.auraColor;
+                                const avatarUrl = userData.avatarUrl || userData.data?.avatarUrl;
+                                // Update the user object with fetched data
+                                if (auraColor && user) {
+                                    user.auraColor = auraColor;
+                                    // Also update currentUser in stateManager to prevent future fetches
+                                    if (currentUserRaw) {
+                                        const updatedUser = { ...currentUserRaw, auraColor: auraColor };
+                                        // Update stateManager (TypeScript migration)
+                                        if (stateManagerInstance?.setState) {
+                                            stateManagerInstance.setState('currentUser', updatedUser);
+                                        }
+                                    }
+                                    Logger.debug('🔍 USER_IDENTITY: ✅ AuraColor fetched immediately', { auraColor }, 'api');
+                                }
+                                if (avatarUrl && user && !user.avatarUrl) {
+                                    user.avatarUrl = avatarUrl;
+                                    if (currentUserRaw && !currentUserRaw.avatarUrl) {
+                                        const updatedUser = { ...currentUserRaw, avatarUrl: avatarUrl };
+                                        if (stateManagerInstance?.setState) {
+                                            stateManagerInstance.setState('currentUser', updatedUser);
+                                        }
                                     }
                                 }
-                                Logger.debug('🔍 USER_IDENTITY: ✅ AuraColor fetched immediately', { auraColor }, 'api');
                             }
-                            if (avatarUrl && user && !user.avatarUrl) {
-                                user.avatarUrl = avatarUrl;
-                                if (currentUserRaw && !currentUserRaw.avatarUrl) {
-                                    const updatedUser = { ...currentUserRaw, avatarUrl: avatarUrl };
-                                    if (stateManagerInstance?.setState) {
-                                        stateManagerInstance.setState('currentUser', updatedUser);
+                            else {
+                                Logger.warn('🔍 USER_IDENTITY: ⚠️ Failed to fetch auraColor', { status: response.status }, 'api');
+                            }
+                        }
+                        catch (error) {
+                            // ROOT CAUSE FIX: Handle connection refused gracefully
+                            if (error instanceof Error && (error.name === 'AbortError' || error.message.includes('Failed to fetch') || error.message.includes('ERR_CONNECTION_REFUSED'))) {
+                                handleError(error, {
+                                    log: true,
+                                    logLevel: 'warn',
+                                    context: {
+                                        operation: 'catch',
+                                        component: 'APIService'
                                     }
-                                }
+                                });
+                                ;
                             }
-                        }
-                        else {
-                            Logger.warn('🔍 USER_IDENTITY: ⚠️ Failed to fetch auraColor', { status: response.status }, 'api');
-                        }
-                    }
-                    catch (error) {
-                        // ROOT CAUSE FIX: Handle connection refused gracefully
-                        if (error instanceof Error && (error.name === 'AbortError' || error.message.includes('Failed to fetch') || error.message.includes('ERR_CONNECTION_REFUSED'))) {
-                            handleError(error, {
-                                log: true,
-                                logLevel: 'warn',
-                                context: {
-                                    operation: 'catch',
-                                    component: 'APIService'
-                                }
-                            });
-                            ;
-                        }
-                        else {
-                            handleError(error, {
-                                log: true,
-                                logLevel: 'warn',
-                                context: {
-                                    operation: 'catch',
-                                    component: 'APIService'
-                                }
-                            });
-                            ;
+                            else {
+                                handleError(error, {
+                                    log: true,
+                                    logLevel: 'warn',
+                                    context: {
+                                        operation: 'catch',
+                                        component: 'APIService'
+                                    }
+                                });
+                                ;
+                            }
                         }
                     }
                 }
             }
-            else if (typeof window !== 'undefined' && window.authManager) {
+            if (typeof window !== 'undefined' && window.authManager) {
                 const authManager = window.authManager;
                 if (authManager && typeof authManager.getCurrentUser === 'function') {
                     const authUser = await authManager.getCurrentUser();
@@ -232,7 +233,7 @@ class MetaLayerAPI {
             // UUID ONLY - getCurrentUserEmail fallback removed
             // If no user.id (UUID) is available, we cannot authenticate
             // This ensures UUID-only policy is enforced
-            else {
+            if (!user?.id) {
                 Logger.debug('🔍 USER_IDENTITY: ❌ No user authentication available', null, 'api');
             }
             Logger.debug('🔍 USER_IDENTITY: === END API USER IDENTITY TRACE ===', null, 'api');

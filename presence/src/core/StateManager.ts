@@ -450,29 +450,6 @@ export const setActiveCommunitiesState = (communities: string[], persist = false
   const normalized = normalizeCommunityIds(communities);
   stateManagerInstance.setState('ui.activeCommunities', normalized, persist);
   stateManagerInstance.setState('activeCommunities', normalized, persist);
-  if (typeof window !== 'undefined') {
-    (window as Window & { activeCommunities?: string[] }).activeCommunities = [...normalized];
-  }
 };
 
-// Export stateManagerInstance to window for diagnostic scripts and module access
-if (typeof window !== 'undefined') {
-  const win = window as Window & {
-    stateManagerInstance?: StateManager;
-    getState?: (key: string) => unknown;
-    setState?: (key: string, value: unknown, persist?: boolean) => void;
-    activeCommunities?: string[];
-  };
-  win.stateManagerInstance = stateManagerInstance;
-  Object.defineProperty(window, 'stateManagerInstance', {
-    value: stateManagerInstance,
-    writable: true,
-    configurable: true,
-    enumerable: true
-  });
-  win.getState = getState;
-  win.setState = setState;
-  win.activeCommunities = normalizeCommunityIds(stateManagerInstance.getState('ui.activeCommunities') as string[] | undefined);
-  Logger.debug('✅ StateManager: stateManagerInstance exported to window', null, 'state');
-}
 

@@ -10,7 +10,6 @@ export class BootController {
         await this.initializeAuthFlow();
         await this.safeInitializeTheme();
         this.setupEventBridges();
-        this.exposeCompatibilityAPI();
         // ROOT CAUSE FIX: Direct message loading trigger - simple and reliable
         // Wait for TabController to finish, then ensure messages load
         if (typeof document !== 'undefined' && typeof chrome !== 'undefined' && chrome.tabs) {
@@ -97,22 +96,6 @@ export class BootController {
             });
         }
     }
-    exposeCompatibilityAPI() {
-        if (typeof window === 'undefined') {
-            return;
-        }
-        const bootWin = window;
-        bootWin.handlePendingContent = () => this.handlePendingContent();
-        bootWin.startPresenceTracking = () => this.options.realtimeController.startForCurrentPage();
-        bootWin.migrateFromChromeStorage = () => this.migrateFromChromeStorage();
-        // ROOT CAUSE FIX: Expose handleUserChange so auth code can use it
-        // This ensures ALL auth code goes through proper UUID conversion
-        bootWin.handleUserChange = (user) => this.handleUserChange(user);
-        this.graph.logger?.info?.('BOOT_CTRL_API', {
-            message: 'Exposed handleUserChange() on window - auth code should use this instead of direct setState',
-            apiAvailable: true
-        });
-    }
     async initializeState() {
         try {
             const isInitialized = await this.graph.stateManager.getState('extension.isInitialized');
@@ -148,7 +131,7 @@ export class BootController {
     }
     registerLifecycle() {
         const lifecycle = this.graph.lifecycleManager;
-        if (!lifecycle) {
+        if (!lifecycle || typeof lifecycle.register !== 'function') {
             return;
         }
         lifecycle.register('sidepanel', {
@@ -184,8 +167,14 @@ export class BootController {
         // ROOT CAUSE FIX: Intercept setState for currentUser to catch any direct sets
         // This is a safety net until real-google-auth.js is fixed to use window.handleUserChange()
         this.interceptCurrentUserSetState();
+        if (!this.graph.authManager) {
+            this.graph.logger?.warn?.('AUTH_INIT', { message: 'AuthManager not available' });
+            return;
+        }
         try {
-            await this.graph.authManager.initialize();
+            if (typeof this.graph.authManager.initialize === 'function') {
+                await this.graph.authManager.initialize();
+            }
         }
         catch (error) {
             this.graph.logger?.error?.('AUTH_INIT', { error });
@@ -193,13 +182,17 @@ export class BootController {
         // CRITICAL: AuthManager should ONLY trigger onAuthStateChange
         // BootController.handleUserChange() is the ONLY place that sets currentUser in state
         // This ensures UUID conversion always happens
-        this.graph.authManager.onAuthStateChange(async (user) => {
-            await this.handleUserChange(user);
-        });
+        if (typeof this.graph.authManager.onAuthStateChange === 'function') {
+            this.graph.authManager.onAuthStateChange(async (user) => {
+                await this.handleUserChange(user);
+            });
+        }
         // Handle initial user if available
-        const initialUser = this.graph.authManager.getCurrentUser();
-        if (initialUser) {
-            await this.handleUserChange(initialUser);
+        if (typeof this.graph.authManager.getCurrentUser === 'function') {
+            const initialUser = this.graph.authManager.getCurrentUser();
+            if (initialUser && typeof initialUser === 'object' && 'id' in initialUser) {
+                await this.handleUserChange(initialUser);
+            }
         }
     }
     /**
@@ -280,12 +273,23 @@ export class BootController {
                     });
                     return; // Cannot proceed without client
                 }
+                // Type guard for Supabase client
+                if (typeof client !== 'object' || client === null || !('from' in client)) {
+                    this.graph.logger?.error?.('AUTH_UUID_FIX', {
+                        message: 'CRITICAL: Invalid Supabase client - missing from method',
+                        email: user.email,
+                        userId: user.id
+                    });
+                    return; // Cannot proceed without valid client
+                }
                 this.graph.logger?.info?.('AUTH_UUID_FIX', {
                     message: 'Looking up AppUser UUID from email',
                     email: user.email,
                     googleId: user.id
                 });
-                const { data, error } = await client
+                // Type guard ensures client has 'from' method, so we can safely cast to our interface
+                const supabaseClient = client;
+                const { data, error } = await supabaseClient
                     .from('AppUser')
                     .select('id')
                     .eq('email', user.email)
@@ -402,7 +406,7 @@ export class BootController {
                 // Already initialized - this is fine, just log for debugging
                 this.graph.logger?.debug?.('VISIBILITY_INIT', {
                     message: 'VisibilityManager already initialized',
-                    currentUserId: status.currentUserId
+                    currentUserEmail: status.currentUserEmail
                 });
             }
         }
@@ -481,7 +485,9 @@ export class BootController {
     }
     async ensureCommunitiesInitialized() {
         try {
-            await this.graph.communitiesModule?.initialize();
+            if (this.graph.communitiesModule && typeof this.graph.communitiesModule.initialize === 'function') {
+                await this.graph.communitiesModule.initialize();
+            }
         }
         catch (error) {
             this.graph.logger?.warn?.('COMMUNITIES_INIT', { error });
@@ -536,13 +542,15 @@ export class BootController {
         });
     }
     setupEventBridges() {
-        this.graph.eventBus?.on('avatar:colorChanged', async (payload) => {
-            const typedPayload = payload;
-            if (!typedPayload?.color) {
-                return;
-            }
-            await this.graph.stateManager.setState('avatars.user.customColor', typedPayload.color, true);
-        });
+        if (this.graph.eventBus && typeof this.graph.eventBus.on === 'function') {
+            this.graph.eventBus.on('avatar:colorChanged', async (payload) => {
+                const typedPayload = payload;
+                if (!typedPayload?.color) {
+                    return;
+                }
+                await this.graph.stateManager.setState('avatars.user.customColor', typedPayload.color, true);
+            });
+        }
     }
     async handlePendingContent() {
         try {

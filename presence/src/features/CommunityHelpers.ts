@@ -6,6 +6,7 @@
 
 import { getState, setState, setActiveCommunitiesState } from '../core/StateManager.js';
 import { Logger } from '../utils/Logger.js';
+import { escapeHtml } from '../utils/HtmlSanitizer.js';
 import { handleError } from '../utils/ErrorHandler.js';
 import { savePreference } from '../utils/UserPreferencesManager.js';
 import { loadChatHistory } from './MessagesModule.js';
@@ -138,27 +139,23 @@ export async function updateCommunityDropdown(communities: Community[]): Promise
         }
         
         // CRITICAL FIX: Hide logo until it loads to prevent broken image flash
-        primaryCommunityLogoEl.style.display = 'none';
-        primaryCommunityLogoEl.style.visibility = 'hidden';
-        primaryCommunityLogoEl.style.opacity = '0';
+        // Must set display/visibility BEFORE setting src to prevent flash
+        primaryCommunityLogoEl.style.cssText = 'display: none !important; visibility: hidden !important; opacity: 0 !important;';
         
         // Set the logo URL with error handling (CSP compliant - no inline handlers)
+        // Attach listeners BEFORE setting src to catch load/error events
         primaryCommunityLogoEl.addEventListener('error', () => {
           Logger.error(`❌ COMMUNITIES: Failed to load logo image: ${cleanedLogoUrl}`, null, 'community');
-          primaryCommunityLogoEl.style.display = 'none';
-          primaryCommunityLogoEl.style.visibility = 'hidden';
-          primaryCommunityLogoEl.style.opacity = '0';
+          primaryCommunityLogoEl.style.cssText = 'display: none !important; visibility: hidden !important; opacity: 0 !important;';
         }, { once: true });
         
         primaryCommunityLogoEl.addEventListener('load', () => {
           Logger.debug(`✅ COMMUNITIES: Logo image loaded successfully: ${cleanedLogoUrl}`, null, 'community');
           // Show logo only after successful load
-          primaryCommunityLogoEl.style.display = 'block';
-          primaryCommunityLogoEl.style.visibility = 'visible';
-          primaryCommunityLogoEl.style.opacity = '1';
-          primaryCommunityLogoEl.style.cssText += 'display: block !important; visibility: visible !important; opacity: 1 !important; width: 24px !important; height: 24px !important;';
+          primaryCommunityLogoEl.style.cssText = 'display: block !important; visibility: visible !important; opacity: 1 !important; width: 24px !important; height: 24px !important; max-width: 24px !important; max-height: 24px !important;';
         }, { once: true });
         
+        // Set src AFTER listeners are attached and element is hidden
         primaryCommunityLogoEl.src = cleanedLogoUrl;
         primaryCommunityLogoEl.alt = `${primaryCommunity.name} logo`;
         Logger.debug(`✅ COMMUNITIES: Set community logo to: ${cleanedLogoUrl} (hidden until load)`, null, 'community');
@@ -243,24 +240,28 @@ export async function updateCommunityDropdown(communities: Community[]): Promise
       logoImg = `<div class="community-icon" style="width: 20px; height: 20px; background: var(--background-secondary); border-radius: 3px; display: flex; align-items: center; justify-content: center; color: var(--text-secondary); font-size: 10px;">${community.name.charAt(0).toUpperCase()}</div>`;
     }
     
+    // SECURITY FIX: Sanitize community name to prevent XSS
+    const safeCommunityName = escapeHtml(community.name);
+    const safeCommunityId = escapeHtml(community.id);
+    
     li.innerHTML = `
       ${logoImg}
-      <span class="community-name">${community.name}</span>
+      <span class="community-name">${safeCommunityName}</span>
       ${isPrimary ? '<span class="primary-tag">Primary</span>' : ''}
       ${!isPrimary ? `
       <label class="community-checkbox-wrapper">
-        <input type="checkbox" class="community-checkbox" ${isActive ? 'checked' : ''} data-community-id="${community.id}">
+        <input type="checkbox" class="community-checkbox" ${isActive ? 'checked' : ''} data-community-id="${safeCommunityId}">
       </label>
       ` : ''}
       ${!isPrimary ? `
-      <button class="community-menu-btn" data-community-id="${community.id}" title="Community options">
+      <button class="community-menu-btn" data-community-id="${safeCommunityId}" title="Community options">
         <span class="action-dots">⋮</span>
       </button>
-      <div class="community-menu-dropdown" data-community-id="${community.id}">
-        <button class="community-menu-item set-primary-btn" data-community-id="${community.id}">
+      <div class="community-menu-dropdown" data-community-id="${safeCommunityId}">
+        <button class="community-menu-item set-primary-btn" data-community-id="${safeCommunityId}">
           Make Primary
         </button>
-        <button class="community-menu-item leave-community-btn" data-community-id="${community.id}">
+        <button class="community-menu-item leave-community-btn" data-community-id="${safeCommunityId}">
           Leave
         </button>
       </div>
@@ -320,6 +321,16 @@ export async function updateCommunityDropdown(communities: Community[]): Promise
           // Update state
           activeCommunities = Array.from(activeCommunitiesSet);
           setActiveCommunitiesState(activeCommunities);
+          
+          // CRITICAL FIX: Save activeCommunities to unified preferences (local storage + database)
+          // Store as JSON string (array of UUIDs)
+          try {
+            const activeCommunitiesJson = JSON.stringify(activeCommunities);
+            await savePreference('activeCommunities', activeCommunitiesJson);
+            Logger.debug(`✅ COMMUNITIES: Saved activeCommunities to unified preferences (local storage + database): ${activeCommunities.join(', ')}`, null, 'community');
+          } catch (error) {
+            Logger.warn('⚠️ COMMUNITIES: Failed to save activeCommunities to unified preferences:', error, 'community');
+          }
           
           // Reload avatars and chat history for the updated active communities
           Logger.debug(`🔄 COMMUNITIES: Active communities updated to: ${activeCommunities.join(', ')}`, null, 'community');
@@ -400,9 +411,12 @@ export async function updateCommunityDropdown(communities: Community[]): Promise
           // Toggle this dropdown
           const isVisible = menuDropdown.style.display === 'block' || 
                            (menuDropdown.style.display === '' && window.getComputedStyle(menuDropdown).display === 'block');
-          menuDropdown.style.display = isVisible ? 'none' : 'block';
-          menuDropdown.style.visibility = isVisible ? 'hidden' : 'visible';
-          menuDropdown.style.opacity = isVisible ? '0' : '1';
+          // CRITICAL FIX: Use cssText to set all properties at once with !important via inline style
+          if (isVisible) {
+            menuDropdown.style.cssText = 'display: none !important; visibility: hidden !important; opacity: 0 !important;';
+          } else {
+            menuDropdown.style.cssText = 'display: block !important; visibility: visible !important; opacity: 1 !important; position: absolute !important; right: 0 !important; top: 100% !important; z-index: 10003 !important;';
+          }
           
           Logger.debug(`🔍 COMMUNITIES: Menu dropdown toggled for ${community.name}: ${isVisible ? 'hidden' : 'visible'}`, null, 'community');
         });

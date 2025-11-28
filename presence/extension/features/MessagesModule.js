@@ -5,7 +5,7 @@ import { AVATAR_FALLBACK_COLOR } from '../core/ConfigModule.js';
 import { stateManagerInstance } from '../core/StateManager.js';
 import { ensureMessageContent, formatAuthorName, formatUserHandle } from '../utils/Fallbacks.js';
 // MessageSystemIntegration not found - using fallback
-const initializeMessageSystemIntegration = () => { };
+const initializeMessageSystemIntegration = () => Promise.resolve(null);
 // UnifiedMessageDisplay not found - using fallback
 const UnifiedMessageDisplay = {};
 import { UnifiedMessageRenderer } from '../utils/UnifiedMessageRenderer.js';
@@ -27,8 +27,7 @@ let initialMessageLoadComplete = false;
 const getWindowFunction = (name) => {
     if (typeof window === 'undefined')
         return undefined;
-    const win = window;
-    return win[name];
+    return window[name];
 };
 // Helper to get API instance
 const getApi = () => {
@@ -107,7 +106,7 @@ async function initializeNewMessageSystem() {
             console.warn('⚠️ initializeNewMessageSystem: Supabase client not available');
             return;
         }
-        if (!messageLoaderInstance) {
+        if (!messageLoaderInstance && typeof MessageLoader === 'function') {
             messageLoaderInstance = new MessageLoader();
             console.log('✅ initializeNewMessageSystem: MessageLoader instance created');
         }
@@ -115,7 +114,9 @@ async function initializeNewMessageSystem() {
         // Note: Variables removed - will be re-added when needed for duplicate processing prevention
         // Initialize integration
         messageSystemIntegration = await initializeMessageSystemIntegration();
-        unifiedMessageDisplay = new UnifiedMessageDisplay();
+        if (typeof UnifiedMessageDisplay === 'function') {
+            unifiedMessageDisplay = new UnifiedMessageDisplay();
+        }
         console.log('✅ New message system initialized');
     }
     catch (error) {
@@ -146,13 +147,25 @@ const resolveAuthorFromPayload = (rawMessage, authorId) => {
         rawMessage.AppUser ??
         rawMessage.user ??
         getCurrentUser());
+    const sourceId = (authorSource && typeof authorSource === 'object' && 'id' in authorSource)
+        ? String(authorSource.id)
+        : undefined;
+    const sourceEmail = (authorSource && typeof authorSource === 'object' && 'email' in authorSource)
+        ? (typeof authorSource.email === 'string' ? authorSource.email : undefined)
+        : undefined;
+    const sourceAvatarUrl = (authorSource && typeof authorSource === 'object' && 'avatarUrl' in authorSource)
+        ? (typeof authorSource.avatarUrl === 'string' ? authorSource.avatarUrl : undefined)
+        : undefined;
+    const sourceAuraColor = (authorSource && typeof authorSource === 'object' && 'auraColor' in authorSource)
+        ? (typeof authorSource.auraColor === 'string' ? authorSource.auraColor : AVATAR_FALLBACK_COLOR)
+        : AVATAR_FALLBACK_COLOR;
     return {
-        id: authorSource?.id || authorId,
+        id: sourceId || authorId || 'unknown-user',
         name: formatAuthorName(authorSource),
         handle: formatUserHandle(authorSource),
-        email: authorSource?.email,
-        avatarUrl: authorSource?.avatarUrl ?? undefined,
-        auraColor: authorSource?.auraColor || AVATAR_FALLBACK_COLOR
+        email: sourceEmail,
+        avatarUrl: sourceAvatarUrl,
+        auraColor: sourceAuraColor
     };
 };
 const normalizeMessagePayload = (rawMessage) => {
@@ -178,6 +191,7 @@ const normalizeMessagePayload = (rawMessage) => {
             return value;
         return new Date().toISOString();
     };
+    const resolvedAuthor = resolveAuthorFromPayload(rawMessage, String(resolvedAuthorId));
     const normalized = {
         id: String(rawMessage.id ||
             rawMessage.messageId ||
@@ -189,7 +203,7 @@ const normalizeMessagePayload = (rawMessage) => {
         }),
         parentId: rawMessage.parentId ?? getStringValue(rawMessage.parent_id) ?? getStringValue(rawMessage.replyTo) ?? null,
         authorId: String(resolvedAuthorId),
-        author: resolveAuthorFromPayload(rawMessage, String(resolvedAuthorId)),
+        author: resolvedAuthor, // ResolvedAuthor is compatible with User
         communityId: String(rawMessage.communityId ||
             getStringValue(rawMessage.community_id) ||
             fallbackCommunities[0] ||
@@ -206,21 +220,21 @@ const normalizeMessagePayload = (rawMessage) => {
         normalizedUrl: rawMessage.normalizedUrl ?? urlData?.normalizedUrl ?? null,
         createdAt: getStringOrDate(rawMessage.createdAt ??
             rawMessage.created_at ??
-            rawMessage.timestamp),
+            rawMessage.timestamp) ?? new Date().toISOString(),
         updatedAt: getStringOrDate(rawMessage.updatedAt ??
             rawMessage.updated_at ??
             rawMessage.modified_at ??
             rawMessage.createdAt ??
-            rawMessage.created_at),
+            rawMessage.created_at) ?? new Date().toISOString(),
         reactions: Array.isArray(rawMessage.reactions) ? rawMessage.reactions : [],
         optionalContent: getStringValue(rawMessage.optionalContent) ?? getStringValue(rawMessage.optional_content) ?? null,
         uri: rawMessage.uri ?? getStringValue(rawMessage.url) ?? getStringValue(rawMessage.messageUrl) ?? null,
         threadId: rawMessage.threadId ?? getStringValue(rawMessage.thread_id) ?? undefined,
         deletedAt: rawMessage.deletedAt ? getStringOrDate(rawMessage.deletedAt) : (getStringValue(rawMessage.deleted_at) ? getStringOrDate(rawMessage.deleted_at) : null),
-        isBookmarked: typeof rawMessage.isBookmarked === 'boolean' ? rawMessage.isBookmarked : undefined,
+        isBookmarked: typeof rawMessage.isBookmarked === 'boolean' ? rawMessage.isBookmarked : (rawMessage.isBookmarked === null ? undefined : undefined),
         bookmarkCount: typeof rawMessage.bookmarkCount === 'number' ? rawMessage.bookmarkCount : undefined,
         shareCount: rawMessage.shareCount,
-        isShared: rawMessage.isShared
+        isShared: typeof rawMessage.isShared === 'boolean' ? rawMessage.isShared : undefined
     };
     return normalized;
 };
@@ -245,7 +259,7 @@ const renderMessageElement = async (message, chatContainer = getChatMessagesCont
                 ? message.createdAt.toISOString()
                 : String(message.createdAt))
         : null;
-    const formattedTime = formatMessageTime(createdAtStr);
+    const formattedTime = formatMessageTime(createdAtStr ?? undefined);
     // ROOT CAUSE FIX: Ensure formattedTime is a string (not a Promise or other type)
     const safeFormattedTime = typeof formattedTime === 'string' ? formattedTime : String(formattedTime || '');
     if (typeof formattedTime !== 'string') {
@@ -294,8 +308,8 @@ const renderMessageElement = async (message, chatContainer = getChatMessagesCont
             hasUserReplied: false,
             hasUserReposted: false,
             hasUserShared: false,
-            canEdit,
-            canDelete
+            canEdit: canEdit ?? false,
+            canDelete: canDelete ?? false
         });
         const messageDiv = document.createElement('div');
         messageDiv.className = isReply ? 'message message-reply thread-reply' : 'message thread-starter';
@@ -350,7 +364,7 @@ const renderMessageElement = async (message, chatContainer = getChatMessagesCont
     }
     // ROOT CAUSE FIX: Get createUnifiedMessageElement from window (set by UnifiedMessageDisplay module)
     const createUnifiedMessageElementFn = getWindowFunction('createUnifiedMessageElement');
-    if (createUnifiedMessageElementFn) {
+    if (createUnifiedMessageElementFn && typeof createUnifiedMessageElementFn === 'function') {
         const polymorphic = createUnifiedMessageElementFn(message);
         const element = (polymorphic instanceof Promise ? await polymorphic : polymorphic);
         element.dataset.createdAt = `${getMessageTimestampValue(message.createdAt)}`;
@@ -390,7 +404,7 @@ const resolveActiveCommunitiesWithRetry = async (initial) => {
  * Update message in chat
  * COMP METHOD: Matches original implementation with full DOM updates
  */
-function updateMessageInChat(updatedMessage) {
+async function updateMessageInChat(updatedMessage) {
     console.log('🔄 UPDATE_MESSAGE: Updating message in chat:', updatedMessage.id);
     const chatMessages = getChatMessagesContainer();
     if (!chatMessages) {
@@ -403,8 +417,8 @@ function updateMessageInChat(updatedMessage) {
         console.log('⚠️ UPDATE_MESSAGE: Message not found in DOM, adding as new message');
         // ROOT CAUSE FIX: Get addMessageToChat from window (set by MessagesModule exports)
         const addMessageToChatFn = getWindowFunction('addMessageToChat');
-        if (addMessageToChatFn) {
-            addMessageToChatFn(updatedMessage);
+        if (addMessageToChatFn && typeof addMessageToChatFn === 'function') {
+            await addMessageToChatFn(updatedMessage);
         }
         return;
     }
@@ -525,7 +539,7 @@ async function addMessageToChat(rawMessage) {
         console.log('✅ ADD_MESSAGE: Appended message to DOM:', message.id);
         // ROOT CAUSE FIX: Get addMessageActionListeners from window
         const addMessageActionListenersFn = getWindowFunction('addMessageActionListeners');
-        if (addMessageActionListenersFn) {
+        if (addMessageActionListenersFn && typeof addMessageActionListenersFn === 'function' && messageElement) {
             addMessageActionListenersFn(messageElement, message);
             console.log('✅ ADD_MESSAGE: Attached action listeners for:', message.id);
         }
@@ -534,7 +548,7 @@ async function addMessageToChat(rawMessage) {
         }
         // ROOT CAUSE FIX: Get loadMessageReactions from window
         const loadMessageReactionsFn = getWindowFunction('loadMessageReactions');
-        if (loadMessageReactionsFn) {
+        if (loadMessageReactionsFn && typeof loadMessageReactionsFn === 'function') {
             try {
                 await loadMessageReactionsFn(message.id);
             }
@@ -739,7 +753,7 @@ function updateReactionDisplay(messageId, reactions) {
         return;
     // Update reaction count
     const countElement = reactionButton.querySelector('.icon-count');
-    const reactionCount = reactions?.length || 0;
+    const reactionCount = (reactions?.reactions && Array.isArray(reactions.reactions)) ? reactions.reactions.length : 0;
     if (countElement) {
         if (reactionCount > 0) {
             countElement.textContent = reactionCount.toString();
@@ -801,7 +815,7 @@ async function loadMessageReactions(messageId, reactionBtn) {
             console.warn('⚠️ loadMessageReactions: No API or Supabase client available');
         }
         // Update reaction display
-        updateReactionDisplay(messageId, reactions);
+        updateReactionDisplay(messageId, { reactions: Array.isArray(reactions) ? reactions : [] });
         // If reactionBtn provided, update it directly (COMP METHOD)
         if (reactionBtn) {
             const countElement = reactionBtn.querySelector('.icon-count');
@@ -1098,7 +1112,9 @@ async function handleMessageFocus(messageOrId) {
         const activeCommunities = getActiveCommunities();
         // Use first active community or fallback to Public Square
         const communityId = activeCommunities[0] || PUBLIC_SQUARE_UUID;
-        const result = await messageSystemIntegration.loadFocusMode(pageId, message.parentId, { communityId });
+        const result = messageSystemIntegration && typeof messageSystemIntegration.loadFocusMode === 'function'
+            ? await messageSystemIntegration.loadFocusMode(pageId, message.parentId, { communityId })
+            : null;
         // Render in focus mode
         const container = getChatMessagesContainer();
         if (!container) {
@@ -1127,12 +1143,12 @@ async function handleMessageFocus(messageOrId) {
                     container.appendChild(parentElement);
                     // Attach action listeners (same as UnifiedMessageDisplay)
                     const addMessageActionListenersFn = getWindowFunction('addMessageActionListeners');
-                    if (addMessageActionListenersFn) {
+                    if (addMessageActionListenersFn && typeof addMessageActionListenersFn === 'function') {
                         addMessageActionListenersFn(parentElement, parentMessage);
                     }
                     // Load reactions (same as UnifiedMessageDisplay)
                     const loadMessageReactionsFn = getWindowFunction('loadMessageReactions');
-                    if (loadMessageReactionsFn) {
+                    if (loadMessageReactionsFn && typeof loadMessageReactionsFn === 'function') {
                         try {
                             await loadMessageReactionsFn(parentMessage.id);
                         }
@@ -1179,12 +1195,12 @@ async function handleMessageFocus(messageOrId) {
                     container.appendChild(messageElement);
                     // Attach action listeners (same as UnifiedMessageDisplay)
                     const addMessageActionListenersFn = getWindowFunction('addMessageActionListeners');
-                    if (addMessageActionListenersFn) {
+                    if (addMessageActionListenersFn && typeof addMessageActionListenersFn === 'function' && messageElement) {
                         addMessageActionListenersFn(messageElement, msg);
                     }
                     // Load reactions (same as UnifiedMessageDisplay)
                     const loadMessageReactionsFn = getWindowFunction('loadMessageReactions');
-                    if (loadMessageReactionsFn) {
+                    if (loadMessageReactionsFn && typeof loadMessageReactionsFn === 'function') {
                         try {
                             await loadMessageReactionsFn(msg.id);
                         }
@@ -1393,9 +1409,6 @@ async function loadChatHistory(pageIdOrRawUrl, activeCommunities) {
                                     canonicalUrl: normalized.normalizedUrl || tabUrl
                                 };
                                 stateManagerInstance.setState('currentUrlData', urlData);
-                                if (typeof window !== 'undefined') {
-                                    window.currentUrlData = urlData;
-                                }
                                 pageId = urlData.pageId;
                                 console.log('✅ loadChatHistory: Set currentUrlData from active tab, pageId:', pageId);
                             }
@@ -1409,9 +1422,6 @@ async function loadChatHistory(pageIdOrRawUrl, activeCommunities) {
                                     canonicalUrl: tabUrl
                                 };
                                 stateManagerInstance.setState('currentUrlData', urlData);
-                                if (typeof window !== 'undefined') {
-                                    window.currentUrlData = urlData;
-                                }
                                 console.log('✅ loadChatHistory: Set currentUrlData (fallback), pageId:', pageId);
                             }
                         }
@@ -1718,7 +1728,7 @@ async function handleDeleteMessage(message) {
         }
         // Use robustIntegration for deletion
         const robustIntegration = getWindowFunction('robustIntegration');
-        if (robustIntegration?.isInitialized && robustIntegration.deleteMessage) {
+        if (robustIntegration?.isInitialized && robustIntegration.deleteMessage && typeof robustIntegration.deleteMessage === 'function') {
             await robustIntegration.deleteMessage(message.id);
         }
         else {
@@ -1909,9 +1919,13 @@ async function getSenderAvatar(author) {
     const displayName = formatAuthorName(author);
     if (!author)
         return getSenderInitial(displayName);
+    // Convert ResolvedAuthor to User if needed
+    const userAuthor = author.id && !('userId' in author)
+        ? { ...author, userId: author.id }
+        : author;
     // ES6 pattern: Use imported AvatarUtils module
     if (AvatarUtils && typeof AvatarUtils.createUnifiedAvatar === 'function') {
-        const avatarHTML = await AvatarUtils.createUnifiedAvatar(author, 'message', {
+        const avatarHTML = await AvatarUtils.createUnifiedAvatar(userAuthor, 'message', {
             size: 32,
             showStatus: true,
             showAura: true,
@@ -2143,16 +2157,12 @@ async function focusOnMessage(message) {
         }
     }
 }
-/**
- * Parse message URL
- * COMP METHOD: Matches original implementation
- */
 function parseMessageUrl(url) {
     const messageIdMatch = url.match(/\/message\/([a-f0-9-]+)/i);
     const conversationIdMatch = url.match(/\/conversation\/([a-f0-9-]+)/i);
     return {
-        messageId: messageIdMatch ? messageIdMatch[1] : null,
-        conversationId: conversationIdMatch ? conversationIdMatch[1] : null,
+        messageId: (messageIdMatch && messageIdMatch[1]) ? messageIdMatch[1] : null,
+        conversationId: (conversationIdMatch && conversationIdMatch[1]) ? conversationIdMatch[1] : null,
         isValid: !!(messageIdMatch || conversationIdMatch)
     };
 }
@@ -2164,24 +2174,25 @@ async function handleIncomingMessageUrl() {
     console.log('🔗 INCOMING_URL: Checking for incoming message URL...');
     const currentUrl = getCurrentLocationHref();
     const messageData = parseMessageUrl(currentUrl);
-    if (messageData.isValid && messageData.messageId) {
-        console.log(`🔗 INCOMING_URL: Found messageId in URL: ${messageData.messageId}`);
+    if (messageData && messageData.isValid && messageData.messageId) {
+        const messageId = messageData.messageId;
+        console.log(`🔗 INCOMING_URL: Found messageId in URL: ${messageId}`);
         // BEST PRACTICE: Wait for message element using event-based approach instead of setTimeout
         try {
-            await waitForCondition(() => document.querySelector(`[data-message-id="${messageData.messageId}"]`) !== null, {
+            await waitForCondition(() => document.querySelector(`[data-message-id="${messageId}"]`) !== null, {
                 timeout: 5000, // 5 seconds max wait
                 interval: 100
             });
-            const messageElement = document.querySelector(`[data-message-id="${messageData.messageId}"]`);
+            const messageElement = document.querySelector(`[data-message-id="${messageId}"]`);
             if (messageElement) {
-                await focusOnMessage({ id: messageData.messageId });
+                await focusOnMessage({ id: messageId });
             }
             else {
-                console.warn('🔗 INCOMING_URL: Message not found in current view:', messageData.messageId);
+                console.warn('🔗 INCOMING_URL: Message not found in current view:', messageId);
             }
         }
         catch (error) {
-            console.warn('🔗 INCOMING_URL: Message element not found after waiting:', messageData.messageId);
+            console.warn('🔗 INCOMING_URL: Message element not found after waiting:', messageId);
         }
     }
     else {
@@ -2287,7 +2298,7 @@ async function handleReaction(message) {
             }
             // CRITICAL FIX: Always reload reactions display after toggle
             const loadMessageReactionsFn = getWindowFunction('loadMessageReactions');
-            if (loadMessageReactionsFn) {
+            if (loadMessageReactionsFn && typeof loadMessageReactionsFn === 'function') {
                 try {
                     await loadMessageReactionsFn(message.id);
                     console.log('✅ REACTION: Reloaded reactions display');
@@ -2375,8 +2386,8 @@ function setupMessageInputEventListeners() {
                 const stateManager = getWindowFunction('stateManagerInstance');
                 const currentUrlData = stateManager && typeof stateManager.getState === 'function' ? stateManager.getState('currentUrlData') : null;
                 const activeCommunities = stateManager && typeof stateManager.getState === 'function' ? stateManager.getState('ui.activeCommunities') : null;
-                const pageId = currentUrlData?.pageId || '';
-                const communityId = activeCommunities?.[0];
+                const pageId = (currentUrlData && typeof currentUrlData === 'object' && 'pageId' in currentUrlData) ? (typeof currentUrlData.pageId === 'string' ? currentUrlData.pageId : '') : '';
+                const communityId = (Array.isArray(activeCommunities) && activeCommunities.length > 0) ? activeCommunities[0] : undefined;
                 console.log('💬 MESSAGE_INPUT: Opening UnifiedMessageModal for new message');
                 await openModal({
                     mode: 'new',

@@ -437,10 +437,6 @@ export function getBackendHealthService(baseURL?: string): BackendHealthService 
       });
     });
 
-    // Export to window for diagnostics
-    if (typeof window !== 'undefined') {
-      (window as Window & { backendHealthService?: BackendHealthService }).backendHealthService = backendHealthServiceInstance;
-    }
   }
 
   return backendHealthServiceInstance;

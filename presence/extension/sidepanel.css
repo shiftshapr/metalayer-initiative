@@ -927,10 +927,20 @@ body {
     border: 1px solid var(--border-color);
     border-radius: 4px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    z-index: 1000;
+    z-index: 10003 !important; /* Above dropdown panel (10002) */
     min-width: 150px;
     margin-top: 4px;
-    display: none;
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+}
+
+/* CRITICAL FIX: Inline style display:block must override CSS display:none */
+.community-menu-dropdown[style*="display: block"],
+.community-menu-dropdown[style*="display:block"] {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
 }
 
 .community-menu {
@@ -1261,9 +1271,7 @@ body {
 }
 
 /* FIX: Add spacing for Settings tab to match other tabs */
-#settings-tab.active {
-    /* Removed padding-top override - using consistent padding-bottom instead */
-}
+/* Removed empty rule - using consistent padding-bottom instead */
 
 /* ROOT CAUSE FIX: Settings tab inherits from .main-nav-tab.active - no override needed */
 /* The base .main-nav-tab.active rule now explicitly sets border-bottom, so Settings tab will inherit correctly */
@@ -5293,17 +5301,7 @@ body.dark .leave-community-modal #cancel-leave-community-btn:hover,
    ============================================================================ */
 
 /* Focus mode containers */
-.chat-messages.focus-mode-parent {
-  /* Parent in focus - emphasizes parent message */
-}
-
-.chat-messages.focus-mode-child {
-  /* Child in focus - highlights selected child */
-}
-
-.chat-messages.focus-mode-default {
-  /* Default view - standard message list */
-}
+/* Placeholder rules removed - styles will be added when focus mode is implemented */
 
 /* Parent in focus styling */
 .message.parent-in-focus {

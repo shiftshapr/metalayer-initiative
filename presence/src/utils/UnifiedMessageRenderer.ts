@@ -10,7 +10,7 @@ import { AvatarUtils } from './AvatarUtils.js';
 import { AVATAR_FALLBACK_COLOR } from '../core/ConfigModule.js';
 import { XIcons } from './XIconLibrary.js';
 import type { Message, User } from '../types/index.js';
-import { convertUrlsToLinksSafely } from './HtmlSanitizer.js';
+import { convertUrlsToLinksSafely, escapeHtml } from './HtmlSanitizer.js';
 
 interface MessageOptions {
   isReply?: boolean;
@@ -63,19 +63,8 @@ export class UnifiedMessageRenderer {
     
     // Try to get displayName from multiple sources
     let displayName = authorObj?.displayName || authorObj?.display_name;
-    if (!displayName && typeof window !== 'undefined') {
-      // Try to get from DisplayNameManager if available
-      const displayNameManager = (window as { DisplayNameManager?: { getDisplayName?: (userId: string) => string | Promise<string> } }).DisplayNameManager;
-      if (displayNameManager?.getDisplayName && authorObj?.id) {
-        const displayNameResult = displayNameManager.getDisplayName(authorObj.id);
-        if (typeof displayNameResult === 'string') {
-          displayName = displayNameResult;
-        } else if (displayNameResult instanceof Promise) {
-          // For async, we'd need to await, but for now use sync approach
-          // This will be handled in a future update if needed
-        }
-      }
-    }
+    // TODO: Add DisplayNameManager access via module graph when needed
+    // For now, use displayName from author object directly
     
     const senderName = displayName && displayName !== name 
       ? `[${displayName} | ${name}]` 
@@ -103,9 +92,10 @@ export class UnifiedMessageRenderer {
       } catch (error) {
         console.error('❌ UnifiedMessageRenderer: Error creating avatar, using fallback:', error);
         // ROOT CAUSE FIX: Always provide fallback avatar
-        const resolvedAvatarUrl = avatarUser.avatarUrl || '';
-        const auraColor = avatarUser.auraColor || AVATAR_FALLBACK_COLOR || '#ccc';
-        const userInitial = (avatarUser.name || avatarUser.displayName || '?')[0].toUpperCase();
+        const resolvedAvatarUrl = avatarUser?.avatarUrl || '';
+        const auraColor = avatarUser?.auraColor || AVATAR_FALLBACK_COLOR || '#ccc';
+        const nameOrDisplay = avatarUser?.name || avatarUser?.displayName || '?';
+        const userInitial = (nameOrDisplay[0] || '?').toUpperCase();
         avatarHTML = `<div class="avatar-container">
           ${resolvedAvatarUrl ? `<img src="${resolvedAvatarUrl}" alt="${senderName}" class="avatar-img" style="border-color: ${auraColor};" referrerpolicy="no-referrer" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
           <div class="avatar-initial" style="display: none; background-color: ${auraColor}; border-color: ${auraColor};">${userInitial}</div>` : 
@@ -204,33 +194,19 @@ export class UnifiedMessageRenderer {
       throw new Error('Button generation failed');
     }
 
-    // Generate action menu - CRITICAL FIX: await Promise if getMessageActionsMenu returns one
-    // ACCEPTABLE: Optional check for window.getMessageActionsMenu - graceful degradation pattern
-    // If the function is not available, falls back to default action buttons
-    let messageActionButtons = '';
-    if (window.getMessageActionsMenu && typeof window.getMessageActionsMenu === 'function') {
-      const actionMenuResult = window.getMessageActionsMenu(message, canEdit, canDelete);
-      // Check if result is a Promise
-      if (actionMenuResult instanceof Promise) {
-        messageActionButtons = await actionMenuResult;
-      } else {
-        messageActionButtons = actionMenuResult as string;
-      }
-    } else {
-      // ROOT CAUSE FIX: Ensure edit/delete buttons are always rendered when canEdit/canDelete is true
-      messageActionButtons = `
-        <div class="message-actions-menu">
-          <button class="action-dots-btn" data-message-id="${message.id}" title="Message actions">
-            <span class="action-dots">⋯</span>
-          </button>
-          <div class="action-dropdown">
-            ${canEdit ? `<button class="action-item edit-btn" data-message-id="${message.id}" style="display: block !important; visibility: visible !important; opacity: 1 !important;">✏️ Edit</button>` : ''}
-            ${canDelete ? `<button class="action-item delete-btn" data-message-id="${message.id}" style="display: block !important; visibility: visible !important; opacity: 1 !important;">🗑️ Delete</button>` : ''}
-            <button class="action-item flag-btn" data-message-id="${message.id}" disabled>🚩 Flag</button>
-          </div>
+    // Generate action menu - always use default action buttons
+    const messageActionButtons = `
+      <div class="message-actions-menu">
+        <button class="action-dots-btn" data-message-id="${message.id}" title="Message actions">
+          <span class="action-dots">⋯</span>
+        </button>
+        <div class="action-dropdown">
+          ${canEdit ? `<button class="action-item edit-btn" data-message-id="${message.id}" style="display: block !important; visibility: visible !important; opacity: 1 !important;">✏️ Edit</button>` : ''}
+          ${canDelete ? `<button class="action-item delete-btn" data-message-id="${message.id}" style="display: block !important; visibility: visible !important; opacity: 1 !important;">🗑️ Delete</button>` : ''}
+          <button class="action-item flag-btn" data-message-id="${message.id}" disabled>🚩 Flag</button>
         </div>
-      `;
-    }
+      </div>
+    `;
 
     // Date formatting - in focus mode, replies show date in header (like default mode)
     const isReplyMessage = isReply || !!message.parentId;
@@ -243,18 +219,23 @@ export class UnifiedMessageRenderer {
     const safeDateInHeader = showHeaderDate && safeFormattedTime ? `<span class="message-time-new">${safeFormattedTime}</span>` : '';
     const safeDateInFooter = !showHeaderDate && safeFormattedTime && isFocusMode ? `<div class="focus-date-row"><span class="message-time-new focus-date">${safeFormattedTime}</span></div>` : '';
 
+    // SECURITY FIX: Sanitize sender name and community name to prevent XSS
+    const safeSenderName = escapeHtml(senderName);
+    const safeCommunityName = communityName ? escapeHtml(communityName) : '';
+    const safeOptionalContent = message.optionalContent ? escapeHtml(message.optionalContent) : '';
+    
     const html = `
       <div class="avatar-container">${avatarHTML}</div>
       <div class="message-content-wrapper">
         <div class="message-header-new">
-          <span class="message-sender-name">${senderName}${communityName ? ` • ${communityName}` : ''}</span>
+          <span class="message-sender-name">${safeSenderName}${safeCommunityName ? ` • ${safeCommunityName}` : ''}</span>
           ${safeDateInHeader}
           <div class="message-actions-new">
             ${messageActionButtons}
           </div>
         </div>
         <div class="message-content">${contentWithLinks}</div>
-        ${message.optionalContent ? `<div class="message-anchor">📍 ${message.optionalContent}</div>` : ''}
+        ${safeOptionalContent ? `<div class="message-anchor">📍 ${safeOptionalContent}</div>` : ''}
       </div>
       <div class="message-footer">
         ${safeDateInFooter}
@@ -384,12 +365,6 @@ export class UnifiedMessageRenderer {
     if (diffDays < 7) return `${diffDays}d`;
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   }
-}
-
-// Export to window for backward compatibility
-if (typeof window !== 'undefined') {
-  (window as Window & { UnifiedMessageRenderer?: typeof UnifiedMessageRenderer }).UnifiedMessageRenderer = UnifiedMessageRenderer;
-  console.log('✅ UnifiedMessageRenderer: Exported to window');
 }
 
 export default UnifiedMessageRenderer;

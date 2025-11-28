@@ -7,7 +7,6 @@ import { exposeModuleGraph, getSidepanelWindow } from './windowInjections.js';
 const getRealtimeControllerCtor = () => undefined;
 const getVisibilityRefresherFactory = () => undefined;
 import { loadChatHistory } from '../features/MessagesModule.js';
-// UIManager is optional - will be loaded dynamically if needed
 let setupTabNavigation;
 let setupMessageInputEventListeners;
 let initializeTheme;
@@ -73,9 +72,9 @@ else {
             const bootController = new BootController(graph, {
                 realtimeController,
                 loadChatHistory: loadChatHistoryWrapper,
-                setupTabNavigation,
-                setupMessageInputEventListeners,
-                initializeTheme,
+                setupTabNavigation: setupTabNavigation || (() => { }),
+                setupMessageInputEventListeners: setupMessageInputEventListeners || (() => { }),
+                initializeTheme: initializeTheme || (async () => { }),
                 refreshVisibility,
                 messageLoadingService: messageLoadingService ? { loadMessages: messageLoadingService.loadMessages } : undefined // Use service if available
             });

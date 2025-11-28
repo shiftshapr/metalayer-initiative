@@ -1445,9 +1445,6 @@ async function loadChatHistory(pageIdOrRawUrl: string, activeCommunities?: strin
                                     canonicalUrl: normalized.normalizedUrl || tabUrl
                                 };
                                 stateManagerInstance.setState('currentUrlData', urlData);
-                                if (typeof window !== 'undefined') {
-                                    (window as Window & { currentUrlData?: { pageId?: string; rawUrl?: string; normalizedUrl?: string } }).currentUrlData = urlData;
-                                }
                                 pageId = urlData.pageId;
                                 console.log('✅ loadChatHistory: Set currentUrlData from active tab, pageId:', pageId);
                             } else {
@@ -1460,9 +1457,6 @@ async function loadChatHistory(pageIdOrRawUrl: string, activeCommunities?: strin
                                     canonicalUrl: tabUrl
                                 };
                                 stateManagerInstance.setState('currentUrlData', urlData);
-                                if (typeof window !== 'undefined') {
-                                    (window as Window & { currentUrlData?: { pageId?: string; rawUrl?: string; normalizedUrl?: string } }).currentUrlData = urlData;
-                                }
                                 console.log('✅ loadChatHistory: Set currentUrlData (fallback), pageId:', pageId);
                             }
                         }

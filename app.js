@@ -5,11 +5,77 @@ const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 require('dotenv').config();
 
+// CRITICAL: Validate required environment variables before starting server
+const requiredEnvVars = [
+  'SESSION_SECRET'
+];
+
+const missing = requiredEnvVars.filter(v => !process.env[v]);
+if (missing.length > 0) {
+  console.error('❌ CRITICAL: Missing required environment variables:', missing);
+  console.error('Please set these variables in your .env file or environment');
+  process.exit(1);
+}
+
+// Validate session secret is not using default value
+if (process.env.SESSION_SECRET === 'your-session-secret') {
+  console.error('❌ CRITICAL: SESSION_SECRET must be changed from default value');
+  console.error('Please set a secure random string in your .env file');
+  process.exit(1);
+}
+
 const app = express();
 
-// CORS configuration for extension
+// CORS configuration for extension - use environment variables
+const allowedOrigins = process.env.ALLOWED_ORIGINS 
+  ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
+  : (process.env.NODE_ENV === 'production' 
+      ? ['https://app.canopi.live', 'https://share.canopi.live', 'https://api.canopi.live']
+      : ['http://localhost:3000', 'http://localhost:3001', 'http://216.238.91.120:3000', 'http://216.238.91.120:3001']);
+
+// CORS configuration with Chrome extension support
+// Production: Only allow specific extension ID
+// Development: Allow all chrome-extension:// origins for flexibility
+const PRODUCTION_EXTENSION_ID = 'bnbghmbiikibpkllpeehcmpjmbcnhhcb';
+const isProduction = process.env.NODE_ENV === 'production';
+
 app.use(cors({
-  origin: ['http://216.238.91.120:3000', 'http://216.238.91.120:3001'],
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps, Postman, or same-origin)
+    if (!origin) {
+      callback(null, true);
+      return;
+    }
+    
+    // Check if origin is in allowed list
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+      return;
+    }
+    
+    // Handle Chrome extension origins
+    if (origin.startsWith('chrome-extension://')) {
+      if (isProduction) {
+        // Production: Only allow the specific published extension
+        const expectedOrigin = `chrome-extension://${PRODUCTION_EXTENSION_ID}`;
+        if (origin === expectedOrigin) {
+          callback(null, true);
+          return;
+        } else {
+          console.warn(`⚠️ CORS: Rejected Chrome extension origin: ${origin} (expected: ${expectedOrigin})`);
+          callback(new Error('Chrome extension not allowed in production'));
+          return;
+        }
+      } else {
+        // Development: Allow all chrome-extension:// origins for flexibility
+        callback(null, true);
+        return;
+      }
+    }
+    
+    // Reject all other origins
+    callback(new Error('Not allowed by CORS'));
+  },
   credentials: true
 }));
 
@@ -135,9 +201,9 @@ app.get('/web3auth-test/', (req, res) => {
 // Serve static files from public directory (AFTER specific routes)
 app.use(express.static('public'));
 
-// Session configuration
+// Session configuration - SESSION_SECRET is validated above
 app.use(session({
-  secret: process.env.SESSION_SECRET || 'your-session-secret',
+  secret: process.env.SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
 }));
@@ -206,44 +272,6 @@ app.get('/auth/google/callback', passport.authenticate('google', {
 
 app.get('/auth/google/success', (req, res) => {
   res.json({ message: 'Google Auth successful', user: req.user });
-});
-
-app.get('/auth/google/success-redirect', (req, res) => {
-  // Store user in session for persistence
-  if (req.user) {
-    req.session.user = req.user;
-  }
-  
-  // Redirect to a simple success page that closes the popup and notifies parent
-  res.send(`
-    <html>
-      <head><title>Authentication Successful</title></head>
-      <body>
-        <script>
-          // Try to communicate with parent window (extension)
-          if (window.opener) {
-            window.opener.postMessage({ 
-              type: 'GOOGLE_AUTH_SUCCESS', 
-              user: ${JSON.stringify(req.user || req.session.user)}
-            }, '*');
-          }
-          
-          // Store user data in localStorage for the extension to access
-          localStorage.setItem('metalayer_user', JSON.stringify(${JSON.stringify(req.user || req.session.user)}));
-          
-          // Close the popup
-          setTimeout(() => {
-            window.close();
-          }, 1000);
-        </script>
-        <div style="text-align: center; padding: 40px; font-family: Arial, sans-serif;">
-          <h2>✅ Authentication Successful!</h2>
-          <p>You can close this window.</p>
-          <p>Redirecting back to extension...</p>
-        </div>
-      </body>
-    </html>
-  `);
 });
 
 // GET /auth/me → Return session info

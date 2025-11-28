@@ -136,6 +136,28 @@ export class UserPreferencesManager {
                     return uuidRegex.test(value);
                 },
                 uiComponents: ['communities', 'header']
+            },
+            activeCommunities: {
+                chromeKey: 'activeCommunities',
+                dbColumn: 'active_communities', // Store as JSON string in AppUser table
+                defaultValue: '[]',
+                validator: (value) => {
+                    // Must be a valid JSON array of UUIDs
+                    if (typeof value !== 'string')
+                        return false;
+                    try {
+                        const parsed = JSON.parse(value);
+                        if (!Array.isArray(parsed))
+                            return false;
+                        // Validate all items are UUIDs
+                        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+                        return parsed.every((item) => typeof item === 'string' && uuidRegex.test(item));
+                    }
+                    catch {
+                        return false;
+                    }
+                },
+                uiComponents: ['communities', 'header']
             }
         };
         this.schema = schema;

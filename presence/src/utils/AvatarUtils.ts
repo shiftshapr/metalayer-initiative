@@ -7,6 +7,7 @@ import { handleError } from './ErrorHandler.js';
 import { Logger } from './Logger.js';
 import { AVATAR_FALLBACK_COLOR } from '../core/ConfigModule.js';
 import { stateManagerInstance } from '../core/StateManager.js';
+import { escapeHtml } from './HtmlSanitizer.js';
 
 export interface AvatarOptions {
   size?: number;
@@ -161,14 +162,38 @@ class AvatarUtils {
       avatarHtml += `<div class="avatar-aura" style="position: absolute; inset: -${glowSize}px; border-radius: 50%; background: ${auraRgba}; z-index: 0; box-shadow: 0 0 ${glowSize * 2}px ${glowSize}px ${glowColorRgba};"></div>`;
     }
 
+    // SECURITY FIX: Sanitize userName to prevent XSS in alt attribute and initials
+    const safeUserName = escapeHtml(avatarData.userName);
+    
     if (avatarUrl) {
-      // CRITICAL FIX: Remove border from avatar image (regression fix)
-      avatarHtml += `<img src="${avatarUrl}" alt="${avatarData.userName}" class="avatar-image" style="width: ${size}px; height: ${size}px; border-radius: 50%; object-fit: cover; position: relative; z-index: 1; border: none !important; outline: none !important;" />`;
-    } else {
-      // Fallback: create initials avatar
-      const initials = avatarData.userName
+      // SECURITY FIX: Validate avatarUrl is a safe URL (not javascript: or data: with malicious content)
+      // CRITICAL: Validate URL to prevent XSS attacks via javascript: or malicious data: URLs
+      const trimmedUrl = avatarUrl.trim();
+      const lowerUrl = trimmedUrl.toLowerCase();
+      
+      // Block dangerous URL schemes
+      const isUnsafeUrl = lowerUrl.startsWith('javascript:') || 
+                          lowerUrl.startsWith('data:text/html') ||
+                          lowerUrl.startsWith('vbscript:') ||
+                          lowerUrl.startsWith('onerror=') ||
+                          lowerUrl.startsWith('onload=');
+      
+      if (isUnsafeUrl) {
+        Logger.warn('⚠️ AVATAR_UTILS: Blocked potentially unsafe avatar URL', { url: trimmedUrl.substring(0, 50) }, 'avatar');
+        // Fall through to initials fallback below
+      } else {
+        // Escape the URL for use in HTML attribute (additional safety)
+        const safeAvatarUrl = escapeHtml(trimmedUrl);
+        // CRITICAL FIX: Remove border from avatar image (regression fix)
+        avatarHtml += `<img src="${safeAvatarUrl}" alt="${safeUserName}" class="avatar-image" style="width: ${size}px; height: ${size}px; border-radius: 50%; object-fit: cover; position: relative; z-index: 1; border: none !important; outline: none !important;" />`;
+      }
+    }
+    
+    // Fallback to initials if no avatar URL or URL was blocked for security
+    if (!avatarUrl || (avatarUrl && avatarUrl.trim().toLowerCase().match(/^(javascript:|data:text\/html|vbscript:|onerror=|onload=)/))) {
+      const initials = safeUserName
         .split(' ')
-        .map(n => n[0])
+        .map(n => n[0] || '')
         .join('')
         .toUpperCase()
         .substring(0, 2);

@@ -41,6 +41,10 @@ const getUserPreferencesManager = () => {
 };
 const getChromeStorage = (keys) => {
     return new Promise((resolve) => {
+        if (!chrome.storage?.local) {
+            resolve({});
+            return;
+        }
         chrome.storage.local.get(keys, (result) => {
             resolve((result || {}));
         });
@@ -48,6 +52,10 @@ const getChromeStorage = (keys) => {
 };
 const setChromeStorage = (items) => {
     return new Promise((resolve, reject) => {
+        if (!chrome.storage?.local) {
+            reject(new Error('Chrome storage not available'));
+            return;
+        }
         chrome.storage.local.set(items, () => {
             if (chrome.runtime?.lastError) {
                 reject(chrome.runtime.lastError);
@@ -179,10 +187,17 @@ class ProfileManager {
                 return;
             }
             Logger.debug('🔧 PROFILE_MANAGER: Waiting for pre-render initialization...', null, 'profile');
+            // CRITICAL FIX: Add short timeout (500ms) to prevent long delays
+            // If pre-render takes too long, proceed anyway with available data
+            const preRenderTimeout = setTimeout(() => {
+                Logger.warn('⏰ PROFILE_MANAGER: PreRenderInitializer timeout reached (500ms), proceeding anyway', 'profile');
+                resolve();
+            }, 500);
             // Listen for pre-render events
             const checkPreRender = () => {
                 const win = window;
                 if (win.preRenderInitializer?.isInitialized) {
+                    clearTimeout(preRenderTimeout);
                     Logger.debug('🔧 PROFILE_MANAGER: Pre-render initialization completed', null, 'profile');
                     const preRenderData = win.preRenderInitializer.getPreRenderData();
                     Logger.debug('🔧 PROFILE_MANAGER: Pre-render data', {
@@ -198,13 +213,13 @@ class ProfileManager {
             // Listen for future pre-render completion events
             document.addEventListener('preRenderComplete', checkPreRender, { once: true });
         });
-        // Add timeout as fallback (30 seconds max)
+        // Add timeout as fallback (reduced from 30s to 1s to prevent long delays)
+        // CRITICAL FIX: Reduce timeout to prevent 1+ second delays in avatar display
         const timeout = new Promise((resolve) => {
             setTimeout(() => {
-                Logger.warn('🔧 PROFILE_MANAGER: Timeout waiting for full initialization (30s)', null, 'profile');
-                Logger.warn('🔧 PROFILE_MANAGER: Proceeding with available data...', null, 'profile');
+                Logger.warn('🔧 PROFILE_MANAGER: Timeout waiting for full initialization (1s) - proceeding with available data', null, 'profile');
                 resolve();
-            }, 30000);
+            }, 1000);
         });
         // Wait for all promises to resolve (auth + pre-render + timeout fallback)
         try {
@@ -886,6 +901,7 @@ class ProfileManager {
                             Logger.debug('🔧 PROFILE MANAGER: COMP METHOD - Avatar HTML generated, updating container', { timestamp: new Date().toISOString() }, 'profile');
                             // ROOT CAUSE FIX: Wrap AvatarUtils HTML in .user-avatar div for consistency with diagnostic expectations
                             // AvatarUtils returns .avatar-container, but we wrap it in .user-avatar for ProfileManager
+                            // SECURITY: avatarHTML from AvatarUtils.createUnifiedAvatar() is already sanitized (userName and URLs are escaped)
                             userAvatarContainer.innerHTML = `<div class="user-avatar">${avatarHTML}</div>`;
                             // Log what was actually inserted
                             Logger.debug('🔧 PROFILE MANAGER: COMP METHOD - Container updated', { innerHTMLLength: userAvatarContainer.innerHTML.length }, 'profile');
@@ -1562,7 +1578,7 @@ class ProfileManager {
         const userPreferencesManager = getUserPreferencesManager();
         // CRITICAL FIX: Get theme from UserPreferencesManager first, then DOM, then default
         let currentTheme = 'light';
-        if (userPreferencesManager && userPreferencesManager.isInitialized && typeof userPreferencesManager.getPreference === 'function') {
+        if (userPreferencesManager && 'isInitialized' in userPreferencesManager && userPreferencesManager.isInitialized && typeof userPreferencesManager.getPreference === 'function') {
             const storedTheme = await userPreferencesManager.getPreference('theme');
             if (storedTheme === 'dark' || storedTheme === 'light') {
                 currentTheme = storedTheme;
@@ -3311,7 +3327,7 @@ async function getCurrentUserAvailability() {
     const visibilityData = getVisibilityDataUnfiltered();
     if (visibilityData?.active) {
         const currentUserInVisibility = visibilityData.active.find((u) => String(u.id || u.userId) === String(currentUserForStatus?.id));
-        if (currentUserInVisibility && currentUserInVisibility.availability) {
+        if (currentUserInVisibility && currentUserInVisibility.availability && typeof currentUserInVisibility.availability === 'string') {
             Logger.debug(`✅ STATUS_GET: Found availability in visibility data: ${currentUserInVisibility.availability}`, null, 'profile');
             return currentUserInVisibility.availability;
         }

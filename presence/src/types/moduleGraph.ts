@@ -7,10 +7,11 @@
 
 import type { StateManager } from './index.js';
 import type { MessageLoadingService } from '../services/MessageLoadingService.js';
-import type { VisibilityManager as VisibilityManagerType, IVisibilityRealtime } from '../features/visibility/core/VisibilityManager.js';
+import type { IVisibilityRealtime } from '../features/visibility/core/VisibilityManager.js';
 import type { Logger } from '../utils/Logger.js';
+import type { VisibilityManager as VisibilityManagerType } from '../features/visibility/core/VisibilityManager.js';
 
-// Re-export for convenience
+// Re-export VisibilityManager type for use in ModuleGraph
 export type { VisibilityManagerType as VisibilityManager };
 
 /**
@@ -100,7 +101,7 @@ export interface VisibilityState {
 export interface ModuleGraph {
   stateManager: StateManager;
   messageLoadingService?: MessageLoadingService;
-  visibilityManager?: VisibilityManager;
+  visibilityManager?: VisibilityManagerType;
   supabaseService?: SupabaseService;
   logger: typeof Logger;
   communitiesModule?: CommunitiesModule;
@@ -143,7 +144,7 @@ export interface VisibilityModuleImport {
     supabase: IVisibilityRealtime,
     logger: typeof Logger,
     visibilityState: VisibilityState
-  ) => VisibilityManager;
+  ) => VisibilityManagerType;
   [key: string]: unknown;
 }
 

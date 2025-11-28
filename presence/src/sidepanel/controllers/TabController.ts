@@ -432,7 +432,7 @@ export class TabController implements SidepanelController {
   private async ensureCommunitiesReady(): Promise<void> {
     try {
       // Check if communities module exists and initialize if needed
-      if (this.options.graph.communitiesModule) {
+      if (this.options.graph.communitiesModule && typeof this.options.graph.communitiesModule.initialize === 'function') {
         await this.options.graph.communitiesModule.initialize();
       }
       
@@ -518,14 +518,8 @@ export class TabController implements SidepanelController {
   }
 
   private async persistCurrentUrl(urlData: NormalizedUrlData): Promise<void> {
-    // CRITICAL FIX: Set currentUrlData in stateManager FIRST (synchronously if possible)
-    // This ensures pageId is immediately available for message loading
+    // Set currentUrlData in stateManager
     this.options.graph.stateManager.setState('currentUrlData', urlData);
-    
-    // Also set on window for backward compatibility
-    if (typeof window !== 'undefined') {
-      (window as Window & { currentUrlData?: { pageId?: string; rawUrl?: string; normalizedUrl?: string } }).currentUrlData = urlData as { pageId?: string; rawUrl?: string; normalizedUrl?: string };
-    }
     
     if (this.options.graph.logger && typeof this.options.graph.logger.debug === 'function') {
       this.options.graph.logger.debug('TAB_CTRL_URL_PERSISTED', { 

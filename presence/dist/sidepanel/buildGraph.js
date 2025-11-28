@@ -6,6 +6,8 @@
  */
 import { getMessageLoadingService, initializeMessageLoadingService } from '../services/MessageLoadingService.js';
 import { Logger } from '../utils/Logger.js';
+// Import StateManager - use dynamic import to handle path resolution
+// From sidepanel/ to core/ is ../core/
 // Note: Optional modules are loaded dynamically in buildModuleGraph
 // This avoids circular dependencies and allows modules to be optional
 /**
@@ -181,12 +183,14 @@ export async function buildModuleGraph() {
     const visibilityStateModule = await safeImport('../features/visibility/core/VisibilityState.js');
     if (visibilityModule?.VisibilityManager && visibilityStateModule?.VisibilityState && supabaseService) {
         // Create VisibilityState instance
-        const VisibilityState = visibilityStateModule.VisibilityState;
-        const visibilityState = new VisibilityState();
+        const VisibilityStateClass = visibilityStateModule.VisibilityState;
+        const visibilityState = new VisibilityStateClass();
         // SupabaseService implements IVisibilityRealtime interface (has getPageUsers, getUserProfile, on methods)
         // Create VisibilityManager instance - it will be initialized later in BootController when user is authenticated
-        visibilityManager = new visibilityModule.VisibilityManager(supabaseService, // SupabaseService implements IVisibilityRealtime
-        Logger, visibilityState);
+        const VisibilityManagerClass = visibilityModule.VisibilityManager;
+        // SupabaseService implements IVisibilityRealtime interface
+        // Type assertion needed because SupabaseService interface doesn't explicitly extend IVisibilityRealtime
+        visibilityManager = new VisibilityManagerClass(supabaseService, Logger, visibilityState);
         Logger.debug('VisibilityManager instance created (will be initialized in BootController)', null, 'module-graph');
     }
     else {
@@ -196,7 +200,7 @@ export async function buildModuleGraph() {
     const graph = {
         stateManager,
         messageLoadingService,
-        visibilityManager: visibilityManager, // Will be set later in BootController
+        visibilityManager,
         supabaseService,
         logger: Logger,
         communitiesModule,
