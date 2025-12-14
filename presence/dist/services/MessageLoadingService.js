@@ -7,6 +7,7 @@
  * Integration Layer Fix: All code should use this service instead of
  * calling loadChatHistory() directly.
  */
+// Import from utils
 import { getActiveSidepanelTab } from '../utils/getActiveSidepanelTab.js';
 import { Logger } from '../utils/Logger.js';
 /**

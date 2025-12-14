@@ -222,14 +222,14 @@ else {
                 // CRITICAL: Initialize UserHoverModal and expose to window
                 try {
                     const userHoverModalModule = await import('../features/UserHoverModal.js');
-                    if (userHoverModalModule.userHoverModal) {
+                    if (userHoverModalModule.userHoverModalInstance) {
                         const winWithHover = win;
-                        winWithHover.userHoverModal = userHoverModalModule.userHoverModal;
+                        winWithHover.userHoverModal = userHoverModalModule.userHoverModalInstance;
                         // Initialize the modal
-                        await userHoverModalModule.userHoverModal.initialize();
+                        await userHoverModalModule.userHoverModalInstance.initialize();
                         Logger.debug('✅ SIDEPANEL: UserHoverModal initialized and exposed to window', {
-                            hasShow: typeof userHoverModalModule.userHoverModal.show === 'function',
-                            hasInitialize: typeof userHoverModalModule.userHoverModal.initialize === 'function',
+                            hasShow: typeof userHoverModalModule.userHoverModalInstance.show === 'function',
+                            hasInitialize: typeof userHoverModalModule.userHoverModalInstance.initialize === 'function',
                         }, 'sidepanel');
                     }
                     else {

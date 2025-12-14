@@ -1198,7 +1198,9 @@ async function handleMessageFocus(messageOrId: Message | string): Promise<void> 
                             avatarContainer.addEventListener('mouseenter', (e) => {
                                 e.stopPropagation();
                                 try {
-                                    showFn(parentMessage.author, avatarContainer as HTMLElement);
+                                    if (parentMessage.author) {
+                                        showFn(parentMessage.author, avatarContainer as HTMLElement);
+                                    }
                                 } catch (error) {
                                     console.warn('⚠️ handleMessageFocus: Failed to show user hover modal for parent:', error);
                                 }
@@ -1253,7 +1255,9 @@ async function handleMessageFocus(messageOrId: Message | string): Promise<void> 
                             avatarContainer.addEventListener('mouseenter', (e) => {
                                 e.stopPropagation();
                                 try {
-                                    showFn(msg.author, avatarContainer as HTMLElement);
+                                    if (msg.author) {
+                                        showFn(msg.author, avatarContainer as HTMLElement);
+                                    }
                                 } catch (error) {
                                     console.warn('⚠️ handleMessageFocus: Failed to show user hover modal:', error);
                                 }

@@ -191,7 +191,7 @@ if (legacyWindow.__CANOPI_SIDEPANEL_READY__) {
         chrome.runtime.onMessage.addListener(
           (
             request: { type?: string; messageId?: string },
-            _sender: { tab?: { id?: number }; [key: string]: unknown },
+            _sender: chrome.runtime.MessageSender,
             sendResponse: (response?: unknown) => void
           ) => {
             if (request.type === 'HIGHLIGHT_SHARED_MESSAGE' && request.messageId) {
@@ -287,7 +287,7 @@ if (legacyWindow.__CANOPI_SIDEPANEL_READY__) {
             const winWithVisibility = win as Window & {
               updateVisibleTab?: typeof visibilityTabRenderer.updateVisibleTab;
             };
-            winWithVisibility.updateVisibleTab = visibilityTabRenderer.updateVisibleTab;
+            winWithVisibility.updateVisibleTab = visibilityTabRenderer.updateVisibleTab as any;
           }
         } catch (error) {
           graph.logger?.warn?.('Failed to expose updateVisibleTab', error, 'sidepanel');
@@ -300,7 +300,7 @@ if (legacyWindow.__CANOPI_SIDEPANEL_READY__) {
             const winWithPreferences = win as Window & {
               userPreferencesManager?: typeof userPreferencesModule.userPreferencesManager;
             };
-            winWithPreferences.userPreferencesManager = userPreferencesModule.userPreferencesManager;
+            winWithPreferences.userPreferencesManager = userPreferencesModule.userPreferencesManager as any;
           }
         } catch (error) {
           graph.logger?.warn?.('Failed to expose userPreferencesManager', error, 'sidepanel');
@@ -314,18 +314,18 @@ if (legacyWindow.__CANOPI_SIDEPANEL_READY__) {
         // CRITICAL: Initialize UserHoverModal and expose to window
         try {
           const userHoverModalModule = await import('../features/UserHoverModal.js');
-          if (userHoverModalModule.userHoverModal) {
+          if (userHoverModalModule.userHoverModalInstance) {
             const winWithHover = win as Window & {
-              userHoverModal?: typeof userHoverModalModule.userHoverModal;
+              userHoverModal?: typeof userHoverModalModule.userHoverModalInstance;
             };
-            winWithHover.userHoverModal = userHoverModalModule.userHoverModal;
+            winWithHover.userHoverModal = userHoverModalModule.userHoverModalInstance;
             // Initialize the modal
-            await userHoverModalModule.userHoverModal.initialize();
+            await userHoverModalModule.userHoverModalInstance.initialize();
             Logger.debug(
               '✅ SIDEPANEL: UserHoverModal initialized and exposed to window',
               {
-                hasShow: typeof userHoverModalModule.userHoverModal.show === 'function',
-                hasInitialize: typeof userHoverModalModule.userHoverModal.initialize === 'function',
+                hasShow: typeof userHoverModalModule.userHoverModalInstance.show === 'function',
+                hasInitialize: typeof userHoverModalModule.userHoverModalInstance.initialize === 'function',
               },
               'sidepanel'
             );
@@ -350,7 +350,7 @@ if (legacyWindow.__CANOPI_SIDEPANEL_READY__) {
             const winWithAvatar = win as Window & {
               AvatarUtils?: typeof AvatarUtilsClass;
             };
-            winWithAvatar.AvatarUtils = AvatarUtilsClass;
+            winWithAvatar.AvatarUtils = AvatarUtilsClass as any;
             Logger.debug(
               '✅ SIDEPANEL: AvatarUtils exposed to window',
               {
@@ -425,5 +425,6 @@ if (legacyWindow.__CANOPI_SIDEPANEL_READY__) {
     }
   })();
 }
+
 
 

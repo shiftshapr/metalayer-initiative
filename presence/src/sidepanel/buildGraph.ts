@@ -20,8 +20,7 @@ import type {
   EventBusModuleImport,
   UIManagerModuleImport,
   VisibilityModuleImport,
-  VisibilityStateModuleImport,
-  CommunitiesModuleImport
+  VisibilityStateModuleImport
 } from '../types/moduleGraph.js';
 import { getMessageLoadingService, initializeMessageLoadingService, type MessageLoadingService } from '../services/MessageLoadingService.js';
 import { Logger } from '../utils/Logger.js';
@@ -149,18 +148,15 @@ export async function buildModuleGraph(): Promise<ModuleGraph> {
     Logger.debug('SupabaseService not available (optional)', null, 'module-graph');
   }
 
-  // CommunitiesModule - CommunityLoaders.ts doesn't export a class, it's just functions
-  // BootController uses graph.communitiesModule?.initialize() which suggests it might be a module with initialize method
-  // For now, we'll leave it undefined and let BootController handle it
+  // CommunitiesModule - centralized community management
   try {
-    const communitiesModuleImport = await import('../features/CommunityLoaders.js').catch(() => null) as CommunitiesModuleImport | null;
-    // Check if there's an initialize function or module instance
-    if (communitiesModuleImport && typeof communitiesModuleImport.initialize === 'function') {
-      communitiesModule = communitiesModuleImport as CommunitiesModule;
-      Logger.debug('CommunitiesModule available', null, 'module-graph');
+    const { CommunitiesModule } = await import('../features/CommunitiesModule.js');
+    if (CommunitiesModule) {
+      communitiesModule = new CommunitiesModule() as any;
+      Logger.debug('CommunitiesModule initialized in module graph', null, 'module-graph');
     }
   } catch (error) {
-    Logger.debug('CommunitiesModule not available (optional)', null, 'module-graph');
+    Logger.debug('CommunitiesModule not available (optional)', error, 'module-graph');
   }
 
   // Initialize AuthManager if available
@@ -246,5 +242,6 @@ export async function buildModuleGraph(): Promise<ModuleGraph> {
 
   return graph;
 }
+
 
 

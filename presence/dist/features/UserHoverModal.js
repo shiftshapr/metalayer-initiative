@@ -60,6 +60,12 @@ class UserHoverModal {
         return this.resolveViewerUserId();
     }
     /**
+     * Show modal for a user (convenience method for external callers)
+     */
+    show(user, targetElement) {
+        this.showModal(user.id || '', targetElement);
+    }
+    /**
      * Initialize the hover modal system
      */
     async initialize() {

@@ -126,19 +126,16 @@ export async function buildModuleGraph() {
     else {
         Logger.debug('SupabaseService not available (optional)', null, 'module-graph');
     }
-    // CommunitiesModule - CommunityLoaders.ts doesn't export a class, it's just functions
-    // BootController uses graph.communitiesModule?.initialize() which suggests it might be a module with initialize method
-    // For now, we'll leave it undefined and let BootController handle it
+    // CommunitiesModule - centralized community management
     try {
-        const communitiesModuleImport = await import('../features/CommunityLoaders.js').catch(() => null);
-        // Check if there's an initialize function or module instance
-        if (communitiesModuleImport && typeof communitiesModuleImport.initialize === 'function') {
-            communitiesModule = communitiesModuleImport;
-            Logger.debug('CommunitiesModule available', null, 'module-graph');
+        const { CommunitiesModule } = await import('../features/CommunitiesModule.js');
+        if (CommunitiesModule) {
+            communitiesModule = new CommunitiesModule();
+            Logger.debug('CommunitiesModule initialized in module graph', null, 'module-graph');
         }
     }
     catch (error) {
-        Logger.debug('CommunitiesModule not available (optional)', null, 'module-graph');
+        Logger.debug('CommunitiesModule not available (optional)', error, 'module-graph');
     }
     // Initialize AuthManager if available
     // CRITICAL FIX: AuthManager is in features/, not core/auth/

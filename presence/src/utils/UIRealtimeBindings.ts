@@ -152,7 +152,7 @@ export class UIRealtimeBindings {
       (windowWithAddMessage.addMessageToChat as { __originalAdd?: (post: MessagePost) => void }).__originalAdd = originalAdd;
     }
 
-    windowWithAddMessage.addMessageToChat = (post: MessagePost) => {
+    windowWithAddMessage.addMessageToChat = ((post: MessagePost) => {
       try {
         if (!post || !post.id) return originalAdd(post);
 
@@ -187,7 +187,7 @@ export class UIRealtimeBindings {
         Logger.warn('⚠️ UI REALTIME: add wrapper error, falling back', e, 'ui-realtime');
         return originalAdd(post);
       }
-    };
+    }) as any;
 
     windowWithAddMessage.__addMessageToChatWrapped = true;
     Logger.info('✅ UI REALTIME: addMessageToChat wrapped for dedupe', null, 'ui-realtime');
@@ -196,7 +196,7 @@ export class UIRealtimeBindings {
   private refreshChatSafely(): void {
     try {
       const windowWithChat = window as Window & {
-        loadChatHistory?: () => void;
+        loadChatHistory?: (url?: string, communities?: string[]) => void;
         currentUrlData?: { pageId?: string; [key: string]: unknown };
       };
       if (typeof windowWithChat.loadChatHistory === 'function' && windowWithChat.currentUrlData) {
@@ -211,10 +211,6 @@ export class UIRealtimeBindings {
           { currentUrlData: windowWithChat.currentUrlData, communities: activeCommunities },
           'ui-realtime'
         );
-        // Use existing function already wired in sidepanel.js
-        const windowWithChat = window as Window & {
-          loadChatHistory?: (url: string, communities: string[]) => void;
-        };
         if (windowWithChat.loadChatHistory) {
           windowWithChat.loadChatHistory(rawUrl, activeCommunities);
         }
@@ -561,12 +557,11 @@ export class UIRealtimeBindings {
             id: message.id || `realtime-${Date.now()}`,
             body: message.content,
             author: {
+              id: message.authorId || message.author?.id || 'unknown-author',
               name: message.author?.name || message.authorId || 'Unknown',
               avatarUrl: message.author?.avatarUrl,
-              email: message.authorId,
             },
             createdAt: message.createdAt || new Date().toISOString(),
-            isDeleted: false,
           });
         } else {
           Logger.error('❌ REALTIME: window.addMessageToChat not available', null, 'ui-realtime');

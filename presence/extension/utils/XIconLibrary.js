@@ -305,9 +305,4 @@ export const XIcons = {
 export function getIcon(name, props) {
     return XIcons[name](props || {});
 }
-// Export to window for global access
-if (typeof window !== 'undefined') {
-    const win = window;
-    win.XIcons = XIcons;
-}
 export default XIcons;

@@ -3070,20 +3070,10 @@ async function updateAvailabilityEverywhere(availability) {
         window.dispatchEvent(new CustomEvent('avatarRefreshRequested', {
             detail: { type: 'all', source: 'ProfileManager' }
         }));
-        // Optional: Try to call functions if available (graceful degradation)
-        const win = window;
-        if (typeof win.refreshAllMessageAvatars === 'function') {
-            Logger.debug('🔄 STATUS_UPDATE: Refreshing all message avatars with new status', null, 'profile');
-            await win.refreshAllMessageAvatars();
-        }
         // Step 7: Refresh visibility avatars
         window.dispatchEvent(new CustomEvent('avatarRefreshRequested', {
             detail: { type: 'visibility', source: 'ProfileManager' }
         }));
-        if (typeof win.refreshVisibilityAvatars === 'function') {
-            Logger.debug('🔄 STATUS_UPDATE: Refreshing visibility avatars', null, 'profile');
-            await win.refreshVisibilityAvatars();
-        }
         Logger.debug('✅ STATUS_UPDATE: Availability update complete', null, 'profile');
         return true;
     }
@@ -3220,11 +3210,6 @@ async function updateThemeEverywhere(theme) {
             window.dispatchEvent(new CustomEvent('updateVisibilityThemeStatus', {
                 detail: { source: 'ProfileManager' }
             }));
-            // Optional: Try to call manager if available (graceful degradation)
-            const win = window;
-            if (win.visibilitySettingsManager && typeof win.visibilitySettingsManager.updateThemeStatus === 'function') {
-                win.visibilitySettingsManager.updateThemeStatus();
-            }
             Logger.debug('✅ THEME_UPDATE: Updated settings tab theme toggle', null, 'profile');
         }
         Logger.debug('✅ THEME_UPDATE: Theme update complete', null, 'profile');

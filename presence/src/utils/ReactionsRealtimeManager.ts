@@ -237,7 +237,7 @@ export class ReactionsRealtimeManager {
           }),
         });
 
-        if (result.success || result.action) {
+        if (result && (result.success || result.action)) {
           this.logger.info('Reaction added successfully via API:', result);
           return true;
         } else {
@@ -285,7 +285,7 @@ export class ReactionsRealtimeManager {
           }),
         });
 
-        if (result.success || result.action) {
+        if (result && (result.success || result.action)) {
           this.logger.info('Reaction removed successfully via API:', result);
           return true;
         } else {

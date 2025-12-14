@@ -9,7 +9,6 @@
  */
 
 // Import from utils
-import { createEventListenerManager } from '../utils/EventListenerManager.js';
 import { getActiveSidepanelTab } from '../utils/getActiveSidepanelTab.js';
 import { Logger } from '../utils/Logger.js';
 
@@ -257,4 +256,5 @@ export function getMessageLoadingService(): MessageLoadingService {
   }
   return messageLoadingServiceInstance;
 }
+
 
