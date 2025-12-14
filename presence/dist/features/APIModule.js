@@ -880,10 +880,8 @@ export { api, MetaLayerAPI };
 // The global fetch override was causing cascading failures
 // Instead, we'll fix individual modules to use proper API calls
 Logger.debug('✅ APIModule: MetaLayerAPI initialized with global fetch override', null, 'api');
-// Export for module system
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { MetaLayerAPI, api };
-}
+// Export for browser environment only
+// Module exports removed for browser compatibility
 // CRITICAL: Expose api to window for legacy code (real-google-auth.js, etc.)
 // ES6 pattern: api is exported via ES6 module exports only
 // No window assignment - api should be imported where needed

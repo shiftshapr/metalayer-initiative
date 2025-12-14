@@ -1,85 +1,340 @@
+// src/features/TabManager/types.ts
+// TypeScript Foundation Layer - Session A
+// Provides type-safe interfaces and contracts for all TabManager operations
+
+import { TabConfig } from '../../types/index.js';
+
+// import * as t from 'io-ts';
+
+// ============================================================================
+// BRANDED TYPES
+// ============================================================================
+
 /**
- * Tab Manager Types
+ * Branded type for Tab IDs to prevent string/TabId confusion at compile time
  */
+export type TabId = string & { readonly __brand: 'TabId' };
 
-export interface TabConfig {
-  id: string;
-  label: string;
-  tabContentId: string;
-  icon?: string;
-  builtIn?: boolean;
-  visible?: boolean;
-  order?: number;
-  isDeveloperMode?: boolean;
-  [key: string]: unknown;
+/**
+ * Branded type for error codes
+ */
+export type TabManagerErrorCode = string & { readonly __brand: 'TabManagerErrorCode' };
+
+// ============================================================================
+// ENUMS & CONSTANTS
+// ============================================================================
+
+/**
+ * Tab operation types - discriminated union for type safety
+ */
+export const TAB_OPERATION_TYPES = {
+  LOAD: 'LOAD',
+  SWITCH: 'SWITCH'
+} as const;
+
+export type TabOperationType = typeof TAB_OPERATION_TYPES[keyof typeof TAB_OPERATION_TYPES];
+
+/**
+ * Tab content loading states
+ */
+export const TAB_CONTENT_STATES = {
+  NOT_LOADED: 'NOT_LOADED',
+  LOADING: 'LOADING',
+  LOADED: 'LOADED',
+  LOAD_FAILED: 'LOAD_FAILED'
+} as const;
+
+export type TabContentState = typeof TAB_CONTENT_STATES[keyof typeof TAB_CONTENT_STATES];
+
+/**
+ * Tab display states
+ */
+export const TAB_DISPLAY_STATES = {
+  NOT_DISPLAYED: 'NOT_DISPLAYED',
+  DISPLAYED: 'DISPLAYED'
+} as const;
+
+export type TabDisplayState = typeof TAB_DISPLAY_STATES[keyof typeof TAB_DISPLAY_STATES];
+
+/**
+ * Tab persistence types
+ */
+export const TAB_PERSISTENCE_TYPES = {
+  SESSION_ONLY: 'SESSION_ONLY',
+  PERSIST_VISIBLE: 'PERSIST_VISIBLE'
+} as const;
+
+export type TabPersistenceType = typeof TAB_PERSISTENCE_TYPES[keyof typeof TAB_PERSISTENCE_TYPES];
+
+// ============================================================================
+// DISCRIMINATED UNIONS
+// ============================================================================
+
+/**
+ * Tab operation context - discriminated union for type safety
+ */
+export type TabOperationContext =
+  | { readonly type: 'initialization'; readonly preserveTheme: boolean }
+  | { readonly type: 'user_action'; readonly notifyBootController: boolean }
+  | { readonly type: 'system'; readonly skipValidation: boolean };
+
+/**
+ * Theme change reasons - type-safe theme operation classification
+ */
+export type ThemeChangeReason =
+  | { readonly type: 'user_action'; readonly source: 'settings' | 'system' }
+  | { readonly type: 'initialization'; readonly source: 'boot' }
+  | { readonly type: 'system'; readonly reason: string };
+
+// ============================================================================
+// INTERFACES
+// ============================================================================
+
+/**
+ * Core tab operation interface with discriminated union
+ */
+export interface TabOperation {
+  readonly type: TabOperationType;
+  readonly tabId: TabId;
+  readonly context: TabOperationContext;
 }
 
-export interface SDKApp {
-  id: string;
-  name: string;
-  description: string;
-  developer: string;
-  category: string[];
-  releaseDate: string;
-  lastUpdated: string;
-  downloadCount?: number;
-  installed?: boolean;
-  reviews?: unknown[];
-  rating?: number;
-  reviewCount?: number;
-  icon?: string;
-  digitalProvenance?: {
-    verified: boolean;
-    [key: string]: unknown;
+/**
+ * Tab state interface - comprehensive state tracking
+ */
+export interface TabState {
+  readonly tabId: TabId;
+  readonly contentState: TabContentState;
+  readonly displayState: TabDisplayState;
+  readonly lastLoadAttempt?: number;
+  readonly loadCount: number;
+  readonly errorCount: number;
+  readonly persistenceType: TabPersistenceType;
+  readonly requiresContentLoading?: boolean;
+}
+
+/**
+ * UI operation result - separated from content operations
+ */
+export interface UiOperationResult {
+  readonly success: boolean;
+  readonly tabId: TabId;
+  readonly operation: TabOperationType;
+  readonly displayState: TabDisplayState;
+  readonly duration: number;
+  readonly error?: TabManagerError;
+}
+
+/**
+ * Content operation result - BootController coordination
+ */
+export interface ContentOperationResult {
+  readonly success: boolean;
+  readonly tabId: TabId;
+  readonly shouldLoad: boolean;
+  readonly reason: string;
+  readonly error?: TabManagerError;
+}
+
+/**
+ * Tab registration for dynamic tabs
+ */
+export interface TabRegistration {
+  readonly persistenceType?: TabPersistenceType;
+  readonly requiresContentLoading?: boolean;
+  readonly displayName?: string;
+  readonly category?: string;
+}
+
+// ============================================================================
+// ERROR HIERARCHY
+// ============================================================================
+
+/**
+ * Base TabManager error with type safety
+ */
+export class TabManagerError extends Error {
+  readonly code: TabManagerErrorCode;
+  readonly tabId?: TabId;
+
+  constructor(message: string, code: TabManagerErrorCode, tabId?: TabId) {
+    super(message);
+    this.name = 'TabManagerError';
+    this.code = code;
+    this.tabId = tabId;
+  }
+}
+
+/**
+ * State transition specific errors
+ */
+export class TabStateError extends TabManagerError {
+  readonly stateTransition?: {
+    from: TabContentState;
+    to: TabContentState;
+    allowed: readonly TabContentState[];
   };
-  [key: string]: unknown;
+
+  constructor(
+    message: string,
+    code: TabManagerErrorCode,
+    tabId: TabId,
+    stateTransition?: TabStateError['stateTransition']
+  ) {
+    super(message, code, tabId);
+    this.name = 'TabStateError';
+    this.stateTransition = stateTransition;
+  }
 }
 
-export interface AppStoreFilters {
-  searchQuery?: string;
-  categories?: string[];
-  sortBy?: 'recent' | 'popular' | 'updated' | 'name';
-  [key: string]: unknown;
+// ============================================================================
+// STATE TRANSITIONS
+// ============================================================================
+
+/**
+ * Strict state transition rules - compile-time validation
+ */
+export const CONTENT_STATE_TRANSITIONS = {
+  [TAB_CONTENT_STATES.NOT_LOADED]: [TAB_CONTENT_STATES.LOADING] as const,
+  [TAB_CONTENT_STATES.LOADING]: [TAB_CONTENT_STATES.LOADED, TAB_CONTENT_STATES.LOAD_FAILED] as const,
+  [TAB_CONTENT_STATES.LOADED]: [TAB_CONTENT_STATES.LOADING] as const, // Allow refresh
+  [TAB_CONTENT_STATES.LOAD_FAILED]: [TAB_CONTENT_STATES.LOADING] as const, // Allow retry
+} as const;
+
+/**
+ * Type-safe transition validation helper
+ */
+export function getAllowedTransitions(state: TabContentState): readonly TabContentState[] {
+  return CONTENT_STATE_TRANSITIONS[state];
 }
 
-export interface ReviewSubmission {
-  appId: string;
-  rating: number;
-  comment?: string;
-  [key: string]: unknown;
+// ============================================================================
+// REACTIVE INTEGRATION TYPES
+// ============================================================================
+
+/**
+ * Reactive event types for coordination
+ */
+export const TAB_MANAGER_EVENTS = {
+  UI_OPERATION: 'reactive:tabManager:uiOperation',
+  CONTENT_NEEDED: 'reactive:tabManager:contentNeeded',
+  STATE_CHANGED: 'reactive:tabManager:stateChanged'
+} as const;
+
+export type TabManagerEventType = typeof TAB_MANAGER_EVENTS[keyof typeof TAB_MANAGER_EVENTS];
+
+/**
+ * Strongly typed event detail interfaces
+ */
+export interface UiOperationEventDetail {
+  readonly tabId: TabId;
+  readonly operation: TabOperationType;
+  readonly timestamp: number;
 }
 
-export interface DigitalProvenance {
-  verified: boolean;
-  [key: string]: unknown;
+export interface ContentNeededEventDetail {
+  readonly tabId: TabId;
+  readonly reason: string;
+  readonly timestamp: number;
 }
 
+export interface StateChangedEventDetail {
+  readonly tabId: TabId;
+  readonly contentState: TabContentState;
+  readonly displayState: TabDisplayState;
+  readonly timestamp: number;
+}
+
+// ============================================================================
+// TYPE GUARDS & UTILITIES
+// ============================================================================
+
+/**
+ * Runtime type guard for TabId validation
+ */
+export function isValidTabId(value: string): value is TabId {
+  // Allow any string that looks like a valid tab ID
+  return typeof value === 'string' &&
+         value.length > 0 &&
+         value.length < 50 && // Reasonable length limit
+         /^[a-zA-Z][a-zA-Z0-9_-]*$/.test(value) && // Valid characters
+         value.endsWith('-tab'); // Convention enforcement
+}
+
+/**
+ * Safe TabId constructor with validation
+ */
+export function toTabId(value: string): TabId {
+  if (!isValidTabId(value)) {
+    throw new TabManagerError(`Invalid tab ID: ${value}`, 'INVALID_TAB_ID' as TabManagerErrorCode);
+  }
+  return value as TabId;
+}
+
+/**
+ * Type guard for known vs dynamic tabs
+ */
+export function isKnownTab(_tabId: TabId): boolean {
+  // This will be populated by TabRegistry
+  return false; // Placeholder - will be implemented by registry
+}
+
+/**
+ * Type guard for tabs requiring content loading
+ */
+export function isContentLoadableTab(_tabId: TabId): boolean {
+  // Default to true for dynamic tabs
+  return true;
+}
+
+/**
+ * Type guard for persistent tabs
+ */
+export function requiresPersistence(_tabId: TabId): boolean {
+  // Default to session-only for dynamic tabs
+  return false;
+}
+
+// ============================================================================
+// RUNTIME VALIDATION CODECS (io-ts)
+// ============================================================================
+
+// IO-TS codecs removed - io-ts dependency not available
+// Runtime validation can be implemented with simple type guards if needed
+
+// ============================================================================
+// TAB MANAGER STATE TYPES
+// ============================================================================
+
+/**
+ * Tab manager state interface
+ */
 export interface TabManagerState {
   tabs: TabConfig[];
-  visibleTabCount: number;
-  userTabLimit: number;
-  isModalOpen: boolean;
   currentTab: string | null;
   previousTab: string | null;
+  visibleTabCount: number;
+  userTabLimit: number;
+  isModalOpen?: boolean;
 }
 
-// CRITICAL FIX: Initialize default tabs with built-in tabs visible (regression fix)
-// This ensures tabs are visible on first load
+/**
+ * Default tab manager state
+ */
 export const DEFAULT_STATE: TabManagerState = {
-  tabs: [
-    { id: 'discuss-tab', label: 'Discuss', tabContentId: 'discuss-tab', builtIn: true, visible: true, order: 1 },
-    { id: 'visibility-tab', label: 'Visibility', tabContentId: 'visibility-tab', builtIn: true, visible: true, order: 2 },
-    { id: 'rooms-tab', label: 'Rooms', tabContentId: 'rooms-tab', builtIn: true, visible: true, order: 3 },
-    { id: 'people-tab', label: 'People', tabContentId: 'people-tab', builtIn: true, visible: true, order: 4 },
-    { id: 'agent-tab', label: 'Agent', tabContentId: 'agent-tab', builtIn: true, visible: true, order: 5 },
-    { id: 'timelines-tab', label: 'Timelines', tabContentId: 'timelines-tab', builtIn: true, visible: true, order: 6 },
-    { id: 'settings-tab', label: 'Settings', tabContentId: 'settings-tab', builtIn: true, visible: true, order: 7 },
-    { id: 'manage-tab', label: 'Manage', tabContentId: 'manage-tab', builtIn: true, visible: true, order: 999, isPermanent: true }
-  ],
-  visibleTabCount: 7,
+  tabs: [],
+  currentTab: null,
+  previousTab: null,
+  visibleTabCount: 0,
   userTabLimit: 10,
   isModalOpen: false,
-  currentTab: null,
-  previousTab: null
 };
+
+// ============================================================================
+// EXPORTS
+// ============================================================================
+
+// All types and functions are already exported individually above
+// No additional exports needed
+
 

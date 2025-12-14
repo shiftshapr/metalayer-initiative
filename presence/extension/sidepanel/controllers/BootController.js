@@ -1,58 +1,122 @@
+import { createEventListenerManager } from '../../utils/EventListenerManager.js';
+// @ts-ignore - JavaScript module without type declarations
+import { getActiveSidepanelTab } from '../../../extension/utils/getActiveSidepanelTab.js';
+// ROOT CAUSE FIX: Import LoadingGifManager for coordinated loading gif management
+import { getLoadingGifManager } from '../../features/TabManager/LoadingGifManager.js';
 // RED-LINE: No hardcoded community - communities must come from database
 export class BootController {
     constructor(graph, options) {
         this.graph = graph;
         this.options = options;
+        // ROOT CAUSE FIX: Initialize LoadingGifManager for coordinated loading gif management
+        this.loadingGifManager = getLoadingGifManager(this.graph.logger);
     }
     async initialize() {
         await this.initializeState();
         this.registerLifecycle();
         await this.initializeAuthFlow();
-        await this.safeInitializeTheme();
         this.setupEventBridges();
+        await this.safeInitializeTheme();
+        await this.checkAndLoadVisibilityTab();
         // ROOT CAUSE FIX: Direct message loading trigger - simple and reliable
         // Wait for TabController to finish, then ensure messages load
+        // CRITICAL FIX: Prevent double reload by checking if messages are already loading
         if (typeof document !== 'undefined' && typeof chrome !== 'undefined' && chrome.tabs) {
             // Use waitForEvent to wait for TabController to complete, then check
             const triggerMessageLoad = async () => {
                 try {
-                    // Wait a moment for TabController to initialize and capture URL
-                    await new Promise(resolve => setTimeout(resolve, 2500));
+                    // OPTIMIZATION: Reduced delay from 2500ms to 500ms for faster initialization
+                    // TabController should initialize quickly, 500ms provides buffer without excessive wait
+                    await new Promise((resolve) => setTimeout(resolve, 500));
                     const currentUrlData = this.graph.stateManager.getState('currentUrlData');
                     const messagesInDom = document.querySelector('.chat-messages')?.children.length || 0;
+                    // COORDINATED FIX: Check multiple sources for loading state to prevent double reload
+                    const isLoading = this.graph.stateManager.getState('messages.isLoading');
+                    const lastLoadTime = this.graph.stateManager.getState('messages.lastLoadTime');
+                    const timeSinceLastLoad = lastLoadTime ? Date.now() - lastLoadTime : Infinity;
+                    // Check if TabManager already loaded the discuss tab
+                    const win = typeof window !== 'undefined' ? window : null;
+                    const tabManager = win?.tabContextManager;
+                    const discussTabLoaded = tabManager?.isTabLoaded?.('discuss-tab') || false;
+                    // If messages were loaded in the last 3 seconds OR discuss tab was already loaded, skip
+                    if (isLoading || (lastLoadTime && timeSinceLastLoad < 3000) || discussTabLoaded) {
+                        this.graph.logger?.debug?.('BOOT_CTRL_SKIP_LOAD', {
+                            isLoading,
+                            timeSinceLastLoad,
+                            discussTabLoaded,
+                            message: 'Messages already loading, recently loaded, or discuss tab pre-loaded, skipping to prevent double reload',
+                        });
+                        return;
+                    }
                     this.graph.logger?.debug?.('BOOT_CTRL_MESSAGE_CHECK', {
                         hasUrlData: !!currentUrlData?.rawUrl,
                         messagesInDom,
+                        isLoading,
+                        timeSinceLastLoad,
                         hasMessageService: !!this.options.messageLoadingService,
-                        hasLoadChatHistory: !!this.options.loadChatHistory
+                        hasLoadChatHistory: !!this.options.loadChatHistory,
                     });
                     // If no URL captured and no messages, trigger manual capture
                     if (!currentUrlData?.rawUrl && messagesInDom === 0) {
                         this.graph.logger?.warn?.('BOOT_CTRL_FALLBACK_NEEDED', {
-                            message: 'TabController did not capture URL, triggering fallback'
+                            message: 'TabController did not capture URL, triggering fallback',
                         });
                         try {
-                            const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+                            const tabs = await new Promise((resolve, reject) => {
+                                chrome.tabs.query({ active: true, currentWindow: true }, (result) => {
+                                    if (chrome.runtime.lastError) {
+                                        reject(new Error(chrome.runtime.lastError.message));
+                                    }
+                                    else {
+                                        resolve(result);
+                                    }
+                                });
+                            });
                             if (tabs && tabs.length > 0 && tabs[0]?.url) {
                                 const tabUrl = tabs[0].url;
                                 // Only process non-chrome URLs
-                                if (tabUrl && !tabUrl.startsWith('chrome://') && !tabUrl.startsWith('chrome-extension://')) {
+                                if (tabUrl &&
+                                    !tabUrl.startsWith('chrome://') &&
+                                    !tabUrl.startsWith('chrome-extension://')) {
                                     this.graph.logger?.debug?.('BOOT_CTRL_FALLBACK_URL_CAPTURE', { tabUrl });
+                                    // ROOT CAUSE FIX: Set loading state before calling to prevent double reload
+                                    this.graph.stateManager.setState('messages.isLoading', true);
+                                    this.graph.stateManager.setState('messages.lastLoadTime', Date.now());
                                     // Trigger message loading via service if available
                                     if (this.options.messageLoadingService) {
                                         this.graph.logger?.debug?.('BOOT_CTRL_FALLBACK_CALLING_SERVICE', { tabUrl });
-                                        await this.options.messageLoadingService.loadMessages(tabUrl);
-                                        this.graph.logger?.debug?.('BOOT_CTRL_FALLBACK_SERVICE_COMPLETE', { tabUrl });
+                                        try {
+                                            await this.options.messageLoadingService.loadMessages(tabUrl);
+                                            this.graph.logger?.debug?.('BOOT_CTRL_FALLBACK_SERVICE_COMPLETE', { tabUrl });
+                                        }
+                                        finally {
+                                            this.graph.stateManager.setState('messages.isLoading', false);
+                                        }
                                     }
                                     else if (this.options.loadChatHistory) {
-                                        const win = typeof window !== 'undefined' ? window : null;
-                                        const getActiveTabFn = win?.getActiveSidepanelTab;
-                                        const activeTab = typeof getActiveTabFn === 'function' ? getActiveTabFn() : null;
+                                        // CRITICAL FIX: Only load messages if discuss tab is active
+                                        const activeTab = getActiveSidepanelTab();
                                         if (activeTab === 'discuss-tab' || activeTab === null) {
-                                            this.graph.logger?.debug?.('BOOT_CTRL_FALLBACK_CALLING_LOADCHAT', { tabUrl, activeTab });
-                                            await this.options.loadChatHistory(tabUrl);
-                                            this.graph.logger?.debug?.('BOOT_CTRL_FALLBACK_LOADCHAT_COMPLETE', { tabUrl });
+                                            this.graph.logger?.debug?.('BOOT_CTRL_FALLBACK_CALLING_LOADCHAT', {
+                                                tabUrl,
+                                                activeTab,
+                                            });
+                                            try {
+                                                await this.options.loadChatHistory(tabUrl);
+                                                this.graph.logger?.debug?.('BOOT_CTRL_FALLBACK_LOADCHAT_COMPLETE', {
+                                                    tabUrl,
+                                                });
+                                            }
+                                            finally {
+                                                this.graph.stateManager.setState('messages.isLoading', false);
+                                            }
                                         }
+                                        else {
+                                            this.graph.stateManager.setState('messages.isLoading', false);
+                                        }
+                                    }
+                                    else {
+                                        this.graph.stateManager.setState('messages.isLoading', false);
                                     }
                                 }
                             }
@@ -60,7 +124,7 @@ export class BootController {
                         catch (error) {
                             this.graph.logger?.error?.('BOOT_CTRL_FALLBACK_URL_CAPTURE_ERROR', {
                                 error,
-                                errorMessage: error instanceof Error ? error.message : String(error)
+                                errorMessage: error instanceof Error ? error.message : String(error),
                             });
                         }
                     }
@@ -68,42 +132,123 @@ export class BootController {
                         // URL captured but no messages - try loading
                         this.graph.logger?.warn?.('BOOT_CTRL_URL_BUT_NO_MESSAGES', {
                             url: currentUrlData.rawUrl,
-                            message: 'URL captured but no messages in DOM, triggering load'
+                            message: 'URL captured but no messages in DOM, triggering load',
                         });
-                        if (this.options.messageLoadingService) {
-                            await this.options.messageLoadingService.loadMessages(currentUrlData.rawUrl);
-                        }
-                        else if (this.options.loadChatHistory) {
-                            const win = typeof window !== 'undefined' ? window : null;
-                            const getActiveTabFn = win?.getActiveSidepanelTab;
-                            const activeTab = typeof getActiveTabFn === 'function' ? getActiveTabFn() : null;
-                            if (activeTab === 'discuss-tab' || activeTab === null) {
-                                await this.options.loadChatHistory(currentUrlData.rawUrl);
+                        // ROOT CAUSE FIX: Set loading state before calling to prevent double reload
+                        this.graph.stateManager.setState('messages.isLoading', true);
+                        this.graph.stateManager.setState('messages.lastLoadTime', Date.now());
+                        try {
+                            if (this.options.messageLoadingService) {
+                                await this.options.messageLoadingService.loadMessages(currentUrlData.rawUrl);
                             }
+                            else if (this.options.loadChatHistory) {
+                                // CRITICAL FIX: Only load messages if discuss tab is active
+                                const activeTab = getActiveSidepanelTab();
+                                if (activeTab === 'discuss-tab' || activeTab === null) {
+                                    await this.options.loadChatHistory(currentUrlData.rawUrl);
+                                }
+                            }
+                        }
+                        finally {
+                            this.graph.stateManager.setState('messages.isLoading', false);
                         }
                     }
                 }
                 catch (error) {
                     this.graph.logger?.error?.('BOOT_CTRL_FALLBACK_CHECK_ERROR', {
                         error,
-                        errorMessage: error instanceof Error ? error.message : String(error)
+                        errorMessage: error instanceof Error ? error.message : String(error),
                     });
                 }
             };
             // Trigger check after TabController should have completed
-            triggerMessageLoad().catch(error => {
+            triggerMessageLoad().catch((error) => {
                 this.graph.logger?.error?.('BOOT_CTRL_FALLBACK_TRIGGER_ERROR', { error });
+            });
+        }
+        // OVERRIDE: Simple message loading logic - only load on appropriate pages
+        // Check if we're on a page where messages can actually load
+        const currentUrl = window.location.href;
+        const canLoadMessages = !currentUrl.startsWith('chrome://') &&
+            !currentUrl.startsWith('chrome-extension://') &&
+            !currentUrl.startsWith('about:') &&
+            !currentUrl.startsWith('file://');
+        if (canLoadMessages) {
+            const activeTab = getActiveSidepanelTab();
+            if (activeTab === 'discuss-tab') {
+                const chatMessages = document.querySelector('.chat-messages');
+                if (chatMessages) {
+                    const existingMessages = chatMessages.children.length;
+                    // Only show loading if we have a URL to load from and no messages exist
+                    const currentUrlData = this.graph.stateManager.getState('currentUrlData');
+                    if (currentUrlData?.rawUrl && existingMessages === 0) {
+                        // Show loading gif
+                        chatMessages.innerHTML = `
+              <div class="loading-container" style="
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                height: 200px;
+                color: var(--text-secondary);
+              ">
+                <div class="loading-spinner" style="
+                  width: 40px;
+                  height: 40px;
+                  border: 3px solid var(--border-color);
+                  border-top: 3px solid var(--accent-color);
+                  border-radius: 50%;
+                  animation: spin 1s linear infinite;
+                  margin-bottom: 16px;
+                "></div>
+                <div>Loading messages...</div>
+              </div>
+              <style>
+                @keyframes spin {
+                  0% { transform: rotate(0deg); }
+                  100% { transform: rotate(360deg); }
+                }
+              </style>
+            `;
+                        // Load messages
+                        try {
+                            this.graph.stateManager.setState('messages.isLoading', true);
+                            this.graph.stateManager.setState('messages.lastLoadTime', Date.now());
+                            if (this.options.loadChatHistory) {
+                                await this.options.loadChatHistory(currentUrlData.rawUrl);
+                                this.graph.logger?.debug?.('BOOT_CTRL_MESSAGES_LOADED', { url: currentUrlData.rawUrl });
+                            }
+                        }
+                        catch (error) {
+                            this.graph.logger?.error?.('BOOT_CTRL_MESSAGE_LOAD_ERROR', error);
+                            // ROOT CAUSE FIX: Use LoadingGifManager for error handling
+                            this.loadingGifManager.hideImmediate();
+                        }
+                        finally {
+                            this.graph.stateManager.setState('messages.isLoading', false);
+                            // ROOT CAUSE FIX: Use LoadingGifManager for completion
+                            this.loadingGifManager.hide();
+                        }
+                    }
+                }
+            }
+        }
+        else {
+            this.graph.logger?.debug?.('BOOT_CTRL_SKIP_MESSAGE_LOADING', {
+                url: currentUrl,
+                reason: 'Messages cannot be loaded on this page type'
             });
         }
     }
     async initializeState() {
         try {
-            const isInitialized = await this.graph.stateManager.getState('extension.isInitialized');
+            const isInitialized = (await this.graph.stateManager.getState('extension.isInitialized'));
             if (isInitialized) {
                 return;
             }
             await this.graph.stateManager.initialize({
-                userAvatarBgColor: window.AVATAR_FALLBACK_COLOR ?? '#7C3AED',
+                userAvatarBgColor: window.AVATAR_FALLBACK_COLOR ??
+                    '#7C3AED',
                 googleUser: null,
                 supabaseUser: null,
                 metalayerUser: null,
@@ -121,8 +266,8 @@ export class BootController {
                 chatData: [],
                 currentUrlData: null,
                 extension: {
-                    isInitialized: true
-                }
+                    isInitialized: true,
+                },
             });
         }
         catch (error) {
@@ -136,17 +281,17 @@ export class BootController {
         }
         lifecycle.register('sidepanel', {
             init: () => true,
-            destroy: () => true
+            destroy: () => true,
         }, {
             dependencies: ['StateManager'],
-            autoInitialize: true
+            autoInitialize: true,
         });
         lifecycle.register('chat', {
             initialize: () => true,
-            destroy: () => true
+            destroy: () => true,
         }, {
             dependencies: ['sidepanel'],
-            autoInitialize: true
+            autoInitialize: true,
         });
     }
     async initializeAuthFlow() {
@@ -154,14 +299,21 @@ export class BootController {
         // ES6 pattern: Use imported function instead of window
         // TODO: Import initializeRealGoogleAuth from AuthModule instead of window
         // ACCEPTABLE: Optional check for backward compatibility during migration
-        const win = typeof window !== 'undefined' ? window : null;
+        const win = typeof window !== 'undefined'
+            ? window
+            : null;
         if (win && typeof win.initializeRealGoogleAuth === 'function') {
             try {
-                this.graph.logger?.debug?.('BOOT_CTRL_INIT_REAL_GOOGLE_AUTH', { message: 'Initializing real Google auth' });
+                this.graph.logger?.debug?.('BOOT_CTRL_INIT_REAL_GOOGLE_AUTH', {
+                    message: 'Initializing real Google auth',
+                });
                 win.initializeRealGoogleAuth();
             }
             catch (error) {
-                this.graph.logger?.error?.('BOOT_CTRL_AUTH_INIT_ERROR', { error, message: 'Failed to initialize real Google auth' });
+                this.graph.logger?.error?.('BOOT_CTRL_AUTH_INIT_ERROR', {
+                    error,
+                    message: 'Failed to initialize real Google auth',
+                });
             }
         }
         // ROOT CAUSE FIX: Intercept setState for currentUser to catch any direct sets
@@ -217,7 +369,7 @@ export class BootController {
                             googleId: user.id,
                             email: user.email,
                             fix: 'real-google-auth.js should use window.handleUserChange() instead',
-                            stackTrace: new Error().stack?.split('\n').slice(0, 5).join('\n')
+                            stackTrace: new Error().stack?.split('\n').slice(0, 5).join('\n'),
                         });
                         // Redirect to proper flow - this will do UUID lookup and set correctly
                         await self.handleUserChange(user);
@@ -236,7 +388,7 @@ export class BootController {
             hasUser: !!user,
             userId: user?.id,
             userEmail: user?.email,
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
         });
         if (!user) {
             await this.graph.stateManager.setState('currentUser', null);
@@ -251,7 +403,7 @@ export class BootController {
             userId: user.id,
             isUUID: isUUID,
             hasEmail: !!user.email,
-            hasSupabaseService: !!this.graph.supabaseService
+            hasSupabaseService: !!this.graph.supabaseService,
         });
         // If user.id is Google ID or invalid, look up AppUser UUID from email
         if (!isUUID && user.email) {
@@ -259,7 +411,7 @@ export class BootController {
                 this.graph.logger?.error?.('AUTH_UUID_FIX', {
                     message: 'CRITICAL: supabaseService not available - cannot lookup AppUser UUID',
                     email: user.email,
-                    userId: user.id
+                    userId: user.id,
                 });
                 return; // Cannot proceed without supabaseService
             }
@@ -269,7 +421,7 @@ export class BootController {
                     this.graph.logger?.error?.('AUTH_UUID_FIX', {
                         message: 'CRITICAL: Supabase client not available - cannot lookup AppUser UUID',
                         email: user.email,
-                        userId: user.id
+                        userId: user.id,
                     });
                     return; // Cannot proceed without client
                 }
@@ -278,21 +430,21 @@ export class BootController {
                     this.graph.logger?.error?.('AUTH_UUID_FIX', {
                         message: 'CRITICAL: Invalid Supabase client - missing from method',
                         email: user.email,
-                        userId: user.id
+                        userId: user.id,
                     });
                     return; // Cannot proceed without valid client
                 }
                 this.graph.logger?.info?.('AUTH_UUID_FIX', {
                     message: 'Looking up AppUser UUID from email',
                     email: user.email,
-                    googleId: user.id
+                    googleId: user.id,
                 });
                 // Type guard ensures client has 'from' method, so we can safely cast to our interface
                 const supabaseClient = client;
                 const { data, error } = await supabaseClient
                     .from('AppUser')
                     .select('id')
-                    .eq('email', user.email)
+                    .eq('email', user.email) // EXCEPTION: Email lookup for UUID conversion only
                     .single();
                 if (error) {
                     this.graph.logger?.error?.('AUTH_UUID_FIX', {
@@ -301,7 +453,7 @@ export class BootController {
                         error: error.message,
                         errorCode: error.code,
                         errorDetails: error.details,
-                        currentUserId: user.id
+                        currentUserId: user.id,
                     });
                     return; // Don't set user with invalid ID
                 }
@@ -310,7 +462,7 @@ export class BootController {
                         message: 'CRITICAL: AppUser not found in database for email',
                         email: user.email,
                         currentUserId: user.id,
-                        dataReturned: !!data
+                        dataReturned: !!data,
                     });
                     return; // Don't set user with invalid ID
                 }
@@ -325,7 +477,7 @@ export class BootController {
                     message: '✅ Replaced Google ID with AppUser UUID - user.id is now UUID',
                     email: user.email,
                     appUserUUID: user.id,
-                    googleId: googleId
+                    googleId: googleId,
                 });
             }
             catch (error) {
@@ -334,7 +486,7 @@ export class BootController {
                     errorStack: error instanceof Error ? error.stack : undefined,
                     message: 'CRITICAL: Exception looking up AppUser UUID',
                     email: user.email,
-                    userId: user.id
+                    userId: user.id,
                 });
                 // Don't set user with invalid ID
                 return;
@@ -346,7 +498,7 @@ export class BootController {
                 message: 'CRITICAL: user.id is not a valid UUID - cannot proceed',
                 userId: user.id,
                 email: user.email,
-                afterLookup: true
+                afterLookup: true,
             });
             return; // Don't set user with invalid ID
         }
@@ -354,17 +506,17 @@ export class BootController {
         this.graph.logger?.info?.('AUTH_UUID_FIX', {
             message: 'Setting currentUser in state with AppUser UUID',
             appUserUUID: user.id,
-            email: user.email
+            email: user.email,
         });
         await this.graph.stateManager.setState('currentUser', user);
         // CRITICAL: Verify the user was set correctly
-        const verifyUser = await this.graph.stateManager.getState('currentUser');
+        const verifyUser = (await this.graph.stateManager.getState('currentUser'));
         if (verifyUser?.id !== user.id) {
             this.graph.logger?.error?.('AUTH_UUID_FIX', {
                 message: 'CRITICAL: User ID mismatch after setting in state',
                 expectedUUID: user.id,
                 actualId: verifyUser?.id,
-                email: user.email
+                email: user.email,
             });
         }
         // REFACTOR PHASE 1: Single Initialization Point
@@ -378,7 +530,7 @@ export class BootController {
                 if (!user.id) {
                     this.graph.logger?.error?.('VISIBILITY_INIT', {
                         message: 'CRITICAL: user.id is missing after UUID lookup',
-                        userEmail: user.email
+                        userEmail: user.email,
                     });
                     return; // Cannot initialize without UUID
                 }
@@ -389,7 +541,7 @@ export class BootController {
                     this.graph.logger?.info?.('VISIBILITY_INIT', {
                         message: 'VisibilityManager initialized successfully (single initialization point)',
                         appUserUUID: user.id,
-                        userEmail: user.email
+                        userEmail: user.email,
                     });
                 }
                 catch (error) {
@@ -397,7 +549,7 @@ export class BootController {
                         error,
                         message: 'Failed to initialize VisibilityManager in handleUserChange',
                         appUserUUID: user.id,
-                        userEmail: user.email
+                        userEmail: user.email,
                     });
                     // Don't throw - let the system continue, but VisibilityManager won't work
                 }
@@ -406,7 +558,7 @@ export class BootController {
                 // Already initialized - this is fine, just log for debugging
                 this.graph.logger?.debug?.('VISIBILITY_INIT', {
                     message: 'VisibilityManager already initialized',
-                    currentUserEmail: status.currentUserEmail
+                    currentUserId: status.currentUserId,
                 });
             }
         }
@@ -425,11 +577,22 @@ export class BootController {
             }
             else if (typeof chrome !== 'undefined' && chrome.tabs) {
                 try {
-                    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+                    const tabs = await new Promise((resolve, reject) => {
+                        chrome.tabs.query({ active: true, currentWindow: true }, (result) => {
+                            if (chrome.runtime.lastError) {
+                                reject(new Error(chrome.runtime.lastError.message));
+                            }
+                            else {
+                                resolve(result);
+                            }
+                        });
+                    });
                     if (tabs && tabs.length > 0 && tabs[0]?.url) {
                         const tabUrl = tabs[0].url;
                         // Only use non-chrome URLs
-                        if (tabUrl && !tabUrl.startsWith('chrome://') && !tabUrl.startsWith('chrome-extension://')) {
+                        if (tabUrl &&
+                            !tabUrl.startsWith('chrome://') &&
+                            !tabUrl.startsWith('chrome-extension://')) {
                             currentUrl = tabUrl;
                         }
                     }
@@ -452,11 +615,13 @@ export class BootController {
             else if (currentUrl && this.options.loadChatHistory) {
                 // Fallback: direct call with tab check
                 const win = typeof window !== 'undefined' ? window : null;
-                const getActiveTabFn = win?.getActiveSidepanelTab;
-                const getActiveTab = getActiveTabFn || (() => {
-                    const activeTab = document.querySelector('.main-nav-tab.active');
-                    return activeTab?.getAttribute('data-tab') || null;
-                });
+                const getActiveTabFn = win
+                    ?.getActiveSidepanelTab;
+                const getActiveTab = getActiveTabFn ||
+                    (() => {
+                        const activeTab = document.querySelector('.main-nav-tab.active');
+                        return activeTab?.getAttribute('data-tab') || null;
+                    });
                 const activeTab = typeof getActiveTab === 'function' ? getActiveTab() : null;
                 if (activeTab === 'discuss-tab' || activeTab === null) {
                     this.graph.logger?.debug?.('BOOT_CTRL_LOAD_MESSAGES_FALLBACK', { currentUrl, activeTab });
@@ -464,14 +629,17 @@ export class BootController {
                         await this.options.loadChatHistory(currentUrl);
                     }
                     catch (error) {
-                        this.graph.logger?.error?.('BOOT_CTRL_LOAD_MESSAGES_FALLBACK_ERROR', { error, currentUrl });
+                        this.graph.logger?.error?.('BOOT_CTRL_LOAD_MESSAGES_FALLBACK_ERROR', {
+                            error,
+                            currentUrl,
+                        });
                     }
                 }
             }
             else {
                 this.graph.logger?.debug?.('BOOT_CTRL_NO_URL_YET', {
                     hasCurrentUrlData: !!currentUrlData,
-                    willBeHandledByTabController: true
+                    willBeHandledByTabController: true,
                 });
             }
         }
@@ -485,21 +653,139 @@ export class BootController {
     }
     async ensureCommunitiesInitialized() {
         try {
-            if (this.graph.communitiesModule && typeof this.graph.communitiesModule.initialize === 'function') {
-                await this.graph.communitiesModule.initialize();
-            }
+            // Load communities from API and update UI
+            await this.loadAndInitializeCommunities();
         }
         catch (error) {
             this.graph.logger?.warn?.('COMMUNITIES_INIT', { error });
         }
     }
+    async loadAndInitializeCommunities() {
+        try {
+            // Import required modules
+            const { api } = await import('../../features/APIModule.js');
+            const { updateCommunityDropdown } = await import('../../features/CommunityHelpers.js');
+            // Get communities from API
+            const response = await api.getCommunities();
+            if (response && response.data && response.data.communities) {
+                const communities = response.data.communities.map((c) => ({
+                    id: c.id,
+                    name: c.name,
+                    description: c.description,
+                    logoUrl: c.logoUrl,
+                    memberCount: c.memberCount,
+                    isActive: c.isActive
+                }));
+                // Store communities in state
+                this.graph.stateManager.setState('communities', communities);
+                // Update the community dropdown UI
+                await updateCommunityDropdown(communities);
+                this.graph.logger?.info?.('COMMUNITIES_INIT', {
+                    message: `Loaded ${communities.length} communities`,
+                    count: communities.length
+                });
+            }
+        }
+        catch (error) {
+            this.graph.logger?.error?.('COMMUNITIES_INIT', {
+                message: 'Failed to load communities',
+                error: error instanceof Error ? error.message : String(error)
+            });
+        }
+    }
+    /**
+     * Check if visibility tab was the previous tab and load it on startup
+     * CRITICAL FIX: Only loads visibility if it was the last active tab
+     */
+    async checkAndLoadVisibilityTab() {
+        try {
+            // Wait for TabManager to be ready
+            await this._waitForTabManager();
+            // Get TabManager state
+            const win = typeof window !== 'undefined' ? window : null;
+            const tabContextManager = win?.tabContextManager;
+            if (!tabContextManager || typeof tabContextManager.getState !== 'function') {
+                this.graph.logger?.debug?.('BOOT_CTRL_VISIBILITY_CHECK', {
+                    message: 'TabManager not available yet',
+                });
+                return;
+            }
+            const tabState = tabContextManager.getState();
+            const previousTab = tabState.previousTab;
+            const currentTab = tabState.currentTab;
+            // Only load visibility if it was the previous tab (user had it open last time)
+            if (previousTab === 'visibility-tab' || currentTab === 'visibility-tab') {
+                this.graph.logger?.debug?.('BOOT_CTRL_VISIBILITY_CHECK', {
+                    previousTab,
+                    currentTab,
+                    shouldLoad: true,
+                });
+                // Get current pageId
+                const currentUrlData = this.graph.stateManager.getState('currentUrlData');
+                const pageId = currentUrlData?.pageId || null;
+                if (pageId && this.options.refreshVisibility) {
+                    this.graph.logger?.debug?.('BOOT_CTRL_LOADING_VISIBILITY', { pageId });
+                    try {
+                        await this.options.refreshVisibility(pageId);
+                        this.graph.logger?.debug?.('BOOT_CTRL_VISIBILITY_LOADED', { pageId });
+                    }
+                    catch (error) {
+                        this.graph.logger?.error?.('BOOT_CTRL_VISIBILITY_LOAD_ERROR', { error, pageId });
+                    }
+                }
+                else {
+                    this.graph.logger?.warn?.('BOOT_CTRL_VISIBILITY_NO_PAGEID', {
+                        hasPageId: !!pageId,
+                        hasRefreshFunction: !!this.options.refreshVisibility,
+                    });
+                }
+            }
+            else {
+                this.graph.logger?.debug?.('BOOT_CTRL_VISIBILITY_CHECK', {
+                    previousTab,
+                    currentTab,
+                    shouldLoad: false,
+                    message: 'Visibility tab was not the previous tab, skipping load',
+                });
+            }
+        }
+        catch (error) {
+            this.graph.logger?.error?.('BOOT_CTRL_VISIBILITY_CHECK_ERROR', { error });
+        }
+    }
+    /**
+     * Handle tab content requests with coordination to prevent double loading
+     */
+    async handleTabContentRequest(tabId, options = {}) {
+        try {
+            const win = typeof window !== 'undefined' ? window : null;
+            const tabManager = win?.tabContextManager;
+            if (tabManager?.performTabOperation) {
+                this.graph.logger?.debug?.('BOOT_CTRL_TAB_CONTENT_REQUEST', {
+                    tabId,
+                    operation: options.operation || 'switch',
+                    coordinated: true
+                });
+                await tabManager.performTabOperation(tabId, {
+                    operation: options.operation || 'switch',
+                    skipThemeChanges: options.skipThemeChanges || false
+                });
+            }
+            else {
+                this.graph.logger?.warn?.('BOOT_CTRL_TAB_CONTENT_REQUEST_FALLBACK', {
+                    tabId,
+                    message: 'TabManager coordination not available, operation not performed'
+                });
+            }
+        }
+        catch (error) {
+            this.graph.logger?.error?.('BOOT_CTRL_TAB_CONTENT_REQUEST_ERROR', { error, tabId });
+        }
+    }
     /**
      * Wait for TabManager to initialize
      * Ensures tab state is set before message loading
-     * @deprecated Not currently used but kept for potential future use
      */
-    // @ts-ignore - Unused method kept for potential future use
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     async _waitForTabManager() {
         return new Promise((resolve) => {
             // Check if already initialized
@@ -514,10 +800,13 @@ export class BootController {
             }
             // Wait for initialization event (max 2 seconds)
             let resolved = false;
+            // Legitimate timeout fallback for TabManager wait - not a race condition workaround
             const timeout = setTimeout(() => {
                 if (!resolved) {
                     resolved = true;
-                    this.graph.logger?.warn?.('TAB_MANAGER_WAIT', { message: 'Timeout waiting for TabManager, proceeding anyway' });
+                    this.graph.logger?.warn?.('TAB_MANAGER_WAIT', {
+                        message: 'Timeout waiting for TabManager, proceeding anyway',
+                    });
                     resolve();
                 }
             }, 2000);
@@ -532,7 +821,8 @@ export class BootController {
                 }
             };
             if (typeof document !== 'undefined') {
-                document.addEventListener('tabManager:initialized', handler, { once: true });
+                const eventManager = createEventListenerManager();
+                eventManager.once(document, 'tabManager:initialized', handler);
             }
             else {
                 // No document, resolve immediately
@@ -554,8 +844,8 @@ export class BootController {
     }
     async handlePendingContent() {
         try {
-            const messageContent = await this.graph.stateManager.getState('pendingMessageContent');
-            const visibilityContent = await this.graph.stateManager.getState('pendingVisibilityContent');
+            const messageContent = (await this.graph.stateManager.getState('pendingMessageContent'));
+            const visibilityContent = (await this.graph.stateManager.getState('pendingVisibilityContent'));
             if (messageContent) {
                 const textarea = document.getElementById('chat-textarea');
                 if (textarea) {
@@ -595,7 +885,7 @@ export class BootController {
                 'pendingMessageContent',
                 'pendingMessageUri',
                 'pendingVisibilityContent',
-                'pendingVisibilityUri'
+                'pendingVisibilityUri',
             ];
             for (const key of keys) {
                 const value = await this.graph.stateManager.getState(key);
@@ -622,7 +912,6 @@ export class BootController {
      * @deprecated Use getActiveSidepanelTab from utils/getActiveSidepanelTab.js instead
      */
     // @ts-ignore - Unused method kept for potential future use
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     _getActiveSidepanelTab() {
         // Implementation kept for potential future use
         if (typeof document === 'undefined') {
@@ -643,3 +932,4 @@ export class BootController {
         return tabId || null;
     }
 }
+//# sourceMappingURL=BootController.js.map

@@ -4,7 +4,7 @@
 
 import { Logger } from './Logger.js';
 import { getState } from '../core/StateManager.js';
-import { AVATAR_FALLBACK_COLOR } from './ConfigManager.js';
+import { AVATAR_FALLBACK_COLOR } from '../core/ConfigModule.js';
 import { waitForCondition } from './AsyncCoordination.js';
 
 interface MessagePost {

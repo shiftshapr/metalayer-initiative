@@ -1,4 +1,0 @@
-/**
- * Subscription Type Definitions
- */
-export {};

@@ -3,10 +3,15 @@
  * Manages tab state, order, visibility, and tracking (currentTab/previousTab)
  */
 
-import { TabManagerState, TabConfig, DEFAULT_STATE } from './types.js';
+import { TabManagerState, DEFAULT_STATE } from './types';
+import { TabConfig } from '../../types/index.js';
 import { Logger } from '../../utils/Logger.js';
 import { handleError } from '../../utils/ErrorHandler.js';
-import { userPreferencesManager, UserPreferencesManager } from '../../utils/UserPreferencesManager.js';
+import { SafeJSON } from '../../utils/SafeJSON.js';
+import {
+  userPreferencesManager,
+  UserPreferencesManager,
+} from '../../utils/UserPreferencesManager.js';
 
 export class TabConfiguration {
   private state: TabManagerState;
@@ -28,6 +33,75 @@ export class TabConfiguration {
   }
 
   /**
+   * Add default built-in tabs
+   */
+  private async addDefaultTabs(): Promise<void> {
+    const defaultTabs: TabConfig[] = [
+      {
+        id: 'discuss-tab',
+        label: 'Discuss',
+        icon: '💬',
+        visible: true,
+        builtIn: true,
+        order: 0,
+        tabContentId: 'discuss-tab'
+      },
+      {
+        id: 'visibility-tab',
+        label: 'Visibility',
+        icon: '👁️',
+        visible: true,
+        builtIn: true,
+        order: 1,
+        tabContentId: 'visibility-tab'
+      },
+      {
+        id: 'rooms-tab',
+        label: 'Rooms',
+        icon: '🏠',
+        visible: true,
+        builtIn: true,
+        order: 2,
+        tabContentId: 'rooms-tab'
+      },
+      {
+        id: 'people-tab',
+        label: 'People',
+        icon: '👥',
+        visible: true,
+        builtIn: true,
+        order: 3,
+        tabContentId: 'people-tab'
+      },
+      {
+        id: 'agent-tab',
+        label: 'Agent',
+        icon: '🤖',
+        visible: true,
+        builtIn: true,
+        order: 4,
+        tabContentId: 'agent-tab'
+      },
+      {
+        id: 'settings-tab',
+        label: 'Settings',
+        icon: '⚙️',
+        visible: true,
+        builtIn: true,
+        order: 5,
+        tabContentId: 'settings-tab'
+      }
+    ];
+
+    for (const tab of defaultTabs) {
+      this.state.tabs.push(tab);
+    }
+
+    this.state.visibleTabCount = defaultTabs.length;
+    this.logger.debug?.(`✅ TabConfiguration: Added ${defaultTabs.length} default tabs`);
+  }
+
+  /**
    * Initialize configuration from storage or use defaults
    */
   async initialize(): Promise<void> {
@@ -43,8 +117,10 @@ export class TabConfiguration {
         this.logger.debug?.('✅ TabConfiguration: Loaded from storage');
       } else {
         this.state = { ...DEFAULT_STATE };
+        // Add default tabs
+        await this.addDefaultTabs();
         await this.persistState();
-        this.logger.debug?.('✅ TabConfiguration: Using default state');
+        this.logger.debug?.('✅ TabConfiguration: Using default state with tabs');
       }
     } catch (error: unknown) {
       this.logger.error?.('❌ TabConfiguration: Failed to initialize', error);
@@ -72,24 +148,26 @@ export class TabConfiguration {
   async switchToTab(tabId: string): Promise<void> {
     try {
       const currentTab = this.state.currentTab;
-      
+
       // Update state: previousTab gets current currentTab, currentTab gets new tabId
-      this.state.previousTab = currentTab;  // Current becomes previous
-      this.state.currentTab = tabId;         // New tab becomes current
-      
+      this.state.previousTab = currentTab; // Current becomes previous
+      this.state.currentTab = tabId; // New tab becomes current
+
       // Persist to storage
       await this.persistState();
-      
+
       // Emit event for other modules
       this.emit('tabSwitched', {
         currentTab: tabId,
-        previousTab: currentTab
+        previousTab: currentTab,
       });
-      
-      this.logger.debug?.(`✅ TabConfiguration: Switched to tab ${tabId} (previous: ${currentTab})`);
+
+      this.logger.debug?.(
+        `✅ TabConfiguration: Switched to tab ${tabId} (previous: ${currentTab})`
+      );
     } catch (error: unknown) {
       handleError(error, {
-        context: { operation: 'switchToTab', component: 'TabConfiguration', tabId }
+        context: { operation: 'switchToTab', component: 'TabConfiguration', tabId },
       });
     }
   }
@@ -131,28 +209,30 @@ export class TabConfiguration {
       }
 
       // Get all tabs sorted by current order
-      const sortedTabs = [...this.state.tabs].sort((a: TabConfig, b: TabConfig) => (a.order || 0) - (b.order || 0));
-      
+      const sortedTabs = [...this.state.tabs].sort(
+        (a: TabConfig, b: TabConfig) => (a.order || 0) - (b.order || 0)
+      );
+
       // Remove the dragged tab from its current position
-      const draggedTab = sortedTabs.find(t => t.id === tabId);
+      const draggedTab = sortedTabs.find((t) => t.id === tabId);
       if (!draggedTab) return;
-      
+
       const filteredTabs = sortedTabs.filter((t: TabConfig) => t.id !== tabId);
-      
+
       // Insert at new position
       filteredTabs.splice(newOrder, 0, draggedTab);
-      
+
       // Update order values
       filteredTabs.forEach((t: TabConfig, index: number) => {
         t.order = index;
       });
-      
+
       this.state.tabs = filteredTabs;
       await this.persistState();
       this.emit('tabOrderChanged', { tabId, newOrder });
     } catch (error: unknown) {
       handleError(error, {
-        context: { operation: 'updateTabOrder', component: 'TabConfiguration', tabId, newOrder }
+        context: { operation: 'updateTabOrder', component: 'TabConfiguration', tabId, newOrder },
       });
     }
   }
@@ -173,7 +253,7 @@ export class TabConfiguration {
       this.emit('tabVisibilityChanged', { tabId, visible });
     } catch (error: unknown) {
       handleError(error, {
-        context: { operation: 'setTabVisibility', component: 'TabConfiguration', tabId, visible }
+        context: { operation: 'setTabVisibility', component: 'TabConfiguration', tabId, visible },
       });
     }
   }
@@ -193,7 +273,7 @@ export class TabConfiguration {
       this.emit('visibleTabCountChanged', { count });
     } catch (error: unknown) {
       handleError(error, {
-        context: { operation: 'setVisibleTabCount', component: 'TabConfiguration', count }
+        context: { operation: 'setVisibleTabCount', component: 'TabConfiguration', count },
       });
     }
   }
@@ -212,12 +292,12 @@ export class TabConfiguration {
       // Set order to end of list
       tab.order = this.state.tabs.length;
       this.state.tabs.push(tab);
-      
+
       await this.persistState();
       this.emit('tabAdded', { tab });
     } catch (error: unknown) {
       handleError(error, {
-        context: { operation: 'addTab', component: 'TabConfiguration', tabId: tab.id }
+        context: { operation: 'addTab', component: 'TabConfiguration', tabId: tab.id },
       });
     }
   }
@@ -248,7 +328,7 @@ export class TabConfiguration {
       this.emit('tabRemoved', { tabId });
     } catch (error: unknown) {
       handleError(error, {
-        context: { operation: 'removeTab', component: 'TabConfiguration', tabId }
+        context: { operation: 'removeTab', component: 'TabConfiguration', tabId },
       });
     }
   }
@@ -270,13 +350,15 @@ export class TabConfiguration {
         const stored = await this.preferencesManager.getPreference('tabConfiguration');
         if (stored && typeof stored === 'string') {
           // Parse JSON string if stored as string
-          try {
-            const parsed = JSON.parse(stored) as unknown;
+          const parsed = SafeJSON.parse(stored, null, 'tab-configuration');
+          if (parsed !== null) {
             const loaded = this.validateAndMergeState(parsed);
             this.logger.debug?.('✅ TabConfiguration: Loaded from preferences manager');
             return loaded;
-          } catch (parseError) {
-            this.logger.warn?.('⚠️ TabConfiguration: Failed to parse stored configuration', parseError);
+          } else {
+            this.logger.warn?.(
+              '⚠️ TabConfiguration: Failed to parse stored configuration, using defaults'
+            );
           }
         } else if (stored && typeof stored === 'object') {
           // Validate and merge with defaults
@@ -285,14 +367,17 @@ export class TabConfiguration {
           return loaded;
         }
       } catch (error: unknown) {
-        this.logger.warn?.('⚠️ TabConfiguration: Failed to load from preferences manager, falling back to chrome.storage', error);
+        this.logger.warn?.(
+          '⚠️ TabConfiguration: Failed to load from preferences manager, falling back to chrome.storage',
+          error
+        );
       }
     }
 
     // Fallback to chrome.storage.local
     return new Promise((resolve) => {
       if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-        chrome.storage.local.get([this.storageKey], (result) => {
+        chrome.storage.local.get([this.storageKey], (result: Record<string, unknown>) => {
           if (result[this.storageKey]) {
             const loaded = this.validateAndMergeState(result[this.storageKey] as TabManagerState);
             resolve(loaded);
@@ -318,25 +403,28 @@ export class TabConfiguration {
     const storedObj = stored as Record<string, unknown>;
 
     // Merge with defaults to ensure all required fields exist
-    const storedTabs = storedObj.tabs && Array.isArray(storedObj.tabs) ? storedObj.tabs as TabManagerState['tabs'] : null;
-    
+    const storedTabs =
+      storedObj.tabs && Array.isArray(storedObj.tabs)
+        ? (storedObj.tabs as TabManagerState['tabs'])
+        : null;
+
     // CRITICAL FIX: Merge stored tabs with default tabs to ensure all default tabs are present
     // This fixes the issue where stored state might be missing Rooms, People, Timelines, Settings
     let mergedTabs: TabConfig[] = DEFAULT_STATE.tabs;
     if (storedTabs && storedTabs.length > 0) {
       // Start with default tabs
       mergedTabs = [...DEFAULT_STATE.tabs];
-      
+
       // Create a map of stored tabs by ID for quick lookup
       const storedTabsMap = new Map<string, TabConfig>();
-      storedTabs.forEach(tab => {
+      storedTabs.forEach((tab: unknown) => {
         if (tab && typeof tab === 'object' && 'id' in tab) {
-          storedTabsMap.set(tab.id, tab as TabConfig);
+          storedTabsMap.set(String(tab.id), tab as TabConfig);
         }
       });
-      
+
       // Merge: update default tabs with stored values, preserve stored tabs not in defaults
-      mergedTabs = mergedTabs.map(defaultTab => {
+      mergedTabs = mergedTabs.map((defaultTab) => {
         const storedTab = storedTabsMap.get(defaultTab.id);
         if (storedTab) {
           // Merge stored tab with default (stored values take precedence, but keep default structure)
@@ -345,32 +433,45 @@ export class TabConfiguration {
             ...storedTab,
             id: defaultTab.id, // Ensure ID matches
             tabContentId: storedTab.tabContentId || defaultTab.tabContentId,
-            label: storedTab.label || defaultTab.label
+            label: storedTab.label || defaultTab.label,
           };
         }
         return defaultTab;
       });
-      
+
       // Add any stored tabs that aren't in defaults (e.g., SDK apps)
-      storedTabs.forEach(storedTab => {
+      storedTabs.forEach((storedTab: unknown) => {
         if (storedTab && typeof storedTab === 'object' && 'id' in storedTab) {
           const tabId = (storedTab as TabConfig).id;
-          if (!DEFAULT_STATE.tabs.find(t => t.id === tabId)) {
+          if (!DEFAULT_STATE.tabs.find((t: TabConfig) => t.id === tabId)) {
             mergedTabs.push(storedTab as TabConfig);
           }
         }
       });
     }
-    
+
     const merged: TabManagerState = {
       ...DEFAULT_STATE,
       ...storedObj,
       tabs: mergedTabs,
-      currentTab: (storedObj.currentTab && typeof storedObj.currentTab === 'string') ? storedObj.currentTab : DEFAULT_STATE.currentTab,
-      previousTab: (storedObj.previousTab !== undefined && (storedObj.previousTab === null || typeof storedObj.previousTab === 'string')) ? storedObj.previousTab : DEFAULT_STATE.previousTab,
-      visibleTabCount: (typeof storedObj.visibleTabCount === 'number') ? storedObj.visibleTabCount : DEFAULT_STATE.visibleTabCount,
-      userTabLimit: (typeof storedObj.userTabLimit === 'number') ? storedObj.userTabLimit : DEFAULT_STATE.userTabLimit,
-      isModalOpen: (typeof storedObj.isModalOpen === 'boolean') ? storedObj.isModalOpen : false
+      currentTab:
+        storedObj.currentTab && typeof storedObj.currentTab === 'string'
+          ? storedObj.currentTab
+          : DEFAULT_STATE.currentTab,
+      previousTab:
+        storedObj.previousTab !== undefined &&
+        (storedObj.previousTab === null || typeof storedObj.previousTab === 'string')
+          ? storedObj.previousTab
+          : DEFAULT_STATE.previousTab,
+      visibleTabCount:
+        typeof storedObj.visibleTabCount === 'number'
+          ? storedObj.visibleTabCount
+          : DEFAULT_STATE.visibleTabCount,
+      userTabLimit:
+        typeof storedObj.userTabLimit === 'number'
+          ? storedObj.userTabLimit
+          : DEFAULT_STATE.userTabLimit,
+      isModalOpen: typeof storedObj.isModalOpen === 'boolean' ? storedObj.isModalOpen : false,
     };
 
     return merged;
@@ -384,11 +485,18 @@ export class TabConfiguration {
     if (this.preferencesManager) {
       try {
         // Use savePreferences for complex objects, or serialize to JSON string
-        await this.preferencesManager.savePreferences({ tabConfiguration: JSON.stringify(this.state) });
-        this.logger.debug?.('✅ TabConfiguration: Saved to preferences manager (chrome.storage + database)');
+        await this.preferencesManager.savePreferences({
+          tabConfiguration: JSON.stringify(this.state),
+        });
+        this.logger.debug?.(
+          '✅ TabConfiguration: Saved to preferences manager (chrome.storage + database)'
+        );
         return;
       } catch (error: unknown) {
-        this.logger.warn?.('⚠️ TabConfiguration: Failed to save via preferences manager, falling back to chrome.storage', error);
+        this.logger.warn?.(
+          '⚠️ TabConfiguration: Failed to save via preferences manager, falling back to chrome.storage',
+          error
+        );
       }
     }
 
@@ -424,7 +532,7 @@ export class TabConfiguration {
   }
 
   private emit(event: string, data: unknown): void {
-    this.eventListeners.get(event)?.forEach(callback => {
+    this.eventListeners.get(event)?.forEach((callback) => {
       try {
         callback(data);
       } catch (error: unknown) {
@@ -433,4 +541,3 @@ export class TabConfiguration {
     });
   }
 }
-

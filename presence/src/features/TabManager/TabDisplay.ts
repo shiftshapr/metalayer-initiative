@@ -66,7 +66,7 @@ export class TabDisplay {
     button.setAttribute('data-tab', tab.id);
     button.setAttribute('role', 'tab');
     button.setAttribute('aria-selected', String(isActive));
-    button.setAttribute('aria-controls', tab.tabContentId);
+    button.setAttribute('aria-controls', tab.tabContentId || tab.id);
     button.setAttribute('aria-label', `${tab.label} tab${isActive ? ', active' : ''}`);
     if (isActive) {
       button.classList.add('active');

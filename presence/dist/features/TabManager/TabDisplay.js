@@ -59,7 +59,7 @@ export class TabDisplay {
         button.setAttribute('data-tab', tab.id);
         button.setAttribute('role', 'tab');
         button.setAttribute('aria-selected', String(isActive));
-        button.setAttribute('aria-controls', tab.tabContentId);
+        button.setAttribute('aria-controls', tab.tabContentId || tab.id);
         button.setAttribute('aria-label', `${tab.label} tab${isActive ? ', active' : ''}`);
         if (isActive) {
             button.classList.add('active');
@@ -90,7 +90,7 @@ export class TabDisplay {
             if (this.onTabClick) {
                 this.onTabClick(tab.id);
             }
-        }, true);
+        }, { capture: true });
         return button;
     }
     /**
@@ -133,7 +133,7 @@ export class TabDisplay {
             if (this.onTabClick) {
                 this.onTabClick('manage-tab');
             }
-        }, true);
+        }, { capture: true });
         if (this.container) {
             this.container.appendChild(button);
         }

@@ -34,7 +34,6 @@ declare const window: Window & {
 };
 
 class CursorVisibilityModule {
-  private logger: Logger;
   private isLive: boolean = false;
   private currentPosition: CursorPosition | null = null;
   private isParked: boolean = false;
@@ -44,23 +43,19 @@ class CursorVisibilityModule {
   private pageId: string | null = null;
   private mouseMoveHandler: ((e: MouseEvent) => void) | null = null;
 
-  constructor() {
-    this.logger = new Logger();
-  }
-
   /**
    * Initialize cursor visibility module
    */
   async initialize(): Promise<void> {
-    this.logger.log('INFO', 'Initializing CursorVisibilityModule...');
-    
+    Logger.info('Initializing CursorVisibilityModule...', null, 'cursor');
+
     // Get current page ID
     this.pageId = this.getCurrentPageId();
-    
+
     // Set up mouse tracking
     this.setupMouseTracking();
-    
-    this.logger.log('INFO', 'CursorVisibilityModule initialized');
+
+    Logger.info('CursorVisibilityModule initialized', null, 'cursor');
   }
 
   /**
@@ -68,12 +63,12 @@ class CursorVisibilityModule {
    */
   async goLive(): Promise<void> {
     if (this.isLive) {
-      this.logger.log('WARN', 'Already live');
+      Logger.warn('Already live', null, 'cursor');
       return;
     }
 
     this.isLive = true;
-    this.logger.log('INFO', 'Going live - cursor visibility enabled');
+    Logger.info('Going live - cursor visibility enabled', null, 'cursor');
     
     // Notify server
     await this.notifyServer('CURSOR_LIVE_START', {
@@ -93,14 +88,14 @@ class CursorVisibilityModule {
    */
   async stopLive(): Promise<void> {
     if (!this.isLive) {
-      this.logger.log('WARN', 'Not currently live');
+      Logger.warn('Not currently live', null, 'cursor');
       return;
     }
 
     this.isLive = false;
     this.isParked = false;
     this.parkedPosition = null;
-    this.logger.log('INFO', 'Stopped live - cursor visibility disabled');
+    Logger.info('Stopped live - cursor visibility disabled', null, 'cursor');
 
     // Notify server
     await this.notifyServer('CURSOR_LIVE_STOP', {
@@ -120,14 +115,14 @@ class CursorVisibilityModule {
    */
   async parkCursor(): Promise<void> {
     if (!this.isLive) {
-      this.logger.log('WARN', 'Must be live to park cursor');
+      Logger.warn('Must be live to park cursor', null, 'cursor');
       return;
     }
 
     if (this.currentPosition) {
       this.isParked = true;
       this.parkedPosition = { ...this.currentPosition };
-      this.logger.log('INFO', 'Cursor parked at position', this.parkedPosition);
+      Logger.info('Cursor parked at position', this.parkedPosition, 'cursor');
 
       // Notify server
       await this.notifyServer('CURSOR_PARKED', {
@@ -148,7 +143,7 @@ class CursorVisibilityModule {
 
     this.isParked = false;
     this.parkedPosition = null;
-    this.logger.log('INFO', 'Cursor unparked');
+    Logger.info('Cursor unparked', null, 'cursor');
 
     // Notify server
     await this.notifyServer('CURSOR_UNPARKED', {
@@ -166,7 +161,7 @@ class CursorVisibilityModule {
     }
 
     this.subscribers.add(userId);
-    this.logger.log('INFO', `Subscribed to cursor: ${userId}`);
+    Logger.info(`Subscribed to cursor: ${userId}`, null, 'cursor');
 
     // Notify server
     await this.notifyServer('CURSOR_SUBSCRIBE', {
@@ -185,7 +180,7 @@ class CursorVisibilityModule {
     }
 
     this.subscribers.delete(userId);
-    this.logger.log('INFO', `Unsubscribed from cursor: ${userId}`);
+    Logger.info(`Unsubscribed from cursor: ${userId}`, null, 'cursor');
 
     // Notify server
     await this.notifyServer('CURSOR_UNSUBSCRIBE', {
@@ -290,7 +285,7 @@ class CursorVisibilityModule {
     const userEmail = window.currentUser?.email;
 
     if (!userId || !userEmail) {
-      this.logger.log('WARN', 'No current user for cursor notification');
+      Logger.warn('No current user for cursor notification', null, 'cursor');
       return;
     }
 
@@ -313,7 +308,7 @@ class CursorVisibilityModule {
       return;
     }
 
-    this.logger.log('WARN', 'No available connection for cursor notification');
+    Logger.warn('No available connection for cursor notification', null, 'cursor');
   }
 
   /**

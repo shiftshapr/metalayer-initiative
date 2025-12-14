@@ -1,21 +1,24 @@
 /**
  * USER PREFERENCES MANAGER - TypeScript Version
  * Unified preference management system - Single source of truth for all user preferences
- * 
+ *
  * Handles:
  * - Loading preferences (Chrome storage → Database fallback)
  * - Saving preferences (Chrome storage + Database)
  * - Event emission (EventBus + DOM events)
  * - Error handling and retry logic
  * - Data validation and integrity
- * 
+ *
  * Based on: PREFERENCE_MANAGEMENT_PLAN.md
  */
 
 // Type definitions
+import { createEventListenerManager } from './EventListenerManager.js';
 import { handleError } from './ErrorHandler.js';
 import { Logger } from './Logger.js';
-import { getBackendHealthService } from '../services/BackendHealthService.js';
+import { SafeJSON } from './SafeJSON.js';
+// @ts-ignore - JavaScript module without type declarations
+import { getBackendHealthService } from '../../extension/services/BackendHealthService.js';
 import { stateManagerInstance } from '../core/StateManager.js';
 import { api } from '../features/APIModule.js';
 type PreferenceKey =
@@ -29,7 +32,9 @@ type PreferenceKey =
   | 'tabConfiguration'
   | 'visibilityTraceLimit'
   | 'primaryCommunity'
-  | 'activeCommunities';
+  | 'activeCommunities'
+  | 'avatarUrl'
+  | 'primaryCommunityAvatar';
 type Theme = 'light' | 'dark' | 'auto';
 type Availability = 'AVAILABLE' | 'BUSY' | 'AWAY' | 'OFFLINE';
 type PreferenceValue = string | number | boolean;
@@ -46,6 +51,8 @@ interface Preferences {
   visibilityTraceLimit: number; // 0 = hide traces, -1 = unlimited, positive = days
   primaryCommunity: string; // UUID of primary community
   activeCommunities: string; // JSON stringified array of community UUIDs
+  avatarUrl: string; // User's avatar URL for caching
+  primaryCommunityAvatar: string; // Primary community's avatar URL for caching
 }
 
 type PreferenceValidator<T extends PreferenceValue> = (value: unknown) => value is T;
@@ -118,14 +125,14 @@ declare const window: Window & {
 /**
  * USER PREFERENCES MANAGER
  * Unified preference management system - Single source of truth for all user preferences
- * 
+ *
  * Handles:
  * - Loading preferences (Chrome storage → Database fallback)
  * - Saving preferences (Chrome storage + Database)
  * - Event emission (EventBus + DOM events)
  * - Error handling and retry logic
  * - Data validation and integrity
- * 
+ *
  * Based on: PREFERENCE_MANAGEMENT_PLAN.md
  */
 
@@ -145,6 +152,11 @@ export class UserPreferencesManager {
   private offlineListeners: Array<(status: { online: boolean }) => void> = [];
   private readonly schema: PreferenceSchema;
   private _defaultValues: Partial<Record<PreferenceKey, boolean>> = {};
+  private eventManager = createEventListenerManager();
+
+  // Async coordination for userId availability
+  private userIdResolvers: Array<(userId: string) => void> = [];
+  private userIdPromise: Promise<string> | null = null;
 
   constructor() {
     // Metrics for monitoring
@@ -152,110 +164,146 @@ export class UserPreferencesManager {
       loads: { success: 0, failure: 0, totalTime: 0 },
       saves: { success: 0, failure: 0, totalTime: 0 },
       retries: { success: 0, failure: 0 },
-      errors: []
+      errors: [],
     };
-    
+
     // Offline detection
     this.isOnline = navigator.onLine !== false;
     this.setupOfflineDetection();
-    
+
     // Preference schema (all as database columns)
     const schema: PreferenceSchema = {
       theme: {
         chromeKey: 'theme',
         dbColumn: 'theme',
-        defaultValue: 'light',
-        validator: (value: unknown): value is Theme => typeof value === 'string' && ['light', 'dark', 'auto'].includes(value),
-        uiComponents: ['profile', 'settings', 'all']
+        // Default to 'dark' - modern UX standard, reduces eye strain, aligns with developer tool conventions
+        // Users can override via browser preference (prefers-color-scheme) or explicit theme selection
+        defaultValue: 'dark',
+        validator: (value: unknown): value is Theme =>
+          typeof value === 'string' && ['light', 'dark', 'auto'].includes(value),
+        uiComponents: ['profile', 'settings', 'all'],
       },
       auraColor: {
         chromeKey: 'auraColor',
         dbColumn: 'aura_color',
         defaultValue: '#98d416',
-        validator: (value: unknown): value is string => typeof value === 'string' && /^#[0-9A-Fa-f]{6}$/i.test(value),
-        uiComponents: ['avatars', 'profile', 'settings']
+        validator: (value: unknown): value is string =>
+          typeof value === 'string' && /^#[0-9A-Fa-f]{6}$/i.test(value),
+        uiComponents: ['avatars', 'profile', 'settings'],
       },
       auraIntensity: {
         chromeKey: 'auraIntensity',
         dbColumn: 'aura_intensity',
         defaultValue: 0.5,
-        validator: (value: unknown): value is number => typeof value === 'number' && value >= 0 && value <= 1,
-        uiComponents: ['avatars', 'settings']
+        validator: (value: unknown): value is number =>
+          typeof value === 'number' && value >= 0 && value <= 1,
+        uiComponents: ['avatars', 'settings'],
       },
       isVisible: {
         chromeKey: 'visibilityEnabled',
         dbColumn: 'is_visible',
         defaultValue: true,
         validator: (value: unknown): value is boolean => typeof value === 'boolean',
-        uiComponents: ['avatars', 'profile', 'settings', 'visibility']
+        uiComponents: ['avatars', 'profile', 'settings', 'visibility'],
       },
       globalAvailability: {
         chromeKey: 'availability',
         dbColumn: 'global_availability',
         defaultValue: 'AVAILABLE',
-        validator: (value: unknown): value is Availability => typeof value === 'string' && ['AVAILABLE', 'BUSY', 'AWAY', 'OFFLINE'].includes(value),
-        uiComponents: ['profile', 'settings', 'visibility']
+        validator: (value: unknown): value is Availability =>
+          typeof value === 'string' && ['AVAILABLE', 'BUSY', 'AWAY', 'OFFLINE'].includes(value),
+        uiComponents: ['profile', 'settings', 'visibility'],
       },
       headline: {
         chromeKey: 'settingsHeadline',
         dbColumn: 'headline',
         defaultValue: '',
-        validator: (value: unknown): value is string => value === '' || (typeof value === 'string' && value.length >= 20 && value.length <= 1000),
-        uiComponents: ['profile', 'settings']
+        validator: (value: unknown): value is string =>
+          value === '' || (typeof value === 'string' && value.length >= 20 && value.length <= 1000),
+        uiComponents: ['profile', 'settings'],
       },
       displayName: {
         chromeKey: 'displayName',
         dbColumn: 'displayName', // FIX: Match Prisma schema (camelCase, not snake_case)
         defaultValue: '',
-        validator: (value: unknown): value is string => value === '' || (typeof value === 'string' && value.length >= 4 && value.length <= 16),
-        uiComponents: ['profile', 'settings', 'avatars']
+        validator: (value: unknown): value is string =>
+          value === '' || (typeof value === 'string' && value.length >= 4 && value.length <= 16),
+        uiComponents: ['profile', 'settings', 'avatars'],
       },
       tabConfiguration: {
         chromeKey: 'tabConfiguration',
         dbColumn: 'tab_configuration', // Stored as JSON string in database
         defaultValue: '',
         validator: (value: unknown): value is string => typeof value === 'string', // Accept any JSON string
-        uiComponents: ['tab-manager', 'settings']
+        uiComponents: ['tab-manager', 'settings'],
       },
       visibilityTraceLimit: {
         chromeKey: 'visibilityTraceLimit',
         dbColumn: 'visibility_trace_limit',
         defaultValue: 30, // Default: 30 days
-        validator: (value: unknown): value is number => typeof value === 'number' && (value === -1 || value >= 0),
-        uiComponents: ['settings', 'visibility']
+        validator: (value: unknown): value is number =>
+          typeof value === 'number' && (value === -1 || value >= 0),
+        uiComponents: ['settings', 'visibility'],
       },
       primaryCommunity: {
         chromeKey: 'primaryCommunity',
-        dbColumn: 'primary_community_id', // Store in AppUser table
-        defaultValue: '',
+        dbColumn: 'primary_community_id', // Store in AppUser table - NON-NULLABLE
+        // CRITICAL: Default to PUBLIC_SQUARE_UUID - all users must have a primary community
+        defaultValue: 'abe5ec85-4ba6-456f-adaf-03d7d51cecf4', // PUBLIC_SQUARE_UUID
         validator: (value: unknown): value is string => {
-          // UUID v4 format validation
+          // UUID v4 format validation - must be valid UUID, cannot be empty
           if (typeof value !== 'string') return false;
-          if (value === '') return true; // Allow empty string as default
-          const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+          if (value === '') return false; // CRITICAL: Empty string NOT allowed - must have a community
+          const uuidRegex =
+            /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
           return uuidRegex.test(value);
         },
-        uiComponents: ['communities', 'header']
+        uiComponents: ['communities', 'header'],
       },
       activeCommunities: {
         chromeKey: 'activeCommunities',
-        dbColumn: 'active_communities', // Store as JSON string in AppUser table
-        defaultValue: '[]',
+        dbColumn: 'active_communities', // Store as JSON string in AppUser table - NON-NULLABLE
+        // CRITICAL: Default to PUBLIC_SQUARE_UUID in array - all users must have at least one active community
+        defaultValue: '["abe5ec85-4ba6-456f-adaf-03d7d51cecf4"]', // [PUBLIC_SQUARE_UUID]
         validator: (value: unknown): value is string => {
-          // Must be a valid JSON array of UUIDs
+          // Must be a valid JSON array of UUIDs - cannot be empty array
           if (typeof value !== 'string') return false;
           try {
-            const parsed = JSON.parse(value);
+            const parsed = SafeJSON.parse(value, [], 'user-preferences');
             if (!Array.isArray(parsed)) return false;
+            if (parsed.length === 0) return false; // CRITICAL: Empty array NOT allowed - must have at least one community
             // Validate all items are UUIDs
-            const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-            return parsed.every((item: unknown) => typeof item === 'string' && uuidRegex.test(item));
+            const uuidRegex =
+              /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+            return parsed.every(
+              (item: unknown) => typeof item === 'string' && uuidRegex.test(item)
+            );
           } catch {
             return false;
           }
         },
-        uiComponents: ['communities', 'header']
-      }
+        uiComponents: ['communities', 'header'],
+      },
+      avatarUrl: {
+        chromeKey: 'avatarUrl',
+        dbColumn: 'avatar_url', // Store in AppUser table for caching
+        defaultValue: '',
+        validator: (value: unknown): value is string => {
+          // Must be a string, can be empty for fallback to initials
+          return typeof value === 'string';
+        },
+        uiComponents: ['avatars', 'profile'],
+      },
+      primaryCommunityAvatar: {
+        chromeKey: 'primaryCommunityAvatar',
+        dbColumn: 'primary_community_avatar', // Store in AppUser table for primary community avatar
+        defaultValue: '', // Empty string for no avatar
+        validator: (value: unknown): value is string => {
+          // Must be a string, can be empty
+          return typeof value === 'string';
+        },
+        uiComponents: ['communities', 'avatars', 'header'],
+      },
     };
 
     this.schema = schema;
@@ -268,9 +316,17 @@ export class UserPreferencesManager {
    * Must be called after user authentication
    */
   async initialize(userId: string): Promise<boolean> {
-    Logger.debug('🔍 USER_PREFERENCES_MANAGER: initialize() called with userId:', userId || 'MISSING', 'preferences');
-    Logger.debug('🔍 USER_PREFERENCES_MANAGER: Current isInitialized:', this.isInitialized, 'preferences');
-    
+    Logger.debug(
+      '🔍 USER_PREFERENCES_MANAGER: initialize() called with userId:',
+      userId || 'MISSING',
+      'preferences'
+    );
+    Logger.debug(
+      '🔍 USER_PREFERENCES_MANAGER: Current isInitialized:',
+      this.isInitialized,
+      'preferences'
+    );
+
     if (this.isInitialized) {
       Logger.warn('⚠️ USER_PREFERENCES_MANAGER: Already initialized', null, 'preferences');
       return true;
@@ -279,71 +335,78 @@ export class UserPreferencesManager {
     if (!userId) {
       Logger.warn('⚠️ USER_PREFERENCES_MANAGER: No userId provided, waiting...', 'preferences');
       // TypeScript migration: Use stateManager instead of window.currentUser
-      const currentUserFromState = stateManagerInstance.getState('currentUser') as { id?: string } | null;
-      Logger.debug('🔍 USER_PREFERENCES_MANAGER: Checking stateManager currentUser?.id:', currentUserFromState?.id, 'preferences');
-      // Wait for userId with longer timeout and better detection
-      return new Promise((resolve) => {
-        let attempts = 0;
-        const maxAttempts = 50; // 25 seconds (500ms * 50)
-        
-        const checkUser = setInterval(() => {
-          attempts++;
-          // TypeScript migration: Use stateManager instead of window.currentUser
-          const currentUser = stateManagerInstance.getState('currentUser') as { id?: string } | null;
-          const currentUserId = currentUser?.id;
-          Logger.debug(`🔍 USER_PREFERENCES_MANAGER: Attempt ${attempts}/${maxAttempts}, checking for userId:`, currentUserId || 'NOT FOUND', 'preferences');
-          
-          if (currentUserId) {
-            clearInterval(checkUser);
-            Logger.debug(`✅ USER_PREFERENCES_MANAGER: Found userId after ${attempts} attempts: ${currentUserId}`, null, 'preferences');
-            this.initialize(currentUserId).then(resolve);
-            return;
-          }
-          
-          // Log progress every 5 seconds
-          if (attempts % 10 === 0) {
-            Logger.debug(`⏳ USER_PREFERENCES_MANAGER: Waiting for userId... (${attempts}/${maxAttempts})`, null, 'preferences');
-          }
-          
-          if (attempts >= maxAttempts) {
-            clearInterval(checkUser);
-            Logger.warn('⚠️ USER_PREFERENCES_MANAGER: Timeout waiting for userId - will initialize when userId becomes available', null, 'preferences');
-            // Don't fail - just return false, initialization will happen when userId is available
-            resolve(false);
-          }
-        }, 500);
-      });
+      const currentUserFromState = stateManagerInstance.getState('currentUser') as {
+        id?: string;
+      } | null;
+      Logger.debug(
+        '🔍 USER_PREFERENCES_MANAGER: Checking stateManager currentUser?.id:',
+        currentUserFromState?.id,
+        'preferences'
+      );
+      // Use proper async coordination instead of polling
+      try {
+        const userId = await this.waitForUserId();
+        Logger.debug(
+          '✅ USER_PREFERENCES_MANAGER: Got userId via async coordination:',
+          userId,
+          'preferences'
+        );
+        await this.initialize(userId);
+        return true;
+      } catch (error) {
+        Logger.error(
+          '❌ USER_PREFERENCES_MANAGER: Failed to get userId via async coordination:',
+          error,
+          'preferences'
+        );
+        return false;
+      }
     }
 
-    this.userId = userId;
-    Logger.debug('🔧 USER_PREFERENCES_MANAGER: Initializing for user:', userId, 'preferences');
+    // CRITICAL FIX: Strip channel suffixes from user ID (e.g., :1, :2 from realtime)
+    this.userId = userId.replace(/:\d+$/, '');
+    if (this.userId !== userId) {
+      Logger.warn(
+        '⚠️ USER_PREFERENCES_MANAGER: Stripped channel suffix from userId',
+        { original: userId, cleaned: this.userId },
+        'preferences'
+      );
+    }
+
+    // Notify any waiting async coordination promises
+    this.resolveUserIdWaiters(this.userId);
+
+    Logger.debug('🔧 USER_PREFERENCES_MANAGER: Initializing for user:', this.userId, 'preferences');
 
     try {
       // Load all preferences
       await this.loadAllPreferences();
-      
+
       // Start retry queue processor
       this.startRetryProcessor();
-      
+
       // Emit loaded event
       this.emitPreferenceLoaded();
-      
+
       this.isInitialized = true;
       Logger.debug('✅ USER_PREFERENCES_MANAGER: Initialization complete', null, 'preferences');
       return true;
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       handleError(error, {
-            log: true,
-            logLevel: 'error',
-            context: {
-                operation: 'catch',
-            component: 'UserPreferences'
-            }
-        });;
-      this.metrics.errors.push({ type: 'initialization', error: errorMessage, timestamp: Date.now() });
+        log: true,
+        logLevel: 'error',
+        context: {
+          operation: 'catch',
+          component: 'UserPreferences',
+        },
+      });
+      this.metrics.errors.push({
+        type: 'initialization',
+        error: errorMessage,
+        timestamp: Date.now(),
+      });
       return false;
-    
     }
   }
 
@@ -364,11 +427,19 @@ export class UserPreferencesManager {
 
       // Load from Chrome storage first (fastest)
       const chromePrefs = await this.loadFromChromeStorage();
-      Logger.debug('✅ USER_PREFERENCES_MANAGER: Loaded from Chrome storage:', Object.keys(chromePrefs).length, 'preferences');
+      Logger.debug(
+        '✅ USER_PREFERENCES_MANAGER: Loaded from Chrome storage:',
+        Object.keys(chromePrefs).length,
+        'preferences'
+      );
 
       // Load from database for any missing values
       const dbPrefs = await this.loadFromDatabase();
-      Logger.debug('✅ USER_PREFERENCES_MANAGER: Loaded from database:', Object.keys(dbPrefs).length, 'preferences');
+      Logger.debug(
+        '✅ USER_PREFERENCES_MANAGER: Loaded from database:',
+        Object.keys(dbPrefs).length,
+        'preferences'
+      );
 
       // Merge: Chrome storage takes precedence (most recent), database fills gaps
       // Database is authoritative source - Chrome storage is cache
@@ -383,58 +454,125 @@ export class UserPreferencesManager {
         const config = this.schema[prefKey] as PreferenceConfig<typeof prefKey>;
         const chromeValue = chromePrefs[prefKey];
         const dbValue = dbPrefs[prefKey];
-        
+
         // ROOT CAUSE FIX: Comprehensive logging for theme resolution
         if (prefKey === 'theme') {
           Logger.debug('🔍 THEME_RESOLUTION: === THEME RESOLUTION START ===', null, 'preferences');
-          Logger.debug('🔍 THEME_RESOLUTION: Chrome storage theme:', chromeValue !== undefined && chromeValue !== null ? chromeValue : 'NOT SET', 'preferences');
-          Logger.debug('🔍 THEME_RESOLUTION: Database theme:', dbValue !== undefined && dbValue !== null ? dbValue : 'NULL/NOT SET', 'preferences');
-          const currentDomTheme = document.body.getAttribute('data-theme') || document.documentElement.getAttribute('data-theme');
-          Logger.debug('🔍 THEME_RESOLUTION: DOM theme:', currentDomTheme || 'NOT SET', 'preferences');
+          Logger.debug(
+            '🔍 THEME_RESOLUTION: Chrome storage theme:',
+            chromeValue !== undefined && chromeValue !== null ? chromeValue : 'NOT SET',
+            'preferences'
+          );
+          Logger.debug(
+            '🔍 THEME_RESOLUTION: Database theme:',
+            dbValue !== undefined && dbValue !== null ? dbValue : 'NULL/NOT SET',
+            'preferences'
+          );
+          const currentDomTheme =
+            document.body.getAttribute('data-theme') ||
+            document.documentElement.getAttribute('data-theme');
+          Logger.debug(
+            '🔍 THEME_RESOLUTION: DOM theme:',
+            currentDomTheme || 'NOT SET',
+            'preferences'
+          );
           Logger.debug('🔍 THEME_RESOLUTION: Default theme:', config.defaultValue, 'preferences');
         }
-        
+
         // Special handling for theme: Check multiple sources in priority order
         let finalValue: Preferences[PreferenceKey];
         if (chromeValue !== undefined && chromeValue !== null) {
           // Priority 1: Chrome storage (extension-specific, most recent user preference)
           finalValue = chromeValue;
           if (prefKey === 'theme') {
-            Logger.debug('🔍 THEME_RESOLUTION: ✅ RESOLVED: Using Chrome storage theme:', finalValue, 'preferences');
+            Logger.debug(
+              '🔍 THEME_RESOLUTION: ✅ RESOLVED: Using Chrome storage theme:',
+              finalValue,
+              'preferences'
+            );
           }
         } else if (prefKey === 'theme') {
           // Priority 2: Check DOM (preserve current UI state - might be set by ProfileManager on startup)
-          const currentDomTheme = document.body.getAttribute('data-theme') || document.documentElement.getAttribute('data-theme');
+          const currentDomTheme =
+            document.body.getAttribute('data-theme') ||
+            document.documentElement.getAttribute('data-theme');
           if (currentDomTheme && ['light', 'dark', 'auto'].includes(currentDomTheme)) {
             const domTheme = currentDomTheme as Theme;
             finalValue = domTheme;
-            Logger.debug(`🔍 THEME_RESOLUTION: ✅ RESOLVED: Using DOM theme '${currentDomTheme}' (preserving current UI state)`, null, 'preferences');
+            Logger.debug(
+              `🔍 THEME_RESOLUTION: ✅ RESOLVED: Using DOM theme '${currentDomTheme}' (preserving current UI state)`,
+              null,
+              'preferences'
+            );
             // Cache it in Chrome storage for next time
             await chrome.storage.local.set({ [config.chromeKey]: currentDomTheme });
           } else if (dbValue !== undefined && dbValue !== null) {
             // Priority 3: Database (authoritative source - user's saved preference)
             finalValue = dbValue;
-            Logger.debug(`🔍 THEME_RESOLUTION: ✅ RESOLVED: Using database theme '${dbValue}'`, null, 'preferences');
+            Logger.debug(
+              `🔍 THEME_RESOLUTION: ✅ RESOLVED: Using database theme '${dbValue}'`,
+              null,
+              'preferences'
+            );
             // Cache it in Chrome storage for next time
             await chrome.storage.local.set({ [config.chromeKey]: dbValue });
           } else {
-            // Priority 4: Default (last resort - ONLY for local use, NEVER save to database)
-            finalValue = config.defaultValue;
-            Logger.debug(`🔍 THEME_RESOLUTION: ✅ RESOLVED: Using default theme '${config.defaultValue}' (local only, will not save to database)`, null, 'preferences');
-            // ROOT CAUSE FIX: Mark this as a default value so it doesn't get saved to database
-            // Store in a separate flag to prevent saving defaults
-            this._defaultValues[prefKey] = true;
+            // Priority 4: Check browser theme preference
+            let browserTheme: Theme | null = null;
+            if (typeof window !== 'undefined' && window.matchMedia) {
+              try {
+                const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                browserTheme = prefersDark ? 'dark' : 'light';
+                Logger.debug(
+                  `🔍 THEME_RESOLUTION: Browser theme preference: ${browserTheme}`,
+                  null,
+                  'preferences'
+                );
+              } catch (error) {
+                Logger.debug(
+                  '⚠️ THEME_RESOLUTION: Error checking browser theme preference:',
+                  error,
+                  'preferences'
+                );
+              }
+            }
+
+            if (browserTheme) {
+              finalValue = browserTheme;
+              Logger.debug(
+                `🔍 THEME_RESOLUTION: ✅ RESOLVED: Using browser theme preference '${browserTheme}' (local only, will not save to database)`,
+                null,
+                'preferences'
+              );
+              // ROOT CAUSE FIX: Mark this as a default value so it doesn't get saved to database
+              this._defaultValues[prefKey] = true;
+            } else {
+              // Priority 5: Default (last resort - ONLY for local use, NEVER save to database)
+              finalValue = config.defaultValue;
+              Logger.debug(
+                `🔍 THEME_RESOLUTION: ✅ RESOLVED: Using default theme '${config.defaultValue}' (local only, will not save to database)`,
+                null,
+                'preferences'
+              );
+              // ROOT CAUSE FIX: Mark this as a default value so it doesn't get saved to database
+              // Store in a separate flag to prevent saving defaults
+              this._defaultValues[prefKey] = true;
+            }
           }
-          Logger.debug(`🔍 THEME_RESOLUTION: === THEME RESOLUTION END (finalValue: ${finalValue}) ===`, null, 'preferences');
+          Logger.debug(
+            `🔍 THEME_RESOLUTION: === THEME RESOLUTION END (finalValue: ${finalValue}) ===`,
+            null,
+            'preferences'
+          );
         } else if (dbValue !== undefined && dbValue !== null) {
           // For non-theme preferences, database is fine as fallback
           finalValue = dbValue;
         } else {
           finalValue = config.defaultValue;
         }
-        
+
         setPreferenceValue(mergedPrefs, prefKey, finalValue as Preferences[PreferenceKey]);
-        
+
         // If we got a value from database but not Chrome storage, save to Chrome storage (cache)
         if (chromeValue === undefined && dbValue !== undefined && dbValue !== null) {
           await chrome.storage.local.set({ [config.chromeKey]: dbValue });
@@ -442,16 +580,26 @@ export class UserPreferencesManager {
       }
 
       this.preferences = mergedPrefs;
-      
+
       // Update stateManager currentUser immediately (TypeScript migration)
       this.updateCurrentUser();
-      
+
       // Apply preferences to UI immediately
       // ROOT CAUSE FIX: Log what theme will be applied before calling applyPreferencesToUI
       if (this.preferences.theme) {
-        Logger.debug('🔍 THEME_APPLY: About to apply theme to UI:', this.preferences.theme, 'preferences');
-        const currentDomTheme = document.body.getAttribute('data-theme') || document.documentElement.getAttribute('data-theme');
-        Logger.debug('🔍 THEME_APPLY: Current DOM theme before apply:', currentDomTheme || 'NOT SET', 'preferences');
+        Logger.debug(
+          '🔍 THEME_APPLY: About to apply theme to UI:',
+          this.preferences.theme,
+          'preferences'
+        );
+        const currentDomTheme =
+          document.body.getAttribute('data-theme') ||
+          document.documentElement.getAttribute('data-theme');
+        Logger.debug(
+          '🔍 THEME_APPLY: Current DOM theme before apply:',
+          currentDomTheme || 'NOT SET',
+          'preferences'
+        );
       }
       // ROOT CAUSE FIX: Always apply theme during initial load (ProfileManager no longer sets theme on startup)
       // This ensures the correct theme from Chrome storage/Database is applied
@@ -483,7 +631,11 @@ export class UserPreferencesManager {
     const storageData = (await chrome.storage.local.get(chromeKeys)) as Record<string, unknown>;
 
     const chromeTheme = storageData['theme'];
-    Logger.debug('🔍 THEME_CHROME_LOAD: Chrome storage theme value:', chromeTheme !== undefined && chromeTheme !== null ? chromeTheme : 'NOT SET', 'preferences');
+    Logger.debug(
+      '🔍 THEME_CHROME_LOAD: Chrome storage theme value:',
+      chromeTheme !== undefined && chromeTheme !== null ? chromeTheme : 'NOT SET',
+      'preferences'
+    );
 
     const prefs: Partial<Preferences> = {};
     const schemaEntries = Object.entries(this.schema) as [PreferenceKey, PreferenceConfig][];
@@ -493,10 +645,18 @@ export class UserPreferencesManager {
       if (config.validator(storedValue)) {
         setPreferenceValue(prefs, prefKey, storedValue);
         if (prefKey === 'theme') {
-          Logger.debug('🔍 THEME_CHROME_LOAD: ✅ Theme found in Chrome storage:', storedValue, 'preferences');
+          Logger.debug(
+            '🔍 THEME_CHROME_LOAD: ✅ Theme found in Chrome storage:',
+            storedValue,
+            'preferences'
+          );
         }
       } else if (prefKey === 'theme') {
-        Logger.debug('🔍 THEME_CHROME_LOAD: ⚠️ Theme NOT SET in Chrome storage', null, 'preferences');
+        Logger.debug(
+          '🔍 THEME_CHROME_LOAD: ⚠️ Theme NOT SET in Chrome storage',
+          null,
+          'preferences'
+        );
       }
     }
 
@@ -508,13 +668,17 @@ export class UserPreferencesManager {
    */
   async loadFromDatabase(): Promise<Partial<Preferences>> {
     if (!this.userId || !api) {
-      Logger.warn('⚠️ USER_PREFERENCES_MANAGER: Cannot load from database (no userId or API)', null, 'preferences');
+      Logger.warn(
+        '⚠️ USER_PREFERENCES_MANAGER: Cannot load from database (no userId or API)',
+        null,
+        'preferences'
+      );
       throw new Error('Cannot load preferences: userId or API not available');
     }
 
     try {
       const apiResponse = await api.request(`/v1/users/${this.userId}`, {
-        method: 'GET'
+        method: 'GET',
       });
       const response = apiResponse?.data || apiResponse;
 
@@ -532,7 +696,11 @@ export class UserPreferencesManager {
             Logger.debug('🔍 THEME_DB_LOAD: ✅ Theme found in database:', dbValue, 'preferences');
           }
         } else if (prefKey === 'theme') {
-          Logger.debug('🔍 THEME_DB_LOAD: ⚠️ Theme is NULL in database (will not use default, will check other sources)', null, 'preferences');
+          Logger.debug(
+            '🔍 THEME_DB_LOAD: ⚠️ Theme is NULL in database (will not use default, will check other sources)',
+            null,
+            'preferences'
+          );
         }
         // ROOT CAUSE FIX: Do NOT set default for NULL values - NULL means "not set" and should not be saved back
         // Only use defaults in loadAllPreferences() when all sources are unavailable
@@ -541,15 +709,14 @@ export class UserPreferencesManager {
       return prefs;
     } catch (error: unknown) {
       handleError(error, {
-            log: true,
-            logLevel: 'error',
-            context: {
-                operation: 'catch',
-            component: 'UserPreferences'
-            }
-        });;
+        log: true,
+        logLevel: 'error',
+        context: {
+          operation: 'catch',
+          component: 'UserPreferences',
+        },
+      });
       throw error; // Don't silently fail - we need database columns
-    
     }
   }
 
@@ -558,7 +725,11 @@ export class UserPreferencesManager {
    */
   async getPreference(key: PreferenceKey | string) {
     if (!this.schema[key as PreferenceKey]) {
-      Logger.warn(`⚠️ USER_PREFERENCES_MANAGER: Unknown preference key: ${key}`, null, 'preferences');
+      Logger.warn(
+        `⚠️ USER_PREFERENCES_MANAGER: Unknown preference key: ${key}`,
+        null,
+        'preferences'
+      );
       return null;
     }
 
@@ -578,18 +749,36 @@ export class UserPreferencesManager {
   /**
    * Save a single preference (supports batching)
    */
-  async savePreference<K extends PreferenceKey>(key: K, value: Preferences[K], options: SaveOptions = {}): Promise<boolean> {
+  async savePreference<K extends PreferenceKey>(
+    key: K,
+    value: Preferences[K],
+    options: SaveOptions = {}
+  ): Promise<boolean> {
     if (!this.schema[key]) {
-      Logger.error(`❌ USER_PREFERENCES_MANAGER: Unknown preference key: ${key}`, null, 'preferences');
+      Logger.error(
+        `❌ USER_PREFERENCES_MANAGER: Unknown preference key: ${key}`,
+        null,
+        'preferences'
+      );
       return false;
     }
 
     const config = this.schema[key];
     const oldValue = this.preferences[key];
 
+    // CRITICAL: For community preferences, always save to database (they're non-nullable)
+    // Don't skip saving primaryCommunity or activeCommunities even if they match defaults
+    // These must be persisted to ensure database has non-null values
+    const isCommunityPreference = key === 'primaryCommunity' || key === 'activeCommunities';
+
     // ROOT CAUSE FIX: Never save default values to database - they're only for local fallback
-    if (this._defaultValues[key] && value === config.defaultValue) {
-      Logger.debug(`⚠️ USER_PREFERENCES_MANAGER: Skipping save of default value for ${key} (prevents overwriting database with defaults)`, null, 'preferences');
+    // EXCEPTION: Community preferences must always be saved (non-nullable requirement)
+    if (!isCommunityPreference && this._defaultValues[key] && value === config.defaultValue) {
+      Logger.debug(
+        `⚠️ USER_PREFERENCES_MANAGER: Skipping save of default value for ${key} (prevents overwriting database with defaults)`,
+        null,
+        'preferences'
+      );
       // Clear the default flag since user is explicitly setting it
       delete this._defaultValues[key];
       // Still update local state and Chrome storage, but skip database
@@ -602,7 +791,11 @@ export class UserPreferencesManager {
     try {
       // Step 1: Validate
       if (!this.validatePreference(key, value)) {
-        Logger.error(`❌ USER_PREFERENCES_MANAGER: Invalid value for ${key}:`, value, 'preferences');
+        Logger.error(
+          `❌ USER_PREFERENCES_MANAGER: Invalid value for ${key}:`,
+          value,
+          'preferences'
+        );
         return false;
       }
 
@@ -611,7 +804,11 @@ export class UserPreferencesManager {
 
       // Step 3: Update Chrome storage (fast, always succeeds)
       await chrome.storage.local.set({ [config.chromeKey]: value });
-      Logger.debug(`✅ USER_PREFERENCES_MANAGER: Saved ${key} to Chrome storage`, null, 'preferences');
+      Logger.debug(
+        `✅ USER_PREFERENCES_MANAGER: Saved ${key} to Chrome storage`,
+        null,
+        'preferences'
+      );
 
       // Step 4: Update stateManager currentUser (immediate) - TypeScript migration
       this.updateCurrentUser();
@@ -642,29 +839,39 @@ export class UserPreferencesManager {
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       handleError(error, {
-            log: true,
-            logLevel: 'error',
-            context: {
-                operation: 'catch',
-            component: 'UserPreferences'
-            }
-        });;
+        log: true,
+        logLevel: 'error',
+        context: {
+          operation: 'catch',
+          component: 'UserPreferences',
+        },
+      });
       this.metrics.errors.push({ type: 'save', key, error: errorMessage, timestamp: Date.now() });
-      this.emitPreferenceSaveFailed(key, value, error instanceof Error ? error : new Error(errorMessage));
+      this.emitPreferenceSaveFailed(
+        key,
+        value,
+        error instanceof Error ? error : new Error(errorMessage)
+      );
       return false;
-    
     }
   }
 
   /**
    * Save multiple preferences in a batch
    */
-  async savePreferences(preferences: Partial<Preferences>, options: SaveOptions = {}): Promise<Partial<Record<PreferenceKey, boolean>>> {
-    Logger.debug(`📦 USER_PREFERENCES_MANAGER: Batching ${Object.keys(preferences).length} preferences`, null, 'preferences');
-    
+  async savePreferences(
+    preferences: Partial<Preferences>,
+    options: SaveOptions = {}
+  ): Promise<Partial<Record<PreferenceKey, boolean>>> {
+    Logger.debug(
+      `📦 USER_PREFERENCES_MANAGER: Batching ${Object.keys(preferences).length} preferences`,
+      null,
+      'preferences'
+    );
+
     const results: Partial<Record<PreferenceKey, boolean>> = {};
     const oldValues: Partial<Record<PreferenceKey, PreferenceValue>> = {};
-    
+
     // Step 1: Validate all preferences
     for (const [key, value] of Object.entries(preferences)) {
       const prefKey = key as PreferenceKey;
@@ -674,20 +881,28 @@ export class UserPreferencesManager {
       }
 
       if (!this.schema[prefKey]) {
-        Logger.error(`❌ USER_PREFERENCES_MANAGER: Unknown preference key: ${key}`, null, 'preferences');
+        Logger.error(
+          `❌ USER_PREFERENCES_MANAGER: Unknown preference key: ${key}`,
+          null,
+          'preferences'
+        );
         results[prefKey] = false;
         continue;
       }
 
       if (!this.validatePreference(prefKey, value)) {
-        Logger.error(`❌ USER_PREFERENCES_MANAGER: Invalid value for ${key}:`, value, 'preferences');
+        Logger.error(
+          `❌ USER_PREFERENCES_MANAGER: Invalid value for ${key}:`,
+          value,
+          'preferences'
+        );
         results[prefKey] = false;
         continue;
       }
 
       oldValues[prefKey] = this.preferences[prefKey];
     }
-    
+
     // Step 2: Update local state immediately
     const chromeUpdates: Record<string, PreferenceValue> = {};
     for (const [key, value] of Object.entries(preferences)) {
@@ -697,26 +912,30 @@ export class UserPreferencesManager {
       const config = this.schema[prefKey];
       chromeUpdates[config.chromeKey] = value;
     }
-    
+
     // Step 3: Update Chrome storage (batch update)
     await chrome.storage.local.set(chromeUpdates);
-    Logger.debug(`✅ USER_PREFERENCES_MANAGER: Saved ${Object.keys(chromeUpdates).length} preferences to Chrome storage`, null, 'preferences');
-    
+    Logger.debug(
+      `✅ USER_PREFERENCES_MANAGER: Saved ${Object.keys(chromeUpdates).length} preferences to Chrome storage`,
+      null,
+      'preferences'
+    );
+
     // Step 4: Update stateManager currentUser - TypeScript migration
     this.updateCurrentUser();
-    
+
     // Step 5: Emit change events
     for (const [key, value] of Object.entries(preferences)) {
       const prefKey = key as PreferenceKey;
       if (results[prefKey] === false) continue;
       this.emitPreferenceChanged(prefKey, value, oldValues[prefKey], 'user');
     }
-    
+
     // Step 6: Save to database in batch
     if (!options.skipDatabase) {
       await this.saveBatchToDatabase(preferences);
     }
-    
+
     return results;
   }
 
@@ -725,22 +944,27 @@ export class UserPreferencesManager {
    */
   addToBatch(key: PreferenceKey, value: PreferenceValue) {
     // Remove existing entry for this key if present
-    this.batchQueue = this.batchQueue.filter(item => item.key !== key);
-    
+    this.batchQueue = this.batchQueue.filter((item) => item.key !== key);
+
     // Add new entry
     this.batchQueue.push({ key, value, timestamp: Date.now() });
-    
+
     // Clear existing timeout
     if (this.batchTimeout) {
       clearTimeout(this.batchTimeout);
     }
-    
+
     // Set new timeout to flush batch
+    // Debounce: intentional delay for performance - batches preference updates for efficiency
     this.batchTimeout = setTimeout(() => {
       this.flushBatch();
     }, this.batchDelay);
-    
-    Logger.debug(`📦 USER_PREFERENCES_MANAGER: Added ${key} to batch (queue size: ${this.batchQueue.length})`, null, 'preferences');
+
+    Logger.debug(
+      `📦 USER_PREFERENCES_MANAGER: Added ${key} to batch (queue size: ${this.batchQueue.length})`,
+      null,
+      'preferences'
+    );
   }
 
   /**
@@ -750,45 +974,65 @@ export class UserPreferencesManager {
     if (this.batchQueue.length === 0) {
       return;
     }
-    
+
     // Check backend health before flushing
     try {
       const healthService = getBackendHealthService();
       if (!healthService.isHealthy()) {
         const state = healthService.getState();
-        Logger.debug(`📦 USER_PREFERENCES_MANAGER: Backend not healthy (${state.status}), queueing batch for later`, null, 'preferences');
-        
+        Logger.debug(
+          `📦 USER_PREFERENCES_MANAGER: Backend not healthy (${state.status}), queueing batch for later`,
+          null,
+          'preferences'
+        );
+
         // Subscribe to health changes to flush when backend recovers
         const unsubscribe = healthService.subscribe((healthState: { status: string }) => {
           if (healthState.status === 'healthy') {
             unsubscribe();
-            Logger.info('✅ USER_PREFERENCES_MANAGER: Backend recovered, flushing queued batch', null, 'preferences');
+            Logger.debug(
+              '✅ USER_PREFERENCES_MANAGER: Backend recovered, flushing queued batch',
+              null,
+              'preferences'
+            );
             this.flushBatch().catch((error: unknown) => {
-              Logger.error('❌ USER_PREFERENCES_MANAGER: Failed to flush batch after recovery', error, 'preferences');
+              Logger.error(
+                '❌ USER_PREFERENCES_MANAGER: Failed to flush batch after recovery',
+                error,
+                'preferences'
+              );
             });
           }
         });
-        
+
         // Don't clear the batch - keep it for when backend recovers
         return;
       }
     } catch (error: unknown) {
-      Logger.warn('⚠️ USER_PREFERENCES_MANAGER: Error checking backend health, proceeding with flush', error, 'preferences');
+      Logger.warn(
+        '⚠️ USER_PREFERENCES_MANAGER: Error checking backend health, proceeding with flush',
+        error,
+        'preferences'
+      );
       // Continue with flush if health check fails
     }
-    
+
     const batch = [...this.batchQueue];
     this.batchQueue = [];
     this.batchTimeout = null;
-    
-    Logger.debug(`📦 USER_PREFERENCES_MANAGER: Flushing batch (${batch.length} items)`, null, 'preferences');
-    
+
+    Logger.debug(
+      `📦 USER_PREFERENCES_MANAGER: Flushing batch (${batch.length} items)`,
+      null,
+      'preferences'
+    );
+
     // Convert to preferences object
     const preferences: Partial<Preferences> = {};
     for (const item of batch) {
       setPreferenceValue(preferences, item.key, item.value as Preferences[PreferenceKey]);
     }
-    
+
     // Save batch to database
     await this.saveBatchToDatabase(preferences);
   }
@@ -798,10 +1042,14 @@ export class UserPreferencesManager {
    */
   async saveBatchToDatabase(preferences: Partial<Preferences>): Promise<void> {
     if (!this.userId || !api) {
-      Logger.warn('⚠️ USER_PREFERENCES_MANAGER: Cannot save batch (no userId or API)', null, 'preferences');
+      Logger.warn(
+        '⚠️ USER_PREFERENCES_MANAGER: Cannot save batch (no userId or API)',
+        null,
+        'preferences'
+      );
       return;
     }
-    
+
     // Check if offline
     if (!this.isOnline) {
       Logger.debug('🌐 USER_PREFERENCES_MANAGER: Offline, queueing batch for sync', 'preferences');
@@ -814,7 +1062,7 @@ export class UserPreferencesManager {
       }
       return;
     }
-    
+
     // Build update object with database column names
     const updates: Record<string, PreferenceValue> = {};
     for (const [key, value] of Object.entries(preferences)) {
@@ -826,10 +1074,15 @@ export class UserPreferencesManager {
         // ROOT CAUSE FIX: tab_configuration is stored as JSON string in Chrome storage,
         // but backend expects parsed object. Parse it before sending.
         if (config.dbColumn === 'tab_configuration' && typeof value === 'string') {
-          try {
-            updates[config.dbColumn] = JSON.parse(value);
-          } catch (parseError) {
-            Logger.error('❌ USER_PREFERENCES_MANAGER: Failed to parse tab_configuration JSON', parseError, 'preferences');
+          const parsed = SafeJSON.parse(value, null, 'user-preferences-tab-configuration');
+          if (parsed !== null) {
+            updates[config.dbColumn] = parsed;
+          } else {
+            Logger.error(
+              '❌ USER_PREFERENCES_MANAGER: Failed to parse tab_configuration JSON, sending as-is',
+              null,
+              'preferences'
+            );
             // Send as-is if parsing fails (backend will handle validation)
             updates[config.dbColumn] = value;
           }
@@ -838,75 +1091,90 @@ export class UserPreferencesManager {
         }
       }
     }
-    
+
     if (Object.keys(updates).length === 0) {
       return;
     }
-    
+
     const startTime = Date.now();
-    
+
     try {
       const apiResponse = await api.request(`/v1/users/${this.userId}`, {
         method: 'PATCH',
-        body: JSON.stringify(updates)
+        body: JSON.stringify(updates),
       });
       const response = apiResponse?.data || apiResponse;
-      
+
       if (!response) {
         throw new Error('Empty response from API');
       }
-      
+
       const duration = Date.now() - startTime;
       this.metrics.saves.success++;
       this.metrics.saves.totalTime += duration;
       this.log('save', 'success', duration);
-      Logger.debug(`✅ USER_PREFERENCES_MANAGER: Saved batch (${Object.keys(updates).length} preferences) to database`, null, 'preferences');
+      Logger.debug(
+        `✅ USER_PREFERENCES_MANAGER: Saved batch (${Object.keys(updates).length} preferences) to database`,
+        null,
+        'preferences'
+      );
     } catch (error: unknown) {
       const duration = Date.now() - startTime;
       this.metrics.saves.failure++;
       const errorMessage = error instanceof Error ? error.message : String(error);
       this.metrics.errors.push({ type: 'save', error: errorMessage, timestamp: Date.now() });
       this.log('save', 'failure', duration, error instanceof Error ? error : null);
-      
+
       // Check if error is due to backend being offline
-      const isOfflineError = errorMessage.includes('Failed to fetch') || 
-                            errorMessage.includes('NetworkError') ||
-                            errorMessage.includes('network') ||
-                            errorMessage.includes('connection refused') ||
-                            errorMessage.includes('ERR_CONNECTION_REFUSED') ||
-                            !this.isOnline;
-      
+      const isOfflineError =
+        errorMessage.includes('Failed to fetch') ||
+        errorMessage.includes('NetworkError') ||
+        errorMessage.includes('network') ||
+        errorMessage.includes('connection refused') ||
+        errorMessage.includes('ERR_CONNECTION_REFUSED') ||
+        !this.isOnline;
+
       if (isOfflineError) {
-        Logger.debug('🌐 USER_PREFERENCES_MANAGER: Network error detected, queueing for sync', 'preferences');
+        Logger.debug(
+          '🌐 USER_PREFERENCES_MANAGER: Network error detected, queueing for sync',
+          'preferences'
+        );
         this.isOnline = false; // Update offline status
-        
+
         // Update backend health service
         try {
           const healthService = getBackendHealthService();
           healthService.updateFromAPIRequest(false, errorMessage);
         } catch (healthError: unknown) {
-          Logger.debug('⚠️ USER_PREFERENCES_MANAGER: Failed to update health service', healthError, 'preferences');
+          Logger.debug(
+            '⚠️ USER_PREFERENCES_MANAGER: Failed to update health service',
+            healthError,
+            'preferences'
+          );
         }
       }
-      
+
       // Don't throw error - queue for retry instead
       // Queue each preference for individual retry
       for (const [key, value] of Object.entries(preferences)) {
         this.queueForRetry(key as PreferenceKey, value);
-        this.emitPreferenceSaveFailed(key as PreferenceKey, value, error instanceof Error ? error : new Error(String(error)));
+        this.emitPreferenceSaveFailed(
+          key as PreferenceKey,
+          value,
+          error instanceof Error ? error : new Error(String(error))
+        );
       }
-      
+
       // Log error but don't throw - preferences are queued for retry
       handleError(error, {
-            log: true,
-            logLevel: 'warn',
-            context: {
-                operation: 'saveBatchToDatabase',
-            component: 'UserPreferences',
-            note: 'Preferences queued for retry when backend recovers'
-            }
-        });;
-    
+        log: true,
+        logLevel: 'warn',
+        context: {
+          operation: 'saveBatchToDatabase',
+          component: 'UserPreferences',
+          note: 'Preferences queued for retry when backend recovers',
+        },
+      });
     }
     return;
   }
@@ -917,7 +1185,7 @@ export class UserPreferencesManager {
    */
   async saveToDatabaseImmediate(key: PreferenceKey, value: PreferenceValue) {
     const startTime = Date.now();
-    
+
     try {
       const response = await this.saveToDatabase(key, value);
       const duration = Date.now() - startTime;
@@ -933,23 +1201,22 @@ export class UserPreferencesManager {
       this.metrics.errors.push({ type: 'save', key, error: errorMessage, timestamp: Date.now() });
       this.log('save', 'failure', duration, error instanceof Error ? error : null);
       handleError(error, {
-            log: true,
-            logLevel: 'error',
-            context: {
-                operation: 'catch',
-            component: 'UserPreferences'
-            }
-        });;
-      
+        log: true,
+        logLevel: 'error',
+        context: {
+          operation: 'catch',
+          component: 'UserPreferences',
+        },
+      });
+
       // Queue for retry
       this.queueForRetry(key, value);
-      
+
       // Emit error event
       const errorObj = error instanceof Error ? error : new Error(String(error));
       this.emitPreferenceSaveFailed(key, value, errorObj);
-      
+
       throw error;
-    
     }
   }
 
@@ -960,7 +1227,7 @@ export class UserPreferencesManager {
     if (!this.userId || !api) {
       throw new Error('No userId or API available');
     }
-    
+
     // Check if offline
     if (!this.isOnline) {
       throw new Error('Offline: Cannot save to database');
@@ -975,13 +1242,26 @@ export class UserPreferencesManager {
       if (!this.isOnline) {
         throw new Error('Offline: Cannot save to database');
       }
-      
+
       try {
+        const requestBody = {
+          [config.dbColumn]: value,
+        };
+
+        Logger.debug(
+          `🔍 USER_PREFERENCES_MANAGER: PATCH /v1/users/${this.userId}`,
+          {
+            key,
+            dbColumn: config.dbColumn,
+            value,
+            requestBody,
+          },
+          'preferences'
+        );
+
         const apiResponse = await api.request(`/v1/users/${this.userId}`, {
           method: 'PATCH',
-          body: JSON.stringify({
-            [config.dbColumn]: value
-          })
+          body: JSON.stringify(requestBody),
         });
         const response = apiResponse?.data || apiResponse;
 
@@ -989,26 +1269,65 @@ export class UserPreferencesManager {
           throw new Error('Empty response from API');
         }
 
+        // CRITICAL DIAGNOSTIC: Log the actual response to verify if backend updated the column
+        const responseValue = (response as Record<string, unknown>)[config.dbColumn];
+        if (responseValue !== undefined && responseValue !== value) {
+          Logger.warn(
+            `⚠️ USER_PREFERENCES_MANAGER: Response value differs from sent value for ${key}`,
+            {
+              sent: value,
+              received: responseValue,
+              dbColumn: config.dbColumn,
+            },
+            'preferences'
+          );
+        } else if (responseValue === undefined) {
+          Logger.warn(
+            `⚠️ USER_PREFERENCES_MANAGER: Response does not contain ${config.dbColumn} for ${key}`,
+            {
+              sent: value,
+              responseKeys: Object.keys(response as Record<string, unknown>),
+              dbColumn: config.dbColumn,
+            },
+            'preferences'
+          );
+        } else {
+          Logger.debug(
+            `✅ USER_PREFERENCES_MANAGER: Response confirms ${config.dbColumn} update for ${key}`,
+            {
+              value: responseValue,
+              dbColumn: config.dbColumn,
+            },
+            'preferences'
+          );
+        }
+
         return response;
       } catch (error: unknown) {
         const errorMessage = error instanceof Error ? error.message : String(error);
         lastError = error instanceof Error ? error : new Error(errorMessage);
-        
+
         // Check if error is due to being offline
-        const isOfflineError = errorMessage.includes('Failed to fetch') || 
-                              errorMessage.includes('NetworkError') ||
-                              errorMessage.includes('network');
-        
+        const isOfflineError =
+          errorMessage.includes('Failed to fetch') ||
+          errorMessage.includes('NetworkError') ||
+          errorMessage.includes('network');
+
         if (isOfflineError) {
           this.isOnline = false; // Update offline status
           throw new Error('Offline: Cannot save to database');
         }
-        
+
         if (attempt < maxRetries) {
           // Exponential backoff
           const delay = Math.pow(2, attempt) * 1000;
-          Logger.warn(`⚠️ USER_PREFERENCES_MANAGER: Retry ${attempt}/${maxRetries} for ${key} after ${delay}ms`, null, 'preferences');
-          await new Promise(resolve => setTimeout(resolve, delay));
+          Logger.warn(
+            `⚠️ USER_PREFERENCES_MANAGER: Retry ${attempt}/${maxRetries} for ${key} after ${delay}ms`,
+            null,
+            'preferences'
+          );
+          // Debounce: intentional delay for performance - retry delay with exponential backoff
+          await new Promise((resolve) => setTimeout(resolve, delay));
         }
       }
     }
@@ -1037,7 +1356,7 @@ export class UserPreferencesManager {
    */
   updateCurrentUser() {
     // ES6 pattern: Update stateManager only
-    const currentUser = stateManagerInstance.getState('currentUser') as { 
+    const currentUser = stateManagerInstance.getState('currentUser') as {
       theme?: string;
       auraColor?: string;
       auraIntensity?: number;
@@ -1077,36 +1396,57 @@ export class UserPreferencesManager {
     // This prevents overriding a user's current theme (set by ProfileManager on startup) with a stale database value
     // CRITICAL: Skip theme application if this is called after saving a non-theme preference (like isVisible)
     if (!skipTheme && this.preferences.theme) {
-      const currentDomTheme = document.body.getAttribute('data-theme') || document.documentElement.getAttribute('data-theme');
-      
+      const currentDomTheme =
+        document.body.getAttribute('data-theme') ||
+        document.documentElement.getAttribute('data-theme');
+
       // ROOT CAUSE FIX: ProfileManager no longer sets theme on startup, so we should always apply the resolved theme
       // Only preserve DOM theme if it's different from the resolved preference AND it's not a default value
       const isDefaultTheme = this.preferences.theme === this.schema.theme.defaultValue;
-      const shouldPreserveDom = currentDomTheme && 
-                                currentDomTheme !== this.preferences.theme && 
-                                !isDefaultTheme &&
-                                currentDomTheme === 'dark'; // Only preserve if DOM is 'dark' (user's actual preference)
-      
+      const shouldPreserveDom =
+        currentDomTheme &&
+        currentDomTheme !== this.preferences.theme &&
+        !isDefaultTheme &&
+        currentDomTheme === 'dark'; // Only preserve if DOM is 'dark' (user's actual preference)
+
       if (!shouldPreserveDom) {
         // Apply the resolved theme preference
         const stack = new Error().stack;
-        Logger.debug(`🔍 USER_PREFERENCES_MANAGER: ========================================`, null, 'preferences');
-        Logger.debug(`🔍 USER_PREFERENCES_MANAGER: Applying theme preference '${this.preferences.theme}' (DOM: '${currentDomTheme || 'NOT SET'}')`, null, 'preferences');
-        Logger.debug(`🔍 USER_PREFERENCES_MANAGER: Call stack:`, stack?.split('\n').slice(1, 8).join('\n'), 'preferences');
-        Logger.debug(`🔍 USER_PREFERENCES_MANAGER: ========================================`, null, 'preferences');
+        Logger.debug(
+          `🔍 USER_PREFERENCES_MANAGER: ========================================`,
+          null,
+          'preferences'
+        );
+        Logger.debug(
+          `🔍 USER_PREFERENCES_MANAGER: Applying theme preference '${this.preferences.theme}' (DOM: '${currentDomTheme || 'NOT SET'}')`,
+          null,
+          'preferences'
+        );
+        Logger.debug(
+          `🔍 USER_PREFERENCES_MANAGER: Call stack:`,
+          stack?.split('\n').slice(1, 8).join('\n'),
+          'preferences'
+        );
+        Logger.debug(
+          `🔍 USER_PREFERENCES_MANAGER: ========================================`,
+          null,
+          'preferences'
+        );
         document.documentElement.setAttribute('data-theme', this.preferences.theme);
         document.body.setAttribute('data-theme', this.preferences.theme);
-        
+
         // Update theme toggle in settings tab if exists
         const themeToggle = document.getElementById('theme-toggle') as HTMLInputElement | null;
         if (themeToggle) {
           themeToggle.checked = this.preferences.theme === 'dark';
           // Dispatch event for VisibilitySettings (replaces window global pattern)
-          window.dispatchEvent(new CustomEvent('updateVisibilityThemeStatus', {
-            detail: { source: 'UserPreferencesManager', theme: this.preferences.theme }
-          }));
+          window.dispatchEvent(
+            new CustomEvent('updateVisibilityThemeStatus', {
+              detail: { source: 'UserPreferencesManager', theme: this.preferences.theme },
+            })
+          );
         }
-        
+
         // Update profile menu theme icon/text
         const themeIconMenu = document.getElementById('theme-icon-menu');
         const themeTextMenu = document.getElementById('theme-text-menu');
@@ -1114,36 +1454,52 @@ export class UserPreferencesManager {
           themeIconMenu.textContent = this.preferences.theme === 'dark' ? '☀️' : '🌙';
         }
         if (themeTextMenu) {
-          themeTextMenu.textContent = this.preferences.theme === 'dark' ? 'Light mode' : 'Dark mode';
+          themeTextMenu.textContent =
+            this.preferences.theme === 'dark' ? 'Light mode' : 'Dark mode';
         }
       } else {
         // DOM theme is 'dark' and preference is different - preserve DOM (user's actual preference)
-        Logger.warn(`🚫 USER_PREFERENCES_MANAGER: Preserving DOM theme '${currentDomTheme}' (user's actual preference), ignoring resolved preference '${this.preferences.theme}'`, null, 'preferences');
-        
+        Logger.warn(
+          `🚫 USER_PREFERENCES_MANAGER: Preserving DOM theme '${currentDomTheme}' (user's actual preference), ignoring resolved preference '${this.preferences.theme}'`,
+          null,
+          'preferences'
+        );
+
         // Sync preference to match DOM
         this.preferences.theme = currentDomTheme as Theme;
-        
+
         // Update Chrome storage to match DOM
         if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
           chrome.storage.local.set({ theme: currentDomTheme }, () => {
-            if (chrome.runtime?.lastError) {
-              Logger.warn('⚠️ USER_PREFERENCES_MANAGER: Failed to sync Chrome storage:', chrome.runtime.lastError, 'preferences');
+            const runtime = typeof chrome !== 'undefined' && chrome.runtime ? chrome.runtime : null;
+            if (runtime?.lastError) {
+              Logger.warn(
+                '⚠️ USER_PREFERENCES_MANAGER: Failed to sync Chrome storage:',
+                runtime.lastError,
+                'preferences'
+              );
             } else {
-              Logger.debug(`✅ USER_PREFERENCES_MANAGER: Synced Chrome storage theme to '${currentDomTheme}' to match DOM`, null, 'preferences');
+              Logger.debug(
+                `✅ USER_PREFERENCES_MANAGER: Synced Chrome storage theme to '${currentDomTheme}' to match DOM`,
+                null,
+                'preferences'
+              );
             }
           });
         }
-        
+
         // Update UI elements to match DOM theme
         const themeToggle = document.getElementById('theme-toggle') as HTMLInputElement | null;
         if (themeToggle) {
           themeToggle.checked = currentDomTheme === 'dark';
           // Dispatch event for VisibilitySettings (replaces window global pattern)
-          window.dispatchEvent(new CustomEvent('updateVisibilityThemeStatus', {
-            detail: { source: 'UserPreferencesManager', theme: currentDomTheme }
-          }));
+          window.dispatchEvent(
+            new CustomEvent('updateVisibilityThemeStatus', {
+              detail: { source: 'UserPreferencesManager', theme: currentDomTheme },
+            })
+          );
         }
-        
+
         const themeIconMenu = document.getElementById('theme-icon-menu');
         const themeTextMenu = document.getElementById('theme-text-menu');
         if (themeIconMenu) {
@@ -1154,54 +1510,72 @@ export class UserPreferencesManager {
         }
       }
     } else if (skipTheme) {
-      Logger.debug(`🔍 USER_PREFERENCES_MANAGER: Skipping theme application (skipTheme=true, called after non-theme preference save)`, null, 'preferences');
+      Logger.debug(
+        `🔍 USER_PREFERENCES_MANAGER: Skipping theme application (skipTheme=true, called after non-theme preference save)`,
+        null,
+        'preferences'
+      );
     }
 
     // Apply visibility to toggle if exists
     if (this.preferences.isVisible !== undefined) {
-      const visibilityToggle = document.getElementById('visibility-toggle') as HTMLInputElement | null;
+      const visibilityToggle = document.getElementById(
+        'visibility-toggle'
+      ) as HTMLInputElement | null;
       if (visibilityToggle) {
         visibilityToggle.checked = this.preferences.isVisible;
         // Dispatch event for VisibilitySettings (replaces window global pattern)
-        window.dispatchEvent(new CustomEvent('updateVisibilityStatus', {
-          detail: { source: 'UserPreferencesManager', isVisible: this.preferences.isVisible }
-        }));
+        window.dispatchEvent(
+          new CustomEvent('updateVisibilityStatus', {
+            detail: { source: 'UserPreferencesManager', isVisible: this.preferences.isVisible },
+          })
+        );
       }
     }
 
     // Apply headline to input if exists
     if (this.preferences.headline !== undefined) {
-      const headlineInput = document.getElementById('settings-headline-input') as HTMLInputElement | null;
+      const headlineInput = document.getElementById(
+        'settings-headline-input'
+      ) as HTMLInputElement | null;
       if (headlineInput && headlineInput.value !== this.preferences.headline) {
         headlineInput.value = this.preferences.headline;
         // Dispatch event for SettingsHeadlineManager to update char count (ES6 pattern)
-        window.dispatchEvent(new CustomEvent('headlineUpdated', {
-          detail: { headline: this.preferences.headline }
-        }));
+        window.dispatchEvent(
+          new CustomEvent('headlineUpdated', {
+            detail: { headline: this.preferences.headline },
+          })
+        );
       }
     }
 
     // Apply display name to input if exists
     if (this.preferences.displayName !== undefined) {
-      const displayNameInput = document.getElementById('display-name-input') as HTMLInputElement | null;
+      const displayNameInput = document.getElementById(
+        'display-name-input'
+      ) as HTMLInputElement | null;
       if (displayNameInput && displayNameInput.value !== this.preferences.displayName) {
         displayNameInput.value = this.preferences.displayName;
         // Dispatch event for DisplayNameManager to update char count (ES6 pattern)
-        window.dispatchEvent(new CustomEvent('displayNameUpdated', {
-          detail: { displayName: this.preferences.displayName }
-        }));
+        window.dispatchEvent(
+          new CustomEvent('displayNameUpdated', {
+            detail: { displayName: this.preferences.displayName },
+          })
+        );
       }
     }
 
     // Trigger avatar refresh for aura changes
     // Dispatch DOM events for avatar refresh (ES6 pattern)
     if (this.preferences.auraColor || this.preferences.auraIntensity !== undefined) {
-      window.dispatchEvent(new CustomEvent('avatarRefreshRequested', {
-        detail: { 
-          auraColor: this.preferences.auraColor,
-          auraIntensity: this.preferences.auraIntensity
-        }
-      }));
+      window.dispatchEvent(
+        new CustomEvent('avatarRefreshRequested', {
+          detail: {
+            auraColor: this.preferences.auraColor,
+            auraIntensity: this.preferences.auraIntensity,
+          },
+        })
+      );
     }
 
     Logger.debug('✅ USER_PREFERENCES_MANAGER: Applied preferences to UI', null, 'preferences');
@@ -1215,27 +1589,36 @@ export class UserPreferencesManager {
       key,
       value,
       timestamp: Date.now(),
-      attempts: 0
+      attempts: 0,
     };
 
     this.retryQueue.push(failedSave);
-    Logger.debug(`📋 USER_PREFERENCES_MANAGER: Queued ${key} for retry (queue size: ${this.retryQueue.length})`, null, 'preferences');
+    Logger.debug(
+      `📋 USER_PREFERENCES_MANAGER: Queued ${key} for retry (queue size: ${this.retryQueue.length})`,
+      null,
+      'preferences'
+    );
 
     // Store in localStorage as backup
     try {
-      const storedQueue = JSON.parse(localStorage.getItem('failedPreferenceSaves') || '[]');
-      storedQueue.push(failedSave);
-      localStorage.setItem('failedPreferenceSaves', JSON.stringify(storedQueue));
+      const storedQueue = SafeJSON.parse(
+        localStorage.getItem('failedPreferenceSaves') || '[]',
+        [],
+        'user-preferences-retry-queue'
+      );
+      if (Array.isArray(storedQueue)) {
+        storedQueue.push(failedSave);
+        localStorage.setItem('failedPreferenceSaves', JSON.stringify(storedQueue));
+      }
     } catch (error: unknown) {
       handleError(error, {
-            log: true,
-            logLevel: 'warn',
-            context: {
-                operation: 'catch',
-            component: 'UserPreferences'
-            }
-        });;
-    
+        log: true,
+        logLevel: 'warn',
+        context: {
+          operation: 'catch',
+          component: 'UserPreferences',
+        },
+      });
     }
   }
 
@@ -1257,21 +1640,86 @@ export class UserPreferencesManager {
   }
 
   /**
+   * Wait for userId to become available (async coordination)
+   */
+  async waitForUserId(): Promise<string> {
+    // Check if userId is already available
+    const currentUser = stateManagerInstance.getState('currentUser') as {
+      id?: string;
+    } | null;
+    const currentUserId = currentUser?.id;
+
+    if (currentUserId) {
+      return currentUserId;
+    }
+
+    // If we already have a pending promise, return it
+    if (this.userIdPromise) {
+      return this.userIdPromise;
+    }
+
+    // Create a new promise that will be resolved when userId becomes available
+    this.userIdPromise = new Promise<string>((resolve) => {
+      this.userIdResolvers.push(resolve);
+
+      // Set a reasonable timeout (10 seconds) in case userId never becomes available
+      setTimeout(() => {
+        if (this.userIdPromise === null) return; // Already resolved
+
+        Logger.warn(
+          '⚠️ USER_PREFERENCES_MANAGER: Timeout waiting for userId via async coordination',
+          null,
+          'preferences'
+        );
+        // Resolve with a fallback - this allows initialization to continue
+        this.userIdPromise = null;
+        this.userIdResolvers = [];
+        resolve('unknown-user');
+      }, 10000);
+    });
+
+    return this.userIdPromise;
+  }
+
+  /**
+   * Notify waiting promises that userId is now available
+   */
+  private resolveUserIdWaiters(userId: string): void {
+    if (this.userIdPromise) {
+      // Resolve all pending promises
+      this.userIdResolvers.forEach(resolve => resolve(userId));
+      this.userIdPromise = null;
+      this.userIdResolvers = [];
+    }
+  }
+
+  /**
    * Setup offline detection
    */
   setupOfflineDetection() {
     // Listen for online/offline events
-    window.addEventListener('online', () => {
+    this.eventManager.on(window, 'online', () => {
       this.handleOnline();
     });
-    
-    window.addEventListener('offline', () => {
+
+    this.eventManager.on(window, 'offline', () => {
       this.handleOffline();
     });
-    
+
     // Initial check
     this.isOnline = navigator.onLine !== false;
-    Logger.debug(`🌐 USER_PREFERENCES_MANAGER: Initial online status: ${this.isOnline}`, null, 'preferences');
+    Logger.debug(
+      `🌐 USER_PREFERENCES_MANAGER: Initial online status: ${this.isOnline}`,
+      null,
+      'preferences'
+    );
+  }
+
+  /**
+   * Cleanup event listeners
+   */
+  cleanup(): void {
+    this.eventManager.cleanup();
   }
 
   /**
@@ -1280,21 +1728,24 @@ export class UserPreferencesManager {
   handleOnline() {
     const wasOffline = !this.isOnline;
     this.isOnline = true;
-    
-    Logger.debug('🌐 USER_PREFERENCES_MANAGER: Connection restored, processing sync queue', 'preferences');
-    
+
+    Logger.debug(
+      '🌐 USER_PREFERENCES_MANAGER: Connection restored, processing sync queue',
+      'preferences'
+    );
+
     // Process retry queue when coming back online
     if (wasOffline) {
       this.processRetryQueue();
-      
+
       // Flush any pending batch
       if (this.batchQueue.length > 0) {
         this.flushBatch();
       }
     }
-    
+
     // Notify listeners
-    this.offlineListeners.forEach(listener => {
+    this.offlineListeners.forEach((listener) => {
       if (typeof listener === 'function') {
         listener({ online: true });
       }
@@ -1306,10 +1757,13 @@ export class UserPreferencesManager {
    */
   handleOffline() {
     this.isOnline = false;
-    Logger.debug('🌐 USER_PREFERENCES_MANAGER: Connection lost, will queue saves for sync', 'preferences');
-    
+    Logger.debug(
+      '🌐 USER_PREFERENCES_MANAGER: Connection lost, will queue saves for sync',
+      'preferences'
+    );
+
     // Notify listeners
-    this.offlineListeners.forEach(listener => {
+    this.offlineListeners.forEach((listener) => {
       if (typeof listener === 'function') {
         listener({ online: false });
       }
@@ -1327,7 +1781,7 @@ export class UserPreferencesManager {
    * Remove offline status listener
    */
   removeOfflineListener(listener: (status: { online: boolean }) => void) {
-    this.offlineListeners = this.offlineListeners.filter(l => l !== listener);
+    this.offlineListeners = this.offlineListeners.filter((l) => l !== listener);
   }
 
   /**
@@ -1335,15 +1789,23 @@ export class UserPreferencesManager {
    */
   async processRetryQueue() {
     if (!this.isOnline) {
-      Logger.debug('🌐 USER_PREFERENCES_MANAGER: Skipping retry queue (offline)', null, 'preferences');
+      Logger.debug(
+        '🌐 USER_PREFERENCES_MANAGER: Skipping retry queue (offline)',
+        null,
+        'preferences'
+      );
       return;
     }
-    
+
     if (this.retryQueue.length === 0) {
       return;
     }
 
-    Logger.debug(`🔄 USER_PREFERENCES_MANAGER: Processing retry queue (${this.retryQueue.length} items)`, null, 'preferences');
+    Logger.debug(
+      `🔄 USER_PREFERENCES_MANAGER: Processing retry queue (${this.retryQueue.length} items)`,
+      null,
+      'preferences'
+    );
 
     const queue = [...this.retryQueue];
     this.retryQueue = [];
@@ -1351,15 +1813,22 @@ export class UserPreferencesManager {
     for (const item of queue) {
       // Check if still online before each retry
       if (!this.isOnline) {
-        Logger.debug('🌐 USER_PREFERENCES_MANAGER: Went offline during retry, re-queuing', 'preferences');
+        Logger.debug(
+          '🌐 USER_PREFERENCES_MANAGER: Went offline during retry, re-queuing',
+          'preferences'
+        );
         this.retryQueue.push(item);
         continue;
       }
-      
+
       try {
         await this.saveToDatabase(item.key, item.value);
         this.metrics.retries.success++;
-        Logger.debug(`✅ USER_PREFERENCES_MANAGER: Retry successful for ${item.key}`, null, 'preferences');
+        Logger.debug(
+          `✅ USER_PREFERENCES_MANAGER: Retry successful for ${item.key}`,
+          null,
+          'preferences'
+        );
       } catch (error: unknown) {
         item.attempts++;
         if (item.attempts < 5) {
@@ -1371,13 +1840,12 @@ export class UserPreferencesManager {
             log: true,
             logLevel: 'error',
             context: {
-                operation: 'catch',
-            component: 'UserPreferences'
-            }
-        });;
+              operation: 'catch',
+              component: 'UserPreferences',
+            },
+          });
         }
-      
-    }
+      }
     }
 
     // Update localStorage
@@ -1385,27 +1853,31 @@ export class UserPreferencesManager {
       localStorage.setItem('failedPreferenceSaves', JSON.stringify(this.retryQueue));
     } catch (error: unknown) {
       handleError(error, {
-            log: true,
-            logLevel: 'warn',
-            context: {
-                operation: 'catch',
-            component: 'UserPreferences'
-            }
-        });;
-    
+        log: true,
+        logLevel: 'warn',
+        context: {
+          operation: 'catch',
+          component: 'UserPreferences',
+        },
+      });
     }
   }
 
   /**
    * Emit preference changed event
    */
-  emitPreferenceChanged(key: PreferenceKey, value: PreferenceValue, oldValue: PreferenceValue | undefined, source: string = 'user') {
+  emitPreferenceChanged(
+    key: PreferenceKey,
+    value: PreferenceValue,
+    oldValue: PreferenceValue | undefined,
+    source: string = 'user'
+  ) {
     const eventData = {
       key,
       value,
       oldValue,
       source,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     };
 
     // EventBus event (optional - for backward compatibility during migration)
@@ -1416,11 +1888,17 @@ export class UserPreferencesManager {
     }
 
     // DOM event
-    window.dispatchEvent(new CustomEvent('preferenceChanged', {
-      detail: eventData
-    }));
+    window.dispatchEvent(
+      new CustomEvent('preferenceChanged', {
+        detail: eventData,
+      })
+    );
 
-    Logger.debug(`📢 USER_PREFERENCES_MANAGER: Emitted preference changed: ${key}`, eventData, 'preferences');
+    Logger.debug(
+      `📢 USER_PREFERENCES_MANAGER: Emitted preference changed: ${key}`,
+      eventData,
+      'preferences'
+    );
   }
 
   /**
@@ -1429,20 +1907,24 @@ export class UserPreferencesManager {
   emitPreferenceLoaded() {
     const eventData = {
       preferences: { ...this.preferences },
-      timestamp: Date.now()
+      timestamp: Date.now(),
     };
 
     // EventBus event (optional - for backward compatibility during migration)
     // ES6 pattern: Optional check for eventBus
-    const win2 = window as Window & { eventBus?: { emit?: (event: string, data: unknown) => void } };
+    const win2 = window as Window & {
+      eventBus?: { emit?: (event: string, data: unknown) => void };
+    };
     if (win2.eventBus && typeof win2.eventBus.emit === 'function') {
       win2.eventBus.emit('preference:loaded', eventData);
     }
 
     // DOM event
-    window.dispatchEvent(new CustomEvent('preferenceLoaded', {
-      detail: eventData
-    }));
+    window.dispatchEvent(
+      new CustomEvent('preferenceLoaded', {
+        detail: eventData,
+      })
+    );
 
     Logger.debug('📢 USER_PREFERENCES_MANAGER: Emitted preference loaded', null, 'preferences');
   }
@@ -1455,20 +1937,24 @@ export class UserPreferencesManager {
       key,
       value,
       error: error.message,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     };
 
     // EventBus event (optional - for backward compatibility during migration)
     // ES6 pattern: Optional check for eventBus
-    const win3 = window as Window & { eventBus?: { emit?: (event: string, data: unknown) => void } };
+    const win3 = window as Window & {
+      eventBus?: { emit?: (event: string, data: unknown) => void };
+    };
     if (win3.eventBus && typeof win3.eventBus.emit === 'function') {
       win3.eventBus.emit('preference:saveFailed', eventData);
     }
 
     // DOM event
-    window.dispatchEvent(new CustomEvent('preferenceSaveFailed', {
-      detail: eventData
-    }));
+    window.dispatchEvent(
+      new CustomEvent('preferenceSaveFailed', {
+        detail: eventData,
+      })
+    );
   }
 
   /**
@@ -1481,19 +1967,25 @@ export class UserPreferencesManager {
       duration,
       error: error?.message,
       timestamp: Date.now(),
-      userId: this.userId
+      userId: this.userId,
     };
 
     // Send to monitoring service if available
     // ES6 pattern: Optional check for monitoringService (for backward compatibility during migration)
-    const win4 = window as Window & { monitoringService?: { log?: (category: string, entry: unknown) => void } };
+    const win4 = window as Window & {
+      monitoringService?: { log?: (category: string, entry: unknown) => void };
+    };
     if (win4.monitoringService && typeof win4.monitoringService.log === 'function') {
       win4.monitoringService.log('preference', logEntry);
     }
 
     // Logger log
     const emoji = status === 'success' ? '✅' : '❌';
-    Logger.debug(`${emoji} [PREFERENCE_MANAGER] ${operation} ${status} (${duration}ms)`, logEntry, 'preferences');
+    Logger.debug(
+      `${emoji} [PREFERENCE_MANAGER] ${operation} ${status} (${duration}ms)`,
+      logEntry,
+      'preferences'
+    );
   }
 
   /**
@@ -1505,7 +1997,7 @@ export class UserPreferencesManager {
       retryQueueSize: this.retryQueue.length,
       isInitialized: this.isInitialized,
       isLoading: this.isLoading,
-      isSaving: this.isSaving
+      isSaving: this.isSaving,
     };
   }
 
@@ -1531,7 +2023,7 @@ export class UserPreferencesManager {
           key: prefKey,
           chromeValue,
           dbValue,
-          currentValue
+          currentValue,
         });
       }
     }
@@ -1548,11 +2040,14 @@ export class UserPreferencesManager {
 const userPreferencesManager = new UserPreferencesManager();
 
 // ES6 convenience exports (no window assignment - pure module pattern)
-export const getPreference = (key: PreferenceKey): Promise<PreferenceValue | null> => 
+export const getPreference = (key: PreferenceKey): Promise<PreferenceValue | null> =>
   userPreferencesManager.getPreference(key);
 
-export const savePreference = (key: PreferenceKey, value: PreferenceValue, options?: SaveOptions): Promise<boolean> => 
-  userPreferencesManager.savePreference(key, value, options);
+export const savePreference = (
+  key: PreferenceKey,
+  value: PreferenceValue,
+  options?: SaveOptions
+): Promise<boolean> => userPreferencesManager.savePreference(key, value, options);
 
 // Export the instance for advanced usage
 export { userPreferencesManager };
@@ -1562,18 +2057,27 @@ Logger.debug('✅ USER_PREFERENCES_MANAGER: Module loaded', null, 'preferences')
 // Start theme change tracking immediately (optional - don't block if it fails)
 if (typeof window !== 'undefined') {
   // Try to load ThemeChangeTracker dynamically to avoid blocking module load
-  import('./ThemeChangeTracker')
+  // CRITICAL FIX: Use .js extension for ES module import
+  // @ts-ignore - JavaScript module without type declarations
+  import('../../extension/utils/ThemeChangeTracker.js')
     .then((module) => {
       if (module.themeChangeTracker) {
         module.themeChangeTracker.startTracking();
-        Logger.debug('✅ USER_PREFERENCES_MANAGER: ThemeChangeTracker loaded and started', null, 'preferences');
+        Logger.debug(
+          '✅ USER_PREFERENCES_MANAGER: ThemeChangeTracker loaded and started',
+          null,
+          'preferences'
+        );
       }
     })
     .catch((err) => {
-      Logger.warn('⚠️ USER_PREFERENCES_MANAGER: ThemeChangeTracker not available (non-critical):', err, 'preferences');
+      Logger.warn(
+        '⚠️ USER_PREFERENCES_MANAGER: ThemeChangeTracker not available (non-critical):',
+        err,
+        'preferences'
+      );
       // Don't fail - theme tracking is optional for debugging
     });
 }
 
 export default userPreferencesManager;
-

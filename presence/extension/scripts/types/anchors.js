@@ -1,4 +1,0 @@
-/**
- * Anchor Type Definitions
- */
-export {};

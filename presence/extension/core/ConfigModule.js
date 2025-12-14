@@ -1,15 +1,22 @@
 /**
- * CONFIG MODULE - Configuration Constants
- * TypeScript + ES6 Module for configuration values
- *
- * First module in TypeScript migration
+ * ConfigModule - Configuration management
  */
-import { Logger } from '../utils/Logger.js';
-// Avatar fallback color constant
-export const AVATAR_FALLBACK_COLOR = '#ffffff';
-// Public Square community UUID - default community for all users
-export const PUBLIC_SQUARE_UUID = 'abe5ec85-4ba6-456f-adaf-03d7d51cecf4';
-// Log initialization
-if (typeof console !== 'undefined') {
-    Logger.debug('✅ CONFIG MODULE: AVATAR_FALLBACK_COLOR exported:', AVATAR_FALLBACK_COLOR, 'config');
-}
+export const AVATAR_FALLBACK_COLOR = '#6366f1';
+/**
+ * Public Square community UUID
+ */
+export const PUBLIC_SQUARE_UUID = '00000000-0000-0000-0000-000000000000';
+/**
+ * Configuration constants and utilities
+ */
+export const configManagerInstance = {
+    get: (key) => {
+        switch (key) {
+            case 'apiUrl':
+                return 'https://api.canopi.live';
+            default:
+                return undefined;
+        }
+    }
+};
+//# sourceMappingURL=ConfigModule.js.map

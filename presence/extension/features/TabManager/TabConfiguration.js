@@ -2,7 +2,7 @@
  * Tab Configuration Service
  * Manages tab state, order, visibility, and tracking (currentTab/previousTab)
  */
-import { DEFAULT_STATE } from './types.js';
+import { DEFAULT_STATE } from './types';
 import { Logger } from '../../utils/Logger.js';
 import { handleError } from '../../utils/ErrorHandler.js';
 import { userPreferencesManager } from '../../utils/UserPreferencesManager.js';
@@ -21,6 +21,72 @@ export class TabConfiguration {
         this.preferencesManager = manager;
     }
     /**
+     * Add default built-in tabs
+     */
+    async addDefaultTabs() {
+        const defaultTabs = [
+            {
+                id: 'discuss-tab',
+                label: 'Discuss',
+                icon: '💬',
+                visible: true,
+                builtIn: true,
+                order: 0,
+                tabContentId: 'discuss-tab'
+            },
+            {
+                id: 'visibility-tab',
+                label: 'Visibility',
+                icon: '👁️',
+                visible: true,
+                builtIn: true,
+                order: 1,
+                tabContentId: 'visibility-tab'
+            },
+            {
+                id: 'rooms-tab',
+                label: 'Rooms',
+                icon: '🏠',
+                visible: true,
+                builtIn: true,
+                order: 2,
+                tabContentId: 'rooms-tab'
+            },
+            {
+                id: 'people-tab',
+                label: 'People',
+                icon: '👥',
+                visible: true,
+                builtIn: true,
+                order: 3,
+                tabContentId: 'people-tab'
+            },
+            {
+                id: 'agent-tab',
+                label: 'Agent',
+                icon: '🤖',
+                visible: true,
+                builtIn: true,
+                order: 4,
+                tabContentId: 'agent-tab'
+            },
+            {
+                id: 'settings-tab',
+                label: 'Settings',
+                icon: '⚙️',
+                visible: true,
+                builtIn: true,
+                order: 5,
+                tabContentId: 'settings-tab'
+            }
+        ];
+        for (const tab of defaultTabs) {
+            this.state.tabs.push(tab);
+        }
+        this.state.visibleTabCount = defaultTabs.length;
+        this.logger.debug?.(`✅ TabConfiguration: Added ${defaultTabs.length} default tabs`);
+    }
+    /**
      * Initialize configuration from storage or use defaults
      */
     async initialize() {
@@ -36,8 +102,10 @@ export class TabConfiguration {
             }
             else {
                 this.state = { ...DEFAULT_STATE };
+                // Add default tabs
+                await this.addDefaultTabs();
                 await this.persistState();
-                this.logger.debug?.('✅ TabConfiguration: Using default state');
+                this.logger.debug?.('✅ TabConfiguration: Using default state with tabs');
             }
         }
         catch (error) {
@@ -301,7 +369,7 @@ export class TabConfiguration {
             const storedTabsMap = new Map();
             storedTabs.forEach(tab => {
                 if (tab && typeof tab === 'object' && 'id' in tab) {
-                    storedTabsMap.set(tab.id, tab);
+                    storedTabsMap.set(String(tab.id), tab);
                 }
             });
             // Merge: update default tabs with stored values, preserve stored tabs not in defaults

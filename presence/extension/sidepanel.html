@@ -1,22 +1,22 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Presence</title>
+  <title>Canopi</title>
   <meta charset="utf-8">
   <link rel="stylesheet" href="sidepanel.css">
   <link rel="stylesheet" href="tab-manager.css">
   
   <!-- ===== CORE SYSTEM LOADING ===== -->
   <!-- Load Configuration FIRST (sets window.SUPABASE_URL, etc.) -->
-  <script type="module" src="config.js"></script>
-  <script type="module" src="security.js"></script>
-  <script type="module" src="performance-optimizer.js"></script>
+  <script type="module" src="utils/ConfigManager.js"></script>
+  <script type="module" src="utils/SecurityManager.js"></script>
+  <script type="module" src="utils/PerformanceOptimizer.js"></script>
   <!-- Load LOCAL Supabase JS Library (CDN blocked by CSP) -->
   <script type="module" src="lib/supabase.min.js"></script>
   
   <!-- ===== PRE-RENDER INITIALIZATION ===== -->
   <!-- CRITICAL: Load PreRenderInitializer BEFORE UserPreferencesManager -->
-  <script type="module" src="PreRenderInitializer.js"></script>
+  <script type="module" src="utils/PreRenderInitializer.js"></script>
   
   <!-- ===== MODULAR ARCHITECTURE ===== -->
   <!-- TypeScript Modules - Load as ES6 modules from src/ -->
@@ -39,9 +39,9 @@
   <!-- Legacy: Keep old ErrorHandler for now (will remove after testing) -->
   <!-- <script src="utils/ErrorHandler.js"></script> -->
   <!-- Load Tab Context Manager (Architecture-First Approach) -->
-  <script type="module" src="TabContextManager.js"></script>
+  <script type="module" src="utils/TabContextManager.js"></script>
   <!-- Load Robust Message Operations Manager -->
-  <script type="module" src="RobustMessageOperationsManager.js"></script>
+  <script type="module" src="utils/RobustMessageOperationsManager.js"></script>
   
   <!-- Load Supabase Service (TypeScript) -->
   <script type="module" src="services/SupabaseService.js"></script>
@@ -50,11 +50,12 @@
   <!-- Legacy: Keep old SupabaseService for now (will remove after testing) -->
   <!-- <script src="services/SupabaseService.js"></script> -->
   <!-- Load Supabase Realtime Client -->
-  <script type="module" src="SupabaseRealtimeClient.js"></script>
+  <script type="module" src="utils/SupabaseRealtimeClient.js"></script>
   <!-- Load Unified Authentication System -->
-  <script type="module" src="unified-auth.js"></script>
+  <script type="module" src="utils/UnifiedAuth.js"></script>
   <!-- Visibility Manager is now loaded via buildGraph.js in Sidepanel.js -->
   <!-- Legacy VisibilityManager.js removed - using refactored visibility module -->
+</script>
   <!-- Load Sidepanel Core -->
   <script type="module" src="core/SidepanelCore.js"></script>
   
@@ -79,6 +80,8 @@
   <!-- Message Visibility Manager - handles CSS class management and visibility (TypeScript build output) -->
   <script type="module" src="utils/MessageVisibilityManager.js"></script>
   <!-- BuildTracker loads build metadata dynamically -->
+  <!-- CRITICAL: Load build info BEFORE BuildTracker so it can access window.__BUILD_INFO__ -->
+  <script src=".build-info.js"></script>
   <script type="module" src="core/BuildTracker.js"></script>
   
   <!-- Load X Icon Library BEFORE UnifiedMessageModal -->
@@ -95,6 +98,12 @@
   <!-- Diagnostic scripts removed - files not found, causing ERR_FILE_NOT_FOUND errors -->
   <!-- CRITICAL FIX: Patch loading overlay for persistent indicator -->
   <script type="module" src="utils/patches/ChatLoadingOverlayPatch.js"></script>
+
+  <!-- ===== REACTIVE MIGRATION SYSTEM ===== -->
+  <!-- Enable complete reactive migration for performance improvements -->
+  <script src="src/scripts/enable-complete-reactive-migration.js"></script>
+  <!-- Verification script for checking migration status -->
+  <script src="verify-reactive-migration.js"></script>
   <!-- CRITICAL FIX: Verify CanopiModule loaded after script tag (TypeScript build output) -->
   <script type="module" src="utils/patches/LoadChatHistoryVerifier.js"></script>
   <!-- Cursor Park Manager -->
@@ -113,8 +122,6 @@
   <!-- Legacy: Keep old AuthManager for now (will remove after testing) -->
   <!-- <script src="features/AuthManager.js"></script> -->
   <script type="module" src="features/AuraColorModal.js"></script>
-  <!-- Load CommunitiesModule (TypeScript) -->
-  <script type="module" src="features/CommunitiesModule.js"></script>
   <!-- Load NavigationManager (TypeScript build output) -->
   <script type="module" src="features/NavigationManager.js"></script>
   <!-- Load TabManager (TypeScript build output) -->
@@ -131,13 +138,13 @@
   
   <!-- Load Notification Manager -->
   <!-- Load URL Normalization Utility -->
-  <script type="module" src="urlNormalization.js"></script>
+  <script type="module" src="utils/UrlNormalization.js"></script>
   
   <!-- Legacy SimpleRealtimeManager removed - using RobustRealtimeManager -->
   
         <!-- Removed conflicting fix files - they were causing system conflicts -->
   
-  <script type="module" src="CleanRealtimeManager.js"></script>
+  <script type="module" src="utils/CleanRealtimeManager.js"></script>
   <script type="module" src="features/RealtimeManager.js"></script>
 </head>
 <body>
@@ -147,7 +154,7 @@
     <header class="sidebar-header-main">
       <div class="header-left">
         <div class="logo-container">
-          <img id="primary-community-logo" alt="Community" class="primary-community-logo" style="display: none;">
+          <img id="primary-community-logo" alt="Canopi" class="primary-community-logo" src="images/canopi-logo-black-bg.png" style="display: block; width: 24px; height: 24px;">
         </div>
         <div class="community-dropdown-trigger">
           <span id="current-community-name"></span>
@@ -171,7 +178,7 @@
             <div id="notification-badge" class="notification-badge" style="display: none; position: absolute; top: 0; right: 0; background: #ff4444; color: white; border-radius: 50%; width: 12px; height: 12px; font-size: 8px; text-align: center; line-height: 12px;">1</div>
           </div>
           <div id="user-avatar-container" style="position: relative; width: 24px; height: 24px; cursor: pointer;"></div>
-          <div id="user-menu" class="user-menu" style="display: none; position: absolute; top: 100%; right: 0; z-index: 1000; min-width: 200px;">
+          <div id="user-menu" class="user-menu" style="display: none; position: absolute; top: 100%; right: 0; z-index: 10002; min-width: 200px;">
             <div style="padding: 8px 12px; border-bottom: 1px solid #eee; font-size: 0.9em; color: #666;">Signed in as <span id="user-menu-name" style="font-weight: bold;"></span></div>
             <div style="padding: 4px 0; border-top: 1px solid #eee;">
               <button id="aura-btn" style="width: 100%; padding: 8px 12px; border: none; background: none; text-align: left; cursor: pointer; font-size: 0.9em; display: flex; align-items: center; gap: 8px;">
@@ -337,11 +344,11 @@
             </select>
           </div>
           
-          <!-- Trace Limit -->
+          <!-- Trace Limit - ROOT CAUSE FIX: Right align dropdown, keep title left, tooltip on label -->
           <div class="setting-item">
-            <label for="trace-limit-select" style="display: block; margin-bottom: 8px;">Trace Limit</label>
-            <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
-              <select id="trace-limit-select" style="width: 30%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.9em;">
+            <label for="trace-limit-select" title='How long to show "last seen" traces' style="display: block; margin-bottom: 8px; white-space: nowrap;">Trace Limit</label>
+            <div style="display: flex; align-items: center; gap: 12px; flex-wrap: nowrap; width: 100%; justify-content: flex-end;">
+              <select id="trace-limit-select" style="padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.9em; flex-shrink: 0;">
                 <option value="0">Hide traces</option>
                 <option value="-1">Unlimited</option>
                 <option value="7">7 days</option>
@@ -352,7 +359,6 @@
                 <option value="180">180 days</option>
                 <option value="365">1 year</option>
               </select>
-              <span style="font-size: 0.85em; color: var(--text-secondary);">How long to show "last seen" traces</span>
             </div>
           </div>
           
@@ -546,7 +552,7 @@
   
   <!-- Load Modern Systems -->
   <!-- Load Modernization Classes -->
-  <script type="module" src="LifecycleManager.js"></script>
+  <script type="module" src="utils/LifecycleManager.js"></script>
   
   <!-- Unified Preference Management -->
   <!-- User Preferences Manager (TypeScript build output) -->
@@ -554,6 +560,7 @@
   
   <!-- Load Preference Managers (must load before sidepanel.js initializes them) -->
   <script type="module" src="features/SettingsHeadlineManager.js"></script>
+  <script type="module" src="features/TraceLimitManager.js"></script>
   <script type="module" src="features/DisplayNameManager.js"></script>
   <!-- LEGACY: VisibilitySettingsManager.js removed - now using VisibilitySettings from buildModuleGraph -->
   <!-- <script type="module" src="features/VisibilitySettingsManager.js"></script> -->
@@ -703,41 +710,52 @@
   
   <!-- Load Robust Modules (Architecture-First Approach) -->
   <!-- Load Unified Initialization Manager -->
-  <script type="module" src="UnifiedInitializationManager.js"></script>
+  <script type="module" src="utils/UnifiedInitializationManager.js"></script>
   <!-- Load Robust Modules -->
   <!-- Removed RobustAuthManager.js - using CleanRealtimeManager instead -->
   <!-- Removed RobustRealtimeManager.js - using CleanRealtimeManager.js instead -->
-  <script type="module" src="RobustIntegration.js"></script>
+  <script type="module" src="utils/RobustIntegration.js"></script>
   
   <!-- Load Rate Limiting Modules -->
-  <script type="module" src="APIRateLimiter.js"></script>
-  <script type="module" src="SupabaseWrapper.js"></script>
-  <script type="module" src="APIMonitor.js"></script>
+  <script type="module" src="utils/APIRateLimiter.js"></script>
+  <script type="module" src="utils/SupabaseWrapper.js"></script>
+  <script type="module" src="utils/APIMonitor.js"></script>
   
         <!-- Load Unified Modules -->
         
         <!-- Load Real-time Foundation -->
-        <script type="module" src="RealtimeFoundation.js"></script>
+        <script type="module" src="utils/RealtimeFoundation.js"></script>
   
   <!-- Load Visibility Real-time System -->
-  <script type="module" src="VisibilityRealtimeManager.js"></script>
+  <script type="module" src="utils/VisibilityRealtimeManager.js"></script>
   <script type="module" src="ui-visibility-bindings.js"></script>
-  <script type="module" src="VisibilityIntegration.js"></script>
+  <script type="module" src="utils/VisibilityIntegration.js"></script>
   
   <!-- Load Reactions Real-time System -->
-  <script type="module" src="ReactionsRealtimeManager.js"></script>
-  <script type="module" src="ui-reactions-bindings.js"></script>
-  <script type="module" src="ReactionsIntegration.js"></script>
+  <script type="module" src="utils/ReactionsRealtimeManager.js"></script>
+  <script type="module" src="utils/UIReactionsBindings.js"></script>
+  <script type="module" src="utils/ReactionsIntegration.js"></script>
+  <!-- Load Reaction Picker -->
+  <script type="module" src="utils/ReactionPicker.js"></script>
   
   <!-- Load Auras Real-time System -->
-  <script type="module" src="ui-auras-bindings.js"></script>
-  <script type="module" src="AurasIntegration.js"></script>
-  
+  <script type="module" src="utils/UIAurasBindings.js"></script>
+  <script type="module" src="utils/AurasIntegration.js"></script>
+
+  <!-- ===== UNIFIED NAVIGATION SYSTEM ===== -->
+  <!-- Load new navigation system (Phase 2: Core Infrastructure) -->
+  <script src="utils/UnifiedStateManager.js"></script>
+  <script src="utils/LoadingStateCoordinator.js"></script>
+  <script src="utils/NavigationInitializer.js"></script>
+
+  <!-- Phase 2 Integration Tests - DISABLED IN PRODUCTION -->
+  <!-- <script src="utils/Phase2IntegrationTest.js"></script> -->
+
   <!-- Load Architecture Tests -->
   
   <!-- Load Real-time Diagnostic Tools -->
   <!-- Bind robust realtime events to UI refresh -->
-  <script type="module" src="ui-realtime-bindings.js"></script>
+  <script type="module" src="utils/UIRealtimeBindings.js"></script>
   
   <!-- Diagnostic scripts removed - files not found, causing ERR_FILE_NOT_FOUND errors -->
         </body>

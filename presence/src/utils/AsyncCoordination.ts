@@ -1,197 +1,213 @@
 /**
- * Async Coordination Utilities
- * 
- * BEST PRACTICE: Use these utilities instead of setTimeout delays for async coordination.
- * 
- * These helpers provide proper event-based and promise-based coordination,
- * eliminating the need for arbitrary setTimeout delays.
+ * Async Coordination Utility
+ * Manages asynchronous operations with coordination and timeouts
  */
 
-/**
- * Wait for a DOM or window event to fire
- * 
- * @param eventName - Name of the event to wait for
- * @param options - Options including timeout and target element
- * @returns Promise that resolves when event fires or timeout
- * 
- * @example
- * // Wait for TabManager to initialize
- * await waitForEvent('tabManager:initialized', { timeout: 5000 });
- */
-export function waitForEvent(
-  eventName: string,
-  options: {
-    timeout?: number;
-    target?: EventTarget;
-  } = {}
-): Promise<void> {
-  const { timeout = 5000, target = typeof document !== 'undefined' ? document : null } = options;
-  
-  return new Promise<void>((resolve, reject) => {
-    if (!target) {
-      resolve();
-      return;
-    }
-    
-    let resolved = false;
-    const timeoutId = setTimeout(() => {
-      if (!resolved) {
-        resolved = true;
-        target.removeEventListener(eventName, handler);
-        reject(new Error(`Timeout waiting for event: ${eventName}`));
-      }
-    }, timeout);
-    
-    const handler = (): void => {
-      if (!resolved) {
-        resolved = true;
-        clearTimeout(timeoutId);
-        target.removeEventListener(eventName, handler);
-        resolve();
-      }
-    };
-    
-    target.addEventListener(eventName, handler, { once: true });
-  });
+export interface AsyncOperationOptions {
+  timeout?: number;
+  retries?: number;
+  retryDelay?: number;
+  description?: string;
 }
 
-/**
- * Wait for a condition to become true
- * 
- * @param checkFn - Function that returns true when condition is met
- * @param options - Options including timeout and interval
- * @returns Promise that resolves when condition is true or timeout
- * 
- * @example
- * // Wait for TabManager to be ready
- * await waitForCondition(() => window.tabContextManager?.getActiveTab !== undefined);
- */
-export function waitForCondition(
-  checkFn: () => boolean,
-  options: {
-    timeout?: number;
-    interval?: number;
-  } = {}
-): Promise<void> {
-  const { timeout = 5000, interval = 100 } = options;
-  
-  return new Promise<void>((resolve, reject) => {
+export interface AsyncOperationResult<T> {
+  success: boolean;
+  result?: T;
+  error?: Error;
+  duration: number;
+  retries: number;
+}
+
+export class AsyncCoordination {
+  private operations: Map<string, { promise: Promise<any>; resolve: Function; reject: Function; timeoutId?: number }> = new Map();
+
+  /**
+   * Execute an async operation with coordination
+   */
+  async execute<T>(
+    operationId: string,
+    operation: () => Promise<T>,
+    options: AsyncOperationOptions = {}
+  ): Promise<AsyncOperationResult<T>> {
     const startTime = Date.now();
-    
-    const check = (): void => {
-      if (checkFn()) {
-        resolve();
-        return;
-      }
-      
-      if (Date.now() - startTime >= timeout) {
-        reject(new Error('Timeout waiting for condition'));
-        return;
-      }
-      
-      setTimeout(check, interval);
-    };
-    
-    // Check immediately
-    if (checkFn()) {
-      resolve();
-      return;
-    }
-    
-    // Then check periodically
-    setTimeout(check, interval);
-  });
-}
+    const {
+      timeout = 30000,
+      retries = 0,
+      retryDelay = 1000,
+      description = operationId
+    } = options;
 
-/**
- * Wait for a dependency to be ready
- * 
- * @param dependency - Object with isReady() method or getter
- * @param options - Options including timeout
- * @returns Promise that resolves when dependency is ready
- * 
- * @example
- * // Wait for communities to be initialized
- * await waitForDependency({
- *   isReady: () => getActiveCommunities().length > 0
- * });
- */
-export function waitForDependency(
-  dependency: {
-    isReady: () => boolean;
-    onReady?: () => Promise<void> | void;
-  },
-  options: {
-    timeout?: number;
-    interval?: number;
-  } = {}
-): Promise<void> {
-  const { timeout = 5000, interval = 100 } = options;
-  
-  return new Promise<void>((resolve, reject) => {
-    const startTime = Date.now();
-    
-    const check = async (): Promise<void> => {
-      if (dependency.isReady()) {
-        if (dependency.onReady) {
-          await dependency.onReady();
+    let lastError: Error | null = null;
+    let attempts = 0;
+
+    while (attempts <= retries) {
+      try {
+        // Check if operation is already in progress
+        if (this.operations.has(operationId)) {
+          console.warn(`AsyncCoordination: Operation ${operationId} already in progress, waiting...`);
+          const existing = await this.operations.get(operationId)!.promise;
+          return {
+            success: true,
+            result: existing,
+            duration: Date.now() - startTime,
+            retries: attempts
+          };
         }
-        resolve();
-        return;
-      }
-      
-      if (Date.now() - startTime >= timeout) {
-        reject(new Error('Timeout waiting for dependency'));
-        return;
-      }
-      
-      setTimeout(check, interval);
-    };
-    
-    // Check immediately
-    if (dependency.isReady()) {
-      if (dependency.onReady) {
-        const result = dependency.onReady();
-        if (result instanceof Promise) {
-          result.then(() => resolve()).catch(reject);
-        } else {
-          resolve();
+
+        // Create new operation promise
+        let resolveOperation: Function;
+        let rejectOperation: Function;
+        const operationPromise = new Promise<T>((resolve, reject) => {
+          resolveOperation = resolve;
+          rejectOperation = reject;
+        });
+
+        // Set timeout
+        const timeoutId = setTimeout(() => {
+          if (this.operations.has(operationId)) {
+            const operationData = this.operations.get(operationId)!;
+            operationData.reject(new Error(`Operation ${description} timed out after ${timeout}ms`));
+            this.operations.delete(operationId);
+          }
+        }, timeout);
+
+        this.operations.set(operationId, {
+          promise: operationPromise,
+          resolve: resolveOperation!,
+          reject: rejectOperation!,
+          timeoutId
+        });
+
+        // Execute the operation
+        const result = await operation();
+
+        // Clean up and resolve
+        if (this.operations.has(operationId)) {
+          const operationData = this.operations.get(operationId)!;
+          clearTimeout(operationData.timeoutId);
+          operationData.resolve(result);
+          this.operations.delete(operationId);
         }
-      } else {
-        resolve();
+
+        return {
+          success: true,
+          result,
+          duration: Date.now() - startTime,
+          retries: attempts
+        };
+
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+        attempts++;
+
+        if (attempts <= retries) {
+          console.warn(`AsyncCoordination: Operation ${description} failed (attempt ${attempts}/${retries + 1}), retrying in ${retryDelay}ms...`, error);
+          await new Promise(resolve => setTimeout(resolve, retryDelay));
+        }
       }
-      return;
     }
-    
-    // Then check periodically
-    setTimeout(check, interval);
-  });
+
+    // All retries exhausted
+    return {
+      success: false,
+      error: lastError || new Error(`Operation ${description} failed after ${retries + 1} attempts`),
+      duration: Date.now() - startTime,
+      retries: attempts - 1
+    };
+  }
+
+  /**
+   * Wait for an operation to complete
+   */
+  async waitFor<T>(operationId: string, timeout = 30000): Promise<T> {
+    if (this.operations.has(operationId)) {
+      const operationData = this.operations.get(operationId)!;
+      return Promise.race([
+        operationData.promise,
+        new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error(`Wait for operation ${operationId} timed out`)), timeout);
+        })
+      ]);
+    }
+
+    throw new Error(`Operation ${operationId} not found`);
+  }
+
+  /**
+   * Cancel an operation
+   */
+  cancel(operationId: string): boolean {
+    if (this.operations.has(operationId)) {
+      const operationData = this.operations.get(operationId)!;
+      clearTimeout(operationData.timeoutId);
+      operationData.reject(new Error(`Operation ${operationId} was cancelled`));
+      this.operations.delete(operationId);
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Check if operation is in progress
+   */
+  isInProgress(operationId: string): boolean {
+    return this.operations.has(operationId);
+  }
+
+  /**
+   * Get active operations count
+   */
+  getActiveCount(): number {
+    return this.operations.size;
+  }
+
+  /**
+   * Wait for a condition to be met
+   */
+  async waitForCondition(
+    condition: () => boolean | Promise<boolean>,
+    timeout = 30000,
+    interval = 100
+  ): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const startTime = Date.now();
+
+      const checkCondition = async () => {
+        try {
+          const result = await condition();
+          if (result) {
+            resolve();
+            return;
+          }
+
+          if (Date.now() - startTime > timeout) {
+            reject(new Error('Condition not met within timeout'));
+            return;
+          }
+
+          setTimeout(checkCondition, interval);
+        } catch (error) {
+          reject(error);
+        }
+      };
+
+      checkCondition();
+    });
+  }
 }
 
-/**
- * Coordinate multiple dependencies
- * 
- * @param dependencies - Array of dependency checkers
- * @param options - Options including timeout
- * @returns Promise that resolves when all dependencies are ready
- * 
- * @example
- * // Wait for multiple dependencies
- * await coordinateDependencies([
- *   { isReady: () => window.tabContextManager !== undefined },
- *   { isReady: () => getActiveCommunities().length > 0 }
- * ]);
- */
-export async function coordinateDependencies(
-  dependencies: Array<{ isReady: () => boolean }>,
-  options: {
-    timeout?: number;
-  } = {}
-): Promise<void> {
-  const { timeout = 5000 } = options;
-  
-  await Promise.all(
-    dependencies.map(dep => waitForDependency(dep, { timeout }))
-  );
+// Export singleton instance
+let asyncCoordinationInstance: AsyncCoordination | null = null;
+
+export function createAsyncCoordination(): AsyncCoordination {
+  if (!asyncCoordinationInstance) {
+    asyncCoordinationInstance = new AsyncCoordination();
+  }
+  return asyncCoordinationInstance;
 }
 
+// Export default singleton for convenience
+export const asyncCoordination = createAsyncCoordination();
+
+// Export individual functions for convenience
+export const waitForCondition = asyncCoordination.waitForCondition.bind(asyncCoordination);

@@ -317,6 +317,26 @@ Please provide helpful, accurate responses based on this content.`;
 // TODO: Add blockchain, TEE, agent orchestration endpoints
 
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+
+// Only start server if this is the primary process or not in cluster mode
+if (require('cluster').isPrimary || !require('cluster').isWorker) {
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+    console.log(`Process ID: ${process.pid}`);
+    console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+  });
+} else {
+  console.log(`Worker ${process.pid} started`);
+}
+
+// Graceful shutdown handling
+process.on('SIGTERM', () => {
+  console.log(`Worker ${process.pid} shutting down gracefully`);
+  // Close server connections here if needed
+  process.exit(0);
+});
+
+process.on('SIGINT', () => {
+  console.log(`Worker ${process.pid} received SIGINT, shutting down gracefully`);
+  process.exit(0);
 }); 

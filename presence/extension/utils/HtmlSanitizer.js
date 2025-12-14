@@ -1,84 +1,116 @@
 /**
- * HTML SANITIZER UTILITY
- *
- * Provides HTML escaping and sanitization functions to prevent XSS attacks.
- * Used before assigning user-generated content to innerHTML.
- *
- * Security: Prevents Cross-Site Scripting (XSS) vulnerabilities
+ * HTML Sanitizer
+ * Sanitizes HTML content to prevent XSS attacks
  */
-/**
- * Escape HTML special characters to prevent XSS attacks
- * Converts <, >, &, ", ' to their HTML entity equivalents
- *
- * @param text - The text to escape
- * @returns Escaped HTML-safe string
- *
- * @example
- * escapeHtml('<script>alert("XSS")</script>')
- * // Returns: '&lt;script&gt;alert(&quot;XSS&quot;)&lt;/script&gt;'
- */
-export function escapeHtml(text) {
-    if (!text)
-        return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
-/**
- * Sanitize HTML string by escaping all special characters
- * This is a simple sanitizer - for more complex needs, consider DOMPurify
- *
- * @param html - HTML string to sanitize
- * @returns Sanitized HTML string
- */
-export function sanitizeHtml(html) {
-    return escapeHtml(html);
-}
-/**
- * Convert URLs in text to clickable links while escaping HTML
- * This is a safer version that escapes HTML before converting URLs
- *
- * @param text - Text that may contain URLs
- * @returns HTML string with escaped text and clickable URLs
- *
- * @example
- * convertUrlsToLinksSafely('Check https://example.com')
- * // Returns: 'Check <a href="https://example.com" target="_blank" rel="noopener noreferrer">https://example.com</a>'
- */
-export function convertUrlsToLinksSafely(text) {
-    if (!text)
-        return '';
-    // Extract URLs first (before escaping) to preserve them for href
-    const urlRegex = /(https?:\/\/[^\s<>"']+)/g;
-    const urls = [];
-    const urlPlaceholder = '___URL_PLACEHOLDER___';
-    // Replace URLs with placeholders and store original URLs
-    let textWithPlaceholders = text.replace(urlRegex, (url) => {
-        urls.push(url);
-        return `${urlPlaceholder}${urls.length - 1}${urlPlaceholder}`;
-    });
-    // Escape the entire text (including placeholders)
-    const escaped = escapeHtml(textWithPlaceholders);
-    // Replace placeholders with actual link HTML (URLs are safe in href attribute)
-    return escaped.replace(new RegExp(`${escapeHtml(urlPlaceholder)}(\\d+)${escapeHtml(urlPlaceholder)}`, 'g'), (_match, index) => {
-        const originalUrl = urls[parseInt(index, 10)];
-        const escapedUrl = escapeHtml(originalUrl);
-        return `<a href="${originalUrl}" target="_blank" rel="noopener noreferrer">${escapedUrl}</a>`;
-    });
-}
-/**
- * Sanitize user content before displaying
- * Escapes HTML and optionally converts URLs to links
- *
- * @param content - User-generated content
- * @param convertUrls - Whether to convert URLs to links (default: true)
- * @returns Sanitized HTML string
- */
-export function sanitizeUserContent(content, convertUrls = true) {
-    if (!content)
-        return '';
-    if (convertUrls) {
-        return convertUrlsToLinksSafely(content);
+export class HtmlSanitizer {
+    constructor() {
+        this.allowedTags = new Set([
+            'p', 'br', 'strong', 'em', 'u', 's', 'a', 'span', 'div',
+            'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+            'ul', 'ol', 'li', 'blockquote', 'code', 'pre'
+        ]);
+        this.allowedAttributes = new Set([
+            'href', 'target', 'rel', 'class', 'id', 'style', 'data-*'
+        ]);
     }
-    return escapeHtml(content);
+    sanitize(html) {
+        if (!html || typeof html !== 'string') {
+            return '';
+        }
+        // Create a temporary DOM element to parse the HTML
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = html;
+        // Sanitize the content
+        this.sanitizeElement(tempDiv);
+        return tempDiv.innerHTML;
+    }
+    sanitizeElement(element) {
+        const children = Array.from(element.children);
+        for (const child of children) {
+            // Remove disallowed tags
+            if (!this.allowedTags.has(child.tagName.toLowerCase())) {
+                element.removeChild(child);
+                continue;
+            }
+            // Sanitize attributes
+            const attributes = Array.from(child.attributes);
+            for (const attr of attributes) {
+                if (!this.isAttributeAllowed(attr.name)) {
+                    child.removeAttribute(attr.name);
+                }
+                // Sanitize href attributes
+                if (attr.name === 'href' && attr.value) {
+                    child.setAttribute('href', this.sanitizeUrl(attr.value));
+                    child.setAttribute('target', '_blank');
+                    child.setAttribute('rel', 'noopener noreferrer');
+                }
+            }
+            // Recursively sanitize children
+            this.sanitizeElement(child);
+        }
+    }
+    isAttributeAllowed(attributeName) {
+        // Allow data-* attributes
+        if (attributeName.startsWith('data-')) {
+            return true;
+        }
+        return this.allowedAttributes.has(attributeName);
+    }
+    sanitizeUrl(url) {
+        // Only allow http/https URLs
+        if (url.startsWith('http://') || url.startsWith('https://')) {
+            return url;
+        }
+        // Convert relative URLs to absolute
+        if (url.startsWith('/')) {
+            return window.location.origin + url;
+        }
+        // Reject other protocols
+        return '#';
+    }
+    sanitizeText(text) {
+        if (!text || typeof text !== 'string') {
+            return '';
+        }
+        // Escape HTML entities
+        return text
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#x27;')
+            .replace(/\//g, '&#x2F;');
+    }
+    /**
+     * Convert URLs in text to safe links
+     */
+    convertUrlsToLinksSafely(text) {
+        if (!text || typeof text !== 'string') {
+            return '';
+        }
+        // Simple URL regex - in production this should be more robust
+        const urlRegex = /(https?:\/\/[^\s]+)/g;
+        return text.replace(urlRegex, (url) => {
+            const safeUrl = this.sanitizeUrl(url);
+            if (safeUrl === '#')
+                return url; // Don't link unsafe URLs
+            return `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${url}</a>`;
+        });
+    }
 }
+// Export singleton instance
+let htmlSanitizerInstance = null;
+export function getHtmlSanitizer() {
+    if (!htmlSanitizerInstance) {
+        htmlSanitizerInstance = new HtmlSanitizer();
+    }
+    return htmlSanitizerInstance;
+}
+// Export individual functions for convenience
+export function convertUrlsToLinksSafely(text) {
+    return getHtmlSanitizer().convertUrlsToLinksSafely(text);
+}
+export function escapeHtml(text) {
+    return getHtmlSanitizer().sanitizeText(text);
+}
+//# sourceMappingURL=HtmlSanitizer.js.map

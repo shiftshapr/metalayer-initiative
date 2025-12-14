@@ -12,9 +12,12 @@
  * Based on: PREFERENCE_MANAGEMENT_PLAN.md
  */
 // Type definitions
+import { createEventListenerManager } from './EventListenerManager.js';
 import { handleError } from './ErrorHandler.js';
 import { Logger } from './Logger.js';
-import { getBackendHealthService } from '../services/BackendHealthService.js';
+import { SafeJSON } from './SafeJSON.js';
+// @ts-ignore - JavaScript module without type declarations
+import { getBackendHealthService } from '../../extension/services/BackendHealthService.js';
 import { stateManagerInstance } from '../core/StateManager.js';
 import { api } from '../features/APIModule.js';
 const setPreferenceValue = (target, key, value) => {
@@ -47,12 +50,16 @@ export class UserPreferencesManager {
         this.batchDelay = 500;
         this.offlineListeners = [];
         this._defaultValues = {};
+        this.eventManager = createEventListenerManager();
+        // Async coordination for userId availability
+        this.userIdResolvers = [];
+        this.userIdPromise = null;
         // Metrics for monitoring
         this.metrics = {
             loads: { success: 0, failure: 0, totalTime: 0 },
             saves: { success: 0, failure: 0, totalTime: 0 },
             retries: { success: 0, failure: 0 },
-            errors: []
+            errors: [],
         };
         // Offline detection
         this.isOnline = navigator.onLine !== false;
@@ -62,93 +69,99 @@ export class UserPreferencesManager {
             theme: {
                 chromeKey: 'theme',
                 dbColumn: 'theme',
-                defaultValue: 'light',
+                // Default to 'dark' - modern UX standard, reduces eye strain, aligns with developer tool conventions
+                // Users can override via browser preference (prefers-color-scheme) or explicit theme selection
+                defaultValue: 'dark',
                 validator: (value) => typeof value === 'string' && ['light', 'dark', 'auto'].includes(value),
-                uiComponents: ['profile', 'settings', 'all']
+                uiComponents: ['profile', 'settings', 'all'],
             },
             auraColor: {
                 chromeKey: 'auraColor',
                 dbColumn: 'aura_color',
                 defaultValue: '#98d416',
                 validator: (value) => typeof value === 'string' && /^#[0-9A-Fa-f]{6}$/i.test(value),
-                uiComponents: ['avatars', 'profile', 'settings']
+                uiComponents: ['avatars', 'profile', 'settings'],
             },
             auraIntensity: {
                 chromeKey: 'auraIntensity',
                 dbColumn: 'aura_intensity',
                 defaultValue: 0.5,
                 validator: (value) => typeof value === 'number' && value >= 0 && value <= 1,
-                uiComponents: ['avatars', 'settings']
+                uiComponents: ['avatars', 'settings'],
             },
             isVisible: {
                 chromeKey: 'visibilityEnabled',
                 dbColumn: 'is_visible',
                 defaultValue: true,
                 validator: (value) => typeof value === 'boolean',
-                uiComponents: ['avatars', 'profile', 'settings', 'visibility']
+                uiComponents: ['avatars', 'profile', 'settings', 'visibility'],
             },
             globalAvailability: {
                 chromeKey: 'availability',
                 dbColumn: 'global_availability',
                 defaultValue: 'AVAILABLE',
                 validator: (value) => typeof value === 'string' && ['AVAILABLE', 'BUSY', 'AWAY', 'OFFLINE'].includes(value),
-                uiComponents: ['profile', 'settings', 'visibility']
+                uiComponents: ['profile', 'settings', 'visibility'],
             },
             headline: {
                 chromeKey: 'settingsHeadline',
                 dbColumn: 'headline',
                 defaultValue: '',
                 validator: (value) => value === '' || (typeof value === 'string' && value.length >= 20 && value.length <= 1000),
-                uiComponents: ['profile', 'settings']
+                uiComponents: ['profile', 'settings'],
             },
             displayName: {
                 chromeKey: 'displayName',
                 dbColumn: 'displayName', // FIX: Match Prisma schema (camelCase, not snake_case)
                 defaultValue: '',
                 validator: (value) => value === '' || (typeof value === 'string' && value.length >= 4 && value.length <= 16),
-                uiComponents: ['profile', 'settings', 'avatars']
+                uiComponents: ['profile', 'settings', 'avatars'],
             },
             tabConfiguration: {
                 chromeKey: 'tabConfiguration',
                 dbColumn: 'tab_configuration', // Stored as JSON string in database
                 defaultValue: '',
                 validator: (value) => typeof value === 'string', // Accept any JSON string
-                uiComponents: ['tab-manager', 'settings']
+                uiComponents: ['tab-manager', 'settings'],
             },
             visibilityTraceLimit: {
                 chromeKey: 'visibilityTraceLimit',
                 dbColumn: 'visibility_trace_limit',
                 defaultValue: 30, // Default: 30 days
                 validator: (value) => typeof value === 'number' && (value === -1 || value >= 0),
-                uiComponents: ['settings', 'visibility']
+                uiComponents: ['settings', 'visibility'],
             },
             primaryCommunity: {
                 chromeKey: 'primaryCommunity',
-                dbColumn: 'primary_community_id', // Store in AppUser table
-                defaultValue: '',
+                dbColumn: 'primary_community_id', // Store in AppUser table - NON-NULLABLE
+                // CRITICAL: Default to PUBLIC_SQUARE_UUID - all users must have a primary community
+                defaultValue: 'abe5ec85-4ba6-456f-adaf-03d7d51cecf4', // PUBLIC_SQUARE_UUID
                 validator: (value) => {
-                    // UUID v4 format validation
+                    // UUID v4 format validation - must be valid UUID, cannot be empty
                     if (typeof value !== 'string')
                         return false;
                     if (value === '')
-                        return true; // Allow empty string as default
+                        return false; // CRITICAL: Empty string NOT allowed - must have a community
                     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
                     return uuidRegex.test(value);
                 },
-                uiComponents: ['communities', 'header']
+                uiComponents: ['communities', 'header'],
             },
             activeCommunities: {
                 chromeKey: 'activeCommunities',
-                dbColumn: 'active_communities', // Store as JSON string in AppUser table
-                defaultValue: '[]',
+                dbColumn: 'active_communities', // Store as JSON string in AppUser table - NON-NULLABLE
+                // CRITICAL: Default to PUBLIC_SQUARE_UUID in array - all users must have at least one active community
+                defaultValue: '["abe5ec85-4ba6-456f-adaf-03d7d51cecf4"]', // [PUBLIC_SQUARE_UUID]
                 validator: (value) => {
-                    // Must be a valid JSON array of UUIDs
+                    // Must be a valid JSON array of UUIDs - cannot be empty array
                     if (typeof value !== 'string')
                         return false;
                     try {
-                        const parsed = JSON.parse(value);
+                        const parsed = SafeJSON.parse(value, [], 'user-preferences');
                         if (!Array.isArray(parsed))
                             return false;
+                        if (parsed.length === 0)
+                            return false; // CRITICAL: Empty array NOT allowed - must have at least one community
                         // Validate all items are UUIDs
                         const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
                         return parsed.every((item) => typeof item === 'string' && uuidRegex.test(item));
@@ -157,8 +170,28 @@ export class UserPreferencesManager {
                         return false;
                     }
                 },
-                uiComponents: ['communities', 'header']
-            }
+                uiComponents: ['communities', 'header'],
+            },
+            avatarUrl: {
+                chromeKey: 'avatarUrl',
+                dbColumn: 'avatar_url', // Store in AppUser table for caching
+                defaultValue: '',
+                validator: (value) => {
+                    // Must be a string, can be empty for fallback to initials
+                    return typeof value === 'string';
+                },
+                uiComponents: ['avatars', 'profile'],
+            },
+            primaryCommunityAvatar: {
+                chromeKey: 'primaryCommunityAvatar',
+                dbColumn: 'primary_community_avatar', // Store in AppUser table for primary community avatar
+                defaultValue: '', // Empty string for no avatar
+                validator: (value) => {
+                    // Must be a string, can be empty
+                    return typeof value === 'string';
+                },
+                uiComponents: ['communities', 'avatars', 'header'],
+            },
         };
         this.schema = schema;
         Logger.debug('✅ USER_PREFERENCES_MANAGER: Initialized', null, 'preferences');
@@ -179,37 +212,26 @@ export class UserPreferencesManager {
             // TypeScript migration: Use stateManager instead of window.currentUser
             const currentUserFromState = stateManagerInstance.getState('currentUser');
             Logger.debug('🔍 USER_PREFERENCES_MANAGER: Checking stateManager currentUser?.id:', currentUserFromState?.id, 'preferences');
-            // Wait for userId with longer timeout and better detection
-            return new Promise((resolve) => {
-                let attempts = 0;
-                const maxAttempts = 50; // 25 seconds (500ms * 50)
-                const checkUser = setInterval(() => {
-                    attempts++;
-                    // TypeScript migration: Use stateManager instead of window.currentUser
-                    const currentUser = stateManagerInstance.getState('currentUser');
-                    const currentUserId = currentUser?.id;
-                    Logger.debug(`🔍 USER_PREFERENCES_MANAGER: Attempt ${attempts}/${maxAttempts}, checking for userId:`, currentUserId || 'NOT FOUND', 'preferences');
-                    if (currentUserId) {
-                        clearInterval(checkUser);
-                        Logger.debug(`✅ USER_PREFERENCES_MANAGER: Found userId after ${attempts} attempts: ${currentUserId}`, null, 'preferences');
-                        this.initialize(currentUserId).then(resolve);
-                        return;
-                    }
-                    // Log progress every 5 seconds
-                    if (attempts % 10 === 0) {
-                        Logger.debug(`⏳ USER_PREFERENCES_MANAGER: Waiting for userId... (${attempts}/${maxAttempts})`, null, 'preferences');
-                    }
-                    if (attempts >= maxAttempts) {
-                        clearInterval(checkUser);
-                        Logger.warn('⚠️ USER_PREFERENCES_MANAGER: Timeout waiting for userId - will initialize when userId becomes available', null, 'preferences');
-                        // Don't fail - just return false, initialization will happen when userId is available
-                        resolve(false);
-                    }
-                }, 500);
-            });
+            // Use proper async coordination instead of polling
+            try {
+                const userId = await this.waitForUserId();
+                Logger.debug('✅ USER_PREFERENCES_MANAGER: Got userId via async coordination:', userId, 'preferences');
+                await this.initialize(userId);
+                return true;
+            }
+            catch (error) {
+                Logger.error('❌ USER_PREFERENCES_MANAGER: Failed to get userId via async coordination:', error, 'preferences');
+                return false;
+            }
         }
-        this.userId = userId;
-        Logger.debug('🔧 USER_PREFERENCES_MANAGER: Initializing for user:', userId, 'preferences');
+        // CRITICAL FIX: Strip channel suffixes from user ID (e.g., :1, :2 from realtime)
+        this.userId = userId.replace(/:\d+$/, '');
+        if (this.userId !== userId) {
+            Logger.warn('⚠️ USER_PREFERENCES_MANAGER: Stripped channel suffix from userId', { original: userId, cleaned: this.userId }, 'preferences');
+        }
+        // Notify any waiting async coordination promises
+        this.resolveUserIdWaiters(this.userId);
+        Logger.debug('🔧 USER_PREFERENCES_MANAGER: Initializing for user:', this.userId, 'preferences');
         try {
             // Load all preferences
             await this.loadAllPreferences();
@@ -228,11 +250,14 @@ export class UserPreferencesManager {
                 logLevel: 'error',
                 context: {
                     operation: 'catch',
-                    component: 'UserPreferences'
-                }
+                    component: 'UserPreferences',
+                },
             });
-            ;
-            this.metrics.errors.push({ type: 'initialization', error: errorMessage, timestamp: Date.now() });
+            this.metrics.errors.push({
+                type: 'initialization',
+                error: errorMessage,
+                timestamp: Date.now(),
+            });
             return false;
         }
     }
@@ -272,7 +297,8 @@ export class UserPreferencesManager {
                     Logger.debug('🔍 THEME_RESOLUTION: === THEME RESOLUTION START ===', null, 'preferences');
                     Logger.debug('🔍 THEME_RESOLUTION: Chrome storage theme:', chromeValue !== undefined && chromeValue !== null ? chromeValue : 'NOT SET', 'preferences');
                     Logger.debug('🔍 THEME_RESOLUTION: Database theme:', dbValue !== undefined && dbValue !== null ? dbValue : 'NULL/NOT SET', 'preferences');
-                    const currentDomTheme = document.body.getAttribute('data-theme') || document.documentElement.getAttribute('data-theme');
+                    const currentDomTheme = document.body.getAttribute('data-theme') ||
+                        document.documentElement.getAttribute('data-theme');
                     Logger.debug('🔍 THEME_RESOLUTION: DOM theme:', currentDomTheme || 'NOT SET', 'preferences');
                     Logger.debug('🔍 THEME_RESOLUTION: Default theme:', config.defaultValue, 'preferences');
                 }
@@ -287,7 +313,8 @@ export class UserPreferencesManager {
                 }
                 else if (prefKey === 'theme') {
                     // Priority 2: Check DOM (preserve current UI state - might be set by ProfileManager on startup)
-                    const currentDomTheme = document.body.getAttribute('data-theme') || document.documentElement.getAttribute('data-theme');
+                    const currentDomTheme = document.body.getAttribute('data-theme') ||
+                        document.documentElement.getAttribute('data-theme');
                     if (currentDomTheme && ['light', 'dark', 'auto'].includes(currentDomTheme)) {
                         const domTheme = currentDomTheme;
                         finalValue = domTheme;
@@ -303,12 +330,32 @@ export class UserPreferencesManager {
                         await chrome.storage.local.set({ [config.chromeKey]: dbValue });
                     }
                     else {
-                        // Priority 4: Default (last resort - ONLY for local use, NEVER save to database)
-                        finalValue = config.defaultValue;
-                        Logger.debug(`🔍 THEME_RESOLUTION: ✅ RESOLVED: Using default theme '${config.defaultValue}' (local only, will not save to database)`, null, 'preferences');
-                        // ROOT CAUSE FIX: Mark this as a default value so it doesn't get saved to database
-                        // Store in a separate flag to prevent saving defaults
-                        this._defaultValues[prefKey] = true;
+                        // Priority 4: Check browser theme preference
+                        let browserTheme = null;
+                        if (typeof window !== 'undefined' && window.matchMedia) {
+                            try {
+                                const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                                browserTheme = prefersDark ? 'dark' : 'light';
+                                Logger.debug(`🔍 THEME_RESOLUTION: Browser theme preference: ${browserTheme}`, null, 'preferences');
+                            }
+                            catch (error) {
+                                Logger.debug('⚠️ THEME_RESOLUTION: Error checking browser theme preference:', error, 'preferences');
+                            }
+                        }
+                        if (browserTheme) {
+                            finalValue = browserTheme;
+                            Logger.debug(`🔍 THEME_RESOLUTION: ✅ RESOLVED: Using browser theme preference '${browserTheme}' (local only, will not save to database)`, null, 'preferences');
+                            // ROOT CAUSE FIX: Mark this as a default value so it doesn't get saved to database
+                            this._defaultValues[prefKey] = true;
+                        }
+                        else {
+                            // Priority 5: Default (last resort - ONLY for local use, NEVER save to database)
+                            finalValue = config.defaultValue;
+                            Logger.debug(`🔍 THEME_RESOLUTION: ✅ RESOLVED: Using default theme '${config.defaultValue}' (local only, will not save to database)`, null, 'preferences');
+                            // ROOT CAUSE FIX: Mark this as a default value so it doesn't get saved to database
+                            // Store in a separate flag to prevent saving defaults
+                            this._defaultValues[prefKey] = true;
+                        }
                     }
                     Logger.debug(`🔍 THEME_RESOLUTION: === THEME RESOLUTION END (finalValue: ${finalValue}) ===`, null, 'preferences');
                 }
@@ -332,7 +379,8 @@ export class UserPreferencesManager {
             // ROOT CAUSE FIX: Log what theme will be applied before calling applyPreferencesToUI
             if (this.preferences.theme) {
                 Logger.debug('🔍 THEME_APPLY: About to apply theme to UI:', this.preferences.theme, 'preferences');
-                const currentDomTheme = document.body.getAttribute('data-theme') || document.documentElement.getAttribute('data-theme');
+                const currentDomTheme = document.body.getAttribute('data-theme') ||
+                    document.documentElement.getAttribute('data-theme');
                 Logger.debug('🔍 THEME_APPLY: Current DOM theme before apply:', currentDomTheme || 'NOT SET', 'preferences');
             }
             // ROOT CAUSE FIX: Always apply theme during initial load (ProfileManager no longer sets theme on startup)
@@ -391,7 +439,7 @@ export class UserPreferencesManager {
         }
         try {
             const apiResponse = await api.request(`/v1/users/${this.userId}`, {
-                method: 'GET'
+                method: 'GET',
             });
             const response = apiResponse?.data || apiResponse;
             if (!response) {
@@ -421,10 +469,9 @@ export class UserPreferencesManager {
                 logLevel: 'error',
                 context: {
                     operation: 'catch',
-                    component: 'UserPreferences'
-                }
+                    component: 'UserPreferences',
+                },
             });
-            ;
             throw error; // Don't silently fail - we need database columns
         }
     }
@@ -457,8 +504,13 @@ export class UserPreferencesManager {
         }
         const config = this.schema[key];
         const oldValue = this.preferences[key];
+        // CRITICAL: For community preferences, always save to database (they're non-nullable)
+        // Don't skip saving primaryCommunity or activeCommunities even if they match defaults
+        // These must be persisted to ensure database has non-null values
+        const isCommunityPreference = key === 'primaryCommunity' || key === 'activeCommunities';
         // ROOT CAUSE FIX: Never save default values to database - they're only for local fallback
-        if (this._defaultValues[key] && value === config.defaultValue) {
+        // EXCEPTION: Community preferences must always be saved (non-nullable requirement)
+        if (!isCommunityPreference && this._defaultValues[key] && value === config.defaultValue) {
             Logger.debug(`⚠️ USER_PREFERENCES_MANAGER: Skipping save of default value for ${key} (prevents overwriting database with defaults)`, null, 'preferences');
             // Clear the default flag since user is explicitly setting it
             delete this._defaultValues[key];
@@ -510,10 +562,9 @@ export class UserPreferencesManager {
                 logLevel: 'error',
                 context: {
                     operation: 'catch',
-                    component: 'UserPreferences'
-                }
+                    component: 'UserPreferences',
+                },
             });
-            ;
             this.metrics.errors.push({ type: 'save', key, error: errorMessage, timestamp: Date.now() });
             this.emitPreferenceSaveFailed(key, value, error instanceof Error ? error : new Error(errorMessage));
             return false;
@@ -578,7 +629,7 @@ export class UserPreferencesManager {
      */
     addToBatch(key, value) {
         // Remove existing entry for this key if present
-        this.batchQueue = this.batchQueue.filter(item => item.key !== key);
+        this.batchQueue = this.batchQueue.filter((item) => item.key !== key);
         // Add new entry
         this.batchQueue.push({ key, value, timestamp: Date.now() });
         // Clear existing timeout
@@ -586,6 +637,7 @@ export class UserPreferencesManager {
             clearTimeout(this.batchTimeout);
         }
         // Set new timeout to flush batch
+        // Debounce: intentional delay for performance - batches preference updates for efficiency
         this.batchTimeout = setTimeout(() => {
             this.flushBatch();
         }, this.batchDelay);
@@ -608,7 +660,7 @@ export class UserPreferencesManager {
                 const unsubscribe = healthService.subscribe((healthState) => {
                     if (healthState.status === 'healthy') {
                         unsubscribe();
-                        Logger.info('✅ USER_PREFERENCES_MANAGER: Backend recovered, flushing queued batch', null, 'preferences');
+                        Logger.debug('✅ USER_PREFERENCES_MANAGER: Backend recovered, flushing queued batch', null, 'preferences');
                         this.flushBatch().catch((error) => {
                             Logger.error('❌ USER_PREFERENCES_MANAGER: Failed to flush batch after recovery', error, 'preferences');
                         });
@@ -665,11 +717,12 @@ export class UserPreferencesManager {
                 // ROOT CAUSE FIX: tab_configuration is stored as JSON string in Chrome storage,
                 // but backend expects parsed object. Parse it before sending.
                 if (config.dbColumn === 'tab_configuration' && typeof value === 'string') {
-                    try {
-                        updates[config.dbColumn] = JSON.parse(value);
+                    const parsed = SafeJSON.parse(value, null, 'user-preferences-tab-configuration');
+                    if (parsed !== null) {
+                        updates[config.dbColumn] = parsed;
                     }
-                    catch (parseError) {
-                        Logger.error('❌ USER_PREFERENCES_MANAGER: Failed to parse tab_configuration JSON', parseError, 'preferences');
+                    else {
+                        Logger.error('❌ USER_PREFERENCES_MANAGER: Failed to parse tab_configuration JSON, sending as-is', null, 'preferences');
                         // Send as-is if parsing fails (backend will handle validation)
                         updates[config.dbColumn] = value;
                     }
@@ -686,7 +739,7 @@ export class UserPreferencesManager {
         try {
             const apiResponse = await api.request(`/v1/users/${this.userId}`, {
                 method: 'PATCH',
-                body: JSON.stringify(updates)
+                body: JSON.stringify(updates),
             });
             const response = apiResponse?.data || apiResponse;
             if (!response) {
@@ -736,10 +789,9 @@ export class UserPreferencesManager {
                 context: {
                     operation: 'saveBatchToDatabase',
                     component: 'UserPreferences',
-                    note: 'Preferences queued for retry when backend recovers'
-                }
+                    note: 'Preferences queued for retry when backend recovers',
+                },
             });
-            ;
         }
         return;
     }
@@ -769,10 +821,9 @@ export class UserPreferencesManager {
                 logLevel: 'error',
                 context: {
                     operation: 'catch',
-                    component: 'UserPreferences'
-                }
+                    component: 'UserPreferences',
+                },
             });
-            ;
             // Queue for retry
             this.queueForRetry(key, value);
             // Emit error event
@@ -801,15 +852,44 @@ export class UserPreferencesManager {
                 throw new Error('Offline: Cannot save to database');
             }
             try {
+                const requestBody = {
+                    [config.dbColumn]: value,
+                };
+                Logger.debug(`🔍 USER_PREFERENCES_MANAGER: PATCH /v1/users/${this.userId}`, {
+                    key,
+                    dbColumn: config.dbColumn,
+                    value,
+                    requestBody,
+                }, 'preferences');
                 const apiResponse = await api.request(`/v1/users/${this.userId}`, {
                     method: 'PATCH',
-                    body: JSON.stringify({
-                        [config.dbColumn]: value
-                    })
+                    body: JSON.stringify(requestBody),
                 });
                 const response = apiResponse?.data || apiResponse;
                 if (!response) {
                     throw new Error('Empty response from API');
+                }
+                // CRITICAL DIAGNOSTIC: Log the actual response to verify if backend updated the column
+                const responseValue = response[config.dbColumn];
+                if (responseValue !== undefined && responseValue !== value) {
+                    Logger.warn(`⚠️ USER_PREFERENCES_MANAGER: Response value differs from sent value for ${key}`, {
+                        sent: value,
+                        received: responseValue,
+                        dbColumn: config.dbColumn,
+                    }, 'preferences');
+                }
+                else if (responseValue === undefined) {
+                    Logger.warn(`⚠️ USER_PREFERENCES_MANAGER: Response does not contain ${config.dbColumn} for ${key}`, {
+                        sent: value,
+                        responseKeys: Object.keys(response),
+                        dbColumn: config.dbColumn,
+                    }, 'preferences');
+                }
+                else {
+                    Logger.debug(`✅ USER_PREFERENCES_MANAGER: Response confirms ${config.dbColumn} update for ${key}`, {
+                        value: responseValue,
+                        dbColumn: config.dbColumn,
+                    }, 'preferences');
                 }
                 return response;
             }
@@ -828,7 +908,8 @@ export class UserPreferencesManager {
                     // Exponential backoff
                     const delay = Math.pow(2, attempt) * 1000;
                     Logger.warn(`⚠️ USER_PREFERENCES_MANAGER: Retry ${attempt}/${maxRetries} for ${key} after ${delay}ms`, null, 'preferences');
-                    await new Promise(resolve => setTimeout(resolve, delay));
+                    // Debounce: intentional delay for performance - retry delay with exponential backoff
+                    await new Promise((resolve) => setTimeout(resolve, delay));
                 }
             }
         }
@@ -880,7 +961,8 @@ export class UserPreferencesManager {
         // This prevents overriding a user's current theme (set by ProfileManager on startup) with a stale database value
         // CRITICAL: Skip theme application if this is called after saving a non-theme preference (like isVisible)
         if (!skipTheme && this.preferences.theme) {
-            const currentDomTheme = document.body.getAttribute('data-theme') || document.documentElement.getAttribute('data-theme');
+            const currentDomTheme = document.body.getAttribute('data-theme') ||
+                document.documentElement.getAttribute('data-theme');
             // ROOT CAUSE FIX: ProfileManager no longer sets theme on startup, so we should always apply the resolved theme
             // Only preserve DOM theme if it's different from the resolved preference AND it's not a default value
             const isDefaultTheme = this.preferences.theme === this.schema.theme.defaultValue;
@@ -903,7 +985,7 @@ export class UserPreferencesManager {
                     themeToggle.checked = this.preferences.theme === 'dark';
                     // Dispatch event for VisibilitySettings (replaces window global pattern)
                     window.dispatchEvent(new CustomEvent('updateVisibilityThemeStatus', {
-                        detail: { source: 'UserPreferencesManager', theme: this.preferences.theme }
+                        detail: { source: 'UserPreferencesManager', theme: this.preferences.theme },
                     }));
                 }
                 // Update profile menu theme icon/text
@@ -913,7 +995,8 @@ export class UserPreferencesManager {
                     themeIconMenu.textContent = this.preferences.theme === 'dark' ? '☀️' : '🌙';
                 }
                 if (themeTextMenu) {
-                    themeTextMenu.textContent = this.preferences.theme === 'dark' ? 'Light mode' : 'Dark mode';
+                    themeTextMenu.textContent =
+                        this.preferences.theme === 'dark' ? 'Light mode' : 'Dark mode';
                 }
             }
             else {
@@ -924,8 +1007,9 @@ export class UserPreferencesManager {
                 // Update Chrome storage to match DOM
                 if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
                     chrome.storage.local.set({ theme: currentDomTheme }, () => {
-                        if (chrome.runtime?.lastError) {
-                            Logger.warn('⚠️ USER_PREFERENCES_MANAGER: Failed to sync Chrome storage:', chrome.runtime.lastError, 'preferences');
+                        const runtime = typeof chrome !== 'undefined' && chrome.runtime ? chrome.runtime : null;
+                        if (runtime?.lastError) {
+                            Logger.warn('⚠️ USER_PREFERENCES_MANAGER: Failed to sync Chrome storage:', runtime.lastError, 'preferences');
                         }
                         else {
                             Logger.debug(`✅ USER_PREFERENCES_MANAGER: Synced Chrome storage theme to '${currentDomTheme}' to match DOM`, null, 'preferences');
@@ -938,7 +1022,7 @@ export class UserPreferencesManager {
                     themeToggle.checked = currentDomTheme === 'dark';
                     // Dispatch event for VisibilitySettings (replaces window global pattern)
                     window.dispatchEvent(new CustomEvent('updateVisibilityThemeStatus', {
-                        detail: { source: 'UserPreferencesManager', theme: currentDomTheme }
+                        detail: { source: 'UserPreferencesManager', theme: currentDomTheme },
                     }));
                 }
                 const themeIconMenu = document.getElementById('theme-icon-menu');
@@ -961,7 +1045,7 @@ export class UserPreferencesManager {
                 visibilityToggle.checked = this.preferences.isVisible;
                 // Dispatch event for VisibilitySettings (replaces window global pattern)
                 window.dispatchEvent(new CustomEvent('updateVisibilityStatus', {
-                    detail: { source: 'UserPreferencesManager', isVisible: this.preferences.isVisible }
+                    detail: { source: 'UserPreferencesManager', isVisible: this.preferences.isVisible },
                 }));
             }
         }
@@ -972,7 +1056,7 @@ export class UserPreferencesManager {
                 headlineInput.value = this.preferences.headline;
                 // Dispatch event for SettingsHeadlineManager to update char count (ES6 pattern)
                 window.dispatchEvent(new CustomEvent('headlineUpdated', {
-                    detail: { headline: this.preferences.headline }
+                    detail: { headline: this.preferences.headline },
                 }));
             }
         }
@@ -983,7 +1067,7 @@ export class UserPreferencesManager {
                 displayNameInput.value = this.preferences.displayName;
                 // Dispatch event for DisplayNameManager to update char count (ES6 pattern)
                 window.dispatchEvent(new CustomEvent('displayNameUpdated', {
-                    detail: { displayName: this.preferences.displayName }
+                    detail: { displayName: this.preferences.displayName },
                 }));
             }
         }
@@ -993,8 +1077,8 @@ export class UserPreferencesManager {
             window.dispatchEvent(new CustomEvent('avatarRefreshRequested', {
                 detail: {
                     auraColor: this.preferences.auraColor,
-                    auraIntensity: this.preferences.auraIntensity
-                }
+                    auraIntensity: this.preferences.auraIntensity,
+                },
             }));
         }
         Logger.debug('✅ USER_PREFERENCES_MANAGER: Applied preferences to UI', null, 'preferences');
@@ -1007,15 +1091,17 @@ export class UserPreferencesManager {
             key,
             value,
             timestamp: Date.now(),
-            attempts: 0
+            attempts: 0,
         };
         this.retryQueue.push(failedSave);
         Logger.debug(`📋 USER_PREFERENCES_MANAGER: Queued ${key} for retry (queue size: ${this.retryQueue.length})`, null, 'preferences');
         // Store in localStorage as backup
         try {
-            const storedQueue = JSON.parse(localStorage.getItem('failedPreferenceSaves') || '[]');
-            storedQueue.push(failedSave);
-            localStorage.setItem('failedPreferenceSaves', JSON.stringify(storedQueue));
+            const storedQueue = SafeJSON.parse(localStorage.getItem('failedPreferenceSaves') || '[]', [], 'user-preferences-retry-queue');
+            if (Array.isArray(storedQueue)) {
+                storedQueue.push(failedSave);
+                localStorage.setItem('failedPreferenceSaves', JSON.stringify(storedQueue));
+            }
         }
         catch (error) {
             handleError(error, {
@@ -1023,10 +1109,9 @@ export class UserPreferencesManager {
                 logLevel: 'warn',
                 context: {
                     operation: 'catch',
-                    component: 'UserPreferences'
-                }
+                    component: 'UserPreferences',
+                },
             });
-            ;
         }
     }
     /**
@@ -1044,19 +1129,66 @@ export class UserPreferencesManager {
         this.processRetryQueue();
     }
     /**
+     * Wait for userId to become available (async coordination)
+     */
+    async waitForUserId() {
+        // Check if userId is already available
+        const currentUser = stateManagerInstance.getState('currentUser');
+        const currentUserId = currentUser?.id;
+        if (currentUserId) {
+            return currentUserId;
+        }
+        // If we already have a pending promise, return it
+        if (this.userIdPromise) {
+            return this.userIdPromise;
+        }
+        // Create a new promise that will be resolved when userId becomes available
+        this.userIdPromise = new Promise((resolve) => {
+            this.userIdResolvers.push(resolve);
+            // Set a reasonable timeout (10 seconds) in case userId never becomes available
+            setTimeout(() => {
+                if (this.userIdPromise === null)
+                    return; // Already resolved
+                Logger.warn('⚠️ USER_PREFERENCES_MANAGER: Timeout waiting for userId via async coordination', null, 'preferences');
+                // Resolve with a fallback - this allows initialization to continue
+                this.userIdPromise = null;
+                this.userIdResolvers = [];
+                resolve('unknown-user');
+            }, 10000);
+        });
+        return this.userIdPromise;
+    }
+    /**
+     * Notify waiting promises that userId is now available
+     */
+    resolveUserIdWaiters(userId) {
+        if (this.userIdPromise) {
+            // Resolve all pending promises
+            this.userIdResolvers.forEach(resolve => resolve(userId));
+            this.userIdPromise = null;
+            this.userIdResolvers = [];
+        }
+    }
+    /**
      * Setup offline detection
      */
     setupOfflineDetection() {
         // Listen for online/offline events
-        window.addEventListener('online', () => {
+        this.eventManager.on(window, 'online', () => {
             this.handleOnline();
         });
-        window.addEventListener('offline', () => {
+        this.eventManager.on(window, 'offline', () => {
             this.handleOffline();
         });
         // Initial check
         this.isOnline = navigator.onLine !== false;
         Logger.debug(`🌐 USER_PREFERENCES_MANAGER: Initial online status: ${this.isOnline}`, null, 'preferences');
+    }
+    /**
+     * Cleanup event listeners
+     */
+    cleanup() {
+        this.eventManager.cleanup();
     }
     /**
      * Handle going online
@@ -1074,7 +1206,7 @@ export class UserPreferencesManager {
             }
         }
         // Notify listeners
-        this.offlineListeners.forEach(listener => {
+        this.offlineListeners.forEach((listener) => {
             if (typeof listener === 'function') {
                 listener({ online: true });
             }
@@ -1087,7 +1219,7 @@ export class UserPreferencesManager {
         this.isOnline = false;
         Logger.debug('🌐 USER_PREFERENCES_MANAGER: Connection lost, will queue saves for sync', 'preferences');
         // Notify listeners
-        this.offlineListeners.forEach(listener => {
+        this.offlineListeners.forEach((listener) => {
             if (typeof listener === 'function') {
                 listener({ online: false });
             }
@@ -1103,7 +1235,7 @@ export class UserPreferencesManager {
      * Remove offline status listener
      */
     removeOfflineListener(listener) {
-        this.offlineListeners = this.offlineListeners.filter(l => l !== listener);
+        this.offlineListeners = this.offlineListeners.filter((l) => l !== listener);
     }
     /**
      * Process retry queue (only if online)
@@ -1144,10 +1276,9 @@ export class UserPreferencesManager {
                         logLevel: 'error',
                         context: {
                             operation: 'catch',
-                            component: 'UserPreferences'
-                        }
+                            component: 'UserPreferences',
+                        },
                     });
-                    ;
                 }
             }
         }
@@ -1161,10 +1292,9 @@ export class UserPreferencesManager {
                 logLevel: 'warn',
                 context: {
                     operation: 'catch',
-                    component: 'UserPreferences'
-                }
+                    component: 'UserPreferences',
+                },
             });
-            ;
         }
     }
     /**
@@ -1176,7 +1306,7 @@ export class UserPreferencesManager {
             value,
             oldValue,
             source,
-            timestamp: Date.now()
+            timestamp: Date.now(),
         };
         // EventBus event (optional - for backward compatibility during migration)
         // ES6 pattern: Optional check for eventBus
@@ -1186,7 +1316,7 @@ export class UserPreferencesManager {
         }
         // DOM event
         window.dispatchEvent(new CustomEvent('preferenceChanged', {
-            detail: eventData
+            detail: eventData,
         }));
         Logger.debug(`📢 USER_PREFERENCES_MANAGER: Emitted preference changed: ${key}`, eventData, 'preferences');
     }
@@ -1196,7 +1326,7 @@ export class UserPreferencesManager {
     emitPreferenceLoaded() {
         const eventData = {
             preferences: { ...this.preferences },
-            timestamp: Date.now()
+            timestamp: Date.now(),
         };
         // EventBus event (optional - for backward compatibility during migration)
         // ES6 pattern: Optional check for eventBus
@@ -1206,7 +1336,7 @@ export class UserPreferencesManager {
         }
         // DOM event
         window.dispatchEvent(new CustomEvent('preferenceLoaded', {
-            detail: eventData
+            detail: eventData,
         }));
         Logger.debug('📢 USER_PREFERENCES_MANAGER: Emitted preference loaded', null, 'preferences');
     }
@@ -1218,7 +1348,7 @@ export class UserPreferencesManager {
             key,
             value,
             error: error.message,
-            timestamp: Date.now()
+            timestamp: Date.now(),
         };
         // EventBus event (optional - for backward compatibility during migration)
         // ES6 pattern: Optional check for eventBus
@@ -1228,7 +1358,7 @@ export class UserPreferencesManager {
         }
         // DOM event
         window.dispatchEvent(new CustomEvent('preferenceSaveFailed', {
-            detail: eventData
+            detail: eventData,
         }));
     }
     /**
@@ -1241,7 +1371,7 @@ export class UserPreferencesManager {
             duration,
             error: error?.message,
             timestamp: Date.now(),
-            userId: this.userId
+            userId: this.userId,
         };
         // Send to monitoring service if available
         // ES6 pattern: Optional check for monitoringService (for backward compatibility during migration)
@@ -1262,7 +1392,7 @@ export class UserPreferencesManager {
             retryQueueSize: this.retryQueue.length,
             isInitialized: this.isInitialized,
             isLoading: this.isLoading,
-            isSaving: this.isSaving
+            isSaving: this.isSaving,
         };
     }
     /**
@@ -1284,7 +1414,7 @@ export class UserPreferencesManager {
                     key: prefKey,
                     chromeValue,
                     dbValue,
-                    currentValue
+                    currentValue,
                 });
             }
         }
@@ -1305,7 +1435,9 @@ Logger.debug('✅ USER_PREFERENCES_MANAGER: Module loaded', null, 'preferences')
 // Start theme change tracking immediately (optional - don't block if it fails)
 if (typeof window !== 'undefined') {
     // Try to load ThemeChangeTracker dynamically to avoid blocking module load
-    import('./ThemeChangeTracker')
+    // CRITICAL FIX: Use .js extension for ES module import
+    // @ts-ignore - JavaScript module without type declarations
+    import('../../extension/utils/ThemeChangeTracker.js')
         .then((module) => {
         if (module.themeChangeTracker) {
             module.themeChangeTracker.startTracking();
@@ -1318,3 +1450,4 @@ if (typeof window !== 'undefined') {
     });
 }
 export default userPreferencesManager;
+//# sourceMappingURL=UserPreferencesManager.js.map

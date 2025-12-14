@@ -1,26 +1,59 @@
-// Listen for messages from background script
+// INTEGRATION: Unified Navigation System
+// TabService now forwards events to UnifiedNavigationManager when available
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    // Check if UnifiedNavigationManager is available (new system)
+    const unifiedNavigation = (window as any).unifiedNavigationManager;
+    if (unifiedNavigation) {
+      // Forward to new unified system
+      try {
+        switch (message.type) {
+          case 'TAB_CHANGED':
+            unifiedNavigation.handleBrowserTabSwitch(message.tabId);
+            break;
+          case 'TAB_UPDATED':
+            unifiedNavigation.handleUrlNavigation(message.tabId, message.url);
+            break;
+          case 'TAB_CLOSED':
+            unifiedNavigation.handleTabClosed(message.tabId);
+            break;
+        }
+        return true;
+      } catch (error) {
+        console.warn('TabService: UnifiedNavigationManager error, falling back to legacy handlers', error);
+        // Fall through to legacy handlers
+      }
+    }
+
+    // LEGACY: Fallback to original handlers for backward compatibility
     if (message.type === 'TAB_CHANGED') {
       console.log('Tab changed to:', message.tabId);
       handleTabChange(message.tabId);
       return true;
     }
-    
+
     if (message.type === 'TAB_UPDATED') {
       console.log('Tab updated:', message.tabId, message.url);
       handleTabUpdate(message.tabId, message.url);
       return true;
     }
-    
+
     if (message.type === 'TAB_CLOSED') {
       console.log('Tab closed:', message.tabId);
       handleTabClosed(message.tabId);
       return true;
     }
-    
+
     return false;
   });
-  
+
+  // FUTURE-PROOFING: Instance mapping helper
+  // This will be needed when multiple Canopi instances operate on different tabs
+  function getInstanceForTab(tabId) {
+    // FUTURE: Implement tab-to-instance mapping
+    // For now, assume single instance handles all tabs
+    return window.canopiInstanceId || 'default-instance';
+  }
+
   // Handle tab changes
   async function handleTabChange(tabId) {
     console.log('🔄 TAB_CHANGE: === HANDLING TAB CHANGE ===');
@@ -173,11 +206,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       console.log('───────────────────────────────────────────────────────────');
       console.log('🔍 TAB_UPDATE: Old page ID:', oldPageId);
       console.log('🔍 TAB_UPDATE: New page ID:', newUrlData.pageId);
-      console.log('🔍 TAB_UPDATE: Are they equal?', oldPageId === newUrlData.pageId);
-      console.log('🔍 TAB_UPDATE: Old page ID type:', typeof oldPageId);
-      console.log('🔍 TAB_UPDATE: New page ID type:', typeof newUrlData.pageId);
-      
-      if (oldPageId === newUrlData.pageId) {
+      console.log('🔍 TAB_UPDATE: Are page IDs equal?', oldPageId === newUrlData.pageId);
+
+      // CRITICAL FIX: Also compare normalized URLs to catch edge cases
+      // where different URLs normalize to same pageId, or same content has different URLs
+      const oldNormalizedUrl = window.supabaseRealtimeClient?.currentPage?.pageUrl;
+      const newNormalizedUrl = newUrlData.normalizedUrl;
+      console.log('🔍 TAB_UPDATE: Old normalized URL:', oldNormalizedUrl);
+      console.log('🔍 TAB_UPDATE: New normalized URL:', newNormalizedUrl);
+      console.log('🔍 TAB_UPDATE: Are normalized URLs equal?', oldNormalizedUrl === newNormalizedUrl);
+
+      // Skip if both pageId AND normalized URL are the same (handles hash fragment changes)
+      const isSamePage = oldPageId === newUrlData.pageId;
+      const isSameUrl = oldNormalizedUrl === newNormalizedUrl;
+
+      if (isSamePage && isSameUrl) {
         console.log('');
         console.log('⚠️⚠️⚠️ TAB_UPDATE: SAME PAGE DETECTED ⚠️⚠️⚠️');
         console.log('⚠️ TAB_UPDATE: Skipping presence re-join to avoid reactivation');
@@ -186,6 +229,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         console.log('═══════════════════════════════════════════════════════════');
         console.log('');
         return;
+      } else if (isSamePage && !isSameUrl) {
+        console.log('');
+        console.log('⚠️⚠️ TAB_UPDATE: SAME PAGE ID, DIFFERENT URL ⚠️⚠️⚠️');
+        console.log('⚠️ TAB_UPDATE: URLs:', oldNormalizedUrl, '→', newNormalizedUrl);
+        console.log('⚠️ TAB_UPDATE: This is unusual - different URLs normalized to same pageId');
+        console.log('⚠️ TAB_UPDATE: Proceeding with update to handle URL changes within same page');
       }
       
       // === STEP 5: UPDATE GLOBAL STATE ===
