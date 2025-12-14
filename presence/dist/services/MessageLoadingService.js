@@ -7,7 +7,6 @@
  * Integration Layer Fix: All code should use this service instead of
  * calling loadChatHistory() directly.
  */
-// Import from utils
 import { getActiveSidepanelTab } from '../utils/getActiveSidepanelTab.js';
 import { Logger } from '../utils/Logger.js';
 /**
@@ -24,14 +23,7 @@ export class MessageLoadingService {
             Logger.debug('MessageLoadingService: Using loadChatHistory from options', {
                 fnType: typeof options.loadChatHistory,
                 fnName: options.loadChatHistory?.name || 'anonymous',
-                isFunction: typeof options.loadChatHistory === 'function'
-            }, 'messages');
-        }
-        else if (typeof window !== 'undefined' && typeof window.loadChatHistory === 'function') {
-            this.loadChatHistoryFn = window.loadChatHistory.bind(window);
-            Logger.debug('MessageLoadingService: Using loadChatHistory from window', {
-                fnType: typeof this.loadChatHistoryFn,
-                fnName: this.loadChatHistoryFn?.name || 'anonymous'
+                isFunction: typeof options.loadChatHistory === 'function',
             }, 'messages');
         }
         else {
@@ -44,7 +36,7 @@ export class MessageLoadingService {
                     if (typeof win.loadChatHistory === 'function') {
                         Logger.debug('MessageLoadingService: Found loadChatHistory on window at call time', {
                             pageIdOrRawUrl,
-                            fnName: win.loadChatHistory?.name || 'anonymous'
+                            fnName: win.loadChatHistory?.name || 'anonymous',
                         }, 'messages');
                         return win.loadChatHistory(pageIdOrRawUrl, activeCommunities);
                     }
@@ -70,91 +62,65 @@ export class MessageLoadingService {
      * @returns Promise that resolves when loading completes or is skipped
      */
     async loadMessages(pageIdOrRawUrl, activeCommunities) {
-        // ROOT CAUSE FIX: Wait for TabManager to be ready if it's not available yet
-        // This prevents race condition where MessageLoadingService is called before TabManager initializes
-        let activeTab = getActiveSidepanelTab();
-        // If tabContextManager is not available, wait for it (max 1 second)
-        if (!activeTab && typeof window !== 'undefined') {
+        // ROOT CAUSE FIX: Check if already loading to prevent double reload
+        if (typeof window !== 'undefined') {
             const win = window;
-            if (!win.tabContextManager) {
-                Logger.debug('📥 MessageLoadingService: TabManager not ready, waiting...', { pageIdOrRawUrl }, 'messages');
-                await new Promise((resolve) => {
-                    let resolved = false;
-                    const timeout = setTimeout(() => {
-                        if (!resolved) {
-                            resolved = true;
-                            Logger.warn('⚠️ MessageLoadingService: Timeout waiting for TabManager, proceeding with null tab', null, 'messages');
-                            resolve();
-                        }
-                    }, 1000);
-                    const handler = () => {
-                        if (!resolved) {
-                            resolved = true;
-                            clearTimeout(timeout);
-                            if (typeof document !== 'undefined') {
-                                document.removeEventListener('tabManager:initialized', handler);
-                            }
-                            resolve();
-                        }
-                    };
-                    if (typeof document !== 'undefined') {
-                        document.addEventListener('tabManager:initialized', handler, { once: true });
-                    }
-                    else {
-                        clearTimeout(timeout);
-                        resolve();
-                    }
-                    // Check again immediately in case event already fired
-                    if (win.tabContextManager) {
-                        handler();
-                    }
-                });
-                activeTab = getActiveSidepanelTab();
+            const stateManager = win.stateManagerInstance;
+            if (stateManager && typeof stateManager.getState === 'function') {
+                const isLoading = stateManager.getState('messages.isLoading');
+                const lastLoadTime = stateManager.getState('messages.lastLoadTime');
+                const timeSinceLastLoad = lastLoadTime ? Date.now() - lastLoadTime : Infinity;
+                if (isLoading && timeSinceLastLoad < 2000) {
+                    Logger.debug(`🚫 MessageLoadingService: Skipping load - already loading recently`, { pageIdOrRawUrl, isLoading, timeSinceLastLoad }, 'messages');
+                    return;
+                }
+                // Set loading state
+                if (typeof stateManager.setState === 'function') {
+                    stateManager.setState('messages.isLoading', true);
+                    stateManager.setState('messages.lastLoadTime', Date.now());
+                }
             }
         }
+        // ROOT CAUSE FIX: Wait for TabManager to be ready if it's not available yet
+        let activeTab = getActiveSidepanelTab();
         Logger.debug(`📥 MessageLoadingService.loadMessages() called`, { pageIdOrRawUrl, activeTab, activeCommunities }, 'messages');
         // RED-LINE: ONLY load messages on discuss-tab, NEVER on visibility-tab
-        // REFACTOR: If activeTab is null (TabManager not ready), allow loading (initial load scenario)
         if (activeTab === 'discuss-tab' || activeTab === null) {
             // Allowed: discuss-tab or initial load (no tab active)
-            Logger.debug(`✅ MessageLoadingService: Active tab is '${activeTab}' - ALLOWING message load`, { pageIdOrRawUrl, loadChatHistoryFnAvailable: typeof this.loadChatHistoryFn === 'function' }, 'messages');
-            // REFACTOR: Verify loadChatHistoryFn is available before calling
-            if (typeof this.loadChatHistoryFn !== 'function') {
-                Logger.error('❌ MessageLoadingService: loadChatHistoryFn is not a function', { pageIdOrRawUrl, loadChatHistoryFn: this.loadChatHistoryFn }, 'messages');
-                return;
-            }
+            Logger.debug(`✅ MessageLoadingService: Active tab is '${activeTab}' - ALLOWING message load`, {
+                pageIdOrRawUrl,
+                loadChatHistoryFnAvailable: typeof this.loadChatHistoryFn === 'function',
+            }, 'messages');
             try {
-                Logger.debug(`🔍 MessageLoadingService: About to call loadChatHistoryFn`, {
-                    pageIdOrRawUrl,
-                    activeCommunities,
-                    fnType: typeof this.loadChatHistoryFn,
-                    fnName: this.loadChatHistoryFn?.name || 'anonymous',
-                    fnToString: String(this.loadChatHistoryFn).substring(0, 100)
-                }, 'messages');
-                console.log('🔴 MessageLoadingService: CALLING loadChatHistoryFn NOW', {
-                    pageIdOrRawUrl,
-                    fnName: this.loadChatHistoryFn?.name
-                });
-                const result = await this.loadChatHistoryFn(pageIdOrRawUrl, activeCommunities);
-                console.log('🔴 MessageLoadingService: loadChatHistoryFn RETURNED', {
-                    pageIdOrRawUrl,
-                    resultType: typeof result
-                });
-                Logger.debug(`✅ MessageLoadingService: loadChatHistoryFn completed`, {
-                    pageIdOrRawUrl,
-                    resultType: typeof result,
-                    hasResult: result !== undefined
-                }, 'messages');
+                if (typeof this.loadChatHistoryFn === 'function') {
+                    const result = await this.loadChatHistoryFn(pageIdOrRawUrl, activeCommunities);
+                    Logger.debug(`✅ MessageLoadingService: loadChatHistoryFn completed`, {
+                        pageIdOrRawUrl,
+                        resultType: typeof result,
+                        hasResult: result !== undefined,
+                    }, 'messages');
+                }
+                else {
+                    Logger.error('❌ MessageLoadingService: loadChatHistoryFn is not available', { pageIdOrRawUrl }, 'messages');
+                }
             }
             catch (error) {
-                console.error('🔴 MessageLoadingService: ERROR calling loadChatHistoryFn', error);
                 Logger.error('❌ MessageLoadingService: Error calling loadChatHistoryFn', {
                     error,
                     pageIdOrRawUrl,
                     errorMessage: error instanceof Error ? error.message : String(error),
-                    errorStack: error instanceof Error ? error.stack : undefined
                 }, 'messages');
                 throw error;
+            }
+            finally {
+                // Clear loading state
+                if (typeof window !== 'undefined') {
+                    const win = window;
+                    const stateManager = win.stateManagerInstance;
+                    if (stateManager && typeof stateManager.setState === 'function') {
+                        stateManager.setState('messages.isLoading', false);
+                    }
+                }
             }
         }
         else {
@@ -170,17 +136,7 @@ export class MessageLoadingService {
         return this.loadMessages(pageIdOrRawUrl, activeCommunities);
     }
     /**
-     * Add a message to the chat
-     */
-    async addMessage(_message, _container) {
-        // Implementation would add message to container
-        // This is a placeholder for the interface
-        // Message addition logic would go here
-    }
-    /**
      * Check if messages can be loaded for current tab
-     *
-     * @returns true if messages can be loaded, false otherwise
      */
     canLoadMessages() {
         const activeTab = getActiveSidepanelTab();
@@ -188,8 +144,6 @@ export class MessageLoadingService {
     }
     /**
      * Get the current active tab
-     *
-     * @returns Active tab ID or null
      */
     getActiveTab() {
         return getActiveSidepanelTab();

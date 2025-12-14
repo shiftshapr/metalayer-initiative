@@ -373,10 +373,6 @@ export function getBackendHealthService(baseURL) {
                 }
             });
         });
-        // Export to window for diagnostics
-        if (typeof window !== 'undefined') {
-            window.backendHealthService = backendHealthServiceInstance;
-        }
     }
     return backendHealthServiceInstance;
 }

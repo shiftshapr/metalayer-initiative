@@ -425,3 +425,5 @@ if (legacyWindow.__CANOPI_SIDEPANEL_READY__) {
     }
   })();
 }
+
+

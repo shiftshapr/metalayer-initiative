@@ -110,3 +110,4 @@ async function doInitialize() {
 // Auto-initialize when module loads
 initializeTabManager();
 
+

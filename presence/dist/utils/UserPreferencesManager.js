@@ -974,10 +974,6 @@ export class UserPreferencesManager {
                 window.dispatchEvent(new CustomEvent('headlineUpdated', {
                     detail: { headline: this.preferences.headline }
                 }));
-                // Optional: Try to call manager if available (graceful degradation)
-                // ES6 pattern: Optional check for backward compatibility during migration
-                const win = window;
-                win.settingsHeadlineManager?.updateCharCount?.();
             }
         }
         // Apply display name to input if exists
@@ -989,10 +985,6 @@ export class UserPreferencesManager {
                 window.dispatchEvent(new CustomEvent('displayNameUpdated', {
                     detail: { displayName: this.preferences.displayName }
                 }));
-                // Optional: Try to call manager if available (graceful degradation)
-                // ES6 pattern: Optional check for backward compatibility during migration
-                const win2 = window;
-                win2.displayNameManager?.updateCharCount?.();
             }
         }
         // Trigger avatar refresh for aura changes
@@ -1004,15 +996,6 @@ export class UserPreferencesManager {
                     auraIntensity: this.preferences.auraIntensity
                 }
             }));
-            // Optional: Try to call functions if available (graceful degradation during migration)
-            // ES6 pattern: Optional checks for backward compatibility
-            const win3 = window;
-            if (typeof win3.refreshAllMessageAvatars === 'function') {
-                win3.refreshAllMessageAvatars();
-            }
-            if (typeof win3.refreshVisibilityAvatars === 'function') {
-                win3.refreshVisibilityAvatars();
-            }
         }
         Logger.debug('✅ USER_PREFERENCES_MANAGER: Applied preferences to UI', null, 'preferences');
     }

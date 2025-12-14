@@ -34,3 +34,5 @@ export function isVisibilityTabActive(): boolean {
   return getActiveSidepanelTab() === 'visibility-tab';
 }
 
+
+

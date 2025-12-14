@@ -242,8 +242,6 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
     else {
         bootstrapCursorVisualSettingsManager();
     }
-    window.CursorVisualSettingsManager = CursorVisualSettingsManager;
-    Logger.debug('✅ CURSOR_VISUAL_SETTINGS: Exported to window', null, 'cursor');
 }
 export { CursorVisualSettingsManager, cursorVisualSettingsManagerInstance };
 export default CursorVisualSettingsManager;
